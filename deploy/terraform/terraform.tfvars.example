@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars and fill in. Identifiers below are AWS documentation examples.
+name                               = "afs-dev"
+region                             = "us-east-1"
+dr_region                          = "us-west-2"
+cluster_name                       = "afs-dev"
+vpc_id                             = "vpc-0123456789abcdef0"
+database_subnet_ids                = ["subnet-0123456789abcdef0", "subnet-0fedcba9876543210"]
+database_client_security_group_ids = ["sg-0123456789abcdef0"]
+cross_account_backup_vault_arn     = "arn:aws:backup:us-east-1:444455556666:backup-vault:afs-central"
+cur_bucket_arn                     = "arn:aws:s3:::example-cur-bucket"
+cur_glue_database                  = "cur"
+athena_workgroup                   = "afs"
+athena_results_bucket_arn          = "arn:aws:s3:::example-athena-results"

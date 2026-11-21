@@ -317,8 +317,8 @@ Owns: `internal/usecase/reconcile/lifecycle/`, `internal/adapter/aws/secretsmana
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-I1 | Ordered delete finalizer: idempotent named steps shown as conditions while `Deleting`, a failed step retried next pass, final row `deleted` with audit and usage readable; team steps: schedule every team secret for deletion with a 30-day recovery window before the namespace goes, revoke IAM, delete inference profiles and access entry, delete namespace; hook points for agent (M2) and pool (M5) steps [envtest with fake AWS] | RC-US-15.2, RC-US-15.3, RA-US-16.4, RC-17 (part) | M1-G1d, M1-G2b |
-| [ ] | M1-I2 | Team suspend and resume: record each workload's prior state and scale hooks (agents M2, pools M5) | RC-US-15.1 (part), RC-17 (part) | M1-F4 |
+| [x] | M1-I1 | Ordered delete finalizer: idempotent named steps shown as conditions while `Deleting`, a failed step retried next pass, final row `deleted` with audit and usage readable; team steps: schedule every team secret for deletion with a 30-day recovery window before the namespace goes, revoke IAM, delete inference profiles and access entry, delete namespace; hook points for agent (M2) and pool (M5) steps [envtest with fake AWS] | RC-US-15.2, RC-US-15.3, RA-US-16.4, RC-17 (part) | M1-G1d, M1-G2b |
+| [x] | M1-I2 | Team suspend and resume: record each workload's prior state and scale hooks (agents M2, pools M5) | RC-US-15.1 (part), RC-17 (part) | M1-F4 |
 
 ### M1-J · Housekeeping (RC-8)
 
@@ -326,9 +326,9 @@ Owns: `internal/usecase/reconcile/housekeeping/`, `internal/adapter/aws/eventbri
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-J1 | Outbox publisher: EventBridge `PutEvents` (source `afs`), at least once, ordered per aggregate, `attempts` with backoff; duplicate harmless; outbox lag metric [adapter with fake EventBridge] | RC-US-18.1, CT-API-9 (part) | M1-F4 |
-| [ ] | M1-J2 | Partitions of `usage_events`, `agent_activity`, `external_traffic` at least one month ahead (a run on the last day of a month finds next month present); monthly `afs.drop_partitions_older_than(13)`; never touches `audit_log` | RC-US-18.2, RC-8 | M1-F4 |
-| [ ] | M1-J3 | `afs.purge_idempotency_keys()` every 5 minutes | RC-US-18.4 | M1-F4 |
+| [x] | M1-J1 | Outbox publisher: EventBridge `PutEvents` (source `afs`), at least once, ordered per aggregate, `attempts` with backoff; duplicate harmless; outbox lag metric [adapter with fake EventBridge] | RC-US-18.1, CT-API-9 (part) | M1-F4 |
+| [x] | M1-J2 | Partitions of `usage_events`, `agent_activity`, `external_traffic` at least one month ahead (a run on the last day of a month finds next month present); monthly `afs.drop_partitions_older_than(13)`; never touches `audit_log` | RC-US-18.2, RC-8 | M1-F4 |
+| [x] | M1-J3 | `afs.purge_idempotency_keys()` every 5 minutes | RC-US-18.4 | M1-F4 |
 
 ### M1-K · Deploy (DP-1)
 
@@ -336,9 +336,9 @@ Owns: `deploy/terraform/`, `deploy/helm/afs/`, `test/e2e/harness.go`.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-K1 | Terraform modules: RDS PostgreSQL 17 (PITR, RPO 5 min, IAM auth, KMS), AWS Backup with cross-region and cross-account copies, export and reports buckets (KMS), Pod Identity roles for the four binaries (least privilege per research and contracts); `terraform validate`, `tflint` in CI; no hardcoded ids | DP-1, NFR Recovery | — |
-| [ ] | M1-K2 | Helm chart: four binaries, ServiceAccounts with Pod Identity, ≥ 3 replicas of `afs-api` and `afs-gateway` spread across AZs, PDBs, gateway TLS via cert-manager, billing CronJobs, ServiceMonitor; per-component values files; `helm lint` and golden `helm template` tests | DP-1, NFR Availability | — |
-| [ ] | M1-K3 | `test/e2e` harness (skips without `AFS_E2E_KUBECONFIG`), shared fixtures for later e2e cases | — | — |
+| [x] | M1-K1 | Terraform modules: RDS PostgreSQL 17 (PITR, RPO 5 min, IAM auth, KMS), AWS Backup with cross-region and cross-account copies, export and reports buckets (KMS), Pod Identity roles for the four binaries (least privilege per research and contracts); `terraform validate`, `tflint` in CI; no hardcoded ids | DP-1, NFR Recovery | — |
+| [x] | M1-K2 | Helm chart: four binaries, ServiceAccounts with Pod Identity, ≥ 3 replicas of `afs-api` and `afs-gateway` spread across AZs, PDBs, gateway TLS via cert-manager, billing CronJobs, ServiceMonitor; per-component values files; `helm lint` and golden `helm template` tests | DP-1, NFR Availability | — |
+| [x] | M1-K3 | `test/e2e` harness (skips without `AFS_E2E_KUBECONFIG`), shared fixtures for later e2e cases | — | — |
 
 ### M1-L · Observability
 
@@ -346,9 +346,9 @@ Owns: `internal/adapter/observability/`, `internal/adapter/httpapi/middleware/me
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-L1 | `slog` JSON with request id; redacting handler (`Authorization`, bearer tokens, `afsk_` keys, `X-Afs-Gateway-Token`, JWT-shaped strings); OpenTelemetry tracer and meter (OTLP); Prometheus registry and `/metrics` server | NFR Observability, NFR Security | — |
-| [ ] | M1-L2 | RED metrics per route; `/healthz`, `/readyz` (database, schema version, leader) for every binary | NFR Observability | M1-L1 |
-| [ ] | M1-L3 | Dashboards and alerts for the NFR SLIs (API p99, reconcile lag, drift per hour, gateway reservation failures and added latency, expired reservations, outbox lag, notification failures, CUR variance) on the metric names in architecture.md | NFR Observability | M1-L2 |
+| [x] | M1-L1 | `slog` JSON with request id; redacting handler (`Authorization`, bearer tokens, `afsk_` keys, `X-Afs-Gateway-Token`, JWT-shaped strings); OpenTelemetry tracer and meter (OTLP); Prometheus registry and `/metrics` server | NFR Observability, NFR Security | — |
+| [x] | M1-L2 | RED metrics per route; `/healthz`, `/readyz` (database, schema version, leader) for every binary | NFR Observability | M1-L1 |
+| [x] | M1-L3 | Dashboards and alerts for the NFR SLIs (API p99, reconcile lag, drift per hour, gateway reservation failures and added latency, expired reservations, outbox lag, notification failures, CUR variance) on the metric names in architecture.md | NFR Observability | M1-L2 |
 
 ### M1-X · Milestone exit
 

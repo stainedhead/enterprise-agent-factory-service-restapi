@@ -1,0 +1,29 @@
+{{- /* Public Services of afs-api and afs-gateway; the reconciler gets a headless metrics Service. */}}
+{{- range $name := list "api" "gateway" "reconciler" }}
+{{- $c := include "afs.component" (dict "root" $ "name" $name) | fromYaml }}
+{{- if $c.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "afs.name" $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "afs.labels" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  {{- if eq $name "reconciler" }}
+  clusterIP: None
+  {{- else }}
+  type: {{ $c.service.type }}
+  {{- end }}
+  selector:
+    {{- include "afs.selectorLabels" (dict "root" $ "name" $name) | nindent 4 }}
+  ports:
+    {{- if eq $name "api" }}
+    - {name: http, port: {{ $c.service.port }}, targetPort: http}
+    {{- else if eq $name "gateway" }}
+    - {name: https, port: {{ $c.service.port }}, targetPort: https}
+    {{- end }}
+    - {name: metrics, port: {{ $c.ports.metrics }}, targetPort: metrics}
+{{- end }}
+{{- end }}

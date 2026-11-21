@@ -1,0 +1,21 @@
+enabled: true
+# Two replicas: one leader and a standby that takes the Lease over in under 30 s.
+replicas: 2
+image:
+  repository: afs-reconciler
+dbUser: afs_reconciler
+serviceAccount:
+  name: afs-reconciler
+ports:
+  metrics: 9090
+pdb:
+  maxUnavailable: 1
+resources:
+  requests: {cpu: 250m, memory: 256Mi}
+  limits: {memory: 1Gi}
+env:
+  AFS_METRICS_ADDR: ":9090"
+# Required: AFS_EVENT_BUS_NAME, AFS_PERMISSIONS_BOUNDARY_ARN, AFS_GATEWAY_ROLE_ARN, AFS_OIDC_PROVIDER_ARN,
+# AFS_EXPORT_BUCKET, AFS_EXPORT_KMS_KEY_ID, AFS_WORK_ORDER_QUEUE_URL (from Terraform outputs).
+leaderLease:
+  namespace: ""           # defaults to the release namespace (AFS_LEADER_LEASE_NAMESPACE)

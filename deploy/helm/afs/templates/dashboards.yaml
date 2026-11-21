@@ -1,0 +1,13 @@
+{{- if .Values.dashboards.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: afs-dashboards
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "afs.labels" (dict "root" $ "name" "dashboards") | nindent 4 }}
+    {{ .Values.dashboards.label }}: "1"
+data:
+  afs-slis.json: |-
+    {{- .Files.Get "dashboards/afs-slis.json" | nindent 4 }}
+{{- end }}

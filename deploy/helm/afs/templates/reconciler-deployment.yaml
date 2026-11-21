@@ -1,0 +1,47 @@
+{{- $name := "reconciler" }}
+{{- $c := include "afs.component" (dict "root" $ "name" $name) | fromYaml }}
+{{- if $c.enabled }}
+{{- $ctx := dict "root" $ "name" $name "c" $c }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: afs-reconciler
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "afs.labels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ $c.replicas }}
+  selector:
+    matchLabels:
+      {{- include "afs.selectorLabels" $ctx | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 1, maxSurge: 1}
+  template:
+    metadata:
+      labels:
+        {{- include "afs.labels" $ctx | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $c.serviceAccount.name }}
+      {{- with .Values.global.image.pullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "afs.podSecurityContext" $ | nindent 8 }}
+      {{- include "afs.spread" $ctx | nindent 6 }}
+      containers:
+        - name: afs-reconciler
+          image: {{ include "afs.image" $ctx | quote }}
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - {name: metrics, containerPort: {{ $c.ports.metrics }}}
+          env:
+            {{- include "afs.env" $ctx | nindent 12 }}
+            - name: AFS_LEADER_LEASE_NAMESPACE
+              value: {{ default .Release.Namespace $c.leaderLease.namespace | quote }}
+          {{- include "afs.probes" $ | nindent 10 }}
+          resources:
+            {{- toYaml $c.resources | nindent 12 }}
+          securityContext:
+            {{- include "afs.containerSecurityContext" $ | nindent 12 }}
+{{- end }}

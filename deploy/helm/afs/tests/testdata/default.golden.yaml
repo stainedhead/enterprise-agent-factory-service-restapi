@@ -1,0 +1,1613 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+    labels:
+        app.kubernetes.io/component: gateway
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-gateway
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-gateway
+    namespace: afs-system
+spec:
+    dnsNames:
+        - afs-gateway
+        - afs-gateway.afs-system
+        - afs-gateway.afs-system.svc
+        - afs-gateway.afs-system.svc.cluster.local
+    duration: 2160h
+    issuerRef:
+        group: cert-manager.io
+        kind: ClusterIssuer
+        name: afs-ca
+    privateKey:
+        algorithm: ECDSA
+        rotationPolicy: Always
+        size: 256
+    renewBefore: 720h
+    secretName: afs-gateway-tls
+    usages:
+        - server auth
+---
+apiVersion: v1
+data:
+    afs-slis.json: |-
+        {
+          "uid": "afs-slis",
+          "title": "AFS service levels",
+          "tags": [
+            "afs"
+          ],
+          "schemaVersion": 39,
+          "version": 1,
+          "editable": true,
+          "time": {
+            "from": "now-6h",
+            "to": "now"
+          },
+          "refresh": "1m",
+          "templating": {
+            "list": [
+              {
+                "name": "datasource",
+                "type": "datasource",
+                "query": "prometheus",
+                "label": "Data source"
+              }
+            ]
+          },
+          "panels": [
+            {
+              "id": 1,
+              "type": "timeseries",
+              "title": "API request rate by route",
+              "description": "RED: rate",
+              "gridPos": {
+                "x": 0,
+                "y": 0,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "reqps"
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum by (route) (rate(afs_api_requests_total[5m]))",
+                  "legendFormat": "{{route}}"
+                }
+              ]
+            },
+            {
+              "id": 2,
+              "type": "timeseries",
+              "title": "API errors (5xx ratio)",
+              "description": "RED: errors. Availability target 99.9%",
+              "gridPos": {
+                "x": 12,
+                "y": 0,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit"
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(afs_api_requests_total{code=~\"5..\"}[5m])) / sum(rate(afs_api_requests_total[5m]))",
+                  "legendFormat": "5xx ratio"
+                }
+              ]
+            },
+            {
+              "id": 3,
+              "type": "timeseries",
+              "title": "API p50 / p99 latency",
+              "description": "RED: duration. Read target p99 < 300 ms, reports < 1 s",
+              "gridPos": {
+                "x": 0,
+                "y": 8,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s"
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "histogram_quantile(0.5, sum by (le) (rate(afs_api_request_duration_seconds_bucket[5m])))",
+                  "legendFormat": "p50"
+                },
+                {
+                  "refId": "B",
+                  "expr": "histogram_quantile(0.99, sum by (le) (rate(afs_api_request_duration_seconds_bucket[5m])))",
+                  "legendFormat": "p99"
+                }
+              ]
+            },
+            {
+              "id": 4,
+              "type": "timeseries",
+              "title": "API p99 by route (top 10)",
+              "description": "",
+              "gridPos": {
+                "x": 12,
+                "y": 8,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s"
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "topk(10, histogram_quantile(0.99, sum by (le, route) (rate(afs_api_request_duration_seconds_bucket[5m]))))",
+                  "legendFormat": "{{route}}"
+                }
+              ]
+            },
+            {
+              "id": 5,
+              "type": "timeseries",
+              "title": "Reconcile lag p50 / p95",
+              "description": "Target p95 < 60 s",
+              "gridPos": {
+                "x": 0,
+                "y": 16,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s"
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "histogram_quantile(0.5, sum by (le) (rate(afs_reconcile_lag_seconds_bucket[10m])))",
+                  "legendFormat": "p50"
+                },
+                {
+                  "refId": "B",
+                  "expr": "histogram_quantile(0.95, sum by (le) (rate(afs_reconcile_lag_seconds_bucket[10m])))",
+                  "legendFormat": "p95"
+                }
+              ]
+            },
+            {
+              "id": 6,
+              "type": "timeseries",
+              "title": "Reconcile errors and drift corrections",
+              "description": "",
+              "gridPos": {
+                "x": 12,
+                "y": 16,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum by (kind) (rate(afs_reconcile_errors_total[10m]))",
+                  "legendFormat": "errors {{kind}}"
+                },
+                {
+                  "refId": "B",
+                  "expr": "sum(increase(afs_drift_corrected_total[1h]))",
+                  "legendFormat": "drift per hour"
+                }
+              ]
+            },
+            {
+              "id": 7,
+              "type": "stat",
+              "title": "Reconciler leader",
+              "description": "Exactly one",
+              "gridPos": {
+                "x": 0,
+                "y": 24,
+                "w": 6,
+                "h": 4
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(afs_reconciler_is_leader)",
+                  "legendFormat": "leaders"
+                }
+              ]
+            },
+            {
+              "id": 8,
+              "type": "timeseries",
+              "title": "Gateway added latency p99",
+              "description": "Target < 25 ms excluding Bedrock time",
+              "gridPos": {
+                "x": 6,
+                "y": 24,
+                "w": 9,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s"
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "histogram_quantile(0.99, sum by (le) (rate(afs_gateway_added_latency_seconds_bucket[5m])))",
+                  "legendFormat": "p99"
+                }
+              ]
+            },
+            {
+              "id": 9,
+              "type": "timeseries",
+              "title": "Gateway reservation failures and expired reservations",
+              "description": "",
+              "gridPos": {
+                "x": 15,
+                "y": 24,
+                "w": 9,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum by (reason) (increase(afs_gateway_reservation_failures_total[5m]))",
+                  "legendFormat": "failed {{reason}}"
+                },
+                {
+                  "refId": "B",
+                  "expr": "sum(increase(afs_gateway_reservations_expired_total[1h]))",
+                  "legendFormat": "expired per hour"
+                }
+              ]
+            },
+            {
+              "id": 10,
+              "type": "timeseries",
+              "title": "Outbox backlog and oldest event age",
+              "description": "",
+              "gridPos": {
+                "x": 0,
+                "y": 32,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "max(afs_outbox_pending_events)",
+                  "legendFormat": "pending"
+                },
+                {
+                  "refId": "B",
+                  "expr": "max(afs_outbox_oldest_age_seconds)",
+                  "legendFormat": "oldest age (s)"
+                }
+              ]
+            },
+            {
+              "id": 11,
+              "type": "timeseries",
+              "title": "Outbox publish failures and notification failures",
+              "description": "",
+              "gridPos": {
+                "x": 12,
+                "y": 32,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(afs_outbox_publish_failures_total[10m]))",
+                  "legendFormat": "publish failures/s"
+                },
+                {
+                  "refId": "B",
+                  "expr": "sum by (channel_type) (increase(afs_notification_failures_total[1h]))",
+                  "legendFormat": "notifications {{channel_type}}"
+                }
+              ]
+            },
+            {
+              "id": 12,
+              "type": "stat",
+              "title": "CUR variance (latest day)",
+              "description": "Gateway estimate vs billed",
+              "gridPos": {
+                "x": 0,
+                "y": 40,
+                "w": 12,
+                "h": 6
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit"
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "max(afs_cost_cur_variance_ratio)",
+                  "legendFormat": "variance"
+                }
+              ]
+            }
+          ]
+        }
+kind: ConfigMap
+metadata:
+    labels:
+        app.kubernetes.io/component: dashboards
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-dashboards
+        app.kubernetes.io/part-of: afs
+        grafana_dashboard: "1"
+        helm.sh/chart: afs-0.1.0
+    name: afs-dashboards
+    namespace: afs-system
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+    labels:
+        afs.io/billing-job: cur-ingest
+        app.kubernetes.io/component: billing
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-billing
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-billing-cur-ingest
+    namespace: afs-system
+spec:
+    concurrencyPolicy: Forbid
+    failedJobsHistoryLimit: 5
+    jobTemplate:
+        spec:
+            activeDeadlineSeconds: 3600
+            backoffLimit: 2
+            template:
+                metadata:
+                    labels:
+                        app.kubernetes.io/component: billing
+                        app.kubernetes.io/instance: afs
+                        app.kubernetes.io/managed-by: Helm
+                        app.kubernetes.io/name: afs-billing
+                        app.kubernetes.io/part-of: afs
+                        helm.sh/chart: afs-0.1.0
+                spec:
+                    containers:
+                        - args:
+                            - --job
+                            - cur-ingest
+                          env:
+                            - name: AFS_DATABASE_URL
+                              value: postgres://afs_billing@afs.cluster-abc123.us-east-1.rds.amazonaws.com:5432/afs?sslmode=verify-full
+                            - name: AFS_DB_IAM_AUTH
+                              value: "true"
+                            - name: AFS_AWS_REGION
+                              value: us-east-1
+                            - name: AFS_CLUSTER_NAME
+                              value: afs-dev
+                            - name: AFS_LOG_LEVEL
+                              value: info
+                            - name: AFS_OTLP_ENDPOINT
+                              value: http://otel-collector.observability:4318
+                            - name: AFS_ATHENA_OUTPUT
+                              value: s3://afs-athena-results-111122223333/
+                            - name: AFS_ATHENA_WORKGROUP
+                              value: afs
+                            - name: AFS_CUR_DATABASE
+                              value: cur
+                            - name: AFS_CUR_TABLE
+                              value: afs_cur
+                            - name: AFS_METRICS_ADDR
+                              value: :9090
+                            - name: AFS_REPORTS_BUCKET
+                              value: afs-reports-111122223333
+                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
+                          imagePullPolicy: IfNotPresent
+                          name: afs-billing
+                          ports:
+                            - containerPort: 9090
+                              name: metrics
+                          resources:
+                            limits:
+                                memory: 1Gi
+                            requests:
+                                cpu: 250m
+                                memory: 256Mi
+                          securityContext:
+                            allowPrivilegeEscalation: false
+                            capabilities:
+                                drop:
+                                    - ALL
+                            readOnlyRootFilesystem: true
+                    restartPolicy: Never
+                    securityContext:
+                        runAsNonRoot: true
+                        seccompProfile:
+                            type: RuntimeDefault
+                    serviceAccountName: afs-billing
+    schedule: 0 3 * * *
+    successfulJobsHistoryLimit: 3
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+    labels:
+        afs.io/billing-job: price-sync
+        app.kubernetes.io/component: billing
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-billing
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-billing-price-sync
+    namespace: afs-system
+spec:
+    concurrencyPolicy: Forbid
+    failedJobsHistoryLimit: 5
+    jobTemplate:
+        spec:
+            activeDeadlineSeconds: 3600
+            backoffLimit: 2
+            template:
+                metadata:
+                    labels:
+                        app.kubernetes.io/component: billing
+                        app.kubernetes.io/instance: afs
+                        app.kubernetes.io/managed-by: Helm
+                        app.kubernetes.io/name: afs-billing
+                        app.kubernetes.io/part-of: afs
+                        helm.sh/chart: afs-0.1.0
+                spec:
+                    containers:
+                        - args:
+                            - --job
+                            - price-sync
+                          env:
+                            - name: AFS_DATABASE_URL
+                              value: postgres://afs_billing@afs.cluster-abc123.us-east-1.rds.amazonaws.com:5432/afs?sslmode=verify-full
+                            - name: AFS_DB_IAM_AUTH
+                              value: "true"
+                            - name: AFS_AWS_REGION
+                              value: us-east-1
+                            - name: AFS_CLUSTER_NAME
+                              value: afs-dev
+                            - name: AFS_LOG_LEVEL
+                              value: info
+                            - name: AFS_OTLP_ENDPOINT
+                              value: http://otel-collector.observability:4318
+                            - name: AFS_ATHENA_OUTPUT
+                              value: s3://afs-athena-results-111122223333/
+                            - name: AFS_ATHENA_WORKGROUP
+                              value: afs
+                            - name: AFS_CUR_DATABASE
+                              value: cur
+                            - name: AFS_CUR_TABLE
+                              value: afs_cur
+                            - name: AFS_METRICS_ADDR
+                              value: :9090
+                            - name: AFS_REPORTS_BUCKET
+                              value: afs-reports-111122223333
+                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
+                          imagePullPolicy: IfNotPresent
+                          name: afs-billing
+                          ports:
+                            - containerPort: 9090
+                              name: metrics
+                          resources:
+                            limits:
+                                memory: 1Gi
+                            requests:
+                                cpu: 250m
+                                memory: 256Mi
+                          securityContext:
+                            allowPrivilegeEscalation: false
+                            capabilities:
+                                drop:
+                                    - ALL
+                            readOnlyRootFilesystem: true
+                    restartPolicy: Never
+                    securityContext:
+                        runAsNonRoot: true
+                        seccompProfile:
+                            type: RuntimeDefault
+                    serviceAccountName: afs-billing
+    schedule: 0 5 * * 1
+    successfulJobsHistoryLimit: 3
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+    labels:
+        afs.io/billing-job: reconcile
+        app.kubernetes.io/component: billing
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-billing
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-billing-reconcile
+    namespace: afs-system
+spec:
+    concurrencyPolicy: Forbid
+    failedJobsHistoryLimit: 5
+    jobTemplate:
+        spec:
+            activeDeadlineSeconds: 3600
+            backoffLimit: 2
+            template:
+                metadata:
+                    labels:
+                        app.kubernetes.io/component: billing
+                        app.kubernetes.io/instance: afs
+                        app.kubernetes.io/managed-by: Helm
+                        app.kubernetes.io/name: afs-billing
+                        app.kubernetes.io/part-of: afs
+                        helm.sh/chart: afs-0.1.0
+                spec:
+                    containers:
+                        - args:
+                            - --job
+                            - reconcile
+                          env:
+                            - name: AFS_DATABASE_URL
+                              value: postgres://afs_billing@afs.cluster-abc123.us-east-1.rds.amazonaws.com:5432/afs?sslmode=verify-full
+                            - name: AFS_DB_IAM_AUTH
+                              value: "true"
+                            - name: AFS_AWS_REGION
+                              value: us-east-1
+                            - name: AFS_CLUSTER_NAME
+                              value: afs-dev
+                            - name: AFS_LOG_LEVEL
+                              value: info
+                            - name: AFS_OTLP_ENDPOINT
+                              value: http://otel-collector.observability:4318
+                            - name: AFS_ATHENA_OUTPUT
+                              value: s3://afs-athena-results-111122223333/
+                            - name: AFS_ATHENA_WORKGROUP
+                              value: afs
+                            - name: AFS_CUR_DATABASE
+                              value: cur
+                            - name: AFS_CUR_TABLE
+                              value: afs_cur
+                            - name: AFS_METRICS_ADDR
+                              value: :9090
+                            - name: AFS_REPORTS_BUCKET
+                              value: afs-reports-111122223333
+                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
+                          imagePullPolicy: IfNotPresent
+                          name: afs-billing
+                          ports:
+                            - containerPort: 9090
+                              name: metrics
+                          resources:
+                            limits:
+                                memory: 1Gi
+                            requests:
+                                cpu: 250m
+                                memory: 256Mi
+                          securityContext:
+                            allowPrivilegeEscalation: false
+                            capabilities:
+                                drop:
+                                    - ALL
+                            readOnlyRootFilesystem: true
+                    restartPolicy: Never
+                    securityContext:
+                        runAsNonRoot: true
+                        seccompProfile:
+                            type: RuntimeDefault
+                    serviceAccountName: afs-billing
+    schedule: 0 4 * * *
+    successfulJobsHistoryLimit: 3
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+    labels:
+        afs.io/billing-job: report-schedules
+        app.kubernetes.io/component: billing
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-billing
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-billing-report-schedules
+    namespace: afs-system
+spec:
+    concurrencyPolicy: Forbid
+    failedJobsHistoryLimit: 5
+    jobTemplate:
+        spec:
+            activeDeadlineSeconds: 3600
+            backoffLimit: 2
+            template:
+                metadata:
+                    labels:
+                        app.kubernetes.io/component: billing
+                        app.kubernetes.io/instance: afs
+                        app.kubernetes.io/managed-by: Helm
+                        app.kubernetes.io/name: afs-billing
+                        app.kubernetes.io/part-of: afs
+                        helm.sh/chart: afs-0.1.0
+                spec:
+                    containers:
+                        - args:
+                            - --job
+                            - report-schedules
+                          env:
+                            - name: AFS_DATABASE_URL
+                              value: postgres://afs_billing@afs.cluster-abc123.us-east-1.rds.amazonaws.com:5432/afs?sslmode=verify-full
+                            - name: AFS_DB_IAM_AUTH
+                              value: "true"
+                            - name: AFS_AWS_REGION
+                              value: us-east-1
+                            - name: AFS_CLUSTER_NAME
+                              value: afs-dev
+                            - name: AFS_LOG_LEVEL
+                              value: info
+                            - name: AFS_OTLP_ENDPOINT
+                              value: http://otel-collector.observability:4318
+                            - name: AFS_ATHENA_OUTPUT
+                              value: s3://afs-athena-results-111122223333/
+                            - name: AFS_ATHENA_WORKGROUP
+                              value: afs
+                            - name: AFS_CUR_DATABASE
+                              value: cur
+                            - name: AFS_CUR_TABLE
+                              value: afs_cur
+                            - name: AFS_METRICS_ADDR
+                              value: :9090
+                            - name: AFS_REPORTS_BUCKET
+                              value: afs-reports-111122223333
+                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
+                          imagePullPolicy: IfNotPresent
+                          name: afs-billing
+                          ports:
+                            - containerPort: 9090
+                              name: metrics
+                          resources:
+                            limits:
+                                memory: 1Gi
+                            requests:
+                                cpu: 250m
+                                memory: 256Mi
+                          securityContext:
+                            allowPrivilegeEscalation: false
+                            capabilities:
+                                drop:
+                                    - ALL
+                            readOnlyRootFilesystem: true
+                    restartPolicy: Never
+                    securityContext:
+                        runAsNonRoot: true
+                        seccompProfile:
+                            type: RuntimeDefault
+                    serviceAccountName: afs-billing
+    schedule: '*/15 * * * *'
+    successfulJobsHistoryLimit: 3
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+    labels:
+        afs.io/billing-job: showback
+        app.kubernetes.io/component: billing
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-billing
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-billing-showback
+    namespace: afs-system
+spec:
+    concurrencyPolicy: Forbid
+    failedJobsHistoryLimit: 5
+    jobTemplate:
+        spec:
+            activeDeadlineSeconds: 3600
+            backoffLimit: 2
+            template:
+                metadata:
+                    labels:
+                        app.kubernetes.io/component: billing
+                        app.kubernetes.io/instance: afs
+                        app.kubernetes.io/managed-by: Helm
+                        app.kubernetes.io/name: afs-billing
+                        app.kubernetes.io/part-of: afs
+                        helm.sh/chart: afs-0.1.0
+                spec:
+                    containers:
+                        - args:
+                            - --job
+                            - showback
+                          env:
+                            - name: AFS_DATABASE_URL
+                              value: postgres://afs_billing@afs.cluster-abc123.us-east-1.rds.amazonaws.com:5432/afs?sslmode=verify-full
+                            - name: AFS_DB_IAM_AUTH
+                              value: "true"
+                            - name: AFS_AWS_REGION
+                              value: us-east-1
+                            - name: AFS_CLUSTER_NAME
+                              value: afs-dev
+                            - name: AFS_LOG_LEVEL
+                              value: info
+                            - name: AFS_OTLP_ENDPOINT
+                              value: http://otel-collector.observability:4318
+                            - name: AFS_ATHENA_OUTPUT
+                              value: s3://afs-athena-results-111122223333/
+                            - name: AFS_ATHENA_WORKGROUP
+                              value: afs
+                            - name: AFS_CUR_DATABASE
+                              value: cur
+                            - name: AFS_CUR_TABLE
+                              value: afs_cur
+                            - name: AFS_METRICS_ADDR
+                              value: :9090
+                            - name: AFS_REPORTS_BUCKET
+                              value: afs-reports-111122223333
+                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
+                          imagePullPolicy: IfNotPresent
+                          name: afs-billing
+                          ports:
+                            - containerPort: 9090
+                              name: metrics
+                          resources:
+                            limits:
+                                memory: 1Gi
+                            requests:
+                                cpu: 250m
+                                memory: 256Mi
+                          securityContext:
+                            allowPrivilegeEscalation: false
+                            capabilities:
+                                drop:
+                                    - ALL
+                            readOnlyRootFilesystem: true
+                    restartPolicy: Never
+                    securityContext:
+                        runAsNonRoot: true
+                        seccompProfile:
+                            type: RuntimeDefault
+                    serviceAccountName: afs-billing
+    schedule: 0 6 1 * *
+    successfulJobsHistoryLimit: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    labels:
+        app.kubernetes.io/component: api
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-api
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-api
+    namespace: afs-system
+spec:
+    replicas: 3
+    selector:
+        matchLabels:
+            app.kubernetes.io/instance: afs
+            app.kubernetes.io/name: afs-api
+    strategy:
+        rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+        type: RollingUpdate
+    template:
+        metadata:
+            labels:
+                app.kubernetes.io/component: api
+                app.kubernetes.io/instance: afs
+                app.kubernetes.io/managed-by: Helm
+                app.kubernetes.io/name: afs-api
+                app.kubernetes.io/part-of: afs
+                helm.sh/chart: afs-0.1.0
+        spec:
+            containers:
+                - env:
+                    - name: AFS_DATABASE_URL
+                      value: postgres://afs_app@afs.cluster-abc123.us-east-1.rds.amazonaws.com:5432/afs?sslmode=verify-full
+                    - name: AFS_DB_IAM_AUTH
+                      value: "true"
+                    - name: AFS_AWS_REGION
+                      value: us-east-1
+                    - name: AFS_CLUSTER_NAME
+                      value: afs-dev
+                    - name: AFS_LOG_LEVEL
+                      value: info
+                    - name: AFS_OTLP_ENDPOINT
+                      value: http://otel-collector.observability:4318
+                    - name: AFS_API_ADDR
+                      value: :8080
+                    - name: AFS_MAX_BODY_BYTES
+                      value: "1048576"
+                    - name: AFS_METRICS_ADDR
+                      value: :9090
+                    - name: AFS_API_REPLICAS
+                      value: "3"
+                  image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-api:v0.1.0
+                  imagePullPolicy: IfNotPresent
+                  livenessProbe:
+                    failureThreshold: 3
+                    httpGet:
+                        path: /healthz
+                        port: metrics
+                    periodSeconds: 10
+                  name: afs-api
+                  ports:
+                    - containerPort: 8080
+                      name: http
+                    - containerPort: 9090
+                      name: metrics
+                  readinessProbe:
+                    failureThreshold: 2
+                    httpGet:
+                        path: /readyz
+                        port: metrics
+                    periodSeconds: 5
+                  resources:
+                    limits:
+                        memory: 512Mi
+                    requests:
+                        cpu: 250m
+                        memory: 256Mi
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    capabilities:
+                        drop:
+                            - ALL
+                    readOnlyRootFilesystem: true
+                  startupProbe:
+                    failureThreshold: 30
+                    httpGet:
+                        path: /healthz
+                        port: metrics
+                    periodSeconds: 2
+            securityContext:
+                runAsNonRoot: true
+                seccompProfile:
+                    type: RuntimeDefault
+            serviceAccountName: afs-api
+            topologySpreadConstraints:
+                - labelSelector:
+                    matchLabels:
+                        app.kubernetes.io/instance: afs
+                        app.kubernetes.io/name: afs-api
+                  maxSkew: 1
+                  topologyKey: topology.kubernetes.io/zone
+                  whenUnsatisfiable: DoNotSchedule
+                - labelSelector:
+                    matchLabels:
+                        app.kubernetes.io/instance: afs
+                        app.kubernetes.io/name: afs-api
+                  maxSkew: 1
+                  topologyKey: kubernetes.io/hostname
+                  whenUnsatisfiable: ScheduleAnyway
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    labels:
+        app.kubernetes.io/component: gateway
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-gateway
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-gateway
+    namespace: afs-system
+spec:
+    replicas: 3
+    selector:
+        matchLabels:
+            app.kubernetes.io/instance: afs
+            app.kubernetes.io/name: afs-gateway
+    strategy:
+        rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+        type: RollingUpdate
+    template:
+        metadata:
+            labels:
+                app.kubernetes.io/component: gateway
+                app.kubernetes.io/instance: afs
+                app.kubernetes.io/managed-by: Helm
+                app.kubernetes.io/name: afs-gateway
+                app.kubernetes.io/part-of: afs
+                helm.sh/chart: afs-0.1.0
+        spec:
+            containers:
+                - env:
+                    - name: AFS_DATABASE_URL
+                      value: postgres://afs_gateway@afs.cluster-abc123.us-east-1.rds.amazonaws.com:5432/afs?sslmode=verify-full
+                    - name: AFS_DB_IAM_AUTH
+                      value: "true"
+                    - name: AFS_AWS_REGION
+                      value: us-east-1
+                    - name: AFS_CLUSTER_NAME
+                      value: afs-dev
+                    - name: AFS_LOG_LEVEL
+                      value: info
+                    - name: AFS_OTLP_ENDPOINT
+                      value: http://otel-collector.observability:4318
+                    - name: AFS_GATEWAY_ADDR
+                      value: :8443
+                    - name: AFS_GATEWAY_MAX_BODY
+                      value: "20971520"
+                    - name: AFS_GATEWAY_TLS_CERT
+                      value: /tls/tls.crt
+                    - name: AFS_GATEWAY_TLS_KEY
+                      value: /tls/tls.key
+                    - name: AFS_METRICS_ADDR
+                      value: :9090
+                  image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-gateway:v0.1.0
+                  imagePullPolicy: IfNotPresent
+                  livenessProbe:
+                    failureThreshold: 3
+                    httpGet:
+                        path: /healthz
+                        port: metrics
+                    periodSeconds: 10
+                  name: afs-gateway
+                  ports:
+                    - containerPort: 8443
+                      name: https
+                    - containerPort: 9090
+                      name: metrics
+                  readinessProbe:
+                    failureThreshold: 2
+                    httpGet:
+                        path: /readyz
+                        port: metrics
+                    periodSeconds: 5
+                  resources:
+                    limits:
+                        memory: 512Mi
+                    requests:
+                        cpu: 500m
+                        memory: 256Mi
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    capabilities:
+                        drop:
+                            - ALL
+                    readOnlyRootFilesystem: true
+                  startupProbe:
+                    failureThreshold: 30
+                    httpGet:
+                        path: /healthz
+                        port: metrics
+                    periodSeconds: 2
+                  volumeMounts:
+                    - mountPath: /tls
+                      name: tls
+                      readOnly: true
+            securityContext:
+                runAsNonRoot: true
+                seccompProfile:
+                    type: RuntimeDefault
+            serviceAccountName: afs-gateway
+            topologySpreadConstraints:
+                - labelSelector:
+                    matchLabels:
+                        app.kubernetes.io/instance: afs
+                        app.kubernetes.io/name: afs-gateway
+                  maxSkew: 1
+                  topologyKey: topology.kubernetes.io/zone
+                  whenUnsatisfiable: DoNotSchedule
+                - labelSelector:
+                    matchLabels:
+                        app.kubernetes.io/instance: afs
+                        app.kubernetes.io/name: afs-gateway
+                  maxSkew: 1
+                  topologyKey: kubernetes.io/hostname
+                  whenUnsatisfiable: ScheduleAnyway
+            volumes:
+                - name: tls
+                  secret:
+                    secretName: afs-gateway-tls
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    labels:
+        app.kubernetes.io/component: reconciler
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-reconciler
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-reconciler
+    namespace: afs-system
+spec:
+    replicas: 2
+    selector:
+        matchLabels:
+            app.kubernetes.io/instance: afs
+            app.kubernetes.io/name: afs-reconciler
+    strategy:
+        rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 1
+        type: RollingUpdate
+    template:
+        metadata:
+            labels:
+                app.kubernetes.io/component: reconciler
+                app.kubernetes.io/instance: afs
+                app.kubernetes.io/managed-by: Helm
+                app.kubernetes.io/name: afs-reconciler
+                app.kubernetes.io/part-of: afs
+                helm.sh/chart: afs-0.1.0
+        spec:
+            containers:
+                - env:
+                    - name: AFS_DATABASE_URL
+                      value: postgres://afs_reconciler@afs.cluster-abc123.us-east-1.rds.amazonaws.com:5432/afs?sslmode=verify-full
+                    - name: AFS_DB_IAM_AUTH
+                      value: "true"
+                    - name: AFS_AWS_REGION
+                      value: us-east-1
+                    - name: AFS_CLUSTER_NAME
+                      value: afs-dev
+                    - name: AFS_LOG_LEVEL
+                      value: info
+                    - name: AFS_OTLP_ENDPOINT
+                      value: http://otel-collector.observability:4318
+                    - name: AFS_EVENT_BUS_NAME
+                      value: afs-events
+                    - name: AFS_GATEWAY_ROLE_ARN
+                      value: arn:aws:iam::111122223333:role/afs-gateway
+                    - name: AFS_METRICS_ADDR
+                      value: :9090
+                    - name: AFS_OIDC_PROVIDER_ARN
+                      value: arn:aws:iam::111122223333:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE
+                    - name: AFS_PERMISSIONS_BOUNDARY_ARN
+                      value: arn:aws:iam::111122223333:policy/afs-agent-boundary
+                    - name: AFS_LEADER_LEASE_NAMESPACE
+                      value: afs-system
+                  image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-reconciler:v0.1.0
+                  imagePullPolicy: IfNotPresent
+                  livenessProbe:
+                    failureThreshold: 3
+                    httpGet:
+                        path: /healthz
+                        port: metrics
+                    periodSeconds: 10
+                  name: afs-reconciler
+                  ports:
+                    - containerPort: 9090
+                      name: metrics
+                  readinessProbe:
+                    failureThreshold: 2
+                    httpGet:
+                        path: /readyz
+                        port: metrics
+                    periodSeconds: 5
+                  resources:
+                    limits:
+                        memory: 1Gi
+                    requests:
+                        cpu: 250m
+                        memory: 256Mi
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    capabilities:
+                        drop:
+                            - ALL
+                    readOnlyRootFilesystem: true
+                  startupProbe:
+                    failureThreshold: 30
+                    httpGet:
+                        path: /healthz
+                        port: metrics
+                    periodSeconds: 2
+            securityContext:
+                runAsNonRoot: true
+                seccompProfile:
+                    type: RuntimeDefault
+            serviceAccountName: afs-reconciler
+            topologySpreadConstraints:
+                - labelSelector:
+                    matchLabels:
+                        app.kubernetes.io/instance: afs
+                        app.kubernetes.io/name: afs-reconciler
+                  maxSkew: 1
+                  topologyKey: topology.kubernetes.io/zone
+                  whenUnsatisfiable: DoNotSchedule
+                - labelSelector:
+                    matchLabels:
+                        app.kubernetes.io/instance: afs
+                        app.kubernetes.io/name: afs-reconciler
+                  maxSkew: 1
+                  topologyKey: kubernetes.io/hostname
+                  whenUnsatisfiable: ScheduleAnyway
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+    labels:
+        app.kubernetes.io/component: api
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-api
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-api
+    namespace: afs-system
+spec:
+    minAvailable: 2
+    selector:
+        matchLabels:
+            app.kubernetes.io/instance: afs
+            app.kubernetes.io/name: afs-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+    labels:
+        app.kubernetes.io/component: gateway
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-gateway
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-gateway
+    namespace: afs-system
+spec:
+    minAvailable: 2
+    selector:
+        matchLabels:
+            app.kubernetes.io/instance: afs
+            app.kubernetes.io/name: afs-gateway
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+    labels:
+        app.kubernetes.io/component: reconciler
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-reconciler
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-reconciler
+    namespace: afs-system
+spec:
+    maxUnavailable: 1
+    selector:
+        matchLabels:
+            app.kubernetes.io/instance: afs
+            app.kubernetes.io/name: afs-reconciler
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+    labels:
+        app.kubernetes.io/component: slis
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-slis
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-slis
+    namespace: afs-system
+spec:
+    groups:
+        - name: afs-api
+          rules:
+            - alert: AFSAPIReadLatencyHigh
+              annotations:
+                description: p99 of API reads (reports excluded) has been above target for 10 minutes.
+                summary: afs-api read p99 above 0.3 s
+              expr: |
+                histogram_quantile(0.99, sum by (le) (rate(afs_api_request_duration_seconds_bucket{method="GET", route!~"GetUsage|GetTeamReport|GetAgentReport|GetServiceReport|ListCosts|ListCostReconciliations"}[5m]))) > 0.3
+              for: 10m
+              labels:
+                severity: warning
+            - alert: AFSAPIReportLatencyHigh
+              annotations:
+                summary: afs-api report p99 above 1 s
+              expr: |
+                histogram_quantile(0.99, sum by (le) (rate(afs_api_request_duration_seconds_bucket{route=~"GetUsage|GetTeamReport|GetAgentReport|GetServiceReport|ListCosts|ListCostReconciliations"}[5m]))) > 1
+              for: 10m
+              labels:
+                severity: warning
+            - alert: AFSAPIErrorRatioHigh
+              annotations:
+                summary: afs-api 5xx ratio above the 99.9% availability budget
+              expr: |
+                sum(rate(afs_api_requests_total{code=~"5.."}[5m])) / sum(rate(afs_api_requests_total[5m])) > 0.001
+              for: 10m
+              labels:
+                severity: critical
+        - name: afs-reconciler
+          rules:
+            - alert: AFSNoReconcilerLeader
+              annotations:
+                summary: no afs-reconciler replica holds the leader lease
+              expr: sum(afs_reconciler_is_leader) < 1 or absent(afs_reconciler_is_leader)
+              for: 1m
+              labels:
+                severity: critical
+            - alert: AFSReconcileLagHigh
+              annotations:
+                summary: reconcile lag p95 above 60 s
+              expr: |
+                histogram_quantile(0.95, sum by (le) (rate(afs_reconcile_lag_seconds_bucket[10m]))) > 60
+              for: 10m
+              labels:
+                severity: warning
+            - alert: AFSReconcileErrors
+              annotations:
+                summary: reconciles of {{ $labels.kind }} keep failing
+              expr: sum by (kind) (rate(afs_reconcile_errors_total[10m])) > 0
+              for: 15m
+              labels:
+                severity: warning
+            - alert: AFSDriftHigh
+              annotations:
+                summary: more than 10 drift corrections in an hour; something edits managed objects
+              expr: sum(increase(afs_drift_corrected_total[1h])) > 10
+              labels:
+                severity: warning
+        - name: afs-gateway
+          rules:
+            - alert: AFSGatewayReservationFailures
+              annotations:
+                summary: the gateway rejects calls because it cannot reserve spend ({{ $labels.reason }}); it fails closed
+              expr: sum by (reason) (increase(afs_gateway_reservation_failures_total[5m])) > 0
+              labels:
+                severity: critical
+            - alert: AFSGatewayAddedLatencyHigh
+              annotations:
+                summary: gateway added latency p99 above 0.025 s
+              expr: |
+                histogram_quantile(0.99, sum by (le) (rate(afs_gateway_added_latency_seconds_bucket[5m]))) > 0.025
+              for: 10m
+              labels:
+                severity: warning
+            - alert: AFSGatewayReservationsExpiring
+              annotations:
+                summary: spend reservations expire unsettled; a gateway replica is dying mid-request
+              expr: sum(increase(afs_gateway_reservations_expired_total[1h])) > 0
+              labels:
+                severity: warning
+        - name: afs-events-and-billing
+          rules:
+            - alert: AFSOutboxLagHigh
+              annotations:
+                summary: the oldest unpublished event is older than 300 s
+              expr: max(afs_outbox_oldest_age_seconds) > 300
+              for: 5m
+              labels:
+                severity: warning
+            - alert: AFSOutboxPublishFailing
+              annotations:
+                summary: outbox events fail to reach EventBridge
+              expr: sum(rate(afs_outbox_publish_failures_total[10m])) > 0
+              for: 15m
+              labels:
+                severity: warning
+            - alert: AFSNotificationFailures
+              annotations:
+                summary: notifications to {{ $labels.channel_type }} channels fail
+              expr: sum by (channel_type) (increase(afs_notification_failures_total[1h])) > 0
+              labels:
+                severity: warning
+            - alert: AFSCURVarianceHigh
+              annotations:
+                summary: gateway cost estimates differ from the CUR by more than 5 percent
+              expr: max(afs_cost_cur_variance_ratio) > 0.05
+              for: 1h
+              labels:
+                severity: warning
+            - alert: AFSBillingJobFailed
+              annotations:
+                summary: billing job {{ $labels.job_name }} failed
+              expr: sum by (job_name) (kube_job_status_failed{namespace="afs-system", job_name=~"afs-billing-.+"}) > 0
+              labels:
+                severity: warning
+---
+apiVersion: v1
+kind: Service
+metadata:
+    labels:
+        app.kubernetes.io/component: api
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-api
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-api
+    namespace: afs-system
+spec:
+    ports:
+        - name: http
+          port: 80
+          targetPort: http
+        - name: metrics
+          port: 9090
+          targetPort: metrics
+    selector:
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/name: afs-api
+    type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+    labels:
+        app.kubernetes.io/component: gateway
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-gateway
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-gateway
+    namespace: afs-system
+spec:
+    ports:
+        - name: https
+          port: 443
+          targetPort: https
+        - name: metrics
+          port: 9090
+          targetPort: metrics
+    selector:
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/name: afs-gateway
+    type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+    labels:
+        app.kubernetes.io/component: reconciler
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-reconciler
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-reconciler
+    namespace: afs-system
+spec:
+    clusterIP: None
+    ports:
+        - name: metrics
+          port: 9090
+          targetPort: metrics
+    selector:
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/name: afs-reconciler
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+    labels:
+        app.kubernetes.io/component: api
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-api
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-api
+    namespace: afs-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+    labels:
+        app.kubernetes.io/component: billing
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-billing
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-billing
+    namespace: afs-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+    labels:
+        app.kubernetes.io/component: gateway
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-gateway
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-gateway
+    namespace: afs-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+    labels:
+        app.kubernetes.io/component: reconciler
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-reconciler
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-reconciler
+    namespace: afs-system
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+    labels:
+        app.kubernetes.io/component: api
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-api
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-api
+    namespace: afs-system
+spec:
+    endpoints:
+        - interval: 30s
+          path: /metrics
+          port: metrics
+    selector:
+        matchLabels:
+            app.kubernetes.io/instance: afs
+            app.kubernetes.io/name: afs-api
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+    labels:
+        app.kubernetes.io/component: gateway
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-gateway
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-gateway
+    namespace: afs-system
+spec:
+    endpoints:
+        - interval: 30s
+          path: /metrics
+          port: metrics
+    selector:
+        matchLabels:
+            app.kubernetes.io/instance: afs
+            app.kubernetes.io/name: afs-gateway
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+    labels:
+        app.kubernetes.io/component: reconciler
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-reconciler
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-reconciler
+    namespace: afs-system
+spec:
+    endpoints:
+        - interval: 30s
+          path: /metrics
+          port: metrics
+    selector:
+        matchLabels:
+            app.kubernetes.io/instance: afs
+            app.kubernetes.io/name: afs-reconciler

@@ -1,0 +1,27 @@
+enabled: true
+image:
+  repository: afs-billing
+dbUser: afs_billing
+serviceAccount:
+  name: afs-billing
+ports:
+  metrics: 9090
+resources:
+  requests: {cpu: 250m, memory: 256Mi}
+  limits: {memory: 1Gi}
+env:
+  AFS_METRICS_ADDR: ":9090"
+# Required: AFS_CUR_DATABASE, AFS_CUR_TABLE, AFS_ATHENA_WORKGROUP, AFS_ATHENA_OUTPUT,
+# AFS_REPORTS_BUCKET, AFS_REPORTS_KMS_KEY_ID (from Terraform outputs).
+# One CronJob per entry; `job` is passed as `afs-billing --job <job>` (M4-C1).
+cronjobs:
+  cur-ingest:      {schedule: "0 3 * * *",    job: cur-ingest}
+  reconcile:       {schedule: "0 4 * * *",    job: reconcile}
+  price-sync:      {schedule: "0 5 * * 1",    job: price-sync}
+  report-schedules: {schedule: "*/15 * * * *", job: report-schedules}
+  showback:        {schedule: "0 6 1 * *",    job: showback}
+concurrencyPolicy: Forbid
+backoffLimit: 2
+activeDeadlineSeconds: 3600
+successfulJobsHistoryLimit: 3
+failedJobsHistoryLimit: 5
