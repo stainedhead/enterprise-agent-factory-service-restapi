@@ -218,15 +218,15 @@ Owns: `internal/domain/team.go`, `internal/usecase/teams/`, `internal/adapter/po
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-B1 | `Team` aggregate: guardrail field set, `kind` immutable, effective ceiling (override while unexpired), state transitions, override validation (both fields, reason, future expiry, above `maxBudgetUsd`) [unit] | RA-US-6.4 (part), RA-14 (part) | — |
-| [ ] | M1-B2 | Teams repository: insert, get, list (RLS), update with `version`, mark deleting; `team_models`, `team_tags` | RA-4 (part) | — |
-| [ ] | M1-B3 | `CreateTeam` (persistent; `Idempotency-Key` replay returns the first response, a different body → `409`): required tags (`details.missingTags`), models, provider, first team-admin binding, one transaction, one audit, one `team.created`; any failure writes nothing; team-admin or viewer → `403` + one denied audit | RA-US-3.1, RA-US-3.2, RA-US-3.3, RA-US-3.4 | M1-B1, M1-B2, M1-D1, M1-D7 |
-| [ ] | M1-B4 | `ListTeams` (bound teams; service admins all), `GetTeam`, `GetTeamStatus` (from `resource_status`) | RA-1 (part), TEAM-5 | M1-B2 |
-| [ ] | M1-B5 | `UpdateTeam`: `teams:write` fields; guardrail fields need `teams:set-guardrails` (team-admin changing `isolationTier` or `viewerKubectl` → `403`); `allowedAwsAccounts` by the conditional grant; ceiling override (reason audit only, `team.ceiling_override_set`); `maxBudgetUsd` below budget → `400`; `kind` change → `400`; `team.updated` | RA-US-6.4, RA-US-6.1 (part), RA-US-12.1 (part), RA-US-13.2 (part), RA-14 (part) | M1-B3, M1-D2 |
-| [ ] | M1-B6 | `SuspendTeam`/`ResumeTeam` (`teams:suspend`, team-admin allowed), `DeleteTeam` (service admin; team-admin → `403` + denied audit; returns `state = deleting`, `status.phase = Deleting`); events | RA-US-16.2 | M1-B3 |
-| [ ] | M1-B7 | Suspended-team guard: on a suspended team every mutation except `ResumeTeam` and `DeleteTeam` → `409` `details.reason = team_suspended`; reads succeed | RA-US-16.1 | M1-B6 |
-| [ ] | M1-B8 | `ListTeamModels`/`PutTeamModels` (`teams:set-guardrails`), `GetTeamTags`/`PutTeamTags` (team-owned keys only; `requestMetadataDroppedKeys` computed by `domain.TagSet.BedrockMetadata`; `team.tags_changed`) | RA-1 (part), TAG-1 (part) | M1-B3, M1-E3 |
-| [ ] | M1-B9 | Deleted teams stay readable to service admins (`state = deleted`): team, revisions and audit routes | RA-US-16.3 (part) | M1-B6, M1-E4, M1-E5 |
+| [x] | M1-B1 | `Team` aggregate: guardrail field set, `kind` immutable, effective ceiling (override while unexpired), state transitions, override validation (both fields, reason, future expiry, above `maxBudgetUsd`) [unit] | RA-US-6.4 (part), RA-14 (part) | — |
+| [x] | M1-B2 | Teams repository: insert, get, list (RLS), update with `version`, mark deleting; `team_models`, `team_tags` | RA-4 (part) | — |
+| [x] | M1-B3 | `CreateTeam` (persistent; `Idempotency-Key` replay returns the first response, a different body → `409`): required tags (`details.missingTags`), models, provider, first team-admin binding, one transaction, one audit, one `team.created`; any failure writes nothing; team-admin or viewer → `403` + one denied audit | RA-US-3.1, RA-US-3.2, RA-US-3.3, RA-US-3.4 | M1-B1, M1-B2, M1-D1, M1-D7 |
+| [x] | M1-B4 | `ListTeams` (bound teams; service admins all), `GetTeam`, `GetTeamStatus` (from `resource_status`) | RA-1 (part), TEAM-5 | M1-B2 |
+| [x] | M1-B5 | `UpdateTeam`: `teams:write` fields; guardrail fields need `teams:set-guardrails` (team-admin changing `isolationTier` or `viewerKubectl` → `403`); `allowedAwsAccounts` by the conditional grant; ceiling override (reason audit only, `team.ceiling_override_set`); `maxBudgetUsd` below budget → `400`; `kind` change → `400`; `team.updated` | RA-US-6.4, RA-US-6.1 (part), RA-US-12.1 (part), RA-US-13.2 (part), RA-14 (part) | M1-B3, M1-D2 |
+| [x] | M1-B6 | `SuspendTeam`/`ResumeTeam` (`teams:suspend`, team-admin allowed), `DeleteTeam` (service admin; team-admin → `403` + denied audit; returns `state = deleting`, `status.phase = Deleting`); events | RA-US-16.2 | M1-B3 |
+| [x] | M1-B7 | Suspended-team guard: on a suspended team every mutation except `ResumeTeam` and `DeleteTeam` → `409` `details.reason = team_suspended`; reads succeed | RA-US-16.1 | M1-B6 |
+| [x] | M1-B8 | `ListTeamModels`/`PutTeamModels` (`teams:set-guardrails`), `GetTeamTags`/`PutTeamTags` (team-owned keys only; `requestMetadataDroppedKeys` computed by `domain.TagSet.BedrockMetadata`; `team.tags_changed`) | RA-1 (part), TAG-1 (part) | M1-B3, M1-E3 |
+| [x] | M1-B9 | Deleted teams stay readable to service admins (`state = deleted`): team, revisions and audit routes | RA-US-16.3 (part) | M1-B6, M1-E4, M1-E5 |
 
 ### M1-C · Members and API keys
 
@@ -235,8 +235,8 @@ Owns: `internal/domain/{member,apikey}.go`, `internal/usecase/{members,apikeys}/
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-C1 | `ListMembers`, `AddMember`, `UpdateMember`, `RemoveMember` with `CanGrant` (team roles only; `If-Match`); events and audit | RA-1 (part), ACC-2 | — |
-| [ ] | M1-C2 | `ListApiKeys` (`api-keys:read`; viewers `403`, D50), `CreateApiKey` (team role, expiry ≤ 90 days, `secretKey` once), `DeleteApiKey`; a replayed create returns metadata without `secretKey` and `Idempotent-Replayed: true`; no stored response contains `secretKey` | RA-US-9.3 (part), RA-4 (part) | M1-D1 |
+| [x] | M1-C1 | `ListMembers`, `AddMember`, `UpdateMember`, `RemoveMember` with `CanGrant` (team roles only; `If-Match`); events and audit | RA-1 (part), ACC-2 | — |
+| [x] | M1-C2 | `ListApiKeys` (`api-keys:read`; viewers `403`, D50), `CreateApiKey` (team role, expiry ≤ 90 days, `secretKey` once), `DeleteApiKey`; a replayed create returns metadata without `secretKey` and `Idempotent-Replayed: true`; no stored response contains `secretKey` | RA-US-9.3 (part), RA-4 (part) | M1-D1 |
 | [ ] | M1-C3 | Matrix rows for every member and key operation (viewer, team-admin, service admin, security operator, team keys of each role, unbound user) | RA-US-1.3 (part) | M1-D6 |
 
 ### M1-D · Request pipeline (RA-4, RA-15)
@@ -259,11 +259,11 @@ Owns: `internal/domain/{settings,idp}.go`, `internal/usecase/{settings,idp,servi
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-E1 | `GetSettings` (every key, value, default, range) and `PutSetting` with type and range checks from `settings_gen.go`; unknown key or bad value → `400`; non-service-admin → `403`; audited | RA-US-15.3, RA-US-18.2 (part), RA-16, CT-API-15 | — |
-| [ ] | M1-E2 | Identity providers: list, create, get (teams using it), update (disabling one in use → `409`), delete (in use → `409`); one default; audited; `ListSignInProviders` then lists both with the default flagged | RA-US-15.4 | M1-A5 |
-| [ ] | M1-E3 | `ListServiceTags`, `PutServiceTag`, `DeleteServiceTag` (`admin:service-tags`) | RA-1 (part), TAG-1 | — |
-| [ ] | M1-E4 | `ListAuditEvents` (team, CSV) and `ListAdminAuditEvents` (service, CSV) with filters and pagination | RA-1 (part), CT-API-3 (part) | — |
-| [ ] | M1-E5 | `ListRevisions`, `GetRevision` | RA-1 (part) | — |
+| [x] | M1-E1 | `GetSettings` (every key, value, default, range) and `PutSetting` with type and range checks from `settings_gen.go`; unknown key or bad value → `400`; non-service-admin → `403`; audited | RA-US-15.3, RA-US-18.2 (part), RA-16, CT-API-15 | — |
+| [x] | M1-E2 | Identity providers: list, create, get (teams using it), update (disabling one in use → `409`), delete (in use → `409`); one default; audited; `ListSignInProviders` then lists both with the default flagged | RA-US-15.4 | M1-A5 |
+| [x] | M1-E3 | `ListServiceTags`, `PutServiceTag`, `DeleteServiceTag` (`admin:service-tags`) | RA-1 (part), TAG-1 | — |
+| [x] | M1-E4 | `ListAuditEvents` (team, CSV) and `ListAdminAuditEvents` (service, CSV) with filters and pagination | RA-1 (part), CT-API-3 (part) | — |
+| [x] | M1-E5 | `ListRevisions`, `GetRevision` | RA-1 (part) | — |
 
 ### M1-F · Reconciler engine (RC-4, RC-5)
 
