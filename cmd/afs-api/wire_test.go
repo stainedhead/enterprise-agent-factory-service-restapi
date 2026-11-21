@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres/pgtest"
@@ -68,6 +69,21 @@ func TestWireWithDatabase(t *testing.T) {
 	}
 	if c.Runner == nil || c.Audit == nil || c.Outbox == nil || c.Idem == nil || c.Creds == nil {
 		t.Fatal("components missing")
+	}
+	// M1-L2: requests are counted by operation, and the readiness checks cover database and schema.
+	_ = get(t, c.Handler, "/v1/me")
+	rec := httptest.NewRecorder()
+	c.Metrics.Handler().ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", nil))
+	if !strings.Contains(rec.Body.String(), `afs_api_requests_total{code="401",method="GET",route="GetMe"} 1`) {
+		t.Errorf("RED metrics missing:\n%s", rec.Body)
+	}
+	for _, ck := range c.Checks {
+		if err := ck.Fn(t.Context()); err != nil {
+			t.Errorf("check %s: %v", ck.Name, err)
+		}
+	}
+	if len(c.Checks) != 2 {
+		t.Errorf("checks = %d, want database and schema", len(c.Checks))
 	}
 	if _, err := wire(t.Context(), quiet, settings{DatabaseURL: db.URLs["afs_app"], OwnerURL: "::bad::"}); err == nil {
 		t.Fatal("bad owner URL accepted")

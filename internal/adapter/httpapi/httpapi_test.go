@@ -579,3 +579,21 @@ func TestSplitVerb(t *testing.T) {
 		t.Fatal("route outside the router")
 	}
 }
+
+// M1-L2: the router tells the metrics middleware which operation a request matched.
+func TestOnRouteReportsTheMatchedOperation(t *testing.T) {
+	var got []string
+	h, err := New(Config{
+		Auth: principals, Teams: fakeTeams{teamA: {}}, Registrars: []Registrar{none},
+		OnRoute: func(_ context.Context, op string) { got = append(got, op) },
+		Now:     func() time.Time { return time.Unix(1_800_000_000, 0) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	do(t, h, "GET", "/v1/me", "", "")
+	do(t, h, "GET", "/v1/nope", "", "")
+	if len(got) != 1 || got[0] != "GetMe" {
+		t.Errorf("OnRoute calls = %v, want [GetMe] (an unmatched path reports nothing)", got)
+	}
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -12,8 +13,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/httpapi"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/httpapi/middleware"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/observability"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/authz"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/buildinfo"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/auth"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 )
@@ -31,6 +35,10 @@ type components struct {
 	// Auth authenticates bearer credentials (wireAuth).
 	Auth    *auth.Service
 	Handler http.Handler
+	// Metrics is the registry the operations server exposes; Checks are its readiness checks
+	// (database and schema version) on /readyz of AFS_METRICS_ADDR.
+	Metrics *observability.Metrics
+	Checks  []observability.Check
 	Close   func()
 }
 
@@ -102,8 +110,12 @@ func settingsFrom(env func(string) string) (settings, error) {
 // placeholders only (development); with it, it migrates (when an owner URL is given), opens the
 // pool and wires the database-backed components.
 func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error) {
-	c := &components{Close: func() {}}
-	cfg := httpapi.Config{}
+	c := &components{Close: func() {}, Metrics: observability.NewMetrics("afs-api", buildinfo.Version)}
+	cfg := httpapi.Config{
+		// RED metrics outermost, labelled by the operationId the router reports.
+		Outer:   []httpapi.Middleware{func(next http.Handler) http.Handler { return middleware.Metrics(c.Metrics, next) }},
+		OnRoute: middleware.SetRoute,
+	}
 	if s.DatabaseURL != "" {
 		if s.OwnerURL != "" {
 			n, err := postgres.Migrate(ctx, s.OwnerURL, s.MigrationTimeout, nil)
@@ -135,6 +147,23 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 		c.Idem = postgres.NewIdempotencyStore()
 		c.Creds = postgres.NewCredentials(c.Runner)
 		c.Settings = postgres.NewSettingsReader(c.Runner)
+		want, err := postgres.ExpectedSchemaVersion()
+		if err != nil {
+			pool.Close()
+			return nil, err
+		}
+		c.Checks = []observability.Check{
+			{Name: "database", Fn: func(ctx context.Context) error {
+				if err := pool.Ping(ctx); err != nil {
+					return errors.New("database: not reachable") // never the driver's text
+				}
+				return nil
+			}},
+			observability.SchemaCheck(func(ctx context.Context) (int, error) {
+				var v int
+				return v, pool.QueryRow(ctx, `SELECT afs.schema_version()`).Scan(&v)
+			}, want),
+		}
 		cfg.Ready = map[string]httpapi.ReadinessCheck{
 			"database": func(r *http.Request) error { return pool.Ping(r.Context()) },
 		}
@@ -150,6 +179,11 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 		cfg.Hooks.CrossTeamNotFound = func(ctx context.Context, op string) {
 			log.InfoContext(ctx, "cross-team not found", "metric", "afs_api_cross_team_not_found_total", "op", op)
 		}
+	}
+	counted := cfg.Hooks.CrossTeamNotFound
+	cfg.Hooks.CrossTeamNotFound = func(ctx context.Context, op string) {
+		c.Metrics.APICrossTeamNotFound.Inc()
+		counted(ctx, op)
 	}
 	h, err := httpapi.New(cfg)
 	if err != nil {

@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/httpapi"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/observability"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/buildinfo"
 )
 
@@ -42,6 +44,20 @@ func main() {
 		os.Exit(1)
 	}
 	defer c.Close()
+	// Probes and metrics on AFS_METRICS_ADDR (default :9090), apart from the public listener.
+	oc := observability.EnvConfig("afs-api", buildinfo.Version, os.Getenv)
+	oc.Metrics, oc.Checks, oc.RequestID = c.Metrics, c.Checks, httpapi.RequestIDFrom
+	rt, err := observability.Start(ctx, oc)
+	if err != nil {
+		log.Error("afs-api observability", "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = rt.Shutdown(sctx)
+	}()
+	log = rt.Log
 	srv := &http.Server{
 		Addr:              *addr,
 		Handler:           c.Handler,

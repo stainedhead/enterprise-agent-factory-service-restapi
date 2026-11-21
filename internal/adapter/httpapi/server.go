@@ -27,6 +27,9 @@ type Config struct {
 	Hooks Hooks
 	// TeamState feeds the suspended-team guard (M1-B7); nil disables it.
 	TeamState TeamStateLookup
+	// OnRoute, when set, is called with the operationId once a request matched a route, before any
+	// middleware of the route runs (RED metrics label by it).
+	OnRoute func(ctx context.Context, operationID string)
 	// Ready maps a dependency name to its readiness check (GetReadiness).
 	Ready map[string]ReadinessCheck
 	// Registrars bind handlers; the default is Areas.
@@ -102,6 +105,9 @@ func New(cfg Config) (http.Handler, error) {
 		inner := chain(authorize(op, cfg.Auth, cfg.Teams, cfg.Hooks, suspendedGuard(op, cfg.TeamState, chain(op.handler, cfg.PostAuth))), cfg.PreAuth)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			r = r.WithContext(context.WithValue(r.Context(), keyRoute, op))
+			if cfg.OnRoute != nil {
+				cfg.OnRoute(r.Context(), op.OperationID)
+			}
 			if err := checkQuery(op, r); err != nil {
 				WriteError(w, r, err)
 				return
