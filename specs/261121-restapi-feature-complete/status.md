@@ -32,7 +32,7 @@
 
 | Milestone | Status | Tasks done |
 |---|---|---|
-| M0 Contract and foundation | In Progress | 23 / 41 |
+| M0 Contract and foundation | In Progress | 24 / 41 |
 | M1 Teams and core | Not Started | 0 |
 | M2 Agents | Not Started | 0 |
 | M3 Gateway and budgets | Not Started | 0 |
@@ -51,3 +51,4 @@
 - 2026-11-21: `review-spec` (step 2): gaps fixed; Phases 0–4 complete; implementation-ready.
 - 2026-11-21: step 3 started; M0-S1..S4 done (`-db` b0d8754 adopted, domain primitives, archtest, Makefile and CI targets).
 - 2026-11-21: M0-A1..A7 (contractgen, generated catalog/routes/events/settings, openapibundle, contract test), M0-B1a..B4b (full `api/openapi.yaml` 1.1.0, 182 operations, examples validated), M0-C1..C4 (authz rewrite, 99% coverage) done. `-db` bumped to 23e9240 (PR #12: migrations 000015–000016, X-DB-1..6).
+- 2026-11-21: M0-F7 done: cross-cutting ports (`internal/usecase/port`) and transactional fakes (`port/fakes`), incl. `CredentialLookup`/`TeamDirectory` for the X-DB-1..3 functions.

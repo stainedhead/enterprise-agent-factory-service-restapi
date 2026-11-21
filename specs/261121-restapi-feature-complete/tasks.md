@@ -182,7 +182,7 @@ Owns: `internal/adapter/postgres/{db,tx,session,errors,migrate,audit,outbox,idem
 | [ ] | M0-F5 | `AuditWriter` (request id, actor type, before/after without secret values, outcome) and `OutboxWriter` (contract §7 envelope); row + audit + outbox in one transaction, all rolled back together; denied audit in its own transaction | CT-API-8 (part), CT-API-9 (part), RA-US-6.3 (part) | M0-F3 |
 | [ ] | M0-F6 | `IdempotencyStore` per database contract §7.1 (`in_progress`, `completed`, replay, mismatch, in progress, 5xx not stored) with `secretKey` stripping before storage | RA-US-9.1 (part), RA-US-9.3 (part) | M0-F3 |
 | [ ] | M0-F8 | Interim lookup transaction (X-DB-1..3): `TxRunner.Lookup(ctx, name, args)` runs one named, read-only (`SET TRANSACTION READ ONLY`) query with `afs.service_admin = 'on'` and actor `system:afs-api-lookup`; only the API key, workload and team directory lookups are registered; a test fails if any other query is registered or the transaction writes; removed when X-DB-1..3 are adopted | RA-2 (part), RA-2b (part) | M0-F3 |
-| [ ] | M0-F7 | Ports `TxRunner`, `Session`, `AuditWriter`, `OutboxWriter`, `IdempotencyStore`, `Clock`, `IDGen`, `SettingsReader` and their fakes in `port/fakes` | — | M0-F3 |
+| [x] | M0-F7 | Ports `TxRunner`, `Session`, `AuditWriter`, `OutboxWriter`, `IdempotencyStore`, `Clock`, `IDGen`, `SettingsReader` and their fakes in `port/fakes` | — | M0-F3 |
 
 ### M0-X · Milestone exit
 
