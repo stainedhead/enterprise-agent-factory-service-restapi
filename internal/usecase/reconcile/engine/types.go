@@ -18,6 +18,8 @@ const (
 	KindAgent     Kind = "agent"
 	KindPool      Kind = "pool"
 	KindAdmission Kind = "admission"
+	// KindPlatform is the singleton for cluster-wide objects the team environments rely on.
+	KindPlatform Kind = "platform"
 )
 
 // Key identifies a work item: one resource of one kind. Two additions of the same key before it runs
