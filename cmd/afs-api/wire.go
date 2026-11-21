@@ -76,6 +76,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 		cfg.Ready = map[string]httpapi.ReadinessCheck{
 			"database": func(r *http.Request) error { return pool.Ping(r.Context()) },
 		}
+		wireM1W2(c, &cfg, log)
 		cfg.Hooks.Denied = func(ctx context.Context, d httpapi.Denial) {
 			s := sessionOf(d.Principal, httpapi.RequestIDFrom(ctx))
 			err := c.Audit.WriteDenied(ctx, s, port.AuditRecord{Action: d.OperationID, TeamID: d.TeamID,
