@@ -651,3 +651,40 @@ func TestPerTeamOrdering(t *testing.T) {
 		t.Errorf("%d resources of one team reconciled at once", maxActive.Load())
 	}
 }
+
+func TestFailureKeepsConditionsOfTheSucceededParts(t *testing.T) {
+	r := newRig(t, nil)
+	r.ctl.fn = func(context.Context, Ref, int) (Outcome, error) {
+		return Outcome{Conditions: []domain.Condition{{Type: domain.CondNamespaceReady, Status: domain.ConditionTrue}}},
+			WithCondition(domain.CondIamReady, &CodedError{Code: "AccessDenied", Err: errors.New("denied")})
+	}
+	r.start(t)
+	r.feed.send(Change{"teams", "team_A", "team_A"})
+	eventually(t, "failure report", func() bool { return len(r.status.all()) >= 1 })
+	got := map[string]domain.Condition{}
+	for _, c := range r.status.all()[0].Conditions {
+		got[c.Type] = c
+	}
+	if got[domain.CondNamespaceReady].Status != domain.ConditionTrue || got[domain.CondIamReady].Status != domain.ConditionFalse || got["Ready"].Status != domain.ConditionFalse {
+		t.Errorf("conditions = %+v", got)
+	}
+}
+
+func TestEnqueueBackgroundSkipsFailingResources(t *testing.T) {
+	r := newRig(t, nil)
+	r.e.queue.AddRateLimited(teamRef, false) // in backoff: a retry timer is pending
+	r.e.queue.Add(teamRef)                   // no-op, already waiting; drain it
+	g, _ := get(t, r.e.queue)
+	r.e.queue.Done(g)
+	r.e.queue.AddRateLimited(teamRef, false)
+	before := r.e.queue.Len()
+	r.e.enqueueBackground(teamRef)
+	if r.e.queue.Len() != before {
+		t.Error("a poll queued a resource that is in backoff")
+	}
+	other := NewRef(KindTeam, "team_Q", "team_Q")
+	r.e.enqueueBackground(other)
+	if r.e.queue.Len() != before+1 {
+		t.Error("a poll did not queue a healthy resource")
+	}
+}

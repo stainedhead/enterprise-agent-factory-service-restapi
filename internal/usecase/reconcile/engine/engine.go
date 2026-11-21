@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -244,7 +245,7 @@ func (e *Engine) reconcile(ctx context.Context, ref Ref) {
 		// A terminal failure is fixed only by a change; it is retried at the longest interval.
 		delay := e.queue.AddRateLimited(ref, errors.Is(err, ErrTerminal))
 		e.cfg.Log.Warn("reconcile failed", slog.String("resource", ref.String()), slog.Any("err", err), slog.Duration("retry_in", delay))
-		e.writeFailure(ctx, ref, err, now)
+		e.writeFailure(ctx, ref, out.Conditions, err, now)
 		return
 	}
 	e.reconciled.Add(1)
@@ -291,14 +292,17 @@ func (e *Engine) safeReconcile(ctx context.Context, c Controller, ref Ref) (out 
 }
 
 // writeFailure reports a failed pass: Degraded (retrying) or Failed (terminal), with the failing
-// condition's reason set to the AWS or Kubernetes error code.
-func (e *Engine) writeFailure(ctx context.Context, ref Ref, err error, now time.Time) {
+// condition's reason set to the AWS or Kubernetes error code. done are the conditions of the parts of
+// the pass that succeeded (a controller may return them with its error); they are kept, so a team whose
+// namespace is ready and whose IAM failed shows both.
+func (e *Engine) writeFailure(ctx context.Context, ref Ref, done []domain.Condition, err error, now time.Time) {
 	condType, reason := reasonOf(err)
 	phase := domain.PhaseDegraded
 	if errors.Is(err, ErrTerminal) {
 		phase = domain.PhaseFailed
 	}
-	conds := []domain.Condition{{Type: condType, Status: domain.ConditionFalse, Reason: reason, Message: err.Error(), LastTransitionTime: now}}
+	conds := slices.DeleteFunc(slices.Clone(done), func(c domain.Condition) bool { return c.Type == condType || c.Type == "Ready" })
+	conds = append(conds, domain.Condition{Type: condType, Status: domain.ConditionFalse, Reason: reason, Message: err.Error(), LastTransitionTime: now})
 	if condType != "Ready" {
 		conds = append(conds, domain.Condition{Type: "Ready", Status: domain.ConditionFalse, Reason: reason, Message: err.Error(), LastTransitionTime: now})
 	}

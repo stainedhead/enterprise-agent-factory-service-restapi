@@ -162,7 +162,8 @@ type Outcome struct {
 type Controller interface {
 	Kind() Kind
 	// Reconcile brings the resource to its desired state. It must be idempotent. An error is
-	// retried with backoff; see ConditionError and Terminal for how it is reported.
+	// retried with backoff; see ConditionError and Terminal for how it is reported. Together with an
+	// error a controller may return an Outcome whose Conditions describe the parts that succeeded.
 	Reconcile(ctx context.Context, ref Ref) (Outcome, error)
 }
 

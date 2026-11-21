@@ -297,10 +297,10 @@ Owns: `internal/adapter/aws/{config.go,awstest/,iam/,bedrock/control*.go}`, `int
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-G2a | AWS base: config loader (Pod Identity credentials, region from env), `awstest` endpoint recorder for SDK clients | — | — |
-| [ ] | M1-G2b | IAM adapter and port fake: roles `afs-<ulid>` under `/afs/<namespace>/`, permissions boundary, tags `afs-team-id`, `afs-team-slug`; team role; Bedrock role `afs-<team ulid>-bedrock` trusting only the gateway's role and allowing only the team's inference profiles; no role but the Bedrock role ever has `bedrock:*`; two teams' agents named `reviewer` get distinct id-named roles | RC-US-1.4, RC-1 (part), NFR Security | M1-G2a |
-| [ ] | M1-G2c | Bedrock control adapter: one application inference profile per enabled team model, tagged, ARN written to `team_models`; removed with the model | RC-1 (part) | M1-G2a |
-| [ ] | M1-G2d | IAM conditions on `aws:PrincipalTag/kubernetes-namespace`, role tags `afs-team-id` (D26) [unit] | RC-2 (part), OQ-1 | M1-G2b, M0-E1 |
+| [x] | M1-G2a | AWS base: config loader (Pod Identity credentials, region from env), `awstest` endpoint recorder for SDK clients | — | — |
+| [x] | M1-G2b | IAM adapter and port fake: roles `afs-<ulid>` under `/afs/<namespace>/`, permissions boundary, tags `afs-team-id`, `afs-team-slug`; team role; Bedrock role `afs-<team ulid>-bedrock` trusting only the gateway's role and allowing only the team's inference profiles; no role but the Bedrock role ever has `bedrock:*`; two teams' agents named `reviewer` get distinct id-named roles | RC-US-1.4, RC-1 (part), NFR Security | M1-G2a |
+| [x] | M1-G2c | Bedrock control adapter: one application inference profile per enabled team model, tagged, ARN written to `team_models`; removed with the model | RC-1 (part) | M1-G2a |
+| [x] | M1-G2d | IAM conditions on `aws:PrincipalTag/kubernetes-namespace`, role tags `afs-team-id` (D26) [unit] | RC-2 (part), OQ-1 | M1-G2b, M0-E1 |
 
 ### M1-H · Admission (RC-19)
 
