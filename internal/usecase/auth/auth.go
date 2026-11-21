@@ -23,11 +23,11 @@ const APIKeyPrefix = "afsk_"
 // authenticating within seconds without a database read on every request.
 const providerCacheTTL = 10 * time.Second
 
-// Provider is an enabled row of afs.identity_providers. There is one client id per provider (CD-9):
-// it is both the console and the CLI audience.
+// Provider is an enabled row of afs.identity_providers. Providers are service level; a team chooses
+// one (teams.identity_provider_id). There is one client id per provider (CD-9): it is both the
+// console and the CLI audience.
 type Provider struct {
 	ID          string
-	TeamID      string // empty: a service-level provider
 	Kind        string
 	Name        string
 	IssuerURL   string

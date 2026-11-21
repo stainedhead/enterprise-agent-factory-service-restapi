@@ -19,7 +19,7 @@ const (
 
 var (
 	defIDP  = Provider{ID: "idp_default", Kind: "okta", IssuerURL: "https://default.example", ClientID: "c1", IsDefault: true}
-	teamIDP = Provider{ID: "idp_teamA", TeamID: teamA, Kind: "entra_id", IssuerURL: "https://team.example", ClientID: "c2"}
+	teamIDP = Provider{ID: "idp_teamA", Kind: "entra_id", IssuerURL: "https://team.example", ClientID: "c2"}
 )
 
 func ident(p Provider, groups ...string) Identity {
@@ -172,7 +172,9 @@ func TestAuthenticateUserFailures(t *testing.T) {
 		{"keys unavailable", func(_ *Service, v *fakeVerifier, _ *fakeProviders, _ *fakeStore) {
 			v.err = domain.Unavailable("identity provider keys", errors.New("down"))
 		}, domain.KindUnavailable},
-		{"disabled user", func(_ *Service, _ *fakeVerifier, _ *fakeProviders, st *fakeStore) { st.signErr = domain.Unauthenticated() }, domain.KindUnauthenticated},
+		{"disabled user", func(_ *Service, _ *fakeVerifier, _ *fakeProviders, st *fakeStore) {
+			st.signErr = domain.Unauthenticated()
+		}, domain.KindUnauthenticated},
 		{"database down on bindings", func(_ *Service, _ *fakeVerifier, _ *fakeProviders, st *fakeStore) {
 			st.bindErr = domain.Unavailable("database", errors.New("x"))
 		}, domain.KindUnavailable},

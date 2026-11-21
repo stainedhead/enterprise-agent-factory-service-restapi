@@ -103,8 +103,8 @@ func (v *Verifier) checkTimes(c claims) error {
 
 func unix(f float64) time.Time { return time.Unix(int64(f), 0) }
 
-// candidates lists the providers whose issuer matches iss and whose client id is among aud, service
-// level (and default) providers first.
+// candidates lists the providers whose issuer matches iss and whose client id is among aud, the
+// default provider first.
 func candidates(providers []auth.Provider, iss string, aud []string) []auth.Provider {
 	var out []auth.Provider
 	for _, p := range providers {
@@ -113,19 +113,15 @@ func candidates(providers []auth.Provider, iss string, aud []string) []auth.Prov
 		}
 	}
 	slices.SortStableFunc(out, func(a, b auth.Provider) int {
-		return rank(a) - rank(b)
+		switch {
+		case a.IsDefault && !b.IsDefault:
+			return -1
+		case !a.IsDefault && b.IsDefault:
+			return 1
+		}
+		return 0
 	})
 	return out
-}
-
-func rank(p auth.Provider) int {
-	switch {
-	case p.IsDefault:
-		return 0
-	case p.TeamID == "":
-		return 1
-	}
-	return 2
 }
 
 func normalize(issuer string) string { return strings.TrimRight(issuer, "/") }
