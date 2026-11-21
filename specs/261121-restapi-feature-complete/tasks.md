@@ -188,7 +188,7 @@ Owns: `internal/adapter/postgres/{db,tx,session,errors,migrate,audit,outbox,idem
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M0-X1 | Merge streams; `make gate`, `make test-db`; M0-A6 equality green (all 182 operations documented); request X-DB-1..6 from `-db`; write the contract delta list (shapes the contract does not fix, the `notification.test_requested` event of OQ-S1, `requestMetadataDroppedKeys`) into implementation-notes.md and open the root `contract` PR; notify `-cli` and `-website` that `api/openapi.yaml` 1.1.0 is on the branch; update status.md | — | all M0 |
+| [x] | M0-X1 | Merge streams; `make gate`, `make test-db`; M0-A6 equality green (all 182 operations documented); request X-DB-1..6 from `-db`; write the contract delta list (shapes the contract does not fix, the `notification.test_requested` event of OQ-S1, `requestMetadataDroppedKeys`) into implementation-notes.md and open the root `contract` PR; notify `-cli` and `-website` that `api/openapi.yaml` 1.1.0 is on the branch; update status.md | — | all M0 |
 
 ---
 

@@ -19,7 +19,7 @@
 | 2 | Research and data modeling | Complete | research.md, data-dictionary.md |
 | 3 | Architecture and planning | Complete | architecture.md, plan.md |
 | 4 | Task breakdown | Complete | tasks.md: 60 streams, 255 tasks |
-| 5 | Implementation (M0–M6) | In Progress | M0 in progress (step 3 started 2026-11-21T20:57:16Z). Task progress in tasks.md |
+| 5 | Implementation (M0–M6) | In Progress | M0 complete 2026-11-21 (step 3 started 2026-11-21T20:57:16Z); M1 next. Task progress in tasks.md |
 | 6 | Completion and archival | Not Started | |
 
 ## Phase 0 checklist
@@ -32,7 +32,7 @@
 
 | Milestone | Status | Tasks done |
 |---|---|---|
-| M0 Contract and foundation | In Progress | 40 / 41 |
+| M0 Contract and foundation | Complete | 41 / 41 |
 | M1 Teams and core | Not Started | 0 |
 | M2 Agents | Not Started | 0 |
 | M3 Gateway and budgets | Not Started | 0 |
@@ -42,8 +42,14 @@
 
 ## Blockers
 
-- None. X-DB-1..6 were delivered by `-db` PR #12 (merged at 23e9240, migrations 000015–000016) and adopted
-  during M0.
+- None blocking M1. X-DB-1..6 were delivered by `-db` PR #12 (merged at 23e9240, migrations 000015–000016)
+  and adopted during M0.
+- Open request **X-DB-7** to `-db`: SELECT on `public.afs_schema_migrations` (or a SECURITY DEFINER
+  `afs.schema_version()`) for `afs_reconciler`, `afs_gateway`, `afs_billing`, so they can refuse to start on an
+  older schema (database contract §1). Needed before the reconciler, gateway and billing binaries start against a
+  database (M1-M3); `afs-api` is unaffected.
+- Root contract PR with the delta list CD-1..CD-10 (implementation-notes.md) not opened yet: left to the
+  orchestrator.
 
 ## Recent activity
 
@@ -56,3 +62,4 @@
 - 2026-11-21: M0-D1..D3, D5 done: router from `routes_gen.go` (182 operations, `:verb` dispatch, 501 placeholders, per-area registrars), request id and contract version on every response, error envelope, panic recovery, body limits, strict query from the OpenAPI parameters, `teamId` from the path, PRD §3 authorization middleware with denied and cross-team hooks, HMAC page tokens, CSV writer.
 - 2026-11-21: M0-D4, D6 done: `cmd/afs-api` `wire()` (optional database: owner migration, pool, readiness, denied-audit hook), `/v1/openapi.yaml`, health and readiness; `test/contract` replays all 182 operations' examples in-process on a seeded database and validates requests and responses (181 validated, 1 placeholder).
 - 2026-11-21: M0-E1..E3 done: OQ-1/OQ-2 desk research in research.md §3.3, `[e2e]` probes in `test/e2e/spike_test.go` (to be run by a person with the dev account), ADR-002 accepted and ADR-003..011 recorded.
+- 2026-11-21: M0-X1 done: `make gate`, `make test-db` and `make cover` green; 182-operation equality green against root main c605c4b; X-DB-1..6 delivered by -db, X-DB-7 requested; contract delta list CD-1..CD-10 written; `api/openapi.yaml` 1.1.0 complete for all 182 operations on the branch (-cli and -website notified through the milestone report). **M0 complete.**

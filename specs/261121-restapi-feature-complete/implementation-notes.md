@@ -99,6 +99,7 @@ Decisions taken while creating the spec (step 1, 2026-11-21, under J's authoriza
 | 2026-11-21 | M0-D4 | `afs-api` starts without a database when `AFS_DATABASE_URL` is unset (health, OpenAPI and placeholders only); `AFS_DATABASE_OWNER_URL` enables startup migration | Local development and the `--version` gate step need no database |
 | 2026-11-21 | M0-E1, M0-E2 | Spikes are desk research only; the probes shell out to `kubectl` and the AWS CLI instead of using client-go and the AWS SDK, and have not been run | No AWS account or cluster is available to agents; the module does not depend on client-go yet. Defaults in research.md §3.3 stand until a person runs `make e2e` |
 | 2026-11-21 | M0-E3 | A-1..A-10 recorded as ADR-002 (accepted) and ADR-003..ADR-011 | ADR numbering continues the existing file |
+| 2026-11-21 | M0-X1 | X-DB-1..6 were not requested: `-db` delivered them unprompted (PR #12). X-DB-7 is requested instead. The root `contract` PR is not opened by the milestone agent; the delta list below is ready for it | Opening a PR in the root repository is outside this milestone's checkout; the orchestrator decides |
 | 2026-11-21 | M0-F | Local integration tests ran against PostgreSQL 16.15 (the sandbox server), not 17; CI uses `postgres:17` | Only PostgreSQL 16 is installed in the build sandbox |
 
 ## Contract deltas for the root repository
