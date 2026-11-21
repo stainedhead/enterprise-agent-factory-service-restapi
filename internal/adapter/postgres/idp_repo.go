@@ -61,7 +61,7 @@ func scanIdP(row pgx.Row) (domain.IdentityProvider, error) {
 	return p, err
 }
 
-// List implements idp.Repository. Service-level providers only (team_id IS NULL).
+// List implements idp.Repository. Providers are service level.
 func (r *IdPRepo) List(ctx context.Context, tx port.Tx, after string, limit int) ([]domain.IdentityProvider, error) {
 	pt, err := Unwrap(tx)
 	if err != nil {
@@ -71,7 +71,7 @@ func (r *IdPRepo) List(ctx context.Context, tx port.Tx, after string, limit int)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := pt.Query(ctx, sel+` WHERE team_id IS NULL AND id > $1 ORDER BY id LIMIT $2`, after, limit)
+	rows, err := pt.Query(ctx, sel+` WHERE id > $1 ORDER BY id LIMIT $2`, after, limit)
 	if err != nil {
 		return nil, MapError(err, OpRead, "identity provider")
 	}
@@ -97,7 +97,7 @@ func (r *IdPRepo) Get(ctx context.Context, tx port.Tx, id string, forUpdate bool
 	if err != nil {
 		return domain.IdentityProvider{}, err
 	}
-	q := sel + ` WHERE team_id IS NULL AND id=$1`
+	q := sel + ` WHERE id=$1`
 	if forUpdate {
 		q += ` FOR UPDATE`
 	}
@@ -176,7 +176,7 @@ func (r *IdPRepo) Update(ctx context.Context, tx port.Tx, p domain.IdentityProvi
 		args = append(args, nullable(p.CLIClientID))
 	}
 	tag, err := pt.Exec(ctx, `UPDATE afs.identity_providers SET name=$3, client_id=$4, client_secret_arn=$5, groups_claim=$6,
-  is_default=$7, enabled=$8`+cliSet+` WHERE team_id IS NULL AND id=$1 AND version=$2`, args...)
+  is_default=$7, enabled=$8`+cliSet+` WHERE id=$1 AND version=$2`, args...)
 	if err != nil {
 		return domain.IdentityProvider{}, MapError(err, OpWrite, "identity provider")
 	}
@@ -192,7 +192,7 @@ func (r *IdPRepo) Delete(ctx context.Context, tx port.Tx, id string, expect doma
 	if err != nil {
 		return err
 	}
-	tag, err := pt.Exec(ctx, `DELETE FROM afs.identity_providers WHERE team_id IS NULL AND id=$1 AND version=$2`, id, int64(expect))
+	tag, err := pt.Exec(ctx, `DELETE FROM afs.identity_providers WHERE id=$1 AND version=$2`, id, int64(expect))
 	if err != nil {
 		return MapError(err, OpDelete, "identity provider")
 	}
@@ -204,7 +204,7 @@ func (r *IdPRepo) Delete(ctx context.Context, tx port.Tx, id string, expect doma
 
 func (*IdPRepo) missOrStale(ctx context.Context, pt *Tx, id string) error {
 	var one int
-	err := pt.QueryRow(ctx, `SELECT 1 FROM afs.identity_providers WHERE team_id IS NULL AND id=$1`, id).Scan(&one)
+	err := pt.QueryRow(ctx, `SELECT 1 FROM afs.identity_providers WHERE id=$1`, id).Scan(&one)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.NotFound("identity provider")
 	}
