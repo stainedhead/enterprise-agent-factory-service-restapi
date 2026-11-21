@@ -32,7 +32,7 @@
 
 | Milestone | Status | Tasks done |
 |---|---|---|
-| M0 Contract and foundation | In Progress | 35 / 41 |
+| M0 Contract and foundation | In Progress | 37 / 41 |
 | M1 Teams and core | Not Started | 0 |
 | M2 Agents | Not Started | 0 |
 | M3 Gateway and budgets | Not Started | 0 |
@@ -54,3 +54,4 @@
 - 2026-11-21: M0-F7 done: cross-cutting ports (`internal/usecase/port`) and transactional fakes (`port/fakes`), incl. `CredentialLookup`/`TeamDirectory` for the X-DB-1..3 functions.
 - 2026-11-21: M0-F1..F6, F8 done: `pgtest` (fresh `afsr_` database and LOGIN users per package), pool, owner migration under the advisory lock, schema check, `TxRunner` (SET LOCAL session, READ COMMITTED, 40001/40P01 retry), SQLSTATE mapping, audit and outbox writers (no RETURNING), idempotency store, X-DB-1..3 lookups. Open: X-DB-7 (service roles cannot read `public.afs_schema_migrations`).
 - 2026-11-21: M0-D1..D3, D5 done: router from `routes_gen.go` (182 operations, `:verb` dispatch, 501 placeholders, per-area registrars), request id and contract version on every response, error envelope, panic recovery, body limits, strict query from the OpenAPI parameters, `teamId` from the path, PRD §3 authorization middleware with denied and cross-team hooks, HMAC page tokens, CSV writer.
+- 2026-11-21: M0-D4, D6 done: `cmd/afs-api` `wire()` (optional database: owner migration, pool, readiness, denied-audit hook), `/v1/openapi.yaml`, health and readiness; `test/contract` replays all 182 operations' examples in-process on a seeded database and validates requests and responses (181 validated, 1 placeholder).

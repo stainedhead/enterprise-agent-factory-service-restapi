@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/httpapi"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/buildinfo"
 )
 
@@ -27,14 +26,27 @@ func main() {
 	}
 
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	srv := &http.Server{
-		Addr:              *addr,
-		Handler:           httpapi.NewHandler(nil),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	slog.SetDefault(log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	s, err := settingsFrom(os.Getenv)
+	if err != nil {
+		log.Error("afs-api configuration", "err", err)
+		os.Exit(2)
+	}
+	c, err := wire(ctx, log, s)
+	if err != nil {
+		log.Error("afs-api cannot start", "err", err)
+		os.Exit(1)
+	}
+	defer c.Close()
+	srv := &http.Server{
+		Addr:              *addr,
+		Handler:           c.Handler,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)

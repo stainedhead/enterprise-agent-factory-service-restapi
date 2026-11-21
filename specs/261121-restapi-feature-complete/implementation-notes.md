@@ -95,6 +95,8 @@ Decisions taken while creating the spec (step 1, 2026-11-21, under J's authoriza
 | 2026-11-21 | M0-D5 | Page tokens are bound to the operation and the caller as well as signed and time-limited | A token replayed by another caller or on another list is refused |
 | 2026-11-21 | M0-D5 | CSV cells starting with `=`, `+`, `@`, tab, CR, or `-` not followed by a number are prefixed with `'` | CSV formula injection; negative money stays numeric |
 | 2026-11-21 | M0-D1 | Unmatched paths and unknown `:verb`s answer `404 NotFound` in the error envelope; ServeMux's own 405 is not used | One error shape for every response |
+| 2026-11-21 | M0-D6 | The replay validates every response the server gives, not only non-placeholder operations: with no authenticator wired yet, every non-public operation answers `401`, and that envelope is validated against each operation's documented `401`. Placeholders (`501`, not in the document) are counted and skipped | Proves the error envelope and headers on all 182 operations from M0 |
+| 2026-11-21 | M0-D4 | `afs-api` starts without a database when `AFS_DATABASE_URL` is unset (health, OpenAPI and placeholders only); `AFS_DATABASE_OWNER_URL` enables startup migration | Local development and the `--version` gate step need no database |
 | 2026-11-21 | M0-F | Local integration tests ran against PostgreSQL 16.15 (the sandbox server), not 17; CI uses `postgres:17` | Only PostgreSQL 16 is installed in the build sandbox |
 
 ## Contract deltas for the root repository
