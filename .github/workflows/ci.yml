@@ -32,6 +32,13 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
+      # The root repository holds the API contract that api/contract/*.json is extracted from.
+      - uses: actions/checkout@v5
+        with:
+          repository: stainedhead/enterprise-agent-factory-service
+          ref: main
+          path: .afs-root
+          persist-credentials: false
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -43,13 +50,33 @@ jobs:
         run: make fmt-check
       - name: go vet
         run: go vet ./...
+      - name: tagged suites compile (e2e, load, conformance, envtest)
+        run: make vet-tags
+      - name: OpenAPI bundle has no drift
+        run: make openapi-check
+      - name: contract extract has no drift
+        run: make contract-check AFS_ROOT_DIR=.afs-root
       - name: golangci-lint
         # Built from source with the go.mod toolchain so it can analyze Go 1.27 code.
         run: make lint GOLANGCI_LINT_VERSION=${{ env.GOLANGCI_LINT_VERSION }}
       - name: go test (race)
         run: go test -race ./...
+      - name: coverage (domain, usecase, authz at 90% or more)
+        run: make cover
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }} ./...
+
+  envtest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: envtest suites
+        run: make envtest
 
   cross-build:
     name: build ${{ matrix.goos }}/${{ matrix.goarch }}

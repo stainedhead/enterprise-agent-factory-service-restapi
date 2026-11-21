@@ -75,7 +75,13 @@ Decisions taken while creating the spec (step 1, 2026-11-21, under J's authoriza
 
 ## Deviations from plan
 
-(append during implementation)
+| Date | Task | Deviation | Why |
+|---|---|---|---|
+| 2026-11-21 | M0 (all streams) | Streams ran serially in the milestone agent's own checkout on `feat/restapi-feature-complete`, one commit group per stream in the listed merge order, instead of parallel worker sub-agents in git worktrees | The M0 milestone agent had no tool to start worker sub-agents. Ownership lines were still honored file by file, so the commit history matches the stream boundaries |
+| 2026-11-21 | M0-S2 | ULIDs are encoded by a small stdlib encoder in `internal/domain/ids.go`, not `oklog/ulid/v2` (research R-12) | AGENTS.md: `domain` imports nothing outside the standard library; `internal/archtest` enforces it |
+| 2026-11-21 | M0-S2 | `ImageRef` lives in `names.go`, not a separate `image.go` (data dictionary §1) | M0-S's Owns line lists `names.go` and no `image.go` |
+| 2026-11-21 | M0-S4 | `make cover` runs `tools/covercheck` (fails any package below 90%) | `go test -cover` alone does not fail on low coverage |
+| 2026-11-21 | M0-F | Local integration tests ran against PostgreSQL 16.15 (the sandbox server), not 17; CI uses `postgres:17` | Only PostgreSQL 16 is installed in the build sandbox |
 
 ## Contract deltas for the root repository
 

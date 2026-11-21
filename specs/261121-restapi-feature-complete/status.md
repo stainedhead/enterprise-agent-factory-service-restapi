@@ -19,7 +19,7 @@
 | 2 | Research and data modeling | Complete | research.md, data-dictionary.md |
 | 3 | Architecture and planning | Complete | architecture.md, plan.md |
 | 4 | Task breakdown | Complete | tasks.md: 60 streams, 255 tasks |
-| 5 | Implementation (M0–M6) | Not Started | Next: M0. Task progress in tasks.md |
+| 5 | Implementation (M0–M6) | In Progress | M0 in progress (step 3 started 2026-11-21T20:57:16Z). Task progress in tasks.md |
 | 6 | Completion and archival | Not Started | |
 
 ## Phase 0 checklist
@@ -32,7 +32,7 @@
 
 | Milestone | Status | Tasks done |
 |---|---|---|
-| M0 Contract and foundation | Not Started | 0 |
+| M0 Contract and foundation | In Progress | 4 / 41 |
 | M1 Teams and core | Not Started | 0 |
 | M2 Agents | Not Started | 0 |
 | M3 Gateway and budgets | Not Started | 0 |
@@ -49,3 +49,4 @@
 
 - 2026-11-21: spec created by `create-spec` (step 1 of `implm-frm-prd`).
 - 2026-11-21: `review-spec` (step 2): gaps fixed; Phases 0–4 complete; implementation-ready.
+- 2026-11-21: step 3 started; M0-S1..S4 done (`-db` b0d8754 adopted, domain primitives, archtest, Makefile and CI targets).
