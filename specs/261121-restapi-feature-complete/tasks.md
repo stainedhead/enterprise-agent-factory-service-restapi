@@ -272,13 +272,13 @@ Owns: `internal/usecase/reconcile/engine/`, `internal/adapter/postgres/{changefe
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-F1 | Kubernetes base: client, server-side apply (field manager `afs-reconciler`, managed labels), envtest harness with pinned CRDs (Cilium, Karpenter, ESO, Agentic Teammates OQ-7 placeholder, VolumeSnapshot) | RC-1 (part) | — |
-| [ ] | M1-F2 | Leader election on a `Lease`; readiness reports leader state; failover < 30 s [envtest] | NFR Availability | M1-F1 |
-| [ ] | M1-F3 | Change feed: `LISTEN afs_desired_state` (payload `<table>:<team_id>:<id>`), reconnect → poll; 30 s `generation <> observed_generation` poll; full resync every 10 min and at startup; pickup within 5 s, and by the poll with notifications blocked; a payload with an empty team part (service-level tables: `agent_templates`, `models`, `external_systems` catalog, `service_tags`, `storage_classes`) fans out to every affected team resource | RC-US-1.2, RC-4 | — |
-| [ ] | M1-F4 | Engine: work queue keyed `(kind, id)`, table → controller registry, per-team ordering; a failed reconcile sets `Degraded` or `Failed` with a condition whose reason carries the AWS or Kubernetes error code and retries with capped exponential backoff (1 s → 5 min, never a hot loop); leader-only periodic job scheduler (`Every`) | RC-4 (part) | M1-F3 |
-| [ ] | M1-F5 | Status writer: `resource_status` upsert with D24 vocabulary only, `observedGeneration`, conditions; `team.status_changed`/`agent.status_changed`/`pool.status_changed` on phase change | RC-5, CT-API-7 (part), CT-API-9 (part) | M1-F4 |
-| [ ] | M1-F6 | Drift: watch owned objects, revert edits and deletes within 60 s, one `drift.corrected` audit record and event, `DriftCorrected` condition | RC-US-3.1 | M1-F1, M1-F5 |
-| [ ] | M1-F7 | `cmd/afs-reconciler`: wiring list, schema version check, health, readiness, metrics | CT-DB-1 (part) | M1-F2 |
+| [x] | M1-F1 | Kubernetes base: client, server-side apply (field manager `afs-reconciler`, managed labels), envtest harness with pinned CRDs (Cilium, Karpenter, ESO, Agentic Teammates OQ-7 placeholder, VolumeSnapshot) | RC-1 (part) | — |
+| [x] | M1-F2 | Leader election on a `Lease`; readiness reports leader state; failover < 30 s [envtest] | NFR Availability | M1-F1 |
+| [x] | M1-F3 | Change feed: `LISTEN afs_desired_state` (payload `<table>:<team_id>:<id>`), reconnect → poll; 30 s `generation <> observed_generation` poll; full resync every 10 min and at startup; pickup within 5 s, and by the poll with notifications blocked; a payload with an empty team part (service-level tables: `agent_templates`, `models`, `external_systems` catalog, `service_tags`, `storage_classes`) fans out to every affected team resource | RC-US-1.2, RC-4 | — |
+| [x] | M1-F4 | Engine: work queue keyed `(kind, id)`, table → controller registry, per-team ordering; a failed reconcile sets `Degraded` or `Failed` with a condition whose reason carries the AWS or Kubernetes error code and retries with capped exponential backoff (1 s → 5 min, never a hot loop); leader-only periodic job scheduler (`Every`) | RC-4 (part) | M1-F3 |
+| [x] | M1-F5 | Status writer: `resource_status` upsert with D24 vocabulary only, `observedGeneration`, conditions; `team.status_changed`/`agent.status_changed`/`pool.status_changed` on phase change | RC-5, CT-API-7 (part), CT-API-9 (part) | M1-F4 |
+| [x] | M1-F6 | Drift: watch owned objects, revert edits and deletes within 60 s, one `drift.corrected` audit record and event, `DriftCorrected` condition | RC-US-3.1 | M1-F1, M1-F5 |
+| [x] | M1-F7 | `cmd/afs-reconciler`: wiring list, schema version check, health, readiness, metrics | CT-DB-1 (part) | M1-F2 |
 
 ### M1-G1 · Team environment, Kubernetes side (RC-1)
 
@@ -286,10 +286,10 @@ Owns: `internal/usecase/reconcile/team/`, `internal/adapter/k8s/render/{namespac
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-G1a | Namespace `afs-t-<slug>`, Pod Security `restricted` labels, ResourceQuota and LimitRange from `quotas` [envtest] | RC-1 (part), TEAM-2 | M1-F1 |
-| [ ] | M1-G1b | Default-deny NetworkPolicies; Cilium policies allowing DNS and `afs-gateway`; Cilium ingress policy on `afs-gateway` admitting only `afs-t-*` pods (D57) [envtest]; `[e2e]` case for RC-US-1a.4 | RC-1 (part), RC-US-1a.4 (part) | M1-F1 |
-| [ ] | M1-G1c | ESO `SecretStore` bound to the team role; gateway CA bundle ConfigMap copied into the namespace | RC-1 (part) | M1-F1 |
-| [ ] | M1-G1d | Team controller: compose Kubernetes and AWS ports, conditions `NamespaceReady`, `IamReady`, `Ready` with `observedGeneration = generation` within 60 s p95 [envtest]; `[e2e]` case | RC-US-1.1 (part) | M1-G1a, M1-G1b, M1-G1c, M1-G2b, M1-G2c |
+| [x] | M1-G1a | Namespace `afs-t-<slug>`, Pod Security `restricted` labels, ResourceQuota and LimitRange from `quotas` [envtest] | RC-1 (part), TEAM-2 | M1-F1 |
+| [x] | M1-G1b | Default-deny NetworkPolicies; Cilium policies allowing DNS and `afs-gateway`; Cilium ingress policy on `afs-gateway` admitting only `afs-t-*` pods (D57) [envtest]; `[e2e]` case for RC-US-1a.4 | RC-1 (part), RC-US-1a.4 (part) | M1-F1 |
+| [x] | M1-G1c | ESO `SecretStore` bound to the team role; gateway CA bundle ConfigMap copied into the namespace | RC-1 (part) | M1-F1 |
+| [x] | M1-G1d | Team controller: compose Kubernetes and AWS ports, conditions `NamespaceReady`, `IamReady`, `Ready` with `observedGeneration = generation` within 60 s p95 [envtest]; `[e2e]` case | RC-US-1.1 (part) | M1-G1a, M1-G1b, M1-G1c, M1-G2b, M1-G2c |
 
 ### M1-G2 · Team environment, AWS side (RC-1)
 
@@ -297,10 +297,10 @@ Owns: `internal/adapter/aws/{config.go,awstest/,iam/,bedrock/control*.go}`, `int
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-G2a | AWS base: config loader (Pod Identity credentials, region from env), `awstest` endpoint recorder for SDK clients | — | — |
-| [ ] | M1-G2b | IAM adapter and port fake: roles `afs-<ulid>` under `/afs/<namespace>/`, permissions boundary, tags `afs-team-id`, `afs-team-slug`; team role; Bedrock role `afs-<team ulid>-bedrock` trusting only the gateway's role and allowing only the team's inference profiles; no role but the Bedrock role ever has `bedrock:*`; two teams' agents named `reviewer` get distinct id-named roles | RC-US-1.4, RC-1 (part), NFR Security | M1-G2a |
-| [ ] | M1-G2c | Bedrock control adapter: one application inference profile per enabled team model, tagged, ARN written to `team_models`; removed with the model | RC-1 (part) | M1-G2a |
-| [ ] | M1-G2d | IAM conditions on `aws:PrincipalTag/kubernetes-namespace`, role tags `afs-team-id` (D26) [unit] | RC-2 (part), OQ-1 | M1-G2b, M0-E1 |
+| [x] | M1-G2a | AWS base: config loader (Pod Identity credentials, region from env), `awstest` endpoint recorder for SDK clients | — | — |
+| [x] | M1-G2b | IAM adapter and port fake: roles `afs-<ulid>` under `/afs/<namespace>/`, permissions boundary, tags `afs-team-id`, `afs-team-slug`; team role; Bedrock role `afs-<team ulid>-bedrock` trusting only the gateway's role and allowing only the team's inference profiles; no role but the Bedrock role ever has `bedrock:*`; two teams' agents named `reviewer` get distinct id-named roles | RC-US-1.4, RC-1 (part), NFR Security | M1-G2a |
+| [x] | M1-G2c | Bedrock control adapter: one application inference profile per enabled team model, tagged, ARN written to `team_models`; removed with the model | RC-1 (part) | M1-G2a |
+| [x] | M1-G2d | IAM conditions on `aws:PrincipalTag/kubernetes-namespace`, role tags `afs-team-id` (D26) [unit] | RC-2 (part), OQ-1 | M1-G2b, M0-E1 |
 
 ### M1-H · Admission (RC-19)
 
@@ -308,8 +308,8 @@ Owns: `internal/usecase/reconcile/admission/`, `internal/adapter/k8s/render/admi
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-H1 | ValidatingAdmissionPolicies and bindings for `afs-t-*`: refuse NetworkPolicy/CiliumNetworkPolicy changes except by the reconciler, LoadBalancer/NodePort Services, hostNetwork/PID/IPC, hostPath, privileged, AFS label changes, another team's dedicated tolerations or selectors [envtest]; `[e2e]` case | RC-US-1a.2, RC-US-1a.1 (part), RC-19 | M1-F1 |
-| [ ] | M1-H2 | Deleted policy or binding restored within 60 s with `drift.corrected` [envtest] | RC-US-1a.3 | M1-H1, M1-F6 |
+| [x] | M1-H1 | ValidatingAdmissionPolicies and bindings for `afs-t-*`: refuse NetworkPolicy/CiliumNetworkPolicy changes except by the reconciler, LoadBalancer/NodePort Services, hostNetwork/PID/IPC, hostPath, privileged, AFS label changes, another team's dedicated tolerations or selectors [envtest]; `[e2e]` case | RC-US-1a.2, RC-US-1a.1 (part), RC-19 | M1-F1 |
+| [x] | M1-H2 | Deleted policy or binding restored within 60 s with `drift.corrected` [envtest] | RC-US-1a.3 | M1-H1, M1-F6 |
 
 ### M1-I · Team lifecycle (RC-17 team part)
 
