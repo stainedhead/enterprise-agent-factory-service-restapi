@@ -1,0 +1,31 @@
+{{- $c := include "afs.component" (dict "root" $ "name" "gateway") | fromYaml }}
+{{- if $c.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: afs-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "afs.labels" (dict "root" $ "name" "gateway") | nindent 4 }}
+spec:
+  secretName: {{ $c.tls.secretName }}
+  duration: {{ $c.tls.duration }}
+  renewBefore: {{ $c.tls.renewBefore }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages: [server auth]
+  dnsNames:
+    - afs-gateway
+    - {{ printf "afs-gateway.%s" .Release.Namespace }}
+    - {{ printf "afs-gateway.%s.svc" .Release.Namespace }}
+    - {{ printf "afs-gateway.%s.svc.cluster.local" .Release.Namespace }}
+    {{- range $c.tls.extraDnsNames }}
+    - {{ . }}
+    {{- end }}
+  issuerRef:
+    name: {{ required "gateway.tls.issuerRef.name is required (a cert-manager issuer)" $c.tls.issuerRef.name }}
+    kind: {{ $c.tls.issuerRef.kind }}
+    group: {{ $c.tls.issuerRef.group }}
+{{- end }}

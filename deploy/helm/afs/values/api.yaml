@@ -1,0 +1,32 @@
+enabled: true
+replicas: 3
+image:
+  repository: afs-api
+dbUser: afs_app
+serviceAccount:
+  name: afs-api
+service:
+  port: 80
+  targetPort: 8080
+  type: ClusterIP
+ports:
+  http: 8080
+  metrics: 9090
+pdb:
+  minAvailable: 2
+resources:
+  requests: {cpu: 250m, memory: 256Mi}
+  limits: {memory: 512Mi}
+# Public base settings, see user-docs/configuration.md. Each key becomes an environment variable.
+env:
+  AFS_API_ADDR: ":8080"
+  AFS_METRICS_ADDR: ":9090"
+  AFS_MAX_BODY_BYTES: "1048576"
+# Number of replicas the per-principal rate limit is divided by; defaults to replicas.
+rateLimitReplicas: null
+cors:
+  origins: []             # api.cors_origins is a service setting; this only seeds nothing
+# Migrations run in afs-api at startup under an advisory lock and need the owner login. Leave
+# ownerUser empty to run migrations out of band with afs-migrate.
+migrate:
+  ownerUser: ""

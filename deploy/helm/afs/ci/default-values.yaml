@@ -1,0 +1,28 @@
+# Minimal values that render the chart (used by helm lint and the golden tests). All identifiers are
+# AWS documentation examples.
+global:
+  image:
+    registry: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs
+    tag: v0.1.0
+  clusterName: afs-dev
+  region: us-east-1
+  otlpEndpoint: http://otel-collector.observability:4318
+database:
+  host: afs.cluster-abc123.us-east-1.rds.amazonaws.com
+gateway:
+  tls:
+    issuerRef:
+      name: afs-ca
+reconciler:
+  env:
+    AFS_EVENT_BUS_NAME: afs-events
+    AFS_PERMISSIONS_BOUNDARY_ARN: arn:aws:iam::111122223333:policy/afs-agent-boundary
+    AFS_GATEWAY_ROLE_ARN: arn:aws:iam::111122223333:role/afs-gateway
+    AFS_OIDC_PROVIDER_ARN: arn:aws:iam::111122223333:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE
+billing:
+  env:
+    AFS_CUR_DATABASE: cur
+    AFS_CUR_TABLE: afs_cur
+    AFS_ATHENA_WORKGROUP: afs
+    AFS_ATHENA_OUTPUT: s3://afs-athena-results-111122223333/
+    AFS_REPORTS_BUCKET: afs-reports-111122223333

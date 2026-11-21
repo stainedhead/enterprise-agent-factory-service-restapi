@@ -1,0 +1,36 @@
+enabled: true
+replicas: 3
+image:
+  repository: afs-gateway
+dbUser: afs_gateway
+serviceAccount:
+  name: afs-gateway
+service:
+  port: 443
+  targetPort: 8443
+  type: ClusterIP
+ports:
+  https: 8443
+  metrics: 9090
+pdb:
+  minAvailable: 2
+resources:
+  requests: {cpu: 500m, memory: 256Mi}
+  limits: {memory: 512Mi}
+env:
+  AFS_GATEWAY_ADDR: ":8443"
+  AFS_METRICS_ADDR: ":9090"
+  AFS_GATEWAY_MAX_BODY: "20971520"
+  AFS_GATEWAY_TLS_CERT: /tls/tls.crt
+  AFS_GATEWAY_TLS_KEY: /tls/tls.key
+# AFS_BEDROCK_VPCE_URL is supplied per environment.
+tls:
+  # cert-manager issues the server certificate; issuerRef is required.
+  issuerRef:
+    name: ""
+    kind: ClusterIssuer
+    group: cert-manager.io
+  secretName: afs-gateway-tls
+  duration: 2160h         # 90 days
+  renewBefore: 720h       # 30 days
+  extraDnsNames: []

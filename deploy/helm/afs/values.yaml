@@ -1,0 +1,56 @@
+# Shared values. Per-component defaults live in values/<component>.yaml and are merged under the
+# component's key here (see templates/_helpers.tpl: afs.component); anything set below under
+# api:, reconciler:, gateway: or billing: wins over the file.
+
+global:
+  # Image registry and tag shared by all four binaries; a component may override image.repository.
+  image:
+    registry: ""          # required, e.g. <account>.dkr.ecr.<region>.amazonaws.com
+    tag: ""               # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+  clusterName: ""         # AFS_CLUSTER_NAME, required
+  region: ""              # AFS_AWS_REGION, required
+  logLevel: info          # AFS_LOG_LEVEL
+  otlpEndpoint: ""        # AFS_OTLP_ENDPOINT, empty disables trace and metric export
+  # Zones the replicas are spread over (topology.kubernetes.io/zone).
+  topologyKey: topology.kubernetes.io/zone
+
+database:
+  host: ""                # RDS endpoint, required
+  port: 5432
+  name: afs
+  sslmode: verify-full
+  iamAuth: true           # AFS_DB_IAM_AUTH: no password in any value or secret
+
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  labels: {}              # e.g. release: kube-prometheus-stack
+
+prometheusRule:
+  enabled: true
+  labels: {}
+  # Operation ids whose p99 target is 1 s rather than 300 ms (90-day reports).
+  reportRoutes: "GetUsage|GetTeamReport|GetAgentReport|GetServiceReport|ListCosts|ListCostReconciliations"
+  # Alert thresholds, from the NFR table (spec.md).
+  thresholds:
+    apiReadP99Seconds: 0.3
+    apiReportP99Seconds: 1
+    apiErrorRatio: 0.001           # 99.9% availability
+    reconcileLagP95Seconds: 60
+    driftPerHour: 10
+    gatewayAddedLatencyP99Seconds: 0.025
+    outboxOldestAgeSeconds: 300
+    curVarianceRatio: 0.05         # raise to match billing.variance_alert_pct
+
+dashboards:
+  enabled: true
+  # Label the Grafana sidecar selects ConfigMaps by.
+  label: grafana_dashboard
+
+# Overrides per component (see values/<component>.yaml for the defaults).
+api: {}
+reconciler: {}
+gateway: {}
+billing: {}
