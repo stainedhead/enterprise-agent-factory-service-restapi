@@ -1,0 +1,17 @@
+# OpenAPI components (API contract §1, §2, §6). Bundled into api/openapi.yaml by make openapi.
+securitySchemes:
+  idpBearer:
+    type: http
+    scheme: bearer
+    bearerFormat: JWT
+    description: IdP access token (OIDC; console PKCE, CLI device grant)
+  apiKeyBearer:
+    type: http
+    scheme: bearer
+    bearerFormat: afsk_<secret>
+    description: Team or service-level API key
+  workloadBearer:
+    type: http
+    scheme: bearer
+    bearerFormat: JWT
+    description: Projected ServiceAccount token, audience afs-api, validated offline against the cluster issuer's JWKS (D29)

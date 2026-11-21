@@ -1,0 +1,1373 @@
+# OpenAPI fragment (API contract §4.10a). Bundled into api/openapi.yaml by make openapi.
+/v1/work-orders:
+  get:
+    operationId: ListWorkOrders
+    summary: List work orders
+    tags:
+    - work-orders
+    parameters:
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum:
+        - open
+        - assigned
+        - in_progress
+        - pr_opened
+        - done
+        - failed
+        - cancelled
+    - name: severity
+      in: query
+      schema:
+        type: string
+        enum:
+        - critical
+        - high
+        - medium
+        - low
+    - name: slaState
+      in: query
+      schema:
+        type: string
+        enum:
+        - on_track
+        - due_soon
+        - breached
+        - met
+        - missed
+    - name: teamId
+      in: query
+      schema:
+        type: string
+        pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+        example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkOrderList'
+            example:
+              items:
+              - id: wo_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                kind: cve_remediation
+                cveId: CVE-2026-1234
+                severity: critical
+                title: OpenSSL remote code execution
+                source: api
+                templateId: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                budgetUsd: '500.00'
+                slaDueAt: '2026-11-28T18:00:00Z'
+                status: assigned
+                teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0002
+                assignedAt: '2026-11-21T18:05:00Z'
+                completedAt: null
+                slaState: on_track
+                progress:
+                  repos: 1
+                  prsOpen: 1
+                  prsMerged: 0
+                  notAffected: 0
+                  failedOrSkipped: 0
+                  remaining: 0
+                cancelReason: null
+          text/csv:
+            schema:
+              type: string
+            example: "id,cveId,severity,title,status,slaState,teamId,slaDueAt\r\nwo_01JD2Q3R4S5T6V7W8X9Y0Z0001,CVE-2026-1234,critical,OpenSSL\
+              \ remote code execution,assigned,on_track,team_01JD2Q3R4S5T6V7W8X9Y0Z0002,2026-11-28T18:00:00Z\r\n"
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: work-orders:read
+    x-afs-scope: any
+    x-afs-condition: assignedOrOwnRepos
+    x-afs-cli: work-orders list-work-orders
+    x-afs-sdk: workOrders.list()
+    x-afs-screen: P3
+    x-afs-priority: P2
+    x-afs-csv: true
+    x-afs-events: []
+  post:
+    operationId: CreateWorkOrder
+    summary: Create work order
+    tags:
+    - work-orders
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateWorkOrderRequest'
+          example:
+            kind: cve_remediation
+            cveId: CVE-2026-1234
+            severity: critical
+            title: OpenSSL remote code execution
+            slaDueAt: '2026-11-28T18:00:00Z'
+            templateId: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+            budgetUsd: '500.00'
+            repos:
+            - host: github.com
+              repo: example-org/payments-api
+            - host: github.com
+              repo: example-org/ledger
+              owningContact: ledger-team@example.com
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkOrder'
+            example:
+              id: wo_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              kind: cve_remediation
+              cveId: CVE-2026-1234
+              severity: critical
+              title: OpenSSL remote code execution
+              source: api
+              templateId: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              budgetUsd: '500.00'
+              slaDueAt: '2026-11-28T18:00:00Z'
+              status: open
+              teamId: null
+              assignedAt: null
+              completedAt: null
+              slaState: on_track
+              progress:
+                repos: 2
+                prsOpen: 0
+                prsMerged: 0
+                notAffected: 0
+                failedOrSkipped: 0
+                remaining: 2
+              cancelReason: null
+              repos:
+              - host: github.com
+                repo: example-org/payments-api
+                owningTeamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                owningContact: null
+                ownerSource: team_config
+                status: pending
+                prUrl: null
+                prNumber: null
+                detail: null
+                mergedAt: null
+                notifications: []
+              - host: github.com
+                repo: example-org/ledger
+                owningTeamId: null
+                owningContact: ledger-team@example.com
+                ownerSource: explicit
+                status: pending
+                prUrl: null
+                prNumber: null
+                detail: null
+                mergedAt: null
+                notifications: []
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: work-orders:write
+    x-afs-scope: any
+    x-afs-cli: work-orders create-work-order
+    x-afs-sdk: workOrders.create()
+    x-afs-screen: P3
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - work_order.created
+/v1/work-orders/{workOrderId}:
+  get:
+    operationId: GetWorkOrder
+    summary: Get work order
+    tags:
+    - work-orders
+    description: (with repositories, progress counts, slaState and notifications)
+    parameters:
+    - name: workOrderId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^wo_[0-9A-HJKMNP-TV-Z]{26}$
+        example: wo_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkOrder'
+            example:
+              id: wo_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              kind: cve_remediation
+              cveId: CVE-2026-1234
+              severity: critical
+              title: OpenSSL remote code execution
+              source: api
+              templateId: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              budgetUsd: '500.00'
+              slaDueAt: '2026-11-28T18:00:00Z'
+              status: assigned
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              assignedAt: '2026-11-21T18:05:00Z'
+              completedAt: null
+              slaState: on_track
+              progress:
+                repos: 1
+                prsOpen: 1
+                prsMerged: 0
+                notAffected: 0
+                failedOrSkipped: 0
+                remaining: 0
+              cancelReason: null
+              repos:
+              - host: github.com
+                repo: example-org/payments-api
+                owningTeamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                owningContact: null
+                status: pr_opened
+                prUrl: https://github.com/example-org/payments-api/pull/412
+                prNumber: 412
+                detail: Bumped openssl
+                mergedAt: null
+                notifications:
+                - kind: pr_opened
+                  recipient: lead@example.com
+                  sentAt: '2026-11-21T18:05:00Z'
+                version: 2
+                updatedAt: '2026-11-21T18:05:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: work-orders:read
+    x-afs-scope: any
+    x-afs-cli: work-orders describe-work-order
+    x-afs-sdk: workOrders.get()
+    x-afs-screen: P6
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  patch:
+    operationId: UpdateWorkOrder
+    summary: Update work order
+    tags:
+    - work-orders
+    description: (title, SLA, cap, add repositories)
+    parameters:
+    - name: workOrderId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^wo_[0-9A-HJKMNP-TV-Z]{26}$
+        example: wo_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateWorkOrderRequest'
+          example:
+            slaDueAt: '2026-11-30T18:00:00Z'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkOrder'
+            example:
+              id: wo_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              kind: cve_remediation
+              cveId: CVE-2026-1234
+              severity: critical
+              title: OpenSSL remote code execution
+              source: api
+              templateId: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              budgetUsd: '500.00'
+              slaDueAt: '2026-11-30T18:00:00Z'
+              status: assigned
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              assignedAt: '2026-11-21T18:05:00Z'
+              completedAt: null
+              slaState: on_track
+              progress:
+                repos: 1
+                prsOpen: 1
+                prsMerged: 0
+                notAffected: 0
+                failedOrSkipped: 0
+                remaining: 0
+              cancelReason: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: work-orders:write
+    x-afs-scope: any
+    x-afs-cli: work-orders update-work-order
+    x-afs-sdk: workOrders.update()
+    x-afs-screen: P6
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - work_order.repo_updated
+/v1/work-orders/{workOrderId}:cancel:
+  post:
+    operationId: CancelWorkOrder
+    summary: Cancel work order
+    tags:
+    - work-orders
+    description: '{reason}'
+    parameters:
+    - name: workOrderId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^wo_[0-9A-HJKMNP-TV-Z]{26}$
+        example: wo_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CancelWorkOrderRequest'
+          example:
+            reason: Duplicate of another work order
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkOrder'
+            example:
+              id: wo_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              kind: cve_remediation
+              cveId: CVE-2026-1234
+              severity: critical
+              title: OpenSSL remote code execution
+              source: api
+              templateId: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              budgetUsd: '500.00'
+              slaDueAt: '2026-11-28T18:00:00Z'
+              status: cancelled
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              assignedAt: '2026-11-21T18:05:00Z'
+              completedAt: null
+              slaState: on_track
+              progress:
+                repos: 1
+                prsOpen: 1
+                prsMerged: 0
+                notAffected: 0
+                failedOrSkipped: 0
+                remaining: 0
+              cancelReason: Duplicate of another work order
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: work-orders:write
+    x-afs-scope: any
+    x-afs-cli: work-orders cancel-work-order
+    x-afs-sdk: workOrders.cancel()
+    x-afs-screen: P6
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - work_order.cancelled
+/v1/work-orders/{workOrderId}/repos:
+  get:
+    operationId: ListWorkOrderRepos
+    summary: List work order repos
+    tags:
+    - work-orders
+    parameters:
+    - name: workOrderId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^wo_[0-9A-HJKMNP-TV-Z]{26}$
+        example: wo_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkOrderRepoList'
+            example:
+              items:
+              - host: github.com
+                repo: example-org/payments-api
+                owningTeamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                owningContact: null
+                status: pr_opened
+                prUrl: https://github.com/example-org/payments-api/pull/412
+                prNumber: 412
+                detail: Bumped openssl
+                mergedAt: null
+                notifications:
+                - kind: pr_opened
+                  recipient: lead@example.com
+                  sentAt: '2026-11-21T18:05:00Z'
+                version: 2
+                updatedAt: '2026-11-21T18:05:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: work-orders:read
+    x-afs-scope: any
+    x-afs-cli: work-orders list-repos
+    x-afs-sdk: workOrders.repos.list()
+    x-afs-screen: P6
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/work-orders/{workOrderId}/repos/{host}/{owner}/{repo}:
+  patch:
+    operationId: UpdateWorkOrderRepo
+    summary: Update work order repo
+    tags:
+    - work-orders
+    description: '{status, prUrl?, prNumber?, detail?}'
+    parameters:
+    - name: workOrderId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^wo_[0-9A-HJKMNP-TV-Z]{26}$
+        example: wo_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: host
+      in: path
+      required: true
+      schema:
+        type: string
+        example: github.com
+    - name: owner
+      in: path
+      required: true
+      schema:
+        type: string
+        example: example-org
+    - name: repo
+      in: path
+      required: true
+      schema:
+        type: string
+        example: payments-api
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateWorkOrderRepoRequest'
+          example:
+            status: pr_opened
+            prUrl: https://github.com/example-org/payments-api/pull/412
+            prNumber: 412
+            detail: Bumped openssl
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkOrderRepo'
+            example:
+              host: github.com
+              repo: example-org/payments-api
+              owningTeamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              owningContact: null
+              status: pr_opened
+              prUrl: https://github.com/example-org/payments-api/pull/412
+              prNumber: 412
+              detail: Bumped openssl
+              mergedAt: null
+              notifications:
+              - kind: pr_opened
+                recipient: lead@example.com
+                sentAt: '2026-11-21T18:05:00Z'
+              version: 2
+              updatedAt: '2026-11-21T18:05:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    security:
+    - idpBearer: []
+    - apiKeyBearer: []
+    - workloadBearer: []
+    x-afs-permission: work-orders:report
+    x-afs-scope: any
+    x-afs-any-of:
+    - work-orders:report
+    - work-orders:write
+    x-afs-condition: assignedTeam
+    x-afs-cli: work-orders update-repo
+    x-afs-sdk: workOrders.repos.update()
+    x-afs-screen: P6
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - work_order.repo_updated
+    - work_order.pr_opened
+    - work_order.merged
+/v1/teams/{teamId}/work-orders:
+  get:
+    operationId: ListTeamWorkOrders
+    summary: List team work orders
+    tags:
+    - work-orders
+    description: (team members; security operators get 403 and use ListWorkOrders?teamId=)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkOrderList'
+            example:
+              items:
+              - id: wo_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                kind: cve_remediation
+                cveId: CVE-2026-1234
+                severity: critical
+                title: OpenSSL remote code execution
+                source: api
+                templateId: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                budgetUsd: '500.00'
+                slaDueAt: '2026-11-28T18:00:00Z'
+                status: assigned
+                teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0002
+                assignedAt: '2026-11-21T18:05:00Z'
+                completedAt: null
+                slaState: on_track
+                progress:
+                  repos: 1
+                  prsOpen: 1
+                  prsMerged: 0
+                  notAffected: 0
+                  failedOrSkipped: 0
+                  remaining: 0
+                cancelReason: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: work-orders:read
+    x-afs-scope: team
+    x-afs-cli: work-orders list-team-work-orders
+    x-afs-sdk: workOrders.listForTeam()
+    x-afs-screen: T1
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/swarm-templates:
+  get:
+    operationId: ListSwarmTemplates
+    summary: List swarm templates
+    tags:
+    - work-orders
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwarmTemplateList'
+            example:
+              items:
+              - id: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                name: cve-remediation
+                description: Triage, fix and verify a CVE across repositories
+                kind: cve_remediation
+                spec:
+                  stages:
+                  - name: triage
+                    position: 1
+                  - name: fix
+                    position: 2
+                  pools:
+                  - name: triager
+                    stage: triage
+                    template: claude-code
+                    workers: 2
+                  - name: fixer
+                    stage: fix
+                    template: claude-code
+                    workers: 10
+                  handoffs:
+                  - from: triager
+                    to: fixer
+                  secrets: []
+                  configValues: []
+                budgetUsd: '500.00'
+                ttlHours: 336
+                teardownRule: at_work_complete
+                enabled: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: swarm-templates:read
+    x-afs-scope: service
+    x-afs-cli: swarm-templates list-swarm-templates
+    x-afs-sdk: swarmTemplates.list()
+    x-afs-screen: P5, P3
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateSwarmTemplate
+    summary: Create swarm template
+    tags:
+    - work-orders
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateSwarmTemplateRequest'
+          example:
+            name: cve-remediation
+            description: Triage, fix and verify a CVE across repositories
+            kind: cve_remediation
+            spec:
+              stages:
+              - name: triage
+                position: 1
+              - name: fix
+                position: 2
+              pools:
+              - name: triager
+                stage: triage
+                template: claude-code
+                workers: 2
+              - name: fixer
+                stage: fix
+                template: claude-code
+                workers: 10
+              handoffs:
+              - from: triager
+                to: fixer
+              secrets: []
+              configValues: []
+            budgetUsd: '500.00'
+            ttlHours: 336
+            teardownRule: at_work_complete
+            enabled: true
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwarmTemplate'
+            example:
+              id: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              name: cve-remediation
+              description: Triage, fix and verify a CVE across repositories
+              kind: cve_remediation
+              spec:
+                stages:
+                - name: triage
+                  position: 1
+                - name: fix
+                  position: 2
+                pools:
+                - name: triager
+                  stage: triage
+                  template: claude-code
+                  workers: 2
+                - name: fixer
+                  stage: fix
+                  template: claude-code
+                  workers: 10
+                handoffs:
+                - from: triager
+                  to: fixer
+                secrets: []
+                configValues: []
+              budgetUsd: '500.00'
+              ttlHours: 336
+              teardownRule: at_work_complete
+              enabled: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:swarm-templates
+    x-afs-scope: service
+    x-afs-cli: swarm-templates create-swarm-template
+    x-afs-sdk: swarmTemplates.create()
+    x-afs-screen: P5
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/swarm-templates/{templateId}:
+  get:
+    operationId: GetSwarmTemplate
+    summary: Get swarm template
+    tags:
+    - work-orders
+    parameters:
+    - name: templateId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^swt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwarmTemplate'
+            example:
+              id: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              name: cve-remediation
+              description: Triage, fix and verify a CVE across repositories
+              kind: cve_remediation
+              spec:
+                stages:
+                - name: triage
+                  position: 1
+                - name: fix
+                  position: 2
+                pools:
+                - name: triager
+                  stage: triage
+                  template: claude-code
+                  workers: 2
+                - name: fixer
+                  stage: fix
+                  template: claude-code
+                  workers: 10
+                handoffs:
+                - from: triager
+                  to: fixer
+                secrets: []
+                configValues: []
+              budgetUsd: '500.00'
+              ttlHours: 336
+              teardownRule: at_work_complete
+              enabled: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: swarm-templates:read
+    x-afs-scope: service
+    x-afs-cli: swarm-templates describe-swarm-template
+    x-afs-sdk: swarmTemplates.get()
+    x-afs-screen: P5, P3
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  patch:
+    operationId: UpdateSwarmTemplate
+    summary: Update swarm template
+    tags:
+    - work-orders
+    parameters:
+    - name: templateId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^swt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateSwarmTemplateRequest'
+          example:
+            budgetUsd: '750.00'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwarmTemplate'
+            example:
+              id: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              name: cve-remediation
+              description: Triage, fix and verify a CVE across repositories
+              kind: cve_remediation
+              spec:
+                stages:
+                - name: triage
+                  position: 1
+                - name: fix
+                  position: 2
+                pools:
+                - name: triager
+                  stage: triage
+                  template: claude-code
+                  workers: 2
+                - name: fixer
+                  stage: fix
+                  template: claude-code
+                  workers: 10
+                handoffs:
+                - from: triager
+                  to: fixer
+                secrets: []
+                configValues: []
+              budgetUsd: '750.00'
+              ttlHours: 336
+              teardownRule: at_work_complete
+              enabled: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:swarm-templates
+    x-afs-scope: service
+    x-afs-cli: swarm-templates update-swarm-template
+    x-afs-sdk: swarmTemplates.update()
+    x-afs-screen: P5
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  delete:
+    operationId: DeleteSwarmTemplate
+    summary: Delete swarm template
+    tags:
+    - work-orders
+    description: (refused with 409 while an open work order uses it)
+    parameters:
+    - name: templateId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^swt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:swarm-templates
+    x-afs-scope: service
+    x-afs-cli: swarm-templates delete-swarm-template
+    x-afs-sdk: swarmTemplates.delete()
+    x-afs-screen: P5
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/swarm-templates/{templateId}:enable:
+  post:
+    operationId: EnableSwarmTemplate
+    summary: Enable swarm template
+    tags:
+    - work-orders
+    parameters:
+    - name: templateId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^swt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwarmTemplate'
+            example:
+              id: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              name: cve-remediation
+              description: Triage, fix and verify a CVE across repositories
+              kind: cve_remediation
+              spec:
+                stages:
+                - name: triage
+                  position: 1
+                - name: fix
+                  position: 2
+                pools:
+                - name: triager
+                  stage: triage
+                  template: claude-code
+                  workers: 2
+                - name: fixer
+                  stage: fix
+                  template: claude-code
+                  workers: 10
+                handoffs:
+                - from: triager
+                  to: fixer
+                secrets: []
+                configValues: []
+              budgetUsd: '500.00'
+              ttlHours: 336
+              teardownRule: at_work_complete
+              enabled: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:swarm-templates
+    x-afs-scope: service
+    x-afs-cli: swarm-templates enable-swarm-template
+    x-afs-sdk: swarmTemplates.enable()
+    x-afs-screen: P5
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/swarm-templates/{templateId}:disable:
+  post:
+    operationId: DisableSwarmTemplate
+    summary: Disable swarm template
+    tags:
+    - work-orders
+    parameters:
+    - name: templateId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^swt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwarmTemplate'
+            example:
+              id: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              name: cve-remediation
+              description: Triage, fix and verify a CVE across repositories
+              kind: cve_remediation
+              spec:
+                stages:
+                - name: triage
+                  position: 1
+                - name: fix
+                  position: 2
+                pools:
+                - name: triager
+                  stage: triage
+                  template: claude-code
+                  workers: 2
+                - name: fixer
+                  stage: fix
+                  template: claude-code
+                  workers: 10
+                handoffs:
+                - from: triager
+                  to: fixer
+                secrets: []
+                configValues: []
+              budgetUsd: '500.00'
+              ttlHours: 336
+              teardownRule: at_work_complete
+              enabled: false
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:swarm-templates
+    x-afs-scope: service
+    x-afs-cli: swarm-templates disable-swarm-template
+    x-afs-sdk: swarmTemplates.disable()
+    x-afs-screen: P5
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []

@@ -1,0 +1,573 @@
+# OpenAPI fragment (API contract §4.8). Bundled into api/openapi.yaml by make openapi.
+/v1/teams/{teamId}/external-systems:
+  get:
+    operationId: ListTeamExternalSystems
+    summary: List team external systems
+    tags:
+    - external-systems
+    description: (catalog + team-declared, with team state)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalSystemList'
+            example:
+              items:
+              - id: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                slug: github
+                name: GitHub
+                category: dev_tools
+                description: Source hosting
+                docsUrl: https://docs.github.com
+                endpoints:
+                - github.com:443
+                - api.github.com:443
+                enabled: true
+                builtin: true
+                scope: service
+                teamState: 'on'
+                disabledAt: null
+                unmetered: false
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:00:00Z'
+              - id: ext_01JD2Q3R4S5T6V7W8X9Y0Z0002
+                slug: payments-ledger
+                name: Ledger API
+                category: other
+                description: Source hosting
+                docsUrl: https://ledger.example.com/docs
+                endpoints:
+                - ledger.example.com:443
+                enabled: true
+                builtin: false
+                scope: team
+                teamState: 'on'
+                disabledAt: null
+                unmetered: false
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:00:00Z'
+                owner: ledger-team@example.com
+                purpose: Reconcile payouts
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: external-systems:read
+    x-afs-scope: team
+    x-afs-cli: teams list-external-systems
+    x-afs-sdk: externalSystems.team.list()
+    x-afs-screen: T9
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: DeclareTeamExternalSystem
+    summary: Declare team external system
+    tags:
+    - external-systems
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DeclareExternalSystemRequest'
+          example:
+            slug: payments-ledger
+            name: Ledger API
+            category: other
+            docsUrl: https://ledger.example.com/docs
+            endpoints:
+            - ledger.example.com:443
+            owner: ledger-team@example.com
+            purpose: Reconcile payouts
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalSystem'
+            example:
+              id: ext_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              slug: payments-ledger
+              name: Ledger API
+              category: other
+              description: Source hosting
+              docsUrl: https://ledger.example.com/docs
+              endpoints:
+              - ledger.example.com:443
+              enabled: true
+              builtin: false
+              scope: team
+              teamState: 'on'
+              disabledAt: null
+              unmetered: false
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              updatedAt: '2026-11-21T18:00:00Z'
+              owner: ledger-team@example.com
+              purpose: Reconcile payouts
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: external-systems:write
+    x-afs-scope: team
+    x-afs-condition: mayAddExternalSystems
+    x-afs-cli: teams declare-external-system
+    x-afs-sdk: externalSystems.team.declare()
+    x-afs-screen: T9
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - team.updated
+/v1/teams/{teamId}/external-systems/{systemId}/state:
+  put:
+    operationId: SetTeamExternalSystemState
+    summary: Set team external system state
+    tags:
+    - external-systems
+    description: '{enabled}'
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: systemId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^ext_[0-9A-HJKMNP-TV-Z]{26}$
+        example: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ExternalSystemState'
+          example:
+            enabled: false
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalSystem'
+            example:
+              id: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              slug: github
+              name: GitHub
+              category: dev_tools
+              description: Source hosting
+              docsUrl: https://docs.github.com
+              endpoints:
+              - github.com:443
+              - api.github.com:443
+              enabled: true
+              builtin: true
+              scope: service
+              teamState: 'off'
+              disabledAt: team
+              unmetered: false
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: external-systems:write
+    x-afs-scope: team
+    x-afs-cli: teams set-external-system-state
+    x-afs-sdk: externalSystems.team.setState()
+    x-afs-screen: T9
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - team.updated
+/v1/teams/{teamId}/external-systems/{systemId}:
+  patch:
+    operationId: UpdateTeamExternalSystem
+    summary: Update team external system
+    tags:
+    - external-systems
+    description: (team-declared only)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: systemId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^ext_[0-9A-HJKMNP-TV-Z]{26}$
+        example: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateExternalSystemRequest'
+          example:
+            endpoints:
+            - ledger.example.com:443
+            - ledger-api.example.com:443
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalSystem'
+            example:
+              id: ext_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              slug: payments-ledger
+              name: Ledger API
+              category: other
+              description: Source hosting
+              docsUrl: https://ledger.example.com/docs
+              endpoints:
+              - ledger.example.com:443
+              - ledger-api.example.com:443
+              enabled: true
+              builtin: false
+              scope: team
+              teamState: 'on'
+              disabledAt: null
+              unmetered: false
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              updatedAt: '2026-11-21T18:00:00Z'
+              owner: ledger-team@example.com
+              purpose: Reconcile payouts
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: external-systems:write
+    x-afs-scope: team
+    x-afs-cli: teams update-external-system
+    x-afs-sdk: externalSystems.team.update()
+    x-afs-screen: T9
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - team.updated
+  delete:
+    operationId: DeleteTeamExternalSystem
+    summary: Delete team external system
+    tags:
+    - external-systems
+    description: (team-declared only)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: systemId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^ext_[0-9A-HJKMNP-TV-Z]{26}$
+        example: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: external-systems:write
+    x-afs-scope: team
+    x-afs-cli: teams delete-external-system
+    x-afs-sdk: externalSystems.team.delete()
+    x-afs-screen: T9
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - team.updated
+/v1/teams/{teamId}/agents/{agentId}/external-systems:
+  get:
+    operationId: ListAgentExternalSystems
+    summary: List agent external systems
+    tags:
+    - external-systems
+    description: (effective, with disabledAt)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalSystemList'
+            example:
+              items:
+              - id: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                slug: github
+                name: GitHub
+                category: dev_tools
+                description: Source hosting
+                docsUrl: https://docs.github.com
+                endpoints:
+                - github.com:443
+                - api.github.com:443
+                enabled: true
+                builtin: true
+                scope: service
+                teamState: 'on'
+                disabledAt: null
+                unmetered: false
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: external-systems:read
+    x-afs-scope: team
+    x-afs-cli: agents list-external-systems
+    x-afs-sdk: externalSystems.agent.list()
+    x-afs-screen: T10
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/agents/{agentId}/external-systems/{systemId}/state:
+  put:
+    operationId: SetAgentExternalSystemState
+    summary: Set agent external system state
+    tags:
+    - external-systems
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: systemId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^ext_[0-9A-HJKMNP-TV-Z]{26}$
+        example: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ExternalSystemState'
+          example:
+            enabled: false
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalSystem'
+            example:
+              id: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              slug: github
+              name: GitHub
+              category: dev_tools
+              description: Source hosting
+              docsUrl: https://docs.github.com
+              endpoints:
+              - github.com:443
+              - api.github.com:443
+              enabled: true
+              builtin: true
+              scope: service
+              teamState: 'on'
+              disabledAt: agent
+              unmetered: false
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: external-systems:write
+    x-afs-scope: team
+    x-afs-cli: agents set-external-system-state
+    x-afs-sdk: externalSystems.agent.setState()
+    x-afs-screen: T10
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - agent.updated

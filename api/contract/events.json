@@ -1,0 +1,394 @@
+[
+  {
+    "type": "team.created",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Team mutations"
+  },
+  {
+    "type": "team.updated",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Team mutations"
+  },
+  {
+    "type": "team.suspended",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Team mutations"
+  },
+  {
+    "type": "team.resumed",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Team mutations"
+  },
+  {
+    "type": "team.deleted",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Team mutations"
+  },
+  {
+    "type": "team.tags_changed",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Team mutations"
+  },
+  {
+    "type": "team.ceiling_override_set",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Team mutations"
+  },
+  {
+    "type": "team.status_changed",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "Phase change"
+  },
+  {
+    "type": "agent.status_changed",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "Phase change"
+  },
+  {
+    "type": "agent.created",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Agent mutations"
+  },
+  {
+    "type": "agent.updated",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Agent mutations"
+  },
+  {
+    "type": "agent.deleted",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Agent mutations"
+  },
+  {
+    "type": "agent.paused",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Agent mutations"
+  },
+  {
+    "type": "agent.resumed",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Agent mutations"
+  },
+  {
+    "type": "agent.restarted",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Agent mutations"
+  },
+  {
+    "type": "secret.created",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "No value in the event"
+  },
+  {
+    "type": "secret.rotated",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "No value in the event"
+  },
+  {
+    "type": "secret.deleted",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "No value in the event"
+  },
+  {
+    "type": "budget.threshold_crossed",
+    "emittedBy": [
+      "gateway"
+    ],
+    "when": "Once per period per threshold"
+  },
+  {
+    "type": "budget.exhausted",
+    "emittedBy": [
+      "gateway"
+    ],
+    "when": "Once per period per threshold"
+  },
+  {
+    "type": "budget.reset",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "A new period's spend counter is opened (D31)"
+  },
+  {
+    "type": "budget.ceiling_override_expired",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "A ceiling override expired; `data` has the base ceiling and whether the budget was lowered (D34)"
+  },
+  {
+    "type": "cost.variance_detected",
+    "emittedBy": [
+      "billing",
+      "api"
+    ],
+    "when": "BUD-6, BUD-9"
+  },
+  {
+    "type": "pricing.proposal_created",
+    "emittedBy": [
+      "billing",
+      "api"
+    ],
+    "when": "BUD-6, BUD-9"
+  },
+  {
+    "type": "pricing.proposal_decided",
+    "emittedBy": [
+      "billing",
+      "api"
+    ],
+    "when": "BUD-6, BUD-9"
+  },
+  {
+    "type": "drift.corrected",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "Manual change reverted"
+  },
+  {
+    "type": "egress.denied_spike",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "More than `egress.denied_spike_threshold` denials from one agent or pool in 5 minutes (RPT-6). Agent sign-ins go to team log delivery only, never to events (D17)"
+  },
+  {
+    "type": "role_link.verified",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "AGT-10"
+  },
+  {
+    "type": "role_link.failed",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "AGT-10"
+  },
+  {
+    "type": "team.teardown_started",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "TEAM-7; `data.reason` = `expired` | `cap_reached` | `work_complete` | `manual`"
+  },
+  {
+    "type": "team.torn_down",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "TEAM-7; `data.reason` = `expired` | `cap_reached` | `work_complete` | `manual`"
+  },
+  {
+    "type": "pool.created",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "AGT-8"
+  },
+  {
+    "type": "pool.updated",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "AGT-8"
+  },
+  {
+    "type": "pool.scaled",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "AGT-8"
+  },
+  {
+    "type": "pool.deleted",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "AGT-8"
+  },
+  {
+    "type": "pool.status_changed",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "AGT-8"
+  },
+  {
+    "type": "report.delivered",
+    "emittedBy": [
+      "billing"
+    ],
+    "when": "RPT-8"
+  },
+  {
+    "type": "report.failed",
+    "emittedBy": [
+      "billing"
+    ],
+    "when": "RPT-8"
+  },
+  {
+    "type": "work_order.created",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "WO-1 to WO-5; owners notified once per event"
+  },
+  {
+    "type": "work_order.assigned",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "WO-1 to WO-5; owners notified once per event"
+  },
+  {
+    "type": "work_order.repo_updated",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "WO-1 to WO-5; owners notified once per event"
+  },
+  {
+    "type": "work_order.pr_opened",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "WO-1 to WO-5; owners notified once per event"
+  },
+  {
+    "type": "work_order.merged",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "WO-1 to WO-5; owners notified once per event"
+  },
+  {
+    "type": "work_order.sla_warning",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "WO-1 to WO-5; owners notified once per event"
+  },
+  {
+    "type": "work_order.sla_breached",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "WO-1 to WO-5; owners notified once per event"
+  },
+  {
+    "type": "work_order.completed",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "WO-1 to WO-5; owners notified once per event"
+  },
+  {
+    "type": "work_order.failed",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "WO-1 to WO-5; owners notified once per event"
+  },
+  {
+    "type": "work_order.cancelled",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "WO-1 to WO-5; owners notified once per event"
+  },
+  {
+    "type": "cost_tags.not_seen",
+    "emittedBy": [
+      "billing"
+    ],
+    "when": "TAG-7"
+  },
+  {
+    "type": "export.completed",
+    "emittedBy": [
+      "reconciler",
+      "api"
+    ],
+    "when": "CFG-5"
+  },
+  {
+    "type": "export.failed",
+    "emittedBy": [
+      "reconciler",
+      "api"
+    ],
+    "when": "CFG-5"
+  },
+  {
+    "type": "import.applied",
+    "emittedBy": [
+      "reconciler",
+      "api"
+    ],
+    "when": "CFG-5"
+  },
+  {
+    "type": "notification.delivery_failed",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "A channel's EventBridge target failed (D46)"
+  }
+]

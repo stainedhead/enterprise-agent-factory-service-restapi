@@ -88,13 +88,13 @@ generated `internal/authz/catalog_gen.go`, `internal/adapter/httpapi/routes_gen.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M0-A1 | `contractgen` parses contract §4 tables into `api/contract/operations.json`: 182 operationIds, method, path, permission (with field-level and conditional variants for `UpdateTeam`, `DeclareTeamExternalSystem`, `UpdateWorkOrderRepo`, `ListWorkOrders`), scope (`team`, `service`, `public`, `any`), CLI, SDK, screen, priority, CSV flag; golden test on a fixture copy of the tables; `api/contract/SOURCE` records contract version 1.1.0 and source SHA-256 | RA-1 (part) | M0-S1 |
-| [ ] | M0-A2 | Parse §3 into `permissions.json` (permission × role, with conditions `mayManageAwsAccounts`, `viewerKubectl`, `assigned or own repos`, `assigned team`) and generate `internal/authz/catalog_gen.go` | RA-1a (part), RA-US-1.2 (part) | M0-A1 |
-| [ ] | M0-A3 | Parse §6 errors, §7 events and root PRD §6.13 settings into `errors.json`, `events.json`, `settings.json`; generate `domain/events_gen.go` (type constants, emitter, envelope) and `domain/settings_gen.go` (key, type, default, range) | CT-API-5 (part), CT-API-9 (part), RA-16 (part) | M0-A1 |
-| [ ] | M0-A4 | Generate `httpapi/routes_gen.go`: one entry per operation (method, ServeMux pattern, permission spec, scope, CSV, idempotent-create flag, mutation flag) | RA-1 (part) | M0-A1 |
-| [ ] | M0-A5 | `openapibundle`: merge `api/src/**` into a stable, sorted `api/openapi.yaml`; `make openapi`; drift check | RA-1 (part) | M0-S4 |
-| [ ] | M0-A6 | `api/contract_test.go`: bundle is valid OpenAPI 3.1; operationIds, methods, paths, `x-afs-permission`, `x-afs-scope` equal `operations.json`; only §6 error codes; every operation has request/response examples; no schema property is a replica count | RA-US-4.6, CT-API-5 (part) | M0-A5, M0-B1b, M0-B2b, M0-B3b, M0-B4b |
-| [ ] | M0-A7 | `api/embed.go` exposes the bundle and `ContractVersion = "1.1.0"` | RA-1 (part), RA-US-6.5 (part) | M0-A5 |
+| [x] | M0-A1 | `contractgen` parses contract §4 tables into `api/contract/operations.json`: 182 operationIds, method, path, permission (with field-level and conditional variants for `UpdateTeam`, `DeclareTeamExternalSystem`, `UpdateWorkOrderRepo`, `ListWorkOrders`), scope (`team`, `service`, `public`, `any`), CLI, SDK, screen, priority, CSV flag; golden test on a fixture copy of the tables; `api/contract/SOURCE` records contract version 1.1.0 and source SHA-256 | RA-1 (part) | M0-S1 |
+| [x] | M0-A2 | Parse §3 into `permissions.json` (permission × role, with conditions `mayManageAwsAccounts`, `viewerKubectl`, `assigned or own repos`, `assigned team`) and generate `internal/authz/catalog_gen.go` | RA-1a (part), RA-US-1.2 (part) | M0-A1 |
+| [x] | M0-A3 | Parse §6 errors, §7 events and root PRD §6.13 settings into `errors.json`, `events.json`, `settings.json`; generate `domain/events_gen.go` (type constants, emitter, envelope) and `domain/settings_gen.go` (key, type, default, range) | CT-API-5 (part), CT-API-9 (part), RA-16 (part) | M0-A1 |
+| [x] | M0-A4 | Generate `httpapi/routes_gen.go`: one entry per operation (method, ServeMux pattern, permission spec, scope, CSV, idempotent-create flag, mutation flag) | RA-1 (part) | M0-A1 |
+| [x] | M0-A5 | `openapibundle`: merge `api/src/**` into a stable, sorted `api/openapi.yaml`; `make openapi`; drift check | RA-1 (part) | M0-S4 |
+| [x] | M0-A6 | `api/contract_test.go`: bundle is valid OpenAPI 3.1; operationIds, methods, paths, `x-afs-permission`, `x-afs-scope` equal `operations.json`; only §6 error codes; every operation has request/response examples; no schema property is a replica count | RA-US-4.6, CT-API-5 (part) | M0-A5, M0-B1b, M0-B2b, M0-B3b, M0-B4b |
+| [x] | M0-A7 | `api/embed.go` exposes the bundle and `ContractVersion = "1.1.0"` | RA-1 (part), RA-US-6.5 (part) | M0-A5 |
 
 ### M0-B1 · OpenAPI: components, caller, teams, members (contract §1, §2, §4.1–§4.3, §5, §6)
 
@@ -103,8 +103,8 @@ Owns: `api/src/openapi.base.yaml`, `api/src/components/`, `api/src/paths/{01-cal
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M0-B1a | Base: `info.version` 1.1.0, servers, security schemes (IdP bearer, `afsk_` key bearer, workload bearer); parameters (`teamId`, `maxResults`, `nextToken`, `Idempotency-Key`, `If-Match`, `X-Request-Id`, report query params); headers (`ETag`, `X-Request-Id`, `X-Afs-Contract-Version`, `Idempotent-Replayed`, `Retry-After`, `X-Afs-Next-Token`); `Error` with every §6 code and `details` variants (`fields`, `requiredPermission`, `reason`, `missingTags`, `ambiguousRepos`, `unownedRepos`); `Status`; page wrapper; standard error responses (incl. `428`) on every operation | CT-API-1 (part), CT-API-5 (part), CT-API-6 (part) | — |
-| [ ] | M0-B1b | §4.1–§4.3 paths and schemas: `Me`, sign-in providers (no secret), `Team` (guardrail fields, ephemeral fields, `effectiveCeilingUsd`), `TeamTags` (+ `requestMetadataDroppedKeys`), `Member`, `ApiKey` (`secretKey` only on create), team directory, kubeconfig (YAML), suspend/resume/status, models, allowed accounts, service keys, security operators; examples | RA-1 (part) | M0-B1a |
+| [x] | M0-B1a | Base: `info.version` 1.1.0, servers, security schemes (IdP bearer, `afsk_` key bearer, workload bearer); parameters (`teamId`, `maxResults`, `nextToken`, `Idempotency-Key`, `If-Match`, `X-Request-Id`, report query params); headers (`ETag`, `X-Request-Id`, `X-Afs-Contract-Version`, `Idempotent-Replayed`, `Retry-After`, `X-Afs-Next-Token`); `Error` with every §6 code and `details` variants (`fields`, `requiredPermission`, `reason`, `missingTags`, `ambiguousRepos`, `unownedRepos`); `Status`; page wrapper; standard error responses (incl. `428`) on every operation | CT-API-1 (part), CT-API-5 (part), CT-API-6 (part) | — |
+| [x] | M0-B1b | §4.1–§4.3 paths and schemas: `Me`, sign-in providers (no secret), `Team` (guardrail fields, ephemeral fields, `effectiveCeilingUsd`), `TeamTags` (+ `requestMetadataDroppedKeys`), `Member`, `ApiKey` (`secretKey` only on create), team directory, kubeconfig (YAML), suspend/resume/status, models, allowed accounts, service keys, security operators; examples | RA-1 (part) | M0-B1a |
 
 ### M0-B2 · OpenAPI: agents, pools, identity, secrets, config, external systems (§4.4–§4.8)
 
@@ -112,8 +112,8 @@ Owns: `api/src/paths/{04-agents,04a-pools,05-identity,06-secrets,07-config,08-ex
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M0-B2a | §4.4 agents (no replica field), snapshots, storage classes, agent templates; §4.4a stages, pools, scale, pause/resume, status, handoffs, pool secret bindings, config, external systems, role links | RA-1 (part), RA-US-4.6 (part) | M0-B1a |
-| [ ] | M0-B2b | §4.5 role links (`trustPolicy`), identities; §4.6 secrets (value only in create/put/rotate requests, `writeOnly`); §4.7 config values (`source`, resolved); §4.8 external systems; examples | RA-1 (part) | M0-B1a |
+| [x] | M0-B2a | §4.4 agents (no replica field), snapshots, storage classes, agent templates; §4.4a stages, pools, scale, pause/resume, status, handoffs, pool secret bindings, config, external systems, role links | RA-1 (part), RA-US-4.6 (part) | M0-B1a |
+| [x] | M0-B2b | §4.5 role links (`trustPolicy`), identities; §4.6 secrets (value only in create/put/rotate requests, `writeOnly`); §4.7 config values (`source`, resolved); §4.8 external systems; examples | RA-1 (part) | M0-B1a |
 
 ### M0-B3 · OpenAPI: budgets, reports, delivery, audit, revisions, work orders (§4.9–§4.10a)
 
@@ -121,8 +121,8 @@ Owns: `api/src/paths/{09-budgets-reports,10-delivery-audit,10a-work-orders}.yaml
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M0-B3a | §4.9 budget (`forecastUsd`, `projectedCapAt`), usage, costs, team/agent/service reports with the report query and `text/csv` responses, report schedules, cost tag status | RA-1 (part), CT-API-3 (part) | M0-B1a |
-| [ ] | M0-B3b | §4.10 log destinations, notification channels (with delivery status; `:test` response per research OQ-S1), audit events (CSV), revisions, `RestoreRevision` (`dryRun`, diff shape decided here); §4.10a work orders (`ownerSource` on create response only), repos, team work orders, swarm templates; examples | RA-1 (part) | M0-B1a |
+| [x] | M0-B3a | §4.9 budget (`forecastUsd`, `projectedCapAt`), usage, costs, team/agent/service reports with the report query and `text/csv` responses, report schedules, cost tag status | RA-1 (part), CT-API-3 (part) | M0-B1a |
+| [x] | M0-B3b | §4.10 log destinations, notification channels (with delivery status; `:test` response per research OQ-S1), audit events (CSV), revisions, `RestoreRevision` (`dryRun`, diff shape decided here); §4.10a work orders (`ownerSource` on create response only), repos, team work orders, swarm templates; examples | RA-1 (part) | M0-B1a |
 
 ### M0-B4 · OpenAPI: service administration (§4.11)
 
@@ -130,8 +130,8 @@ Owns: `api/src/paths/11-admin.yaml`, `api/src/schemas/11-admin.yaml`.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M0-B4a | Settings (every key with value, default, range), identity providers, service notification channels, service tags, models, prices, price proposals, cost reconciliations, catalog systems, storage classes, agent templates, org accounts, admin audit | RA-1 (part) | M0-B1a |
-| [ ] | M0-B4b | Exports (`202`, `downloadUrl`), imports (`dryRun` default true, 100 MB body, report shape), health and readiness; examples | RA-1 (part) | M0-B1a |
+| [x] | M0-B4a | Settings (every key with value, default, range), identity providers, service notification channels, service tags, models, prices, price proposals, cost reconciliations, catalog systems, storage classes, agent templates, org accounts, admin audit | RA-1 (part) | M0-B1a |
+| [x] | M0-B4b | Exports (`202`, `downloadUrl`), imports (`dryRun` default true, 100 MB body, report shape), health and readiness; examples | RA-1 (part) | M0-B1a |
 
 ### M0-C · Authorization (`internal/authz`)
 
@@ -139,10 +139,10 @@ Owns: `internal/authz/` except `catalog_gen.go`.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M0-C1 | Replace the scaffold: roles `team_viewer`, `team_admin`, `service_admin`, `security_operator`, workload grant; catalog from `catalog_gen.go`; catalog-equality test against `permissions.json` (no extra or missing permission or grant; `budgets:set-ceiling` gone) | RA-1a, RA-US-1.2 | M0-A2 |
-| [ ] | M0-C2 | `Authorize(principal, perm, resource) Decision`: service admins everything; team roles only on bound teams (`NotFound` when unbound); security operator only its column and `Deny` on every team-scoped resource; workload only `work-orders:report` on its team's assigned work orders | RA-US-1.4 (part), RA-US-2b.2 (part), RA-US-15.5 (part) | M0-C1 |
-| [ ] | M0-C3 | Conditional grants with allowed and denied cases: `teams:set-aws-accounts` iff `mayManageAwsAccounts`, `teams:get-kubeconfig` iff `viewerKubectl`, declare external systems iff `mayAddExternalSystems`, `work-orders:read` for assigned or own-repo work orders, `work-orders:report` on the assigned team | RA-US-1.5 | M0-C2 |
-| [ ] | M0-C4 | `Effective` for `GetMe` (flag-dependent, D42) and `CanGrant` (team-admins cannot grant `service_admin` or `security_operator`); coverage ≥ 90% | RA-US-3a.1 (part), RA-US-3a.2 (part), RA-3 (part) | M0-C3 |
+| [x] | M0-C1 | Replace the scaffold: roles `team_viewer`, `team_admin`, `service_admin`, `security_operator`, workload grant; catalog from `catalog_gen.go`; catalog-equality test against `permissions.json` (no extra or missing permission or grant; `budgets:set-ceiling` gone) | RA-1a, RA-US-1.2 | M0-A2 |
+| [x] | M0-C2 | `Authorize(principal, perm, resource) Decision`: service admins everything; team roles only on bound teams (`NotFound` when unbound); security operator only its column and `Deny` on every team-scoped resource; workload only `work-orders:report` on its team's assigned work orders | RA-US-1.4 (part), RA-US-2b.2 (part), RA-US-15.5 (part) | M0-C1 |
+| [x] | M0-C3 | Conditional grants with allowed and denied cases: `teams:set-aws-accounts` iff `mayManageAwsAccounts`, `teams:get-kubeconfig` iff `viewerKubectl`, declare external systems iff `mayAddExternalSystems`, `work-orders:read` for assigned or own-repo work orders, `work-orders:report` on the assigned team | RA-US-1.5 | M0-C2 |
+| [x] | M0-C4 | `Effective` for `GetMe` (flag-dependent, D42) and `CanGrant` (team-admins cannot grant `service_admin` or `security_operator`); coverage ≥ 90% | RA-US-3a.1 (part), RA-US-3a.2 (part), RA-3 (part) | M0-C3 |
 
 ### M0-D · HTTP skeleton
 

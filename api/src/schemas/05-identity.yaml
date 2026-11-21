@@ -1,0 +1,176 @@
+# OpenAPI fragment (API contract §4.5 and §5 shapes). Bundled into api/openapi.yaml by make openapi.
+RoleLink:
+  type: object
+  required:
+  - id
+  - profileName
+  - roleArn
+  - accountId
+  - status
+  - version
+  properties:
+    id:
+      type: string
+      pattern: ^arl_[0-9A-HJKMNP-TV-Z]{26}$
+      example: arl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    profileName:
+      type: string
+    roleArn:
+      type: string
+      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+    accountId:
+      $ref: '#/components/schemas/AwsAccountId'
+      readOnly: true
+    maxSessionSeconds:
+      type: integer
+      minimum: 900
+      maximum: 43200
+    externalId:
+      type: string
+      readOnly: true
+    status:
+      type: string
+      enum:
+      - pending_trust
+      - verified
+      - failed
+      - disabled
+      readOnly: true
+    lastVerifiedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+    lastError:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+    trustPolicy:
+      type: object
+      description: IAM trust policy JSON to put on the role in the target account
+      readOnly: true
+RoleLinkList:
+  type: object
+  description: A page of RoleLink resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/RoleLink'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateRoleLinkRequest:
+  type: object
+  required:
+  - profileName
+  - roleArn
+  properties:
+    profileName:
+      type: string
+    roleArn:
+      type: string
+      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+    maxSessionSeconds:
+      type: integer
+      minimum: 900
+      maximum: 43200
+AgentIdentity:
+  type: object
+  required:
+  - id
+  - kind
+  - externalRef
+  - status
+  - version
+  properties:
+    id:
+      type: string
+      pattern: ^aid_[0-9A-HJKMNP-TV-Z]{26}$
+      example: aid_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    kind:
+      type: string
+      enum:
+      - k8s_service_account
+      - aws_iam_role
+      - github_app
+      - external
+    externalRef:
+      type: string
+    secretId:
+      type:
+      - string
+      - 'null'
+      pattern: ^sec_[0-9A-HJKMNP-TV-Z]{26}$
+      example: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    status:
+      type: string
+      enum:
+      - pending
+      - active
+      - disabled
+      - error
+      readOnly: true
+AgentIdentityList:
+  type: object
+  description: A page of AgentIdentity resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/AgentIdentity'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateAgentIdentityRequest:
+  type: object
+  required:
+  - kind
+  - externalRef
+  properties:
+    kind:
+      type: string
+      enum:
+      - github_app
+      - external
+    externalRef:
+      type: string
+    secretId:
+      type: string
+      pattern: ^sec_[0-9A-HJKMNP-TV-Z]{26}$
+      example: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001

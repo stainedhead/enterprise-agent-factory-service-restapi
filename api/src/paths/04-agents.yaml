@@ -1,0 +1,1056 @@
+# OpenAPI fragment (API contract §4.4). Bundled into api/openapi.yaml by make openapi.
+/v1/teams/{teamId}/agents:
+  get:
+    operationId: ListAgents
+    summary: List agents
+    tags:
+    - agents
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentList'
+            example:
+              items:
+              - id: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                generation: 1
+                status:
+                  phase: Pending
+                  observedGeneration: 0
+                  conditions: []
+                  updatedAt: '2026-11-21T18:00:00Z'
+                name: coder
+                description: Writes and reviews code
+                template: claude-code
+                image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+                modelId: anthropic.claude-sonnet-4-5
+                resources:
+                  cpu: '1'
+                  memory: 2Gi
+                iamIdentity: team_shared
+                iamRoleArn: arn:aws:iam::111122223333:role/afs-payments-agents
+                volume:
+                  sizeGiB: 20
+                  storageClass: gp3-standard
+                  onDelete: snapshot_then_delete
+                  snapshotSchedule: daily
+                  snapshotRetain: 7
+                secretBindings:
+                - secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                  delivery: env
+                  target: GITHUB_PAT
+                paused: false
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agents:read
+    x-afs-scope: team
+    x-afs-cli: agents list-agents
+    x-afs-sdk: agents.list()
+    x-afs-screen: T2
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateAgent
+    summary: Create agent
+    tags:
+    - agents
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateAgentRequest'
+          example:
+            name: coder
+            description: Writes and reviews code
+            template: claude-code
+            image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+            modelId: anthropic.claude-sonnet-4-5
+            resources:
+              cpu: '1'
+              memory: 2Gi
+            iamIdentity: team_shared
+            volume:
+              sizeGiB: 20
+              storageClass: gp3-standard
+              onDelete: snapshot_then_delete
+              snapshotSchedule: daily
+              snapshotRetain: 7
+            secretBindings:
+            - secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              delivery: env
+              target: GITHUB_PAT
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Agent'
+            example:
+              id: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: coder
+              description: Writes and reviews code
+              template: claude-code
+              image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              modelId: anthropic.claude-sonnet-4-5
+              resources:
+                cpu: '1'
+                memory: 2Gi
+              iamIdentity: team_shared
+              iamRoleArn: arn:aws:iam::111122223333:role/afs-payments-agents
+              volume:
+                sizeGiB: 20
+                storageClass: gp3-standard
+                onDelete: snapshot_then_delete
+                snapshotSchedule: daily
+                snapshotRetain: 7
+              secretBindings:
+              - secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                delivery: env
+                target: GITHUB_PAT
+              paused: false
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agents:write
+    x-afs-scope: team
+    x-afs-cli: agents create-agent
+    x-afs-sdk: agents.create()
+    x-afs-screen: T3
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - agent.created
+/v1/teams/{teamId}/agents/{agentId}:
+  get:
+    operationId: GetAgent
+    summary: Get agent
+    tags:
+    - agents
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Agent'
+            example:
+              id: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Ready
+                observedGeneration: 1
+                conditions:
+                - type: NamespaceReady
+                  status: 'True'
+                  reason: Applied
+                  message: Namespace and policies applied
+                  lastTransitionTime: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:05:00Z'
+              name: coder
+              description: Writes and reviews code
+              template: claude-code
+              image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              modelId: anthropic.claude-sonnet-4-5
+              resources:
+                cpu: '1'
+                memory: 2Gi
+              iamIdentity: team_shared
+              iamRoleArn: arn:aws:iam::111122223333:role/afs-payments-agents
+              volume:
+                sizeGiB: 20
+                storageClass: gp3-standard
+                onDelete: snapshot_then_delete
+                snapshotSchedule: daily
+                snapshotRetain: 7
+              secretBindings:
+              - secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                delivery: env
+                target: GITHUB_PAT
+              paused: false
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agents:read
+    x-afs-scope: team
+    x-afs-cli: agents describe-agent
+    x-afs-sdk: agents.get()
+    x-afs-screen: T2
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  patch:
+    operationId: UpdateAgent
+    summary: Update agent
+    tags:
+    - agents
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateAgentRequest'
+          example:
+            modelId: anthropic.claude-haiku-4-5
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Agent'
+            example:
+              id: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 2
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: coder
+              description: Writes and reviews code
+              template: claude-code
+              image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              modelId: anthropic.claude-haiku-4-5
+              resources:
+                cpu: '1'
+                memory: 2Gi
+              iamIdentity: team_shared
+              iamRoleArn: arn:aws:iam::111122223333:role/afs-payments-agents
+              volume:
+                sizeGiB: 20
+                storageClass: gp3-standard
+                onDelete: snapshot_then_delete
+                snapshotSchedule: daily
+                snapshotRetain: 7
+              secretBindings:
+              - secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                delivery: env
+                target: GITHUB_PAT
+              paused: false
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agents:write
+    x-afs-scope: team
+    x-afs-cli: agents update-agent
+    x-afs-sdk: agents.update()
+    x-afs-screen: T3
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - agent.updated
+  delete:
+    operationId: DeleteAgent
+    summary: Delete agent
+    tags:
+    - agents
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '202':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Agent'
+            example:
+              id: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Deleting
+                observedGeneration: 1
+                conditions:
+                - type: NamespaceReady
+                  status: 'True'
+                  reason: Applied
+                  message: Namespace and policies applied
+                  lastTransitionTime: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:05:00Z'
+              name: coder
+              description: Writes and reviews code
+              template: claude-code
+              image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              modelId: anthropic.claude-sonnet-4-5
+              resources:
+                cpu: '1'
+                memory: 2Gi
+              iamIdentity: team_shared
+              iamRoleArn: arn:aws:iam::111122223333:role/afs-payments-agents
+              volume:
+                sizeGiB: 20
+                storageClass: gp3-standard
+                onDelete: snapshot_then_delete
+                snapshotSchedule: daily
+                snapshotRetain: 7
+              secretBindings:
+              - secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                delivery: env
+                target: GITHUB_PAT
+              paused: false
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agents:write
+    x-afs-scope: team
+    x-afs-cli: agents delete-agent
+    x-afs-sdk: agents.delete()
+    x-afs-screen: T2
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - agent.deleted
+/v1/teams/{teamId}/agents/{agentId}:pause:
+  post:
+    operationId: PauseAgent
+    summary: Pause agent
+    tags:
+    - agents
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Agent'
+            example:
+              id: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 2
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: coder
+              description: Writes and reviews code
+              template: claude-code
+              image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              modelId: anthropic.claude-sonnet-4-5
+              resources:
+                cpu: '1'
+                memory: 2Gi
+              iamIdentity: team_shared
+              iamRoleArn: arn:aws:iam::111122223333:role/afs-payments-agents
+              volume:
+                sizeGiB: 20
+                storageClass: gp3-standard
+                onDelete: snapshot_then_delete
+                snapshotSchedule: daily
+                snapshotRetain: 7
+              secretBindings:
+              - secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                delivery: env
+                target: GITHUB_PAT
+              paused: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agents:write
+    x-afs-scope: team
+    x-afs-cli: agents pause-agent
+    x-afs-sdk: agents.pause()
+    x-afs-screen: T2
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - agent.paused
+/v1/teams/{teamId}/agents/{agentId}:resume:
+  post:
+    operationId: ResumeAgent
+    summary: Resume agent
+    tags:
+    - agents
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Agent'
+            example:
+              id: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 3
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 3
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: coder
+              description: Writes and reviews code
+              template: claude-code
+              image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              modelId: anthropic.claude-sonnet-4-5
+              resources:
+                cpu: '1'
+                memory: 2Gi
+              iamIdentity: team_shared
+              iamRoleArn: arn:aws:iam::111122223333:role/afs-payments-agents
+              volume:
+                sizeGiB: 20
+                storageClass: gp3-standard
+                onDelete: snapshot_then_delete
+                snapshotSchedule: daily
+                snapshotRetain: 7
+              secretBindings:
+              - secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                delivery: env
+                target: GITHUB_PAT
+              paused: false
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agents:write
+    x-afs-scope: team
+    x-afs-cli: agents resume-agent
+    x-afs-sdk: agents.resume()
+    x-afs-screen: T2
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - agent.resumed
+/v1/teams/{teamId}/agents/{agentId}:restart:
+  post:
+    operationId: RestartAgent
+    summary: Restart agent
+    tags:
+    - agents
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '202':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Agent'
+            example:
+              id: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 2
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: coder
+              description: Writes and reviews code
+              template: claude-code
+              image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              modelId: anthropic.claude-sonnet-4-5
+              resources:
+                cpu: '1'
+                memory: 2Gi
+              iamIdentity: team_shared
+              iamRoleArn: arn:aws:iam::111122223333:role/afs-payments-agents
+              volume:
+                sizeGiB: 20
+                storageClass: gp3-standard
+                onDelete: snapshot_then_delete
+                snapshotSchedule: daily
+                snapshotRetain: 7
+              secretBindings:
+              - secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                delivery: env
+                target: GITHUB_PAT
+              paused: false
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agents:write
+    x-afs-scope: team
+    x-afs-cli: agents restart-agent
+    x-afs-sdk: agents.restart()
+    x-afs-screen: T2
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - agent.restarted
+/v1/teams/{teamId}/agents/{agentId}/status:
+  get:
+    operationId: GetAgentStatus
+    summary: Get agent status
+    tags:
+    - agents
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceStatus'
+            example:
+              id: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              kind: agent
+              generation: 1
+              status:
+                phase: Ready
+                observedGeneration: 1
+                conditions:
+                - type: NamespaceReady
+                  status: 'True'
+                  reason: Applied
+                  message: Namespace and policies applied
+                  lastTransitionTime: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:05:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agents:read
+    x-afs-scope: team
+    x-afs-cli: agents get-agent-status
+    x-afs-sdk: agents.getStatus()
+    x-afs-screen: T2
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/agents/{agentId}/snapshots:
+  get:
+    operationId: ListAgentSnapshots
+    summary: List agent snapshots
+    tags:
+    - agents
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SnapshotList'
+            example:
+              items:
+              - id: vsnap_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                agentId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                reason: manual
+                state: completed
+                sizeGiB: 20
+                requestedAt: '2026-11-21T18:00:00Z'
+                requestedBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                completedAt: '2026-11-21T18:05:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agents:read
+    x-afs-scope: team
+    x-afs-cli: agents list-snapshots
+    x-afs-sdk: agents.snapshots.list()
+    x-afs-screen: T2
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateAgentSnapshot
+    summary: Create agent snapshot
+    tags:
+    - agents
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateSnapshotRequest'
+          example:
+            description: Before upgrading the harness
+    responses:
+      '202':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Snapshot'
+            example:
+              id: vsnap_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              agentId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              reason: manual
+              state: requested
+              sizeGiB: 20
+              requestedAt: '2026-11-21T18:00:00Z'
+              requestedBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              completedAt: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agents:write
+    x-afs-scope: team
+    x-afs-cli: agents create-snapshot
+    x-afs-sdk: agents.snapshots.create()
+    x-afs-screen: T2
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/storage-classes:
+  get:
+    operationId: ListStorageClasses
+    summary: List storage classes
+    tags:
+    - agents
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorageClassList'
+            example:
+              items:
+              - name: gp3-standard
+                description: General purpose SSD
+                volumeType: gp3
+                enabled: true
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: models:read
+    x-afs-scope: any
+    x-afs-cli: agents list-storage-classes
+    x-afs-sdk: storageClasses.list()
+    x-afs-screen: T3
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/agent-templates:
+  get:
+    operationId: ListAgentTemplates
+    summary: List agent templates
+    tags:
+    - agents
+    description: (enabled templates with allowed digests)
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentTemplateList'
+            example:
+              items:
+              - id: tpl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                name: claude-code
+                description: Agentic Teammates coding harness
+                harness: claude-code
+                defaultResources:
+                  cpu: '1'
+                  memory: 2Gi
+                allowedDigests:
+                - sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+                currentDigest: sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+                enabled: true
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: models:read
+    x-afs-scope: any
+    x-afs-cli: agents list-agent-templates
+    x-afs-sdk: agentTemplates.list()
+    x-afs-screen: T3
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []

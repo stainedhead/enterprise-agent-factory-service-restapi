@@ -1,0 +1,31 @@
+# OpenAPI components (API contract §1, §2, §6). Bundled into api/openapi.yaml by make openapi.
+headers:
+  ETag:
+    schema:
+      type: string
+      example: '"3"'
+    description: '"<version>" of the returned resource'
+  XRequestId:
+    schema:
+      type: string
+    description: The request id (echoed or generated)
+  XAfsContractVersion:
+    schema:
+      type: string
+      example: 1.1.0
+    description: API contract version (D47)
+  IdempotentReplayed:
+    schema:
+      type: string
+      enum:
+      - 'true'
+    description: Present when the response is a stored replay
+  RetryAfter:
+    schema:
+      type: integer
+      minimum: 1
+    description: Seconds to wait before retrying
+  XAfsNextToken:
+    schema:
+      type: string
+    description: Next page token of a CSV response; absent on the last page

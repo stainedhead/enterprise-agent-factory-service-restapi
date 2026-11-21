@@ -1,0 +1,1137 @@
+# OpenAPI fragment (API contract §4.2). Bundled into api/openapi.yaml by make openapi.
+/v1/teams:
+  get:
+    operationId: ListTeams
+    summary: List teams
+    tags:
+    - teams
+    parameters:
+    - name: state
+      in: query
+      schema:
+        type: string
+        enum:
+        - active
+        - suspended
+        - deleting
+        - deleted
+    - name: kind
+      in: query
+      schema:
+        type: string
+        enum:
+        - persistent
+        - ephemeral
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamList'
+            example:
+              items:
+              - id: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                generation: 1
+                status:
+                  phase: Pending
+                  observedGeneration: 0
+                  conditions: []
+                  updatedAt: '2026-11-21T18:00:00Z'
+                slug: payments
+                displayName: Payments
+                description: Payment services agents
+                kind: persistent
+                state: active
+                namespace: afs-payments
+                costCenter: CC-1001
+                ownerEmail: lead@example.com
+                maxBudgetUsd: '5000.00'
+                ceilingOverrideUsd: null
+                ceilingOverrideExpiresAt: null
+                effectiveCeilingUsd: '5000.00'
+                quotas:
+                  cpu: '16'
+                  memory: 64Gi
+                  pods: 50
+                  storage: 500Gi
+                isolationTier: shared
+                viewerKubectl: false
+                identityProviderId: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                allowedAwsAccounts:
+                - '111122223333'
+                mayManageAwsAccounts: false
+                mayAddExternalSystems: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: teams:read
+    x-afs-scope: any
+    x-afs-cli: teams list-teams
+    x-afs-sdk: teams.list()
+    x-afs-screen: S2, team switcher
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateTeam
+    summary: Create team
+    tags:
+    - teams
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateTeamRequest'
+          example:
+            slug: payments
+            displayName: Payments
+            description: Payment services agents
+            kind: persistent
+            costCenter: CC-1001
+            ownerEmail: lead@example.com
+            maxBudgetUsd: '5000.00'
+            quotas:
+              cpu: '16'
+              memory: 64Gi
+              pods: 50
+              storage: 500Gi
+            isolationTier: shared
+            viewerKubectl: false
+            identityProviderId: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+            allowedAwsAccounts:
+            - '111122223333'
+            firstAdmin:
+              subjectType: user
+              email: lead@example.com
+            models:
+            - anthropic.claude-sonnet-4-5
+            tags:
+            - key: cost-center
+              value: CC-1001
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Team'
+            example:
+              id: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              slug: payments
+              displayName: Payments
+              description: Payment services agents
+              kind: persistent
+              state: active
+              namespace: afs-payments
+              costCenter: CC-1001
+              ownerEmail: lead@example.com
+              maxBudgetUsd: '5000.00'
+              ceilingOverrideUsd: null
+              ceilingOverrideExpiresAt: null
+              effectiveCeilingUsd: '5000.00'
+              quotas:
+                cpu: '16'
+                memory: 64Gi
+                pods: 50
+                storage: 500Gi
+              isolationTier: shared
+              viewerKubectl: false
+              identityProviderId: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              allowedAwsAccounts:
+              - '111122223333'
+              mayManageAwsAccounts: false
+              mayAddExternalSystems: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: teams:create
+    x-afs-scope: service
+    x-afs-cli: teams create-team
+    x-afs-sdk: teams.create()
+    x-afs-screen: S3, P2
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - team.created
+/v1/teams/{teamId}:
+  get:
+    operationId: GetTeam
+    summary: Get team
+    tags:
+    - teams
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Team'
+            example:
+              id: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Ready
+                observedGeneration: 1
+                conditions:
+                - type: NamespaceReady
+                  status: 'True'
+                  reason: Applied
+                  message: Namespace and policies applied
+                  lastTransitionTime: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:05:00Z'
+              slug: payments
+              displayName: Payments
+              description: Payment services agents
+              kind: persistent
+              state: active
+              namespace: afs-payments
+              costCenter: CC-1001
+              ownerEmail: lead@example.com
+              maxBudgetUsd: '5000.00'
+              ceilingOverrideUsd: null
+              ceilingOverrideExpiresAt: null
+              effectiveCeilingUsd: '5000.00'
+              quotas:
+                cpu: '16'
+                memory: 64Gi
+                pods: 50
+                storage: 500Gi
+              isolationTier: shared
+              viewerKubectl: false
+              identityProviderId: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              allowedAwsAccounts:
+              - '111122223333'
+              mayManageAwsAccounts: false
+              mayAddExternalSystems: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: teams:read
+    x-afs-scope: team
+    x-afs-cli: teams describe-team
+    x-afs-sdk: teams.get()
+    x-afs-screen: T1, V1
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  patch:
+    operationId: UpdateTeam
+    summary: Update team
+    tags:
+    - teams
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateTeamRequest'
+          example:
+            displayName: Payments platform
+            maxBudgetUsd: '6000.00'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Team'
+            example:
+              id: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 2
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              slug: payments
+              displayName: Payments platform
+              description: Payment services agents
+              kind: persistent
+              state: active
+              namespace: afs-payments
+              costCenter: CC-1001
+              ownerEmail: lead@example.com
+              maxBudgetUsd: '6000.00'
+              ceilingOverrideUsd: null
+              ceilingOverrideExpiresAt: null
+              effectiveCeilingUsd: '6000.00'
+              quotas:
+                cpu: '16'
+                memory: 64Gi
+                pods: 50
+                storage: 500Gi
+              isolationTier: shared
+              viewerKubectl: false
+              identityProviderId: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              allowedAwsAccounts:
+              - '111122223333'
+              mayManageAwsAccounts: false
+              mayAddExternalSystems: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: teams:write
+    x-afs-scope: team
+    x-afs-field-permissions:
+      allowedAwsAccounts: teams:set-aws-accounts
+      guardrails: teams:set-guardrails
+    x-afs-cli: teams update-team
+    x-afs-sdk: teams.update()
+    x-afs-screen: T1, S6
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - team.updated
+    - team.ceiling_override_set
+  delete:
+    operationId: DeleteTeam
+    summary: Delete team
+    tags:
+    - teams
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '202':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Team'
+            example:
+              id: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Deleting
+                observedGeneration: 1
+                conditions:
+                - type: NamespaceReady
+                  status: 'True'
+                  reason: Applied
+                  message: Namespace and policies applied
+                  lastTransitionTime: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:05:00Z'
+              slug: payments
+              displayName: Payments
+              description: Payment services agents
+              kind: persistent
+              state: deleting
+              namespace: afs-payments
+              costCenter: CC-1001
+              ownerEmail: lead@example.com
+              maxBudgetUsd: '5000.00'
+              ceilingOverrideUsd: null
+              ceilingOverrideExpiresAt: null
+              effectiveCeilingUsd: '5000.00'
+              quotas:
+                cpu: '16'
+                memory: 64Gi
+                pods: 50
+                storage: 500Gi
+              isolationTier: shared
+              viewerKubectl: false
+              identityProviderId: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              allowedAwsAccounts:
+              - '111122223333'
+              mayManageAwsAccounts: false
+              mayAddExternalSystems: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: teams:delete
+    x-afs-scope: team
+    x-afs-cli: teams delete-team
+    x-afs-sdk: teams.delete()
+    x-afs-screen: S2
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - team.deleted
+/v1/teams/{teamId}:suspend:
+  post:
+    operationId: SuspendTeam
+    summary: Suspend team
+    tags:
+    - teams
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Team'
+            example:
+              id: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              slug: payments
+              displayName: Payments
+              description: Payment services agents
+              kind: persistent
+              state: suspended
+              namespace: afs-payments
+              costCenter: CC-1001
+              ownerEmail: lead@example.com
+              maxBudgetUsd: '5000.00'
+              ceilingOverrideUsd: null
+              ceilingOverrideExpiresAt: null
+              effectiveCeilingUsd: '5000.00'
+              quotas:
+                cpu: '16'
+                memory: 64Gi
+                pods: 50
+                storage: 500Gi
+              isolationTier: shared
+              viewerKubectl: false
+              identityProviderId: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              allowedAwsAccounts:
+              - '111122223333'
+              mayManageAwsAccounts: false
+              mayAddExternalSystems: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: teams:suspend
+    x-afs-scope: team
+    x-afs-cli: teams suspend-team
+    x-afs-sdk: teams.suspend()
+    x-afs-screen: S2, T1
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - team.suspended
+/v1/teams/{teamId}:resume:
+  post:
+    operationId: ResumeTeam
+    summary: Resume team
+    tags:
+    - teams
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Team'
+            example:
+              id: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 3
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              slug: payments
+              displayName: Payments
+              description: Payment services agents
+              kind: persistent
+              state: active
+              namespace: afs-payments
+              costCenter: CC-1001
+              ownerEmail: lead@example.com
+              maxBudgetUsd: '5000.00'
+              ceilingOverrideUsd: null
+              ceilingOverrideExpiresAt: null
+              effectiveCeilingUsd: '5000.00'
+              quotas:
+                cpu: '16'
+                memory: 64Gi
+                pods: 50
+                storage: 500Gi
+              isolationTier: shared
+              viewerKubectl: false
+              identityProviderId: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              allowedAwsAccounts:
+              - '111122223333'
+              mayManageAwsAccounts: false
+              mayAddExternalSystems: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: teams:suspend
+    x-afs-scope: team
+    x-afs-cli: teams resume-team
+    x-afs-sdk: teams.resume()
+    x-afs-screen: S2, T1
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - team.resumed
+/v1/teams/{teamId}/status:
+  get:
+    operationId: GetTeamStatus
+    summary: Get team status
+    tags:
+    - teams
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceStatus'
+            example:
+              id: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              kind: team
+              generation: 1
+              status:
+                phase: Ready
+                observedGeneration: 1
+                conditions:
+                - type: NamespaceReady
+                  status: 'True'
+                  reason: Applied
+                  message: Namespace and policies applied
+                  lastTransitionTime: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:05:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: teams:read
+    x-afs-scope: team
+    x-afs-cli: teams get-team-status
+    x-afs-sdk: teams.getStatus()
+    x-afs-screen: T1
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/models:
+  get:
+    operationId: ListTeamModels
+    summary: List team models
+    tags:
+    - teams
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamModels'
+            example:
+              items:
+              - id: anthropic.claude-sonnet-4-5
+                provider: anthropic
+                displayName: Claude Sonnet 4.5
+                enabled: true
+                contextWindow: 200000
+                maxOutputTokens: 64000
+                version: 1
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: teams:read
+    x-afs-scope: team
+    x-afs-cli: teams list-team-models
+    x-afs-sdk: teams.models.list()
+    x-afs-screen: S3, T1
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  put:
+    operationId: PutTeamModels
+    summary: Put team models
+    tags:
+    - teams
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutTeamModelsRequest'
+          example:
+            modelIds:
+            - anthropic.claude-sonnet-4-5
+            - anthropic.claude-haiku-4-5
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamModels'
+            example:
+              items:
+              - id: anthropic.claude-sonnet-4-5
+                provider: anthropic
+                displayName: Claude Sonnet 4.5
+                enabled: true
+                contextWindow: 200000
+                maxOutputTokens: 64000
+                version: 1
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: teams:set-guardrails
+    x-afs-scope: team
+    x-afs-cli: teams put-team-models
+    x-afs-sdk: teams.models.put()
+    x-afs-screen: S3, T1
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - team.updated
+/v1/teams/{teamId}/tags:
+  get:
+    operationId: GetTeamTags
+    summary: Get team tags
+    tags:
+    - teams
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamTags'
+            example:
+              tags:
+              - key: afs:team
+                value: payments
+                source: system
+              - key: cost-center
+                value: CC-1001
+                source: team
+              requestMetadataDroppedKeys: []
+              version: 3
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: tags:read
+    x-afs-scope: team
+    x-afs-cli: teams get-team-tags
+    x-afs-sdk: teams.tags.get()
+    x-afs-screen: T13
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  put:
+    operationId: PutTeamTags
+    summary: Put team tags
+    tags:
+    - teams
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutTeamTagsRequest'
+          example:
+            tags:
+            - key: cost-center
+              value: CC-2002
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamTags'
+            example:
+              tags:
+              - key: afs:team
+                value: payments
+                source: system
+              - key: cost-center
+                value: CC-2002
+                source: team
+              requestMetadataDroppedKeys: []
+              version: 4
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: tags:write
+    x-afs-scope: team
+    x-afs-cli: teams put-team-tags
+    x-afs-sdk: teams.tags.put()
+    x-afs-screen: T13, S3
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - team.tags_changed
+/v1/teams/{teamId}/allowed-accounts:
+  get:
+    operationId: ListAllowedAccounts
+    summary: List allowed accounts
+    tags:
+    - teams
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AllowedAccountList'
+            example:
+              items:
+              - accountId: '111122223333'
+                name: payments-prod
+                status: active
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: identities:read
+    x-afs-scope: team
+    x-afs-cli: teams list-allowed-accounts
+    x-afs-sdk: teams.allowedAccounts.list()
+    x-afs-screen: S6, T8
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/kubeconfig:
+  get:
+    operationId: GetTeamKubeconfig
+    summary: Get team kubeconfig
+    tags:
+    - teams
+    description: (YAML, exec credential plugin, no token in the file)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/yaml:
+            schema:
+              type: string
+            example: |
+              apiVersion: v1
+              kind: Config
+              clusters:
+                - name: afs
+                  cluster:
+                    server: https://EXAMPLE0123456789.gr7.us-east-1.eks.amazonaws.com
+                    certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCkVYQU1QTEUKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
+              contexts:
+                - name: afs-payments
+                  context: {cluster: afs, namespace: afs-payments, user: afs}
+              current-context: afs-payments
+              users:
+                - name: afs
+                  user:
+                    exec:
+                      apiVersion: client.authentication.k8s.io/v1beta1
+                      command: aws
+                      args: [eks, get-token, --cluster-name, afs, --region, us-east-1]
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: teams:get-kubeconfig
+    x-afs-scope: team
+    x-afs-cli: teams get-kubeconfig
+    x-afs-sdk: teams.getKubeconfig()
+    x-afs-screen: T1, V1
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/team-directory:
+  get:
+    operationId: ListTeamDirectory
+    summary: List team directory
+    tags:
+    - teams
+    description: (id, slug, displayName only; every non-deleted team)
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamDirectoryList'
+            example:
+              items:
+              - id: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                slug: payments
+                displayName: Payments
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: teams:read-directory
+    x-afs-scope: service
+    x-afs-cli: teams list-team-directory
+    x-afs-sdk: teams.directory.list()
+    x-afs-screen: P3 create dialog
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []

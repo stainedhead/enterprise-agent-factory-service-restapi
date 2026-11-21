@@ -32,7 +32,7 @@
 
 | Milestone | Status | Tasks done |
 |---|---|---|
-| M0 Contract and foundation | In Progress | 4 / 41 |
+| M0 Contract and foundation | In Progress | 23 / 41 |
 | M1 Teams and core | Not Started | 0 |
 | M2 Agents | Not Started | 0 |
 | M3 Gateway and budgets | Not Started | 0 |
@@ -42,11 +42,12 @@
 
 ## Blockers
 
-- X-DB-4, X-DB-5, X-DB-6 (`-db` changes, research.md §6) block M6-E2, pool delete completion (M5-C4) and the
-  denied-audit and security operator writes (M1-D7). Requested at M0 exit.
+- None. X-DB-1..6 were delivered by `-db` PR #12 (merged at 23e9240, migrations 000015–000016) and adopted
+  during M0.
 
 ## Recent activity
 
 - 2026-11-21: spec created by `create-spec` (step 1 of `implm-frm-prd`).
 - 2026-11-21: `review-spec` (step 2): gaps fixed; Phases 0–4 complete; implementation-ready.
 - 2026-11-21: step 3 started; M0-S1..S4 done (`-db` b0d8754 adopted, domain primitives, archtest, Makefile and CI targets).
+- 2026-11-21: M0-A1..A7 (contractgen, generated catalog/routes/events/settings, openapibundle, contract test), M0-B1a..B4b (full `api/openapi.yaml` 1.1.0, 182 operations, examples validated), M0-C1..C4 (authz rewrite, 99% coverage) done. `-db` bumped to 23e9240 (PR #12: migrations 000015–000016, X-DB-1..6).

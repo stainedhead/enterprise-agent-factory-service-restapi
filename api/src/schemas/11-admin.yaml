@@ -1,0 +1,817 @@
+# OpenAPI fragment (API contract §4.11 and §5 shapes). Bundled into api/openapi.yaml by make openapi.
+Setting:
+  type: object
+  required:
+  - key
+  - value
+  - default
+  - type
+  - allowed
+  properties:
+    key:
+      type: string
+    value:
+      description: JSON value of the setting's type
+    default: {}
+    type:
+      type: string
+      enum:
+      - string
+      - boolean
+      - integer
+      - array
+    nullable:
+      type: boolean
+    min:
+      type: integer
+    max:
+      type: integer
+    pattern:
+      type: string
+    allowed:
+      type: string
+      description: Allowed values, as root PRD §6.13 states them
+    version:
+      type: integer
+      readOnly: true
+    updatedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+Settings:
+  type: object
+  description: Every key of root PRD §6.13
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/Setting'
+PutSettingRequest:
+  type: object
+  required:
+  - value
+  properties:
+    value:
+      description: JSON value of the setting's type
+IdentityProvider:
+  type: object
+  required:
+  - id
+  - kind
+  - name
+  - issuerUrl
+  - consoleClientId
+  - cliClientId
+  - groupsClaim
+  - isDefault
+  - enabled
+  - version
+  properties:
+    id:
+      type: string
+      pattern: ^idp_[0-9A-HJKMNP-TV-Z]{26}$
+      example: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    kind:
+      type: string
+      enum:
+      - okta
+      - entra_id
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    issuerUrl:
+      type: string
+      format: uri
+      pattern: ^https://
+    consoleClientId:
+      type: string
+    cliClientId:
+      type: string
+    clientSecretArn:
+      type:
+      - string
+      - 'null'
+      description: Secrets Manager ARN of the confidential client's secret; the value never reaches AFS
+    groupsClaim:
+      type: string
+      default: groups
+    isDefault:
+      type: boolean
+    enabled:
+      type: boolean
+    teams:
+      type: array
+      items:
+        $ref: '#/components/schemas/TeamDirectoryEntry'
+      description: 'GetIdentityProvider only: teams using it'
+      readOnly: true
+IdentityProviderList:
+  type: object
+  description: A page of IdentityProvider resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/IdentityProvider'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateIdentityProviderRequest:
+  type: object
+  required:
+  - kind
+  - name
+  - issuerUrl
+  - consoleClientId
+  - cliClientId
+  properties:
+    kind:
+      type: string
+      enum:
+      - okta
+      - entra_id
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    issuerUrl:
+      type: string
+      format: uri
+      pattern: ^https://
+    consoleClientId:
+      type: string
+    cliClientId:
+      type: string
+    clientSecretArn:
+      type: string
+    groupsClaim:
+      type: string
+    isDefault:
+      type: boolean
+    enabled:
+      type: boolean
+UpdateIdentityProviderRequest:
+  type: object
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    consoleClientId:
+      type: string
+    cliClientId:
+      type: string
+    clientSecretArn:
+      type:
+      - string
+      - 'null'
+    groupsClaim:
+      type: string
+    isDefault:
+      type: boolean
+    enabled:
+      type: boolean
+ServiceTag:
+  type: object
+  required:
+  - key
+  - mode
+  properties:
+    key:
+      type: string
+      pattern: ^[A-Za-z0-9_.:/=+@-]{1,128}$
+    mode:
+      type: string
+      enum:
+      - fixed
+      - required
+    value:
+      type:
+      - string
+      - 'null'
+    defaultValue:
+      type:
+      - string
+      - 'null'
+    allowedValues:
+      type:
+      - array
+      - 'null'
+      items:
+        type: string
+    description:
+      type: string
+    version:
+      type: integer
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+ServiceTagList:
+  type: object
+  description: A page of ServiceTag resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/ServiceTag'
+    nextToken:
+      type: string
+      description: Absent on the last page
+PutServiceTagRequest:
+  type: object
+  required:
+  - mode
+  properties:
+    mode:
+      type: string
+      enum:
+      - fixed
+      - required
+    value:
+      type: string
+    defaultValue:
+      type: string
+    allowedValues:
+      type: array
+      items:
+        type: string
+    description:
+      type: string
+Model:
+  type: object
+  required:
+  - id
+  - provider
+  - displayName
+  - enabled
+  - contextWindow
+  - maxOutputTokens
+  properties:
+    id:
+      type: string
+      example: anthropic.claude-sonnet-4-5
+    provider:
+      type: string
+      example: anthropic
+    displayName:
+      type: string
+    enabled:
+      type: boolean
+    contextWindow:
+      type: integer
+      minimum: 1
+    maxOutputTokens:
+      type: integer
+      minimum: 1
+    version:
+      type: integer
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+ModelList:
+  type: object
+  description: A page of Model resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/Model'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateModelRequest:
+  type: object
+  required:
+  - id
+  - provider
+  - displayName
+  - contextWindow
+  - maxOutputTokens
+  properties:
+    id:
+      type: string
+    provider:
+      type: string
+    displayName:
+      type: string
+    enabled:
+      type: boolean
+    contextWindow:
+      type: integer
+      minimum: 1
+    maxOutputTokens:
+      type: integer
+      minimum: 1
+      description: Required (D28)
+UpdateModelRequest:
+  type: object
+  properties:
+    displayName:
+      type: string
+    enabled:
+      type: boolean
+    contextWindow:
+      type: integer
+      minimum: 1
+    maxOutputTokens:
+      type: integer
+      minimum: 1
+ModelPrice:
+  type: object
+  required:
+  - modelId
+  - effectiveFrom
+  - inputUsdPerMtok
+  - outputUsdPerMtok
+  - source
+  properties:
+    modelId:
+      type: string
+    effectiveFrom:
+      $ref: '#/components/schemas/Timestamp'
+    inputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    outputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    cacheReadUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    cacheWriteUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    source:
+      type: string
+      enum:
+      - manual
+      - aws_price_list
+      - cur_adjusted
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+ModelPriceList:
+  type: object
+  description: A page of ModelPrice resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/ModelPrice'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateModelPriceRequest:
+  type: object
+  required:
+  - effectiveFrom
+  - inputUsdPerMtok
+  - outputUsdPerMtok
+  properties:
+    effectiveFrom:
+      $ref: '#/components/schemas/Timestamp'
+    inputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    outputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    cacheReadUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    cacheWriteUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+PriceProposal:
+  type: object
+  required:
+  - id
+  - modelId
+  - effectiveFrom
+  - inputUsdPerMtok
+  - outputUsdPerMtok
+  - status
+  - fetchedAt
+  properties:
+    id:
+      type: string
+      readOnly: true
+    modelId:
+      type: string
+    effectiveFrom:
+      $ref: '#/components/schemas/Timestamp'
+    inputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    outputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    cacheReadUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    cacheWriteUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    status:
+      type: string
+      enum:
+      - pending
+      - approved
+      - rejected
+      - superseded
+      readOnly: true
+    fetchedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    decidedBy:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+    decidedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+    note:
+      type:
+      - string
+      - 'null'
+    version:
+      type: integer
+      readOnly: true
+PriceProposalList:
+  type: object
+  description: A page of PriceProposal resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/PriceProposal'
+    nextToken:
+      type: string
+      description: Absent on the last page
+DecidePriceProposalRequest:
+  type: object
+  properties:
+    note:
+      type: string
+      maxLength: 1000
+CostReconciliation:
+  type: object
+  required:
+  - teamId
+  - day
+  - gatewayUsd
+  - billedUsd
+  - variancePct
+  - status
+  - reconciledAt
+  properties:
+    teamId:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+      example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    day:
+      type: string
+      format: date
+    gatewayUsd:
+      $ref: '#/components/schemas/Money'
+    billedUsd:
+      $ref: '#/components/schemas/Money'
+    variancePct:
+      type: string
+      pattern: ^-?[0-9]+(\.[0-9]{1,2})?$
+    status:
+      type: string
+      enum:
+      - ok
+      - over_threshold
+      - missing_billing
+    reconciledAt:
+      $ref: '#/components/schemas/Timestamp'
+CostReconciliationList:
+  type: object
+  description: A page of CostReconciliation resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/CostReconciliation'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CatalogSystemRequest:
+  type: object
+  required:
+  - slug
+  - name
+  - category
+  - endpoints
+  properties:
+    slug:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{1,62}$
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    category:
+      type: string
+      enum:
+      - dev_tools
+      - collaboration
+      - email
+      - cloud
+      - identity
+      - llm
+      - other
+    description:
+      type: string
+    docsUrl:
+      type: string
+      pattern: ^https://
+    endpoints:
+      type: array
+      items:
+        type: string
+        description: host or host:port; wildcards as the catalog allows
+    enabled:
+      type: boolean
+UpdateCatalogSystemRequest:
+  type: object
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    description:
+      type: string
+    docsUrl:
+      type: string
+      pattern: ^https://
+    endpoints:
+      type: array
+      items:
+        type: string
+    enabled:
+      type: boolean
+      description: Service-level switch
+PutStorageClassRequest:
+  type: object
+  required:
+  - volumeType
+  properties:
+    description:
+      type: string
+    volumeType:
+      type: string
+      enum:
+      - gp3
+      - io2
+    enabled:
+      type: boolean
+PutAgentTemplateRequest:
+  type: object
+  required:
+  - harness
+  - allowedDigests
+  - currentDigest
+  properties:
+    description:
+      type: string
+    harness:
+      type: string
+      pattern: ^[a-z][a-z0-9-]*$
+    defaultResources:
+      $ref: '#/components/schemas/Resources'
+    allowedDigests:
+      type: array
+      items:
+        type: string
+        pattern: ^sha256:[0-9a-f]{64}$
+      minItems: 1
+    currentDigest:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    enabled:
+      type: boolean
+OrgAccount:
+  type: object
+  required:
+  - accountId
+  - name
+  - status
+  - syncedAt
+  properties:
+    accountId:
+      $ref: '#/components/schemas/AwsAccountId'
+    name:
+      type: string
+    status:
+      type: string
+      enum:
+      - active
+      - suspended
+      - pending_closure
+    syncedAt:
+      $ref: '#/components/schemas/Timestamp'
+OrgAccountList:
+  type: object
+  description: A page of OrgAccount resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/OrgAccount'
+    nextToken:
+      type: string
+      description: Absent on the last page
+ServiceNotificationChannelList:
+  type: object
+  description: A page of NotificationChannel resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/NotificationChannel'
+    nextToken:
+      type: string
+      description: Absent on the last page
+Export:
+  type: object
+  required:
+  - id
+  - status
+  - schemaVersion
+  - createdAt
+  properties:
+    id:
+      type: string
+      pattern: ^exp_[0-9A-HJKMNP-TV-Z]{26}$
+      example: exp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    status:
+      type: string
+      enum:
+      - pending
+      - running
+      - succeeded
+      - failed
+      readOnly: true
+    schemaVersion:
+      type: integer
+      readOnly: true
+    sha256:
+      type:
+      - string
+      - 'null'
+      pattern: ^[0-9a-f]{64}$
+      readOnly: true
+    sizeBytes:
+      type:
+      - integer
+      - 'null'
+      readOnly: true
+    downloadUrl:
+      type:
+      - string
+      - 'null'
+      format: uri
+      description: Pre-signed, valid 7 days
+      readOnly: true
+    downloadExpiresAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+    teamIds:
+      type: array
+      items:
+        type: string
+        pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+        example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      description: Teams to export; empty means all
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    finishedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+    error:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+ExportList:
+  type: object
+  description: A page of Export resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/Export'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateExportRequest:
+  type: object
+  properties:
+    teamIds:
+      type: array
+      items:
+        type: string
+        pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+        example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      description: Teams to export; omit for every team
+ImportRequest:
+  type: object
+  description: Up to 100 MB
+  required:
+  - bundle
+  properties:
+    bundle:
+      type: object
+      description: 'An export bundle: {schemaVersion, sha256, teams[...]}'
+    accountMap:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/AwsAccountId'
+      description: Source AWS account id → target account id
+ImportTeamResult:
+  type: object
+  required:
+  - slug
+  - result
+  - changes
+  properties:
+    slug:
+      $ref: '#/components/schemas/Name'
+    result:
+      type: string
+      enum:
+      - created
+      - updated
+      - skipped
+      - failed
+    changes:
+      type: array
+      items:
+        type: string
+    error:
+      type:
+      - string
+      - 'null'
+ImportReport:
+  type: object
+  required:
+  - dryRun
+  - teams
+  properties:
+    id:
+      type: string
+      pattern: ^exp_[0-9A-HJKMNP-TV-Z]{26}$
+      example: exp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    dryRun:
+      type: boolean
+    teams:
+      type: array
+      items:
+        $ref: '#/components/schemas/ImportTeamResult'

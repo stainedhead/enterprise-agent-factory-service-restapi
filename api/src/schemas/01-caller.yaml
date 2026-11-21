@@ -1,0 +1,113 @@
+# OpenAPI fragment (API contract §4.1 and §5 shapes). Bundled into api/openapi.yaml by make openapi.
+Principal:
+  type: object
+  required:
+  - id
+  - type
+  properties:
+    id:
+      type: string
+    type:
+      type: string
+      enum:
+      - user
+      - api_key
+      - workload
+    email:
+      type: string
+      format: email
+    name:
+      type: string
+MeTeam:
+  type: object
+  required:
+  - teamId
+  - slug
+  - role
+  - permissions
+  properties:
+    teamId:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+      example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    slug:
+      $ref: '#/components/schemas/Name'
+    role:
+      type: string
+      enum:
+      - team_admin
+      - team_viewer
+      - workload
+    permissions:
+      type: array
+      items:
+        type: string
+      description: Effective permissions on this team (D42); UX only
+Me:
+  type: object
+  required:
+  - principal
+  - serviceAdmin
+  - securityOperator
+  - teams
+  properties:
+    principal:
+      $ref: '#/components/schemas/Principal'
+    serviceAdmin:
+      type: boolean
+    securityOperator:
+      type: boolean
+    servicePermissions:
+      type: array
+      items:
+        type: string
+      description: 'Service-level permissions: all for service admins, the security operator column for security operators'
+    teams:
+      type: array
+      items:
+        $ref: '#/components/schemas/MeTeam'
+SignInProvider:
+  type: object
+  description: An enabled identity provider; never carries a secret
+  required:
+  - id
+  - kind
+  - name
+  - issuerUrl
+  - consoleClientId
+  - cliClientId
+  - isDefault
+  properties:
+    id:
+      type: string
+      pattern: ^idp_[0-9A-HJKMNP-TV-Z]{26}$
+      example: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    kind:
+      type: string
+      enum:
+      - okta
+      - entra_id
+    name:
+      type: string
+    issuerUrl:
+      type: string
+      format: uri
+    consoleClientId:
+      type: string
+    cliClientId:
+      type: string
+    isDefault:
+      type: boolean
+SignInProviderList:
+  type: object
+  description: A page of SignInProvider resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/SignInProvider'
+    nextToken:
+      type: string
+      description: Absent on the last page

@@ -1,0 +1,2960 @@
+# OpenAPI fragment (API contract §4.11). Bundled into api/openapi.yaml by make openapi.
+/v1/admin/settings:
+  get:
+    operationId: GetSettings
+    summary: Get settings
+    tags:
+    - admin
+    description: (every key of root PRD §6.13 with value, default and range)
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Settings'
+            example:
+              items:
+              - key: secrets.path_prefix
+                value: afs
+                default: afs
+                type: string
+                allowed: '`^[a-z][a-z0-9-]{0,30}$`; applies to new secrets only'
+                pattern: ^[a-z][a-z0-9-]{0,30}$
+                version: 1
+                updatedAt: null
+              - key: pricing.price_list_sync
+                value: true
+                default: true
+                type: boolean
+                allowed: boolean
+                version: 1
+                updatedAt: null
+              - key: billing.variance_alert_pct
+                value: 5
+                default: 5
+                type: integer
+                allowed: 0 to 100
+                min: 0
+                max: 100
+                version: 1
+                updatedAt: null
+              - key: api.idempotency_key_ttl_seconds
+                value: 3600
+                default: 3600
+                type: integer
+                allowed: 60 to 604800
+                min: 60
+                max: 604800
+                version: 1
+                updatedAt: null
+              - key: teams.ephemeral_max_days
+                value: 90
+                default: 90
+                type: integer
+                allowed: 1 to 365
+                min: 1
+                max: 365
+                version: 1
+                updatedAt: null
+              - key: work_orders.sla_warning_hours
+                value: 48
+                default: 48
+                type: integer
+                allowed: 1 to 720
+                min: 1
+                max: 720
+                version: 1
+                updatedAt: null
+              - key: billing.tag_activation_acknowledged
+                value: false
+                default: false
+                type: boolean
+                allowed: boolean; setting it to `true` is how S9's banner is acknowledged
+                version: 1
+                updatedAt: null
+              - key: work_orders.notification_channel_id
+                value: null
+                default: null
+                type: string
+                allowed: null, or the id (`nch_<ulid>`) of a service-level email channel
+                nullable: true
+                pattern: ^nch_[0-9A-HJKMNP-TV-Z]{26}$
+                version: 1
+                updatedAt: null
+              - key: reports.idle_cpu_millicores
+                value: 50
+                default: 50
+                type: integer
+                allowed: 1 to 4000
+                min: 1
+                max: 4000
+                version: 1
+                updatedAt: null
+              - key: egress.denied_spike_threshold
+                value: 20
+                default: 20
+                type: integer
+                allowed: 1 to 100000 denials per agent or pool in 5 minutes
+                min: 1
+                max: 100000
+                version: 1
+                updatedAt: null
+              - key: gateway.reservation_ttl_seconds
+                value: 900
+                default: 900
+                type: integer
+                allowed: 60 to 3600
+                min: 60
+                max: 3600
+                version: 1
+                updatedAt: null
+              - key: api.cors_origins
+                value: []
+                default: []
+                type: array
+                allowed: array of `https://host[:port]` origins
+                pattern: ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$
+                version: 1
+                updatedAt: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:settings
+    x-afs-scope: service
+    x-afs-cli: admin get-settings
+    x-afs-sdk: admin.settings.get()
+    x-afs-screen: S10
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/settings/{key}:
+  put:
+    operationId: PutSetting
+    summary: Put setting
+    tags:
+    - admin
+    description: '{value}'
+    parameters:
+    - name: key
+      in: path
+      required: true
+      schema:
+        type: string
+        enum:
+        - secrets.path_prefix
+        - pricing.price_list_sync
+        - billing.variance_alert_pct
+        - api.idempotency_key_ttl_seconds
+        - teams.ephemeral_max_days
+        - work_orders.sla_warning_hours
+        - billing.tag_activation_acknowledged
+        - work_orders.notification_channel_id
+        - reports.idle_cpu_millicores
+        - egress.denied_spike_threshold
+        - gateway.reservation_ttl_seconds
+        - api.cors_origins
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutSettingRequest'
+          example:
+            value: 7200
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Setting'
+            example:
+              key: api.idempotency_key_ttl_seconds
+              value: 7200
+              default: 3600
+              type: integer
+              allowed: 60 to 604800
+              min: 60
+              max: 604800
+              version: 2
+              updatedAt: '2026-11-21T18:05:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:settings
+    x-afs-scope: service
+    x-afs-cli: admin put-setting
+    x-afs-sdk: admin.settings.put()
+    x-afs-screen: S10, S9
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/identity-providers:
+  get:
+    operationId: ListIdentityProviders
+    summary: List identity providers
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityProviderList'
+            example:
+              items:
+              - id: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                kind: okta
+                name: Corporate Okta
+                issuerUrl: https://example.okta.com/oauth2/default
+                consoleClientId: 0oa1console
+                cliClientId: 0oa1cli
+                clientSecretArn: null
+                groupsClaim: groups
+                isDefault: true
+                enabled: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:identity-providers
+    x-afs-scope: service
+    x-afs-cli: admin list-identity-providers
+    x-afs-sdk: admin.identityProviders.list()
+    x-afs-screen: S10
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateIdentityProvider
+    summary: Create identity provider
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateIdentityProviderRequest'
+          example:
+            kind: okta
+            name: Corporate Okta
+            issuerUrl: https://example.okta.com/oauth2/default
+            consoleClientId: 0oa1console
+            cliClientId: 0oa1cli
+            groupsClaim: groups
+            isDefault: true
+            enabled: true
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityProvider'
+            example:
+              id: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              kind: okta
+              name: Corporate Okta
+              issuerUrl: https://example.okta.com/oauth2/default
+              consoleClientId: 0oa1console
+              cliClientId: 0oa1cli
+              clientSecretArn: null
+              groupsClaim: groups
+              isDefault: true
+              enabled: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:identity-providers
+    x-afs-scope: service
+    x-afs-cli: admin create-identity-provider
+    x-afs-sdk: admin.identityProviders.create()
+    x-afs-screen: S10
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/identity-providers/{id}:
+  get:
+    operationId: GetIdentityProvider
+    summary: Get identity provider
+    tags:
+    - admin
+    description: (with the teams using it)
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^idp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityProvider'
+            example:
+              id: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              kind: okta
+              name: Corporate Okta
+              issuerUrl: https://example.okta.com/oauth2/default
+              consoleClientId: 0oa1console
+              cliClientId: 0oa1cli
+              clientSecretArn: null
+              groupsClaim: groups
+              isDefault: true
+              enabled: true
+              teams:
+              - id: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                slug: payments
+                displayName: Payments
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:identity-providers
+    x-afs-scope: service
+    x-afs-cli: admin describe-identity-provider
+    x-afs-sdk: admin.identityProviders.get()
+    x-afs-screen: S10
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  patch:
+    operationId: UpdateIdentityProvider
+    summary: Update identity provider
+    tags:
+    - admin
+    description: (disabling one in use → 409)
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^idp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateIdentityProviderRequest'
+          example:
+            groupsClaim: afs_groups
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityProvider'
+            example:
+              id: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              kind: okta
+              name: Corporate Okta
+              issuerUrl: https://example.okta.com/oauth2/default
+              consoleClientId: 0oa1console
+              cliClientId: 0oa1cli
+              clientSecretArn: null
+              groupsClaim: afs_groups
+              isDefault: true
+              enabled: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:identity-providers
+    x-afs-scope: service
+    x-afs-cli: admin update-identity-provider
+    x-afs-sdk: admin.identityProviders.update()
+    x-afs-screen: S10
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  delete:
+    operationId: DeleteIdentityProvider
+    summary: Delete identity provider
+    tags:
+    - admin
+    description: (in use → 409)
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^idp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:identity-providers
+    x-afs-scope: service
+    x-afs-cli: admin delete-identity-provider
+    x-afs-sdk: admin.identityProviders.delete()
+    x-afs-screen: S10
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/notification-channels:
+  get:
+    operationId: ListServiceNotificationChannels
+    summary: List service notification channels
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceNotificationChannelList'
+            example:
+              items:
+              - id: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                generation: 1
+                status:
+                  phase: Pending
+                  observedGeneration: 0
+                  conditions: []
+                  updatedAt: '2026-11-21T18:00:00Z'
+                name: security-email
+                kind: email
+                config:
+                  to:
+                  - security@example.com
+                secretId: null
+                eventTypes:
+                - work_order.*
+                enabled: true
+                delivery:
+                  healthy: true
+                  lastDeliveredAt: '2026-11-21T18:00:00Z'
+                  lastFailureAt: null
+                  lastError: null
+                  lastTestId: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:settings
+    x-afs-scope: service
+    x-afs-cli: admin list-notification-channels
+    x-afs-sdk: admin.notificationChannels.list()
+    x-afs-screen: S10
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateServiceNotificationChannel
+    summary: Create service notification channel
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateNotificationChannelRequest'
+          example:
+            name: security-email
+            kind: email
+            config:
+              to:
+              - security@example.com
+            eventTypes:
+            - work_order.*
+            enabled: true
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationChannel'
+            example:
+              id: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: security-email
+              kind: email
+              config:
+                to:
+                - security@example.com
+              secretId: null
+              eventTypes:
+              - work_order.*
+              enabled: true
+              delivery:
+                healthy: true
+                lastDeliveredAt: '2026-11-21T18:00:00Z'
+                lastFailureAt: null
+                lastError: null
+                lastTestId: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:settings
+    x-afs-scope: service
+    x-afs-cli: admin create-notification-channel
+    x-afs-sdk: admin.notificationChannels.create()
+    x-afs-screen: S10
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/notification-channels/{id}:
+  patch:
+    operationId: UpdateServiceNotificationChannel
+    summary: Update service notification channel
+    tags:
+    - admin
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^nch_[0-9A-HJKMNP-TV-Z]{26}$
+        example: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateNotificationChannelRequest'
+          example:
+            enabled: false
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationChannel'
+            example:
+              id: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 2
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: security-email
+              kind: email
+              config:
+                to:
+                - security@example.com
+              secretId: null
+              eventTypes:
+              - work_order.*
+              enabled: false
+              delivery:
+                healthy: true
+                lastDeliveredAt: '2026-11-21T18:00:00Z'
+                lastFailureAt: null
+                lastError: null
+                lastTestId: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:settings
+    x-afs-scope: service
+    x-afs-cli: admin update-notification-channel
+    x-afs-sdk: admin.notificationChannels.update()
+    x-afs-screen: S10
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  delete:
+    operationId: DeleteServiceNotificationChannel
+    summary: Delete service notification channel
+    tags:
+    - admin
+    description: (named in a setting → 409)
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^nch_[0-9A-HJKMNP-TV-Z]{26}$
+        example: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:settings
+    x-afs-scope: service
+    x-afs-cli: admin delete-notification-channel
+    x-afs-sdk: admin.notificationChannels.delete()
+    x-afs-screen: S10
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/service-tags:
+  get:
+    operationId: ListServiceTags
+    summary: List service tags
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceTagList'
+            example:
+              items:
+              - key: cost-center
+                mode: required
+                value: null
+                defaultValue: null
+                allowedValues: null
+                description: Finance cost center
+                version: 1
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:service-tags
+    x-afs-scope: service
+    x-afs-cli: admin list-service-tags
+    x-afs-sdk: admin.serviceTags.list()
+    x-afs-screen: S9
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/service-tags/{key}:
+  put:
+    operationId: PutServiceTag
+    summary: Put service tag
+    tags:
+    - admin
+    parameters:
+    - name: key
+      in: path
+      required: true
+      schema:
+        type: string
+        example: cost-center
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutServiceTagRequest'
+          example:
+            mode: required
+            description: Finance cost center
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceTag'
+            example:
+              key: cost-center
+              mode: required
+              value: null
+              defaultValue: null
+              allowedValues: null
+              description: Finance cost center
+              version: 1
+              updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:service-tags
+    x-afs-scope: service
+    x-afs-cli: admin put-service-tag
+    x-afs-sdk: admin.serviceTags.put()
+    x-afs-screen: S9
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  delete:
+    operationId: DeleteServiceTag
+    summary: Delete service tag
+    tags:
+    - admin
+    parameters:
+    - name: key
+      in: path
+      required: true
+      schema:
+        type: string
+        example: cost-center
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:service-tags
+    x-afs-scope: service
+    x-afs-cli: admin delete-service-tag
+    x-afs-sdk: admin.serviceTags.delete()
+    x-afs-screen: S9
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/models:
+  get:
+    operationId: ListModels
+    summary: List models
+    tags:
+    - admin
+    description: '(not *svc*: enabled models for any signed-in caller)'
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelList'
+            example:
+              items:
+              - id: anthropic.claude-sonnet-4-5
+                provider: anthropic
+                displayName: Claude Sonnet 4.5
+                enabled: true
+                contextWindow: 200000
+                maxOutputTokens: 64000
+                version: 1
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: models:read
+    x-afs-scope: any
+    x-afs-cli: models list-models
+    x-afs-sdk: models.list()
+    x-afs-screen: T3
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/models:
+  get:
+    operationId: ListAdminModels
+    summary: List admin models
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelList'
+            example:
+              items:
+              - id: anthropic.claude-sonnet-4-5
+                provider: anthropic
+                displayName: Claude Sonnet 4.5
+                enabled: true
+                contextWindow: 200000
+                maxOutputTokens: 64000
+                version: 1
+                updatedAt: '2026-11-21T18:00:00Z'
+              - id: anthropic.claude-haiku-4-5
+                provider: anthropic
+                displayName: Claude Haiku 4.5
+                enabled: false
+                contextWindow: 200000
+                maxOutputTokens: 64000
+                version: 1
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:models
+    x-afs-scope: service
+    x-afs-cli: admin list-models
+    x-afs-sdk: admin.models.list()
+    x-afs-screen: S4
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateModel
+    summary: Create model
+    tags:
+    - admin
+    description: (maxOutputTokens required, D28)
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateModelRequest'
+          example:
+            id: anthropic.claude-sonnet-4-5
+            provider: anthropic
+            displayName: Claude Sonnet 4.5
+            enabled: true
+            contextWindow: 200000
+            maxOutputTokens: 64000
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Model'
+            example:
+              id: anthropic.claude-sonnet-4-5
+              provider: anthropic
+              displayName: Claude Sonnet 4.5
+              enabled: true
+              contextWindow: 200000
+              maxOutputTokens: 64000
+              version: 1
+              updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:models
+    x-afs-scope: service
+    x-afs-cli: admin create-model
+    x-afs-sdk: admin.models.create()
+    x-afs-screen: S4
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/models/{modelId}:
+  patch:
+    operationId: UpdateModel
+    summary: Update model
+    tags:
+    - admin
+    parameters:
+    - name: modelId
+      in: path
+      required: true
+      schema:
+        type: string
+        example: anthropic.claude-sonnet-4-5
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateModelRequest'
+          example:
+            enabled: false
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Model'
+            example:
+              id: anthropic.claude-sonnet-4-5
+              provider: anthropic
+              displayName: Claude Sonnet 4.5
+              enabled: false
+              contextWindow: 200000
+              maxOutputTokens: 64000
+              version: 2
+              updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:models
+    x-afs-scope: service
+    x-afs-cli: admin update-model
+    x-afs-sdk: admin.models.update()
+    x-afs-screen: S4
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/models/{modelId}/prices:
+  get:
+    operationId: ListModelPrices
+    summary: List model prices
+    tags:
+    - admin
+    parameters:
+    - name: modelId
+      in: path
+      required: true
+      schema:
+        type: string
+        example: anthropic.claude-sonnet-4-5
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelPriceList'
+            example:
+              items:
+              - modelId: anthropic.claude-sonnet-4-5
+                effectiveFrom: '2026-11-01T00:00:00Z'
+                inputUsdPerMtok: '3.00'
+                outputUsdPerMtok: '15.00'
+                cacheReadUsdPerMtok: '0.30'
+                cacheWriteUsdPerMtok: '3.75'
+                source: manual
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:pricing
+    x-afs-scope: service
+    x-afs-cli: admin list-model-prices
+    x-afs-sdk: admin.prices.list()
+    x-afs-screen: S4
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateModelPrice
+    summary: Create model price
+    tags:
+    - admin
+    parameters:
+    - name: modelId
+      in: path
+      required: true
+      schema:
+        type: string
+        example: anthropic.claude-sonnet-4-5
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateModelPriceRequest'
+          example:
+            effectiveFrom: '2026-11-01T00:00:00Z'
+            inputUsdPerMtok: '3.00'
+            outputUsdPerMtok: '15.00'
+            cacheReadUsdPerMtok: '0.30'
+            cacheWriteUsdPerMtok: '3.75'
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelPrice'
+            example:
+              modelId: anthropic.claude-sonnet-4-5
+              effectiveFrom: '2026-11-01T00:00:00Z'
+              inputUsdPerMtok: '3.00'
+              outputUsdPerMtok: '15.00'
+              cacheReadUsdPerMtok: '0.30'
+              cacheWriteUsdPerMtok: '3.75'
+              source: manual
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:pricing
+    x-afs-scope: service
+    x-afs-cli: admin create-model-price
+    x-afs-sdk: admin.prices.create()
+    x-afs-screen: S4
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/model-price-proposals:
+  get:
+    operationId: ListModelPriceProposals
+    summary: List model price proposals
+    tags:
+    - admin
+    parameters:
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum:
+        - pending
+        - approved
+        - rejected
+        - superseded
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceProposalList'
+            example:
+              items:
+              - id: '1042'
+                modelId: anthropic.claude-sonnet-4-5
+                effectiveFrom: '2026-12-01T00:00:00Z'
+                inputUsdPerMtok: '3.00'
+                outputUsdPerMtok: '15.00'
+                cacheReadUsdPerMtok: '0.30'
+                cacheWriteUsdPerMtok: '3.75'
+                status: pending
+                fetchedAt: '2026-11-21T18:00:00Z'
+                decidedBy: null
+                decidedAt: null
+                note: null
+                version: 1
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:pricing
+    x-afs-scope: service
+    x-afs-cli: admin list-price-proposals
+    x-afs-sdk: admin.priceProposals.list()
+    x-afs-screen: S4, S1
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/model-price-proposals/{proposalId}:approve:
+  post:
+    operationId: ApproveModelPriceProposal
+    summary: Approve model price proposal
+    tags:
+    - admin
+    description: '{note}'
+    parameters:
+    - name: proposalId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[0-9]+$
+        example: '1042'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DecidePriceProposalRequest'
+          example:
+            note: Matches the AWS price list
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceProposal'
+            example:
+              id: '1042'
+              modelId: anthropic.claude-sonnet-4-5
+              effectiveFrom: '2026-12-01T00:00:00Z'
+              inputUsdPerMtok: '3.00'
+              outputUsdPerMtok: '15.00'
+              cacheReadUsdPerMtok: '0.30'
+              cacheWriteUsdPerMtok: '3.75'
+              status: approved
+              fetchedAt: '2026-11-21T18:00:00Z'
+              decidedBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              decidedAt: '2026-11-21T18:05:00Z'
+              note: Matches the AWS price list
+              version: 2
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:pricing
+    x-afs-scope: service
+    x-afs-cli: admin approve-price-proposal
+    x-afs-sdk: admin.priceProposals.approve()
+    x-afs-screen: S4
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - pricing.proposal_decided
+/v1/admin/model-price-proposals/{proposalId}:reject:
+  post:
+    operationId: RejectModelPriceProposal
+    summary: Reject model price proposal
+    tags:
+    - admin
+    description: '{note}'
+    parameters:
+    - name: proposalId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[0-9]+$
+        example: '1042'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DecidePriceProposalRequest'
+          example:
+            note: Waiting for the contract rate
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceProposal'
+            example:
+              id: '1042'
+              modelId: anthropic.claude-sonnet-4-5
+              effectiveFrom: '2026-12-01T00:00:00Z'
+              inputUsdPerMtok: '3.00'
+              outputUsdPerMtok: '15.00'
+              cacheReadUsdPerMtok: '0.30'
+              cacheWriteUsdPerMtok: '3.75'
+              status: rejected
+              fetchedAt: '2026-11-21T18:00:00Z'
+              decidedBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              decidedAt: '2026-11-21T18:05:00Z'
+              note: Waiting for the contract rate
+              version: 2
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:pricing
+    x-afs-scope: service
+    x-afs-cli: admin reject-price-proposal
+    x-afs-sdk: admin.priceProposals.reject()
+    x-afs-screen: S4
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - pricing.proposal_decided
+/v1/admin/cost-reconciliations:
+  get:
+    operationId: ListCostReconciliations
+    summary: List cost reconciliations
+    tags:
+    - admin
+    parameters:
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum:
+        - ok
+        - over_threshold
+        - missing_billing
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CostReconciliationList'
+            example:
+              items:
+              - teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                day: '2026-11-20'
+                gatewayUsd: '25.35'
+                billedUsd: '27.10'
+                variancePct: '6.90'
+                status: over_threshold
+                reconciledAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:reports
+    x-afs-scope: service
+    x-afs-cli: admin list-cost-reconciliations
+    x-afs-sdk: admin.reconciliations.list()
+    x-afs-screen: S1, S8
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/external-systems:
+  get:
+    operationId: ListCatalogSystems
+    summary: List catalog systems
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalSystemList'
+            example:
+              items:
+              - id: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                slug: github
+                name: GitHub
+                category: dev_tools
+                description: Source hosting
+                docsUrl: https://docs.github.com
+                endpoints:
+                - github.com:443
+                - api.github.com:443
+                enabled: true
+                builtin: true
+                scope: service
+                teamState: 'on'
+                disabledAt: null
+                unmetered: false
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:external-systems
+    x-afs-scope: service
+    x-afs-cli: admin list-external-systems
+    x-afs-sdk: admin.externalSystems.list()
+    x-afs-screen: S7
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateCatalogSystem
+    summary: Create catalog system
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CatalogSystemRequest'
+          example:
+            slug: jira
+            name: Jira
+            category: collaboration
+            description: Issue tracking
+            docsUrl: https://support.atlassian.com/jira
+            endpoints:
+            - example.atlassian.net:443
+            enabled: true
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalSystem'
+            example:
+              id: ext_01JD2Q3R4S5T6V7W8X9Y0Z0003
+              slug: jira
+              name: Jira
+              category: collaboration
+              description: Issue tracking
+              docsUrl: https://support.atlassian.com/jira
+              endpoints:
+              - example.atlassian.net:443
+              enabled: true
+              builtin: false
+              scope: service
+              teamState: 'on'
+              disabledAt: null
+              unmetered: false
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:external-systems
+    x-afs-scope: service
+    x-afs-cli: admin create-external-system
+    x-afs-sdk: admin.externalSystems.create()
+    x-afs-screen: S7
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/external-systems/{systemId}:
+  get:
+    operationId: GetCatalogSystem
+    summary: Get catalog system
+    tags:
+    - admin
+    parameters:
+    - name: systemId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^ext_[0-9A-HJKMNP-TV-Z]{26}$
+        example: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalSystem'
+            example:
+              id: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              slug: github
+              name: GitHub
+              category: dev_tools
+              description: Source hosting
+              docsUrl: https://docs.github.com
+              endpoints:
+              - github.com:443
+              - api.github.com:443
+              enabled: true
+              builtin: true
+              scope: service
+              teamState: 'on'
+              disabledAt: null
+              unmetered: false
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:external-systems
+    x-afs-scope: service
+    x-afs-cli: admin describe-external-system
+    x-afs-sdk: admin.externalSystems.get()
+    x-afs-screen: S7
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  patch:
+    operationId: UpdateCatalogSystem
+    summary: Update catalog system
+    tags:
+    - admin
+    description: (endpoints, service-level switch)
+    parameters:
+    - name: systemId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^ext_[0-9A-HJKMNP-TV-Z]{26}$
+        example: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateCatalogSystemRequest'
+          example:
+            enabled: false
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalSystem'
+            example:
+              id: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              slug: github
+              name: GitHub
+              category: dev_tools
+              description: Source hosting
+              docsUrl: https://docs.github.com
+              endpoints:
+              - github.com:443
+              - api.github.com:443
+              enabled: false
+              builtin: true
+              scope: service
+              teamState: 'on'
+              disabledAt: service
+              unmetered: false
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:external-systems
+    x-afs-scope: service
+    x-afs-cli: admin update-external-system
+    x-afs-sdk: admin.externalSystems.update()
+    x-afs-screen: S7
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  delete:
+    operationId: DeleteCatalogSystem
+    summary: Delete catalog system
+    tags:
+    - admin
+    description: (built-ins → 409)
+    parameters:
+    - name: systemId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^ext_[0-9A-HJKMNP-TV-Z]{26}$
+        example: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:external-systems
+    x-afs-scope: service
+    x-afs-cli: admin delete-external-system
+    x-afs-sdk: admin.externalSystems.delete()
+    x-afs-screen: S7
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/storage-classes:
+  get:
+    operationId: ListStorageClassesAdmin
+    summary: List storage classes admin
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorageClassList'
+            example:
+              items:
+              - name: gp3-standard
+                description: General purpose SSD
+                volumeType: gp3
+                enabled: true
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:storage-classes
+    x-afs-scope: service
+    x-afs-cli: admin list-storage-classes
+    x-afs-sdk: admin.storageClasses.list()
+    x-afs-screen: S10
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/storage-classes/{name}:
+  put:
+    operationId: PutStorageClass
+    summary: Put storage class
+    tags:
+    - admin
+    parameters:
+    - name: name
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[a-z][a-z0-9-]{0,62}$
+        example: gp3-standard
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutStorageClassRequest'
+          example:
+            description: General purpose SSD
+            volumeType: gp3
+            enabled: true
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorageClass'
+            example:
+              name: gp3-standard
+              description: General purpose SSD
+              volumeType: gp3
+              enabled: true
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:storage-classes
+    x-afs-scope: service
+    x-afs-cli: admin put-storage-class
+    x-afs-sdk: admin.storageClasses.put()
+    x-afs-screen: S10
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  delete:
+    operationId: DeleteStorageClass
+    summary: Delete storage class
+    tags:
+    - admin
+    description: (in use → 409)
+    parameters:
+    - name: name
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[a-z][a-z0-9-]{0,62}$
+        example: gp3-standard
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:storage-classes
+    x-afs-scope: service
+    x-afs-cli: admin delete-storage-class
+    x-afs-sdk: admin.storageClasses.delete()
+    x-afs-screen: S10
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/agent-templates:
+  get:
+    operationId: ListAdminAgentTemplates
+    summary: List admin agent templates
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentTemplateList'
+            example:
+              items:
+              - id: tpl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                name: claude-code
+                description: Agentic Teammates coding harness
+                harness: claude-code
+                defaultResources:
+                  cpu: '1'
+                  memory: 2Gi
+                allowedDigests:
+                - sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+                currentDigest: sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+                enabled: true
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:agent-templates
+    x-afs-scope: service
+    x-afs-cli: admin list-agent-templates
+    x-afs-sdk: admin.agentTemplates.list()
+    x-afs-screen: S10
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/agent-templates/{name}:
+  put:
+    operationId: PutAgentTemplate
+    summary: Put agent template
+    tags:
+    - admin
+    description: (harness, defaults, allowedDigests[], enabled)
+    parameters:
+    - name: name
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[a-z][a-z0-9-]{1,62}$
+        example: claude-code
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutAgentTemplateRequest'
+          example:
+            description: Agentic Teammates coding harness
+            harness: claude-code
+            defaultResources:
+              cpu: '1'
+              memory: 2Gi
+            allowedDigests:
+            - sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+            currentDigest: sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+            enabled: true
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentTemplate'
+            example:
+              id: tpl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              name: claude-code
+              description: Agentic Teammates coding harness
+              harness: claude-code
+              defaultResources:
+                cpu: '1'
+                memory: 2Gi
+              allowedDigests:
+              - sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              currentDigest: sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              enabled: true
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:agent-templates
+    x-afs-scope: service
+    x-afs-cli: admin put-agent-template
+    x-afs-sdk: admin.agentTemplates.put()
+    x-afs-screen: S10
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  delete:
+    operationId: DeleteAgentTemplate
+    summary: Delete agent template
+    tags:
+    - admin
+    description: (in use → 409; disable instead)
+    parameters:
+    - name: name
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[a-z][a-z0-9-]{1,62}$
+        example: claude-code
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:agent-templates
+    x-afs-scope: service
+    x-afs-cli: admin delete-agent-template
+    x-afs-sdk: admin.agentTemplates.delete()
+    x-afs-screen: S10
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/org-accounts:
+  get:
+    operationId: ListOrgAccounts
+    summary: List org accounts
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrgAccountList'
+            example:
+              items:
+              - accountId: '111122223333'
+                name: payments-prod
+                status: active
+                syncedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:accounts
+    x-afs-scope: service
+    x-afs-cli: admin list-org-accounts
+    x-afs-sdk: admin.orgAccounts.list()
+    x-afs-screen: S6
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/audit-events:
+  get:
+    operationId: ListAdminAuditEvents
+    summary: List admin audit events
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/From'
+    - $ref: '#/components/parameters/To'
+    - name: actorId
+      in: query
+      schema:
+        type: string
+    - name: action
+      in: query
+      schema:
+        type: string
+    - name: outcome
+      in: query
+      schema:
+        type: string
+        enum:
+        - allowed
+        - denied
+        - failed
+    - name: resourceKind
+      in: query
+      schema:
+        type: string
+    - name: resourceId
+      in: query
+      schema:
+        type: string
+    - name: teamId
+      in: query
+      schema:
+        type: string
+        pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+        example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditEventList'
+            example:
+              items:
+              - id: 4182
+                occurredAt: '2026-11-21T18:00:00Z'
+                actorType: user
+                actorId: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                action: UpdateAgent
+                outcome: allowed
+                resourceKind: agent
+                resourceId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                requestId: req_7f3a
+                sourceIp: 192.0.2.10
+                userAgent: afs-cli/1.0.0
+                workerPod: null
+                before:
+                  modelId: anthropic.claude-haiku-4-5
+                after:
+                  modelId: anthropic.claude-sonnet-4-5
+          text/csv:
+            schema:
+              type: string
+            example: "id,occurredAt,actorType,actorId,action,outcome,resourceKind,resourceId,teamId,requestId\r\n4182,2026-11-21T18:00:00Z,user,usr_01JD2Q3R4S5T6V7W8X9Y0Z0001,UpdateAgent,allowed,agent,agt_01JD2Q3R4S5T6V7W8X9Y0Z0001,team_01JD2Q3R4S5T6V7W8X9Y0Z0001,req_7f3a\r\
+              \n"
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:audit
+    x-afs-scope: service
+    x-afs-cli: audit list-service-audit-events
+    x-afs-sdk: admin.audit.list()
+    x-afs-screen: S5
+    x-afs-priority: P0
+    x-afs-csv: true
+    x-afs-events: []
+/v1/exports:
+  post:
+    operationId: CreateExport
+    summary: Create export
+    tags:
+    - admin
+    description: (asynchronous; 202 with the export in pending)
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateExportRequest'
+          example:
+            teamIds:
+            - team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    responses:
+      '202':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Export'
+            example:
+              id: exp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              status: pending
+              schemaVersion: 14
+              sha256: null
+              sizeBytes: null
+              downloadUrl: null
+              downloadExpiresAt: null
+              teamIds:
+              - team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              finishedAt: null
+              error: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:export
+    x-afs-scope: service
+    x-afs-cli: admin create-export
+    x-afs-sdk: admin.exports.create()
+    x-afs-screen: S11
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  get:
+    operationId: ListExports
+    summary: List exports
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportList'
+            example:
+              items:
+              - id: exp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                status: pending
+                schemaVersion: 14
+                sha256: null
+                sizeBytes: null
+                downloadUrl: null
+                downloadExpiresAt: null
+                teamIds: []
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                finishedAt: null
+                error: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:export
+    x-afs-scope: service
+    x-afs-cli: admin list-exports
+    x-afs-sdk: admin.exports.list()
+    x-afs-screen: S11
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/exports/{exportId}:
+  get:
+    operationId: GetExport
+    summary: Get export
+    tags:
+    - admin
+    description: (status, size, sha256, downloadUrl when succeeded)
+    parameters:
+    - name: exportId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^exp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: exp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Export'
+            example:
+              id: exp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              status: succeeded
+              schemaVersion: 14
+              sha256: 9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f
+              sizeBytes: 48213
+              downloadUrl: https://afs-exports-example.s3.amazonaws.com/exports/exp.json?X-Amz-Signature=EXAMPLE
+              downloadExpiresAt: '2026-11-28T18:05:00Z'
+              teamIds: []
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              finishedAt: '2026-11-21T18:05:00Z'
+              error: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:export
+    x-afs-scope: service
+    x-afs-cli: admin describe-export
+    x-afs-sdk: admin.exports.get()
+    x-afs-screen: S11
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/imports:
+  post:
+    operationId: CreateImport
+    summary: Create import
+    tags:
+    - admin
+    description: '(body: {bundle, accountMap}, application/json, up to 100 MB)'
+    parameters:
+    - name: dryRun
+      in: query
+      schema:
+        type: boolean
+        default: true
+      description: 'Default true: nothing is written'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ImportRequest'
+          example:
+            bundle:
+              schemaVersion: 14
+              sha256: 9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f
+              teams: []
+            accountMap:
+              '111122223333': '444455556666'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportReport'
+            example:
+              id: exp_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              dryRun: true
+              teams:
+              - slug: payments
+                result: updated
+                changes:
+                - 'agents/coder: modelId'
+                error: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:export
+    x-afs-scope: service
+    x-afs-cli: admin create-import
+    x-afs-sdk: admin.imports.create()
+    x-afs-screen: S11
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - import.applied
+/healthz:
+  get:
+    operationId: GetHealth
+    summary: Get health
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealthStatus'
+            example:
+              status: ok
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+    security: []
+    x-afs-permission: none
+    x-afs-scope: public
+    x-afs-cli: none (not a CLI operation)
+    x-afs-sdk: health.get()
+    x-afs-screen: none
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/readyz:
+  get:
+    operationId: GetReadiness
+    summary: Get readiness
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealthStatus'
+            example:
+              status: ready
+              checks:
+                database: ok
+                schema: ok
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        description: A dependency is not ready
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealthStatus'
+            example:
+              status: not ready
+              checks:
+                database: connection refused
+                schema: ok
+    security: []
+    x-afs-permission: none
+    x-afs-scope: public
+    x-afs-cli: none (not a CLI operation)
+    x-afs-sdk: health.getReadiness()
+    x-afs-screen: none
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []

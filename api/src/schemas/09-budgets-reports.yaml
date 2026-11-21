@@ -1,0 +1,465 @@
+# OpenAPI fragment (API contract §4.9 and §5 shapes). Bundled into api/openapi.yaml by make openapi.
+Budget:
+  type: object
+  required:
+  - id
+  - period
+  - amountUsd
+  - thresholds
+  - onExhaust
+  - spentUsd
+  - reservedUsd
+  - version
+  properties:
+    id:
+      type: string
+      pattern: ^bud_[0-9A-HJKMNP-TV-Z]{26}$
+      example: bud_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    period:
+      type: string
+      enum:
+      - monthly
+      - lifetime
+    amountUsd:
+      $ref: '#/components/schemas/Money'
+    thresholds:
+      type: array
+      items:
+        type: integer
+        minimum: 1
+        maximum: 100
+    onExhaust:
+      type: string
+      enum:
+      - block
+      - notify
+    expiresAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+    spentUsd:
+      $ref: '#/components/schemas/Money'
+      readOnly: true
+    reservedUsd:
+      $ref: '#/components/schemas/Money'
+      readOnly: true
+    percentUsed:
+      type: number
+      readOnly: true
+    forecastUsd:
+      $ref: '#/components/schemas/Money'
+      readOnly: true
+    projectedCapAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+PutBudgetRequest:
+  type: object
+  required:
+  - period
+  - amountUsd
+  properties:
+    period:
+      type: string
+      enum:
+      - monthly
+      - lifetime
+    amountUsd:
+      $ref: '#/components/schemas/Money'
+    thresholds:
+      type: array
+      items:
+        type: integer
+        minimum: 1
+        maximum: 100
+    onExhaust:
+      type: string
+      enum:
+      - block
+      - notify
+      description: notify needs teams:set-guardrails and a persistent team (D33)
+    expiresAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+UsageRow:
+  type: object
+  required:
+  - key
+  - calls
+  - costUsd
+  properties:
+    key:
+      type: object
+      additionalProperties:
+        type: string
+      description: The groupBy values of this row
+    calls:
+      type: integer
+    inputTokens:
+      type: integer
+    outputTokens:
+      type: integer
+    costUsd:
+      $ref: '#/components/schemas/Money'
+Usage:
+  type: object
+  required:
+  - range
+  - groupBy
+  - rows
+  - totals
+  properties:
+    range:
+      type: object
+      properties:
+        from:
+          $ref: '#/components/schemas/Timestamp'
+        to:
+          $ref: '#/components/schemas/Timestamp'
+    groupBy:
+      type: array
+      items:
+        type: string
+    rows:
+      type: array
+      items:
+        $ref: '#/components/schemas/UsageRow'
+    totals:
+      $ref: '#/components/schemas/UsageRow'
+    nextToken:
+      type: string
+CostRow:
+  type: object
+  required:
+  - day
+  - source
+  - costUsd
+  properties:
+    day:
+      type: string
+      format: date
+    source:
+      type: string
+      enum:
+      - gateway
+      - cur_bedrock
+      - cur_eks
+      - cur_other
+    agentId:
+      type:
+      - string
+      - 'null'
+      pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+      example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    poolId:
+      type:
+      - string
+      - 'null'
+      pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+      example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    modelId:
+      type:
+      - string
+      - 'null'
+    costUsd:
+      $ref: '#/components/schemas/Money'
+    calls:
+      type: integer
+CostList:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/CostRow'
+    nextToken:
+      type: string
+ReportRange:
+  type: object
+  required:
+  - from
+  - to
+  properties:
+    from:
+      $ref: '#/components/schemas/Timestamp'
+    to:
+      $ref: '#/components/schemas/Timestamp'
+Report:
+  type: object
+  required:
+  - kind
+  - range
+  - groupBy
+  - rows
+  - totals
+  - notes
+  properties:
+    kind:
+      type: string
+      enum:
+      - usage
+      - costs
+      - activity
+      - traffic
+    range:
+      $ref: '#/components/schemas/ReportRange'
+    groupBy:
+      type: array
+      items:
+        type: string
+    rows:
+      type: array
+      items:
+        type: object
+        additionalProperties: true
+        description: groupBy columns, then measures; traffic rows carry counts and bytes, never a cost
+    totals:
+      type: object
+      additionalProperties: true
+    notes:
+      type: array
+      items:
+        type: string
+    nextToken:
+      type: string
+ReportQuery:
+  type: object
+  description: Stored report query parameters
+  properties:
+    from:
+      $ref: '#/components/schemas/Timestamp'
+    to:
+      $ref: '#/components/schemas/Timestamp'
+    range:
+      type: string
+      enum:
+      - 24h
+      - 7d
+      - 30d
+      - 90d
+      - mtd
+    groupBy:
+      type: array
+      items:
+        type: string
+    filters:
+      type: object
+      additionalProperties:
+        type: string
+      description: teamId, agentId, modelId, systemId, poolId, tag.<key>
+ReportSchedule:
+  type: object
+  required:
+  - id
+  - name
+  - report
+  - query
+  - cadence
+  - channelId
+  - format
+  - enabled
+  - version
+  properties:
+    id:
+      type: string
+      pattern: ^rsc_[0-9A-HJKMNP-TV-Z]{26}$
+      example: rsc_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    report:
+      type: string
+      enum:
+      - usage
+      - costs
+      - activity
+      - traffic
+    query:
+      $ref: '#/components/schemas/ReportQuery'
+    cadence:
+      type: string
+      enum:
+      - daily
+      - weekly
+      - monthly
+    channelId:
+      type: string
+      pattern: ^nch_[0-9A-HJKMNP-TV-Z]{26}$
+      example: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    format:
+      type: string
+      enum:
+      - csv
+    enabled:
+      type: boolean
+    nextRunAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+    lastRunAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+    lastStatus:
+      type:
+      - string
+      - 'null'
+      enum:
+      - succeeded
+      - failed
+      - null
+      readOnly: true
+    lastError:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+ReportScheduleList:
+  type: object
+  description: A page of ReportSchedule resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/ReportSchedule'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateReportScheduleRequest:
+  type: object
+  required:
+  - name
+  - report
+  - cadence
+  - channelId
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    report:
+      type: string
+      enum:
+      - usage
+      - costs
+      - activity
+      - traffic
+    query:
+      $ref: '#/components/schemas/ReportQuery'
+    cadence:
+      type: string
+      enum:
+      - daily
+      - weekly
+      - monthly
+    channelId:
+      type: string
+      pattern: ^nch_[0-9A-HJKMNP-TV-Z]{26}$
+      example: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    format:
+      type: string
+      enum:
+      - csv
+    enabled:
+      type: boolean
+UpdateReportScheduleRequest:
+  type: object
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    query:
+      $ref: '#/components/schemas/ReportQuery'
+    cadence:
+      type: string
+      enum:
+      - daily
+      - weekly
+      - monthly
+    channelId:
+      type: string
+      pattern: ^nch_[0-9A-HJKMNP-TV-Z]{26}$
+      example: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    enabled:
+      type: boolean
+CostTagStatus:
+  type: object
+  required:
+  - key
+  - seenInCur
+  - awsStatus
+  - checkedAt
+  properties:
+    key:
+      type: string
+    seenInCur:
+      type: boolean
+    firstSeenAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+    lastSeenAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+    awsStatus:
+      type: string
+      enum:
+      - active
+      - inactive
+      - unknown
+    checkedAt:
+      $ref: '#/components/schemas/Timestamp'
+CostTagStatusList:
+  type: object
+  description: A page of CostTagStatus resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/CostTagStatus'
+    nextToken:
+      type: string
+      description: Absent on the last page

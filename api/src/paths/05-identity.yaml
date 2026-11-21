@@ -1,0 +1,606 @@
+# OpenAPI fragment (API contract §4.5). Bundled into api/openapi.yaml by make openapi.
+/v1/teams/{teamId}/agents/{agentId}/role-links:
+  get:
+    operationId: ListAgentRoleLinks
+    summary: List agent role links
+    tags:
+    - identity
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleLinkList'
+            example:
+              items:
+              - id: arl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                profileName: deploy
+                roleArn: arn:aws:iam::444455556666:role/payments-deployer
+                accountId: '444455556666'
+                maxSessionSeconds: 3600
+                externalId: afs-4N8P2Q
+                status: pending_trust
+                lastVerifiedAt: null
+                lastError: null
+                trustPolicy:
+                  Version: '2012-10-17'
+                  Statement:
+                  - Effect: Allow
+                    Principal:
+                      AWS: arn:aws:iam::111122223333:role/afs-payments-coder
+                    Action:
+                    - sts:AssumeRole
+                    - sts:TagSession
+                    Condition:
+                      StringEquals:
+                        sts:ExternalId: afs-4N8P2Q
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: identities:read
+    x-afs-scope: team
+    x-afs-cli: agents list-role-links
+    x-afs-sdk: agents.roleLinks.list()
+    x-afs-screen: T8
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateAgentRoleLink
+    summary: Create agent role link
+    tags:
+    - identity
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateRoleLinkRequest'
+          example:
+            profileName: deploy
+            roleArn: arn:aws:iam::444455556666:role/payments-deployer
+            maxSessionSeconds: 3600
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleLink'
+            example:
+              id: arl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              profileName: deploy
+              roleArn: arn:aws:iam::444455556666:role/payments-deployer
+              accountId: '444455556666'
+              maxSessionSeconds: 3600
+              externalId: afs-4N8P2Q
+              status: pending_trust
+              lastVerifiedAt: null
+              lastError: null
+              trustPolicy:
+                Version: '2012-10-17'
+                Statement:
+                - Effect: Allow
+                  Principal:
+                    AWS: arn:aws:iam::111122223333:role/afs-payments-coder
+                  Action:
+                  - sts:AssumeRole
+                  - sts:TagSession
+                  Condition:
+                    StringEquals:
+                      sts:ExternalId: afs-4N8P2Q
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: identities:write
+    x-afs-scope: team
+    x-afs-cli: agents create-role-link
+    x-afs-sdk: agents.roleLinks.create()
+    x-afs-screen: T8
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/agents/{agentId}/role-links/{linkId}:
+  get:
+    operationId: GetAgentRoleLink
+    summary: Get agent role link
+    tags:
+    - identity
+    description: (includes trustPolicy JSON)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: linkId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^arl_[0-9A-HJKMNP-TV-Z]{26}$
+        example: arl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleLink'
+            example:
+              id: arl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              profileName: deploy
+              roleArn: arn:aws:iam::444455556666:role/payments-deployer
+              accountId: '444455556666'
+              maxSessionSeconds: 3600
+              externalId: afs-4N8P2Q
+              status: pending_trust
+              lastVerifiedAt: null
+              lastError: null
+              trustPolicy:
+                Version: '2012-10-17'
+                Statement:
+                - Effect: Allow
+                  Principal:
+                    AWS: arn:aws:iam::111122223333:role/afs-payments-coder
+                  Action:
+                  - sts:AssumeRole
+                  - sts:TagSession
+                  Condition:
+                    StringEquals:
+                      sts:ExternalId: afs-4N8P2Q
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: identities:read
+    x-afs-scope: team
+    x-afs-cli: agents describe-role-link
+    x-afs-sdk: agents.roleLinks.get()
+    x-afs-screen: T8
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  delete:
+    operationId: DeleteAgentRoleLink
+    summary: Delete agent role link
+    tags:
+    - identity
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: linkId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^arl_[0-9A-HJKMNP-TV-Z]{26}$
+        example: arl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: identities:write
+    x-afs-scope: team
+    x-afs-cli: agents delete-role-link
+    x-afs-sdk: agents.roleLinks.delete()
+    x-afs-screen: T8
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/agents/{agentId}/role-links/{linkId}:verify:
+  post:
+    operationId: VerifyAgentRoleLink
+    summary: Verify agent role link
+    tags:
+    - identity
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: linkId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^arl_[0-9A-HJKMNP-TV-Z]{26}$
+        example: arl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '202':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleLink'
+            example:
+              id: arl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              profileName: deploy
+              roleArn: arn:aws:iam::444455556666:role/payments-deployer
+              accountId: '444455556666'
+              maxSessionSeconds: 3600
+              externalId: afs-4N8P2Q
+              status: pending_trust
+              lastVerifiedAt: null
+              lastError: null
+              trustPolicy:
+                Version: '2012-10-17'
+                Statement:
+                - Effect: Allow
+                  Principal:
+                    AWS: arn:aws:iam::111122223333:role/afs-payments-coder
+                  Action:
+                  - sts:AssumeRole
+                  - sts:TagSession
+                  Condition:
+                    StringEquals:
+                      sts:ExternalId: afs-4N8P2Q
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: identities:write
+    x-afs-scope: team
+    x-afs-cli: agents verify-role-link
+    x-afs-sdk: agents.roleLinks.verify()
+    x-afs-screen: T8
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/agents/{agentId}/identities:
+  get:
+    operationId: ListAgentIdentities
+    summary: List agent identities
+    tags:
+    - identity
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentIdentityList'
+            example:
+              items:
+              - id: aid_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                kind: github_app
+                externalRef: github.com/example-org/apps/afs-coder
+                secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0002
+                status: pending
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: identities:read
+    x-afs-scope: team
+    x-afs-cli: agents list-identities
+    x-afs-sdk: agents.identities.list()
+    x-afs-screen: T2
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateAgentIdentity
+    summary: Create agent identity
+    tags:
+    - identity
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateAgentIdentityRequest'
+          example:
+            kind: github_app
+            externalRef: github.com/example-org/apps/afs-coder
+            secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0002
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentIdentity'
+            example:
+              id: aid_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              kind: github_app
+              externalRef: github.com/example-org/apps/afs-coder
+              secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              status: pending
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: identities:write
+    x-afs-scope: team
+    x-afs-cli: agents create-identity
+    x-afs-sdk: agents.identities.create()
+    x-afs-screen: T2
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/agents/{agentId}/identities/{identityId}:
+  delete:
+    operationId: DeleteAgentIdentity
+    summary: Delete agent identity
+    tags:
+    - identity
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: identityId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^aid_[0-9A-HJKMNP-TV-Z]{26}$
+        example: aid_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: identities:write
+    x-afs-scope: team
+    x-afs-cli: agents delete-identity
+    x-afs-sdk: agents.identities.delete()
+    x-afs-screen: T2
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []

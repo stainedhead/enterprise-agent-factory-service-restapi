@@ -1,0 +1,457 @@
+# OpenAPI fragment (API contract §4.2 and §5 shapes). Bundled into api/openapi.yaml by make openapi.
+Team:
+  type: object
+  required:
+  - id
+  - slug
+  - displayName
+  - kind
+  - state
+  - namespace
+  - maxBudgetUsd
+  - effectiveCeilingUsd
+  - isolationTier
+  - viewerKubectl
+  - allowedAwsAccounts
+  - mayManageAwsAccounts
+  - mayAddExternalSystems
+  - version
+  - generation
+  - status
+  properties:
+    id:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+      example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    generation:
+      type: integer
+      minimum: 1
+      readOnly: true
+    status:
+      $ref: '#/components/schemas/Status'
+      readOnly: true
+    slug:
+      $ref: '#/components/schemas/Name'
+      readOnly: true
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 100
+    description:
+      type: string
+      maxLength: 1000
+    kind:
+      type: string
+      enum:
+      - persistent
+      - ephemeral
+      description: Immutable after create
+    state:
+      type: string
+      enum:
+      - active
+      - suspended
+      - deleting
+      - deleted
+      readOnly: true
+    namespace:
+      type: string
+      readOnly: true
+    costCenter:
+      type: string
+    ownerEmail:
+      type: string
+      format: email
+    maxBudgetUsd:
+      allOf:
+      - $ref: '#/components/schemas/Money'
+      description: 'Guardrail field: needs teams:set-guardrails'
+    ceilingOverrideUsd:
+      oneOf:
+      - $ref: '#/components/schemas/Money'
+      - type: 'null'
+    ceilingOverrideExpiresAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+    effectiveCeilingUsd:
+      $ref: '#/components/schemas/Money'
+      readOnly: true
+    quotas:
+      $ref: '#/components/schemas/Quotas'
+    isolationTier:
+      type: string
+      enum:
+      - shared
+      - dedicated
+      description: 'Guardrail field: needs teams:set-guardrails'
+    viewerKubectl:
+      type: boolean
+      description: 'Guardrail field: needs teams:set-guardrails'
+    expiresAt:
+      $ref: '#/components/schemas/Timestamp'
+    teardownRule:
+      type: string
+      enum:
+      - at_expiry
+      - at_cap_or_expiry
+      - at_work_complete
+    tornDownAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    teardownReason:
+      type: string
+      enum:
+      - expired
+      - cap_reached
+      - work_complete
+      - manual
+      readOnly: true
+    identityProviderId:
+      type: string
+      pattern: ^idp_[0-9A-HJKMNP-TV-Z]{26}$
+      example: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    allowedAwsAccounts:
+      type: array
+      items:
+        $ref: '#/components/schemas/AwsAccountId'
+      description: Needs teams:set-aws-accounts on update
+    mayManageAwsAccounts:
+      type: boolean
+      description: 'Guardrail field: needs teams:set-guardrails'
+    mayAddExternalSystems:
+      type: boolean
+      description: 'Guardrail field: needs teams:set-guardrails'
+TeamList:
+  type: object
+  description: A page of Team resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/Team'
+    nextToken:
+      type: string
+      description: Absent on the last page
+FirstAdmin:
+  type: object
+  description: 'The first team-admin binding: a user (userId or email) or an IdP group'
+  required:
+  - subjectType
+  properties:
+    subjectType:
+      type: string
+      enum:
+      - user
+      - group
+    userId:
+      type: string
+      pattern: ^usr_[0-9A-HJKMNP-TV-Z]{26}$
+      example: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    email:
+      type: string
+      format: email
+    groupName:
+      type: string
+TeamBudgetInput:
+  type: object
+  description: Lifetime budget of an ephemeral team, created with it
+  required:
+  - amountUsd
+  properties:
+    amountUsd:
+      $ref: '#/components/schemas/Money'
+    thresholds:
+      type: array
+      items:
+        type: integer
+        minimum: 1
+        maximum: 100
+    period:
+      type: string
+      enum:
+      - lifetime
+CreateTeamRequest:
+  type: object
+  required:
+  - slug
+  - displayName
+  - kind
+  - maxBudgetUsd
+  - firstAdmin
+  properties:
+    slug:
+      $ref: '#/components/schemas/Name'
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 100
+    description:
+      type: string
+      maxLength: 1000
+    kind:
+      type: string
+      enum:
+      - persistent
+      - ephemeral
+      description: Immutable after create
+    costCenter:
+      type: string
+    ownerEmail:
+      type: string
+      format: email
+    maxBudgetUsd:
+      $ref: '#/components/schemas/Money'
+      description: 'Guardrail field: needs teams:set-guardrails'
+    quotas:
+      $ref: '#/components/schemas/Quotas'
+    isolationTier:
+      type: string
+      enum:
+      - shared
+      - dedicated
+      description: 'Guardrail field: needs teams:set-guardrails'
+    viewerKubectl:
+      type: boolean
+      description: 'Guardrail field: needs teams:set-guardrails'
+    expiresAt:
+      $ref: '#/components/schemas/Timestamp'
+    teardownRule:
+      type: string
+      enum:
+      - at_expiry
+      - at_cap_or_expiry
+      - at_work_complete
+    identityProviderId:
+      type: string
+      pattern: ^idp_[0-9A-HJKMNP-TV-Z]{26}$
+      example: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    allowedAwsAccounts:
+      type: array
+      items:
+        $ref: '#/components/schemas/AwsAccountId'
+      description: Needs teams:set-aws-accounts on update
+    mayManageAwsAccounts:
+      type: boolean
+      description: 'Guardrail field: needs teams:set-guardrails'
+    mayAddExternalSystems:
+      type: boolean
+      description: 'Guardrail field: needs teams:set-guardrails'
+    firstAdmin:
+      $ref: '#/components/schemas/FirstAdmin'
+    models:
+      type: array
+      items:
+        type: string
+      description: Model ids enabled for the team
+    tags:
+      type: array
+      items:
+        $ref: '#/components/schemas/TagValue'
+      description: Team-owned tag values, including required service tags
+    budget:
+      $ref: '#/components/schemas/TeamBudgetInput'
+UpdateTeamRequest:
+  type: object
+  description: Fields to change. maxBudgetUsd, the ceiling override, quotas, isolationTier, viewerKubectl, mayManageAwsAccounts
+    and mayAddExternalSystems need teams:set-guardrails; allowedAwsAccounts needs teams:set-aws-accounts
+  properties:
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 100
+    description:
+      type: string
+      maxLength: 1000
+    ownerEmail:
+      type: string
+      format: email
+    costCenter:
+      type: string
+    identityProviderId:
+      type:
+      - string
+      - 'null'
+      pattern: ^idp_[0-9A-HJKMNP-TV-Z]{26}$
+      example: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    kind:
+      type: string
+      enum:
+      - persistent
+      - ephemeral
+      description: Immutable; a different value is a ValidationError
+    maxBudgetUsd:
+      $ref: '#/components/schemas/Money'
+    ceilingOverrideUsd:
+      oneOf:
+      - $ref: '#/components/schemas/Money'
+      - type: 'null'
+    ceilingOverrideExpiresAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+    ceilingOverrideReason:
+      type: string
+      minLength: 1
+      maxLength: 500
+      description: Required with an override; stored in the audit record only
+      writeOnly: true
+    quotas:
+      $ref: '#/components/schemas/Quotas'
+    isolationTier:
+      type: string
+      enum:
+      - shared
+      - dedicated
+    viewerKubectl:
+      type: boolean
+    mayManageAwsAccounts:
+      type: boolean
+    mayAddExternalSystems:
+      type: boolean
+    allowedAwsAccounts:
+      type: array
+      items:
+        $ref: '#/components/schemas/AwsAccountId'
+TeamModels:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/Model'
+PutTeamModelsRequest:
+  type: object
+  required:
+  - modelIds
+  properties:
+    modelIds:
+      type: array
+      items:
+        type: string
+      minItems: 0
+TeamTag:
+  type: object
+  required:
+  - key
+  - source
+  properties:
+    key:
+      type: string
+    value:
+      type: string
+    source:
+      type: string
+      enum:
+      - system
+      - service
+      - team
+      - service_default
+      - missing
+      readOnly: true
+TeamTags:
+  type: object
+  required:
+  - tags
+  properties:
+    tags:
+      type: array
+      items:
+        $ref: '#/components/schemas/TeamTag'
+    requestMetadataDroppedKeys:
+      type: array
+      items:
+        type: string
+      description: Keys left out of Bedrock requestMetadata because of its pair limit (D27)
+      readOnly: true
+    version:
+      type: integer
+      readOnly: true
+PutTeamTagsRequest:
+  type: object
+  required:
+  - tags
+  properties:
+    tags:
+      type: array
+      items:
+        $ref: '#/components/schemas/TagValue'
+      description: Team-owned keys only
+AllowedAccount:
+  type: object
+  required:
+  - accountId
+  properties:
+    accountId:
+      $ref: '#/components/schemas/AwsAccountId'
+    name:
+      type: string
+    status:
+      type: string
+      enum:
+      - active
+      - suspended
+      - pending_closure
+AllowedAccountList:
+  type: object
+  description: A page of AllowedAccount resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/AllowedAccount'
+    nextToken:
+      type: string
+      description: Absent on the last page
+TeamDirectoryEntry:
+  type: object
+  required:
+  - id
+  - slug
+  - displayName
+  properties:
+    id:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+      example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    slug:
+      $ref: '#/components/schemas/Name'
+    displayName:
+      type: string
+TeamDirectoryList:
+  type: object
+  description: A page of TeamDirectoryEntry resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/TeamDirectoryEntry'
+    nextToken:
+      type: string
+      description: Absent on the last page
+Kubeconfig:
+  type: string
+  description: kubeconfig YAML with an exec credential plugin; never a token

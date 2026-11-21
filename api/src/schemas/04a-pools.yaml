@@ -1,0 +1,441 @@
+# OpenAPI fragment (API contract §4.4a and §5 shapes). Bundled into api/openapi.yaml by make openapi.
+Stage:
+  type: object
+  required:
+  - id
+  - name
+  - position
+  - version
+  properties:
+    id:
+      type: string
+      pattern: ^stg_[0-9A-HJKMNP-TV-Z]{26}$
+      example: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    name:
+      $ref: '#/components/schemas/Name'
+    position:
+      type: integer
+      minimum: 0
+      maximum: 100
+    description:
+      type: string
+StageList:
+  type: object
+  description: A page of Stage resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/Stage'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateStageRequest:
+  type: object
+  required:
+  - name
+  - position
+  properties:
+    name:
+      $ref: '#/components/schemas/Name'
+    position:
+      type: integer
+      minimum: 0
+      maximum: 100
+    description:
+      type: string
+UpdateStageRequest:
+  type: object
+  properties:
+    position:
+      type: integer
+      minimum: 0
+      maximum: 100
+    description:
+      type: string
+Pool:
+  type: object
+  required:
+  - id
+  - name
+  - template
+  - image
+  - modelId
+  - workers
+  - state
+  - version
+  - generation
+  - status
+  properties:
+    id:
+      type: string
+      pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+      example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    generation:
+      type: integer
+      minimum: 1
+      readOnly: true
+    status:
+      $ref: '#/components/schemas/Status'
+      readOnly: true
+    name:
+      $ref: '#/components/schemas/Name'
+      readOnly: true
+    description:
+      type: string
+      maxLength: 1000
+    stageId:
+      type:
+      - string
+      - 'null'
+      pattern: ^stg_[0-9A-HJKMNP-TV-Z]{26}$
+      example: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    template:
+      type: string
+    image:
+      $ref: '#/components/schemas/ImageRef'
+    persona:
+      type: string
+    modelId:
+      type: string
+    workers:
+      type: integer
+      minimum: 0
+      maximum: 200
+      description: Desired workers
+    resources:
+      $ref: '#/components/schemas/Resources'
+    scratchSizeGiB:
+      type: integer
+      minimum: 1
+      maximum: 500
+    sharedVolume:
+      type: string
+      enum:
+      - none
+      - efs
+    state:
+      type: string
+      enum:
+      - enabled
+      - paused
+      - deleting
+      - deleted
+      readOnly: true
+    handoffs:
+      type: array
+      items:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+PoolList:
+  type: object
+  description: A page of Pool resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/Pool'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreatePoolRequest:
+  type: object
+  required:
+  - name
+  - template
+  - image
+  - modelId
+  - workers
+  properties:
+    name:
+      $ref: '#/components/schemas/Name'
+    description:
+      type: string
+      maxLength: 1000
+    stageId:
+      type:
+      - string
+      - 'null'
+      pattern: ^stg_[0-9A-HJKMNP-TV-Z]{26}$
+      example: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    template:
+      type: string
+    image:
+      $ref: '#/components/schemas/ImageRef'
+    persona:
+      type: string
+    modelId:
+      type: string
+    workers:
+      type: integer
+      minimum: 0
+      maximum: 200
+      description: Desired workers
+    resources:
+      $ref: '#/components/schemas/Resources'
+    scratchSizeGiB:
+      type: integer
+      minimum: 1
+      maximum: 500
+    sharedVolume:
+      type: string
+      enum:
+      - none
+      - efs
+UpdatePoolRequest:
+  type: object
+  properties:
+    description:
+      type: string
+      maxLength: 1000
+    stageId:
+      type:
+      - string
+      - 'null'
+      pattern: ^stg_[0-9A-HJKMNP-TV-Z]{26}$
+      example: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    template:
+      type: string
+    image:
+      $ref: '#/components/schemas/ImageRef'
+    persona:
+      type: string
+    modelId:
+      type: string
+    workers:
+      type: integer
+      minimum: 0
+      maximum: 200
+      description: Desired workers
+    resources:
+      $ref: '#/components/schemas/Resources'
+    scratchSizeGiB:
+      type: integer
+      minimum: 1
+      maximum: 500
+    sharedVolume:
+      type: string
+      enum:
+      - none
+      - efs
+ScalePoolRequest:
+  type: object
+  required:
+  - workers
+  properties:
+    workers:
+      type: integer
+      minimum: 0
+      maximum: 200
+PoolStatus:
+  type: object
+  required:
+  - id
+  - generation
+  - status
+  - workers
+  properties:
+    id:
+      type: string
+      pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+      example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    generation:
+      type: integer
+    status:
+      $ref: '#/components/schemas/Status'
+    workers:
+      type: object
+      required:
+      - desired
+      - reporting
+      - working
+      - idle
+      - impaired
+      properties:
+        desired:
+          type: integer
+        reporting:
+          type: integer
+        working:
+          type: integer
+        idle:
+          type: integer
+        impaired:
+          type: integer
+PoolHandoffs:
+  type: object
+  required:
+  - toPoolIds
+  properties:
+    toPoolIds:
+      type: array
+      items:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    version:
+      type: integer
+      readOnly: true
+PutPoolHandoffsRequest:
+  type: object
+  required:
+  - toPoolIds
+  properties:
+    toPoolIds:
+      type: array
+      items:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+PoolSecretBindings:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/SecretBinding'
+    version:
+      type: integer
+      readOnly: true
+PutPoolSecretBindingsRequest:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/SecretBinding'
+PoolRoleLink:
+  type: object
+  required:
+  - id
+  - roleName
+  - accountId
+  - profileName
+  - status
+  - version
+  properties:
+    id:
+      type: string
+      pattern: ^prl_[0-9A-HJKMNP-TV-Z]{26}$
+      example: prl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    roleName:
+      type: string
+      pattern: ^[A-Za-z0-9+=,.@_-]{1,64}$
+    accountId:
+      $ref: '#/components/schemas/AwsAccountId'
+    profileName:
+      type: string
+    roleArn:
+      type: string
+      readOnly: true
+    externalId:
+      type: string
+      readOnly: true
+    maxSessionSeconds:
+      type: integer
+      minimum: 900
+      maximum: 43200
+    status:
+      type: string
+      enum:
+      - pending_trust
+      - verified
+      - failed
+      - disabled
+      readOnly: true
+    lastVerifiedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+    lastError:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+PoolRoleLinkList:
+  type: object
+  description: A page of PoolRoleLink resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/PoolRoleLink'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreatePoolRoleLinkRequest:
+  type: object
+  required:
+  - roleName
+  - accountId
+  - profileName
+  properties:
+    roleName:
+      type: string
+      pattern: ^[A-Za-z0-9+=,.@_-]{1,64}$
+    accountId:
+      $ref: '#/components/schemas/AwsAccountId'
+    profileName:
+      type: string
+    maxSessionSeconds:
+      type: integer
+      minimum: 900
+      maximum: 43200

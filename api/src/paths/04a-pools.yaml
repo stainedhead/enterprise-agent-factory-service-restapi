@@ -1,0 +1,1958 @@
+# OpenAPI fragment (API contract §4.4a). Bundled into api/openapi.yaml by make openapi.
+/v1/teams/{teamId}/stages:
+  get:
+    operationId: ListStages
+    summary: List stages
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageList'
+            example:
+              items:
+              - id: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                name: triage
+                position: 1
+                description: Find affected repositories
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:read
+    x-afs-scope: team
+    x-afs-cli: pools list-stages
+    x-afs-sdk: pools.stages.list()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateStage
+    summary: Create stage
+    tags:
+    - pools
+    description: (name, position)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateStageRequest'
+          example:
+            name: triage
+            position: 1
+            description: Find affected repositories
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Stage'
+            example:
+              id: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              name: triage
+              position: 1
+              description: Find affected repositories
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools create-stage
+    x-afs-sdk: pools.stages.create()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/stages/{stageId}:
+  patch:
+    operationId: UpdateStage
+    summary: Update stage
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: stageId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^stg_[0-9A-HJKMNP-TV-Z]{26}$
+        example: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateStageRequest'
+          example:
+            position: 2
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Stage'
+            example:
+              id: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              name: triage
+              position: 2
+              description: Find affected repositories
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools update-stage
+    x-afs-sdk: pools.stages.update()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  delete:
+    operationId: DeleteStage
+    summary: Delete stage
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: stageId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^stg_[0-9A-HJKMNP-TV-Z]{26}$
+        example: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools delete-stage
+    x-afs-sdk: pools.stages.delete()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/pools:
+  get:
+    operationId: ListPools
+    summary: List pools
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolList'
+            example:
+              items:
+              - id: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                generation: 1
+                status:
+                  phase: Pending
+                  observedGeneration: 0
+                  conditions: []
+                  updatedAt: '2026-11-21T18:00:00Z'
+                name: fixer
+                description: Opens fix pull requests
+                stageId: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                template: claude-code
+                image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+                persona: Careful dependency upgrader
+                modelId: anthropic.claude-sonnet-4-5
+                workers: 10
+                resources:
+                  cpu: '1'
+                  memory: 2Gi
+                scratchSizeGiB: 20
+                sharedVolume: none
+                state: enabled
+                handoffs:
+                - pool_01JD2Q3R4S5T6V7W8X9Y0Z0002
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:read
+    x-afs-scope: team
+    x-afs-cli: pools list-pools
+    x-afs-sdk: pools.list()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreatePool
+    summary: Create pool
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreatePoolRequest'
+          example:
+            name: fixer
+            description: Opens fix pull requests
+            stageId: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+            template: claude-code
+            image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+            persona: Careful dependency upgrader
+            modelId: anthropic.claude-sonnet-4-5
+            workers: 10
+            resources:
+              cpu: '1'
+              memory: 2Gi
+            scratchSizeGiB: 20
+            sharedVolume: none
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pool'
+            example:
+              id: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: fixer
+              description: Opens fix pull requests
+              stageId: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              template: claude-code
+              image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              persona: Careful dependency upgrader
+              modelId: anthropic.claude-sonnet-4-5
+              workers: 10
+              resources:
+                cpu: '1'
+                memory: 2Gi
+              scratchSizeGiB: 20
+              sharedVolume: none
+              state: enabled
+              handoffs:
+              - pool_01JD2Q3R4S5T6V7W8X9Y0Z0002
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools create-pool
+    x-afs-sdk: pools.create()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - pool.created
+/v1/teams/{teamId}/pools/{poolId}:
+  get:
+    operationId: GetPool
+    summary: Get pool
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pool'
+            example:
+              id: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Ready
+                observedGeneration: 1
+                conditions:
+                - type: NamespaceReady
+                  status: 'True'
+                  reason: Applied
+                  message: Namespace and policies applied
+                  lastTransitionTime: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:05:00Z'
+              name: fixer
+              description: Opens fix pull requests
+              stageId: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              template: claude-code
+              image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              persona: Careful dependency upgrader
+              modelId: anthropic.claude-sonnet-4-5
+              workers: 10
+              resources:
+                cpu: '1'
+                memory: 2Gi
+              scratchSizeGiB: 20
+              sharedVolume: none
+              state: enabled
+              handoffs:
+              - pool_01JD2Q3R4S5T6V7W8X9Y0Z0002
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:read
+    x-afs-scope: team
+    x-afs-cli: pools describe-pool
+    x-afs-sdk: pools.get()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  patch:
+    operationId: UpdatePool
+    summary: Update pool
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdatePoolRequest'
+          example:
+            persona: Minimal-change dependency upgrader
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pool'
+            example:
+              id: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 2
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: fixer
+              description: Opens fix pull requests
+              stageId: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              template: claude-code
+              image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              persona: Minimal-change dependency upgrader
+              modelId: anthropic.claude-sonnet-4-5
+              workers: 10
+              resources:
+                cpu: '1'
+                memory: 2Gi
+              scratchSizeGiB: 20
+              sharedVolume: none
+              state: enabled
+              handoffs:
+              - pool_01JD2Q3R4S5T6V7W8X9Y0Z0002
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools update-pool
+    x-afs-sdk: pools.update()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - pool.updated
+  delete:
+    operationId: DeletePool
+    summary: Delete pool
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '202':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pool'
+            example:
+              id: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Deleting
+                observedGeneration: 1
+                conditions:
+                - type: NamespaceReady
+                  status: 'True'
+                  reason: Applied
+                  message: Namespace and policies applied
+                  lastTransitionTime: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:05:00Z'
+              name: fixer
+              description: Opens fix pull requests
+              stageId: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              template: claude-code
+              image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              persona: Careful dependency upgrader
+              modelId: anthropic.claude-sonnet-4-5
+              workers: 10
+              resources:
+                cpu: '1'
+                memory: 2Gi
+              scratchSizeGiB: 20
+              sharedVolume: none
+              state: deleting
+              handoffs:
+              - pool_01JD2Q3R4S5T6V7W8X9Y0Z0002
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools delete-pool
+    x-afs-sdk: pools.delete()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - pool.deleted
+/v1/teams/{teamId}/pools/{poolId}:scale:
+  post:
+    operationId: ScalePool
+    summary: Scale pool
+    tags:
+    - pools
+    description: '{workers} (0–200)'
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ScalePoolRequest'
+          example:
+            workers: 25
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pool'
+            example:
+              id: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 2
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: fixer
+              description: Opens fix pull requests
+              stageId: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              template: claude-code
+              image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              persona: Careful dependency upgrader
+              modelId: anthropic.claude-sonnet-4-5
+              workers: 25
+              resources:
+                cpu: '1'
+                memory: 2Gi
+              scratchSizeGiB: 20
+              sharedVolume: none
+              state: enabled
+              handoffs:
+              - pool_01JD2Q3R4S5T6V7W8X9Y0Z0002
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools scale-pool
+    x-afs-sdk: pools.scale()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - pool.scaled
+/v1/teams/{teamId}/pools/{poolId}:pause:
+  post:
+    operationId: PausePool
+    summary: Pause pool
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pool'
+            example:
+              id: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 2
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: fixer
+              description: Opens fix pull requests
+              stageId: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              template: claude-code
+              image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              persona: Careful dependency upgrader
+              modelId: anthropic.claude-sonnet-4-5
+              workers: 10
+              resources:
+                cpu: '1'
+                memory: 2Gi
+              scratchSizeGiB: 20
+              sharedVolume: none
+              state: paused
+              handoffs:
+              - pool_01JD2Q3R4S5T6V7W8X9Y0Z0002
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools pause-pool
+    x-afs-sdk: pools.pause()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - pool.updated
+/v1/teams/{teamId}/pools/{poolId}:resume:
+  post:
+    operationId: ResumePool
+    summary: Resume pool
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pool'
+            example:
+              id: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 3
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 3
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: fixer
+              description: Opens fix pull requests
+              stageId: stg_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              template: claude-code
+              image: registry.example.com/agents/coder@sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              persona: Careful dependency upgrader
+              modelId: anthropic.claude-sonnet-4-5
+              workers: 10
+              resources:
+                cpu: '1'
+                memory: 2Gi
+              scratchSizeGiB: 20
+              sharedVolume: none
+              state: enabled
+              handoffs:
+              - pool_01JD2Q3R4S5T6V7W8X9Y0Z0002
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools resume-pool
+    x-afs-sdk: pools.resume()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - pool.updated
+/v1/teams/{teamId}/pools/{poolId}/status:
+  get:
+    operationId: GetPoolStatus
+    summary: Get pool status
+    tags:
+    - pools
+    description: (desired, reporting, working, idle, impaired workers)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolStatus'
+            example:
+              id: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              generation: 1
+              status:
+                phase: Ready
+                observedGeneration: 1
+                conditions:
+                - type: NamespaceReady
+                  status: 'True'
+                  reason: Applied
+                  message: Namespace and policies applied
+                  lastTransitionTime: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:05:00Z'
+              workers:
+                desired: 10
+                reporting: 10
+                working: 7
+                idle: 3
+                impaired: 0
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:read
+    x-afs-scope: team
+    x-afs-cli: pools get-pool-status
+    x-afs-sdk: pools.getStatus()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/pools/{poolId}/handoffs:
+  get:
+    operationId: ListPoolHandoffs
+    summary: List pool handoffs
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolHandoffs'
+            example:
+              toPoolIds:
+              - pool_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              version: 1
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:read
+    x-afs-scope: team
+    x-afs-cli: pools list-handoffs
+    x-afs-sdk: pools.handoffs.list()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  put:
+    operationId: PutPoolHandoffs
+    summary: Put pool handoffs
+    tags:
+    - pools
+    description: '{toPoolIds[]}'
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutPoolHandoffsRequest'
+          example:
+            toPoolIds:
+            - pool_01JD2Q3R4S5T6V7W8X9Y0Z0002
+            - pool_01JD2Q3R4S5T6V7W8X9Y0Z0003
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolHandoffs'
+            example:
+              toPoolIds:
+              - pool_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              - pool_01JD2Q3R4S5T6V7W8X9Y0Z0003
+              version: 2
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools put-handoffs
+    x-afs-sdk: pools.handoffs.put()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - pool.updated
+/v1/teams/{teamId}/pools/{poolId}/secret-bindings:
+  get:
+    operationId: ListPoolSecretBindings
+    summary: List pool secret bindings
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolSecretBindings'
+            example:
+              items:
+              - secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0004
+                delivery: file
+                target: /var/run/afs/secrets/github-app.pem
+              version: 1
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:read
+    x-afs-scope: team
+    x-afs-cli: pools list-secret-bindings
+    x-afs-sdk: pools.secretBindings.list()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  put:
+    operationId: PutPoolSecretBindings
+    summary: Put pool secret bindings
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutPoolSecretBindingsRequest'
+          example:
+            items:
+            - secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0004
+              delivery: file
+              target: /var/run/afs/secrets/github-app.pem
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolSecretBindings'
+            example:
+              items:
+              - secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0004
+                delivery: file
+                target: /var/run/afs/secrets/github-app.pem
+              version: 2
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools put-secret-bindings
+    x-afs-sdk: pools.secretBindings.put()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - pool.updated
+/v1/teams/{teamId}/pools/{poolId}/config-values:
+  get:
+    operationId: ListPoolConfigValues
+    summary: List pool config values
+    tags:
+    - pools
+    description: (resolved, with source)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigValueList'
+            example:
+              items:
+              - name: LOG_LEVEL
+                source: namespace
+                resolvedValue: info
+                usedBy:
+                - agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:read
+    x-afs-scope: team
+    x-afs-cli: pools list-config-values
+    x-afs-sdk: pools.config.list()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/pools/{poolId}/config-values/{name}:
+  put:
+    operationId: PutPoolConfigValue
+    summary: Put pool config value
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: name
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ConfigName'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutConfigValueRequest'
+          example:
+            source: literal
+            value: debug
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigValue'
+            example:
+              name: LOG_LEVEL
+              value: debug
+              source: literal
+              resolvedValue: debug
+              usedBy: []
+              version: 1
+              updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools put-config-value
+    x-afs-sdk: pools.config.put()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - pool.updated
+  delete:
+    operationId: DeletePoolConfigValue
+    summary: Delete pool config value
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: name
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ConfigName'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools delete-config-value
+    x-afs-sdk: pools.config.delete()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - pool.updated
+/v1/teams/{teamId}/pools/{poolId}/external-systems:
+  get:
+    operationId: ListPoolExternalSystems
+    summary: List pool external systems
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalSystemList'
+            example:
+              items:
+              - id: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                slug: github
+                name: GitHub
+                category: dev_tools
+                description: Source hosting
+                docsUrl: https://docs.github.com
+                endpoints:
+                - github.com:443
+                - api.github.com:443
+                enabled: true
+                builtin: true
+                scope: service
+                teamState: 'on'
+                disabledAt: null
+                unmetered: false
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:read
+    x-afs-scope: team
+    x-afs-cli: pools list-external-systems
+    x-afs-sdk: pools.externalSystems.list()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/pools/{poolId}/external-systems/{systemId}:
+  put:
+    operationId: PutPoolExternalSystem
+    summary: Put pool external system
+    tags:
+    - pools
+    description: '{enabled}'
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: systemId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^ext_[0-9A-HJKMNP-TV-Z]{26}$
+        example: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ExternalSystemState'
+          example:
+            enabled: false
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalSystem'
+            example:
+              id: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              slug: github
+              name: GitHub
+              category: dev_tools
+              description: Source hosting
+              docsUrl: https://docs.github.com
+              endpoints:
+              - github.com:443
+              - api.github.com:443
+              enabled: true
+              builtin: true
+              scope: service
+              teamState: 'on'
+              disabledAt: agent
+              unmetered: false
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools put-external-system
+    x-afs-sdk: pools.externalSystems.put()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events:
+    - pool.updated
+/v1/teams/{teamId}/pools/{poolId}/role-links:
+  get:
+    operationId: ListPoolRoleLinks
+    summary: List pool role links
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolRoleLinkList'
+            example:
+              items:
+              - id: prl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                roleName: afs-cve-reader
+                accountId: '111122223333'
+                profileName: target
+                roleArn: arn:aws:iam::111122223333:role/afs-cve-reader
+                externalId: afs-7Q2M9K
+                maxSessionSeconds: 3600
+                status: pending_trust
+                lastVerifiedAt: null
+                lastError: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:read
+    x-afs-scope: team
+    x-afs-cli: pools list-role-links
+    x-afs-sdk: pools.roleLinks.list()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreatePoolRoleLink
+    summary: Create pool role link
+    tags:
+    - pools
+    description: (one roleName per pool, one link per account)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreatePoolRoleLinkRequest'
+          example:
+            roleName: afs-cve-reader
+            accountId: '111122223333'
+            profileName: target
+            maxSessionSeconds: 3600
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolRoleLink'
+            example:
+              id: prl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              roleName: afs-cve-reader
+              accountId: '111122223333'
+              profileName: target
+              roleArn: arn:aws:iam::111122223333:role/afs-cve-reader
+              externalId: afs-7Q2M9K
+              maxSessionSeconds: 3600
+              status: pending_trust
+              lastVerifiedAt: null
+              lastError: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools create-role-link
+    x-afs-sdk: pools.roleLinks.create()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/pools/{poolId}/role-links/{linkId}:
+  delete:
+    operationId: DeletePoolRoleLink
+    summary: Delete pool role link
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: linkId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^prl_[0-9A-HJKMNP-TV-Z]{26}$
+        example: prl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools delete-role-link
+    x-afs-sdk: pools.roleLinks.delete()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/pools/{poolId}/role-links/{linkId}:verify:
+  post:
+    operationId: VerifyPoolRoleLink
+    summary: Verify pool role link
+    tags:
+    - pools
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: linkId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^prl_[0-9A-HJKMNP-TV-Z]{26}$
+        example: prl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '202':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolRoleLink'
+            example:
+              id: prl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              roleName: afs-cve-reader
+              accountId: '111122223333'
+              profileName: target
+              roleArn: arn:aws:iam::111122223333:role/afs-cve-reader
+              externalId: afs-7Q2M9K
+              maxSessionSeconds: 3600
+              status: pending_trust
+              lastVerifiedAt: null
+              lastError: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:write
+    x-afs-scope: team
+    x-afs-cli: pools verify-role-link
+    x-afs-sdk: pools.roleLinks.verify()
+    x-afs-screen: P4
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []

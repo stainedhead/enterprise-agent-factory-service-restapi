@@ -1,0 +1,70 @@
+[
+  {
+    "http": 400,
+    "code": "ValidationError",
+    "when": "Malformed or out-of-range input; `details.fields[]` lists `{field, reason}`",
+    "dbOrigin": "`23514`, `23502`, `22xxx`"
+  },
+  {
+    "http": 401,
+    "code": "Unauthenticated",
+    "when": "Missing, expired or unknown credential"
+  },
+  {
+    "http": 403,
+    "code": "AccessDenied",
+    "when": "Valid caller without the permission; `details.requiredPermission`",
+    "dbOrigin": "`42501`"
+  },
+  {
+    "http": 404,
+    "code": "NotFound",
+    "when": "No such resource, **or** a resource in a team the caller cannot see (never reveals existence)",
+    "dbOrigin": "RLS hides the row"
+  },
+  {
+    "http": 402,
+    "code": "BudgetExceeded",
+    "when": "Returned by `afs-gateway` to agents only, never by `afs-api`; not retryable (see [gateway contract](gateway-contract.md))",
+    "dbOrigin": "`reserve_spend_held` returned NULL",
+    "gatewayOnly": true
+  },
+  {
+    "http": 409,
+    "code": "Conflict",
+    "when": "Duplicate name, idempotency body mismatch or in progress, dependent objects exist, invalid state transition (for example a suspended team)",
+    "dbOrigin": "`23505`, `23503` (on delete), `55000`"
+  },
+  {
+    "http": 412,
+    "code": "PreconditionFailed",
+    "when": "`If-Match` does not match `version`"
+  },
+  {
+    "http": 428,
+    "code": "PreconditionRequired",
+    "when": "`If-Match` missing on `PATCH`, `PUT` or `DELETE` of an existing resource"
+  },
+  {
+    "http": 429,
+    "code": "Throttled",
+    "when": "Rate limit; `Retry-After`"
+  },
+  {
+    "http": 500,
+    "code": "InternalError",
+    "when": "Anything else; logged with `requestId`",
+    "dbOrigin": "`40001` after retries, others"
+  },
+  {
+    "http": 502,
+    "code": "UpstreamError",
+    "when": "Returned by `afs-gateway` only, when Bedrock returns a server error; the reservation is released; retry with backoff",
+    "gatewayOnly": true
+  },
+  {
+    "http": 503,
+    "code": "Unavailable",
+    "when": "Dependency down (database, Secrets Manager); safe to retry with backoff"
+  }
+]

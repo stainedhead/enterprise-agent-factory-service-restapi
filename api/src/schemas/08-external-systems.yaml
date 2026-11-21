@@ -1,0 +1,169 @@
+# OpenAPI fragment (API contract §4.8 and §5 shapes). Bundled into api/openapi.yaml by make openapi.
+ExternalSystem:
+  type: object
+  required:
+  - id
+  - slug
+  - name
+  - category
+  - endpoints
+  - enabled
+  - builtin
+  - scope
+  properties:
+    id:
+      type: string
+      pattern: ^ext_[0-9A-HJKMNP-TV-Z]{26}$
+      example: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    slug:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{1,62}$
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    category:
+      type: string
+      enum:
+      - dev_tools
+      - collaboration
+      - email
+      - cloud
+      - identity
+      - llm
+      - other
+    description:
+      type: string
+    docsUrl:
+      type: string
+      pattern: ^https://
+    endpoints:
+      type: array
+      items:
+        type: string
+        description: host or host:port; wildcards as the catalog allows
+    enabled:
+      type: boolean
+    builtin:
+      type: boolean
+      readOnly: true
+    owner:
+      type: string
+    purpose:
+      type: string
+    scope:
+      type: string
+      enum:
+      - service
+      - team
+      readOnly: true
+    teamState:
+      type: string
+      enum:
+      - 'on'
+      - 'off'
+      readOnly: true
+    disabledAt:
+      type:
+      - string
+      - 'null'
+      enum:
+      - service
+      - team
+      - agent
+      - null
+      readOnly: true
+    unmetered:
+      type: boolean
+      readOnly: true
+    version:
+      type: integer
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+ExternalSystemList:
+  type: object
+  description: A page of ExternalSystem resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/ExternalSystem'
+    nextToken:
+      type: string
+      description: Absent on the last page
+ExternalSystemState:
+  type: object
+  required:
+  - enabled
+  properties:
+    enabled:
+      type: boolean
+DeclareExternalSystemRequest:
+  type: object
+  required:
+  - slug
+  - name
+  - category
+  - endpoints
+  - owner
+  - purpose
+  properties:
+    slug:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{1,62}$
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    category:
+      type: string
+      enum:
+      - dev_tools
+      - collaboration
+      - email
+      - cloud
+      - identity
+      - llm
+      - other
+    description:
+      type: string
+    docsUrl:
+      type: string
+      pattern: ^https://
+    endpoints:
+      type: array
+      items:
+        type: string
+        description: host or host:port; wildcards as the catalog allows
+    owner:
+      type: string
+    purpose:
+      type: string
+UpdateExternalSystemRequest:
+  type: object
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    description:
+      type: string
+    docsUrl:
+      type: string
+      pattern: ^https://
+    endpoints:
+      type: array
+      items:
+        type: string
+    owner:
+      type: string
+    purpose:
+      type: string
