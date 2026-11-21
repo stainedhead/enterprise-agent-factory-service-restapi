@@ -277,7 +277,7 @@ Owns: `internal/usecase/reconcile/engine/`, `internal/adapter/postgres/{changefe
 | [x] | M1-F3 | Change feed: `LISTEN afs_desired_state` (payload `<table>:<team_id>:<id>`), reconnect → poll; 30 s `generation <> observed_generation` poll; full resync every 10 min and at startup; pickup within 5 s, and by the poll with notifications blocked; a payload with an empty team part (service-level tables: `agent_templates`, `models`, `external_systems` catalog, `service_tags`, `storage_classes`) fans out to every affected team resource | RC-US-1.2, RC-4 | — |
 | [x] | M1-F4 | Engine: work queue keyed `(kind, id)`, table → controller registry, per-team ordering; a failed reconcile sets `Degraded` or `Failed` with a condition whose reason carries the AWS or Kubernetes error code and retries with capped exponential backoff (1 s → 5 min, never a hot loop); leader-only periodic job scheduler (`Every`) | RC-4 (part) | M1-F3 |
 | [x] | M1-F5 | Status writer: `resource_status` upsert with D24 vocabulary only, `observedGeneration`, conditions; `team.status_changed`/`agent.status_changed`/`pool.status_changed` on phase change | RC-5, CT-API-7 (part), CT-API-9 (part) | M1-F4 |
-| [ ] | M1-F6 | Drift: watch owned objects, revert edits and deletes within 60 s, one `drift.corrected` audit record and event, `DriftCorrected` condition | RC-US-3.1 | M1-F1, M1-F5 |
+| [x] | M1-F6 | Drift: watch owned objects, revert edits and deletes within 60 s, one `drift.corrected` audit record and event, `DriftCorrected` condition | RC-US-3.1 | M1-F1, M1-F5 |
 | [ ] | M1-F7 | `cmd/afs-reconciler`: wiring list, schema version check, health, readiness, metrics | CT-DB-1 (part) | M1-F2 |
 
 ### M1-G1 · Team environment, Kubernetes side (RC-1)

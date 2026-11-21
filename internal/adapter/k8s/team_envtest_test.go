@@ -34,7 +34,7 @@ func TestTeamEnvironmentConverges(t *testing.T) {
 	ctl, err := team.NewController(team.Config{
 		Source: teamtest.NewSource(desired), Cluster: k8s.NewTeamCluster(c, k8s.GatewayCASource{Namespace: "afs-system", Name: "afs-gateway-ca"}),
 		IAM: teamtest.NewIAM(), Profiles: teamtest.NewProfiles(),
-		AWS: team.AWSConfig{Partition: "aws", Region: "us-east-1", AccountID: "111122223333", GatewayRoleARN: "arn:aws:iam::111122223333:role/afs-gateway", SecretsPrefix: "afs"},
+		AWS:     team.AWSConfig{Partition: "aws", Region: "us-east-1", AccountID: "111122223333", GatewayRoleARN: "arn:aws:iam::111122223333:role/afs-gateway", SecretsPrefix: "afs"},
 		Gateway: team.PlatformSpec{GatewayNamespace: "afs-system", GatewayName: "afs-gateway", GatewayPort: 8443},
 	})
 	if err != nil {

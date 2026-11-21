@@ -48,12 +48,32 @@ func (e *Engine) NoteDrift(ref Ref, object string) {
 	e.queue.Add(ref)
 }
 
-func (e *Engine) takeDrift(key Key) map[string]time.Time {
+// driftNoteTTL bounds how long a flagged object waits for a pass that changes it; an object the pass
+// found already correct (a notice for a change that was undone, or fixed by an earlier pass) stops
+// counting as drift.
+const driftNoteTTL = 2 * time.Minute
+
+// takeCorrectedDrift is called after a pass: it removes and returns the flagged objects that the pass
+// changed, sorted, and drops flags older than driftNoteTTL. Flags set while the pass ran are matched too.
+func (e *Engine) takeCorrectedDrift(key Key, changed []string, now time.Time) (map[string]time.Time, []string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	m := e.drift[key]
-	delete(e.drift, key)
-	return m
+	corrected := correctedDrift(m, changed)
+	taken := make(map[string]time.Time, len(corrected))
+	for _, o := range corrected {
+		taken[o] = m[o]
+		delete(m, o)
+	}
+	for o, at := range m {
+		if now.Sub(at) > driftNoteTTL {
+			delete(m, o)
+		}
+	}
+	if len(m) == 0 {
+		delete(e.drift, key)
+	}
+	return taken, corrected
 }
 
 // correctedDrift returns the flagged objects the pass changed, sorted.

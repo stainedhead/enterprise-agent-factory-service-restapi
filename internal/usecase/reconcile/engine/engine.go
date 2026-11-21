@@ -234,7 +234,6 @@ func (e *Engine) worker(ctx context.Context) {
 // reconcile runs one pass for ref and reports the result.
 func (e *Engine) reconcile(ctx context.Context, ref Ref) {
 	c := e.controllers[ref.Kind]
-	noted := e.takeDrift(ref.Key)
 	out, err := e.safeReconcile(ctx, c, ref)
 	now := e.cfg.Now()
 	if err != nil {
@@ -256,7 +255,7 @@ func (e *Engine) reconcile(ctx context.Context, ref Ref) {
 	}
 	conds := out.Conditions
 	var driftAt *time.Time
-	if objs := correctedDrift(noted, out.Changed); len(objs) > 0 {
+	if _, objs := e.takeCorrectedDrift(ref.Key, out.Changed, now); len(objs) > 0 {
 		driftAt = &now
 		conds = append(append([]domain.Condition(nil), conds...), driftCondition(objs, now))
 		if e.cfg.Drift != nil {
