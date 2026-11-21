@@ -7,11 +7,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/observability"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/buildinfo"
 )
 
@@ -23,9 +23,17 @@ func main() {
 		return
 	}
 
-	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// JSON logs with redaction, /metrics, /healthz and /readyz on AFS_METRICS_ADDR, OTLP export.
+	rt, err := observability.Start(ctx, observability.EnvConfig("afs-gateway", buildinfo.Version, os.Getenv))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "afs-gateway:", err)
+		os.Exit(1)
+	}
+	defer func() { _ = rt.Shutdown(context.Background()) }()
+	log := rt.Log
 
 	log.Info("afs-gateway starting", "version", buildinfo.Version)
 	<-ctx.Done()
