@@ -62,25 +62,10 @@ func restConfig(kubeconfig string) (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
 
-// checkSchema refuses to run on a schema older than this build (database contract §1). It prefers
-// afs.schema_version() and falls back to reading the tracking table on databases without it.
+// checkSchema refuses to run on a schema older than this build (database contract §1).
 func checkSchema(ctx context.Context, pool *pgxpool.Pool) error {
-	want, err := postgres.ExpectedSchemaVersion()
-	if err != nil {
-		return err
-	}
-	var have int
-	if err := pool.QueryRow(ctx, `SELECT afs.schema_version()`).Scan(&have); err != nil {
-		h, w, cerr := postgres.CheckSchema(ctx, pool)
-		if cerr != nil {
-			return cerr
-		}
-		have, want = h, w
-	}
-	if have < want {
-		return fmt.Errorf("%w: have %06d, want %06d", postgres.ErrSchemaTooOld, have, want)
-	}
-	return nil
+	_, _, err := postgres.CheckSchema(ctx, pool)
+	return err
 }
 
 // wire builds afs-reconciler. It is the only place adapters are connected.

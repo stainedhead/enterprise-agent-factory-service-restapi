@@ -9,9 +9,9 @@ import (
 )
 
 // SchemaVersion is the -db schema version this repository is built against (plan.md §6).
-const schemaVersion = 16
+const schemaVersion = 17
 
-// TestDBModuleMigrations: the adopted -db module embeds migrations 000001 to 000016.
+// TestDBModuleMigrations: the adopted -db module embeds migrations 000001 to 000017.
 func TestDBModuleMigrations(t *testing.T) {
 	migs, err := migrate.Load(migrations.FS)
 	if err != nil {
@@ -25,7 +25,7 @@ func TestDBModuleMigrations(t *testing.T) {
 			t.Errorf("migration %d has version %06d", i, m.Version)
 		}
 	}
-	if got := fmt.Sprintf("%06d", migs[len(migs)-1].Version); got != "000016" {
+	if got := fmt.Sprintf("%06d", migs[len(migs)-1].Version); got != "000017" {
 		t.Errorf("latest = %s", got)
 	}
 }

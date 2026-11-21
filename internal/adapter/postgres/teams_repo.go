@@ -303,7 +303,7 @@ func (*TeamRepo) Models(ctx context.Context, tx port.Tx, teamID string) ([]teams
 	if err != nil {
 		return nil, 0, err
 	}
-	rows, err := pt.Query(ctx, `SELECT m.id, m.provider, m.display_name, m.enabled, coalesce(m.context_window, 0), m.version, m.updated_at
+	rows, err := pt.Query(ctx, `SELECT m.id, m.provider, m.display_name, m.enabled, coalesce(m.context_window, 0), coalesce(m.max_output_tokens, 0), m.version, m.updated_at
 FROM afs.team_models tm JOIN afs.models m ON m.id = tm.model_id WHERE tm.team_id=$1 ORDER BY m.id`, teamID)
 	if err != nil {
 		return nil, 0, MapError(err, OpRead, "model")
@@ -313,7 +313,7 @@ FROM afs.team_models tm JOIN afs.models m ON m.id = tm.model_id WHERE tm.team_id
 	for rows.Next() {
 		var m teams.ModelInfo
 		var v int64
-		if err := rows.Scan(&m.ID, &m.Provider, &m.DisplayName, &m.Enabled, &m.ContextWindow, &v, &m.UpdatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.Provider, &m.DisplayName, &m.Enabled, &m.ContextWindow, &m.MaxOutputTokens, &v, &m.UpdatedAt); err != nil {
 			return nil, 0, MapError(err, OpRead, "model")
 		}
 		m.Version = v
@@ -333,7 +333,7 @@ func (*TeamRepo) ModelsByID(ctx context.Context, tx port.Tx, ids []string) (map[
 	if err != nil {
 		return nil, err
 	}
-	rows, err := pt.Query(ctx, `SELECT id, provider, display_name, enabled, coalesce(context_window, 0), version, updated_at
+	rows, err := pt.Query(ctx, `SELECT id, provider, display_name, enabled, coalesce(context_window, 0), coalesce(max_output_tokens, 0), version, updated_at
 FROM afs.models WHERE id = ANY($1)`, ids)
 	if err != nil {
 		return nil, MapError(err, OpRead, "model")
@@ -343,7 +343,7 @@ FROM afs.models WHERE id = ANY($1)`, ids)
 	for rows.Next() {
 		var m teams.ModelInfo
 		var v int64
-		if err := rows.Scan(&m.ID, &m.Provider, &m.DisplayName, &m.Enabled, &m.ContextWindow, &v, &m.UpdatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.Provider, &m.DisplayName, &m.Enabled, &m.ContextWindow, &m.MaxOutputTokens, &v, &m.UpdatedAt); err != nil {
 			return nil, MapError(err, OpRead, "model")
 		}
 		m.Version = v

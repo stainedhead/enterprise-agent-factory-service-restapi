@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	crand "crypto/rand"
-	"encoding/json"
 	"io"
 	"log/slog"
 	"os"
@@ -18,7 +17,6 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/audit"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/idp"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/members"
-	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/revisions"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/servicetags"
 	settingsuc "github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/settings"
@@ -35,34 +33,6 @@ type m1w2IDs struct{ entropy io.Reader }
 
 func (g m1w2IDs) NewID(p domain.IDPrefix) (domain.ID, error) {
 	return domain.NewID(p, time.Now(), g.entropy)
-}
-
-// m1w2Settings reads service settings, falling back to the default of the setting's spec.
-type m1w2Settings struct {
-	runner *postgres.TxRunner
-	repo   *postgres.SettingsRepo
-}
-
-var m1w2SettingsSession = port.Session{Actor: "system:afs-api-settings", ActorType: port.ActorSystem}
-
-func (s m1w2Settings) Setting(ctx context.Context, key string) (json.RawMessage, error) {
-	spec, ok := domain.SettingSpecFor(key)
-	if !ok {
-		return nil, domain.Validation(domain.FieldError{Field: "key", Reason: "unknown setting"})
-	}
-	var stored map[string]settingsuc.Stored
-	err := s.runner.ReadTx(ctx, m1w2SettingsSession, func(ctx context.Context, tx port.Tx) error {
-		var err error
-		stored, err = s.repo.All(ctx, tx)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	if v, ok := stored[key]; ok {
-		return v.Value, nil
-	}
-	return json.RawMessage(spec.Default), nil
 }
 
 // m1w2Teams answers the authorization middleware's team lookups with the teams use case, as the
@@ -103,7 +73,7 @@ func wireM1W2(c *components, cfg *httpapi.Config, log *slog.Logger) {
 	pages := httpapi.NewPageTokens(pageTokenKey(log), nil)
 	setRepo := postgres.NewSettingsRepo()
 
-	teamSvc := &teams.Service{Deps: deps, Repo: postgres.NewTeamRepo(), Settings: m1w2Settings{c.Runner, setRepo}}
+	teamSvc := &teams.Service{Deps: deps, Repo: postgres.NewTeamRepo(), Settings: c.Settings}
 	lookup := m1w2Teams{teamSvc}
 	cfg.Teams, cfg.TeamState = lookup, lookup
 

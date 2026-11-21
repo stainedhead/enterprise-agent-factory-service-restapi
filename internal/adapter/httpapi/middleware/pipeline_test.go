@@ -3,7 +3,6 @@ package middleware_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -38,25 +37,10 @@ func (c creds) Authenticate(_ context.Context, tok string) (*authz.Principal, er
 	return nil, domain.Unauthenticated()
 }
 
-// flakyStore fails Complete on demand.
-type flakyStore struct {
-	*fakes.Idempotency
-	failComplete bool
-}
-
-func (f *flakyStore) Complete(ctx context.Context, tx port.Tx, k port.IdempotencyKey, r port.StoredResponse) error {
-	if f.failComplete {
-		return errors.New("complete failed")
-	}
-	return f.Idempotency.Complete(ctx, tx, k, r)
-}
-
 type env struct {
-	flaky   *flakyStore
 	h       http.Handler
 	runner  *fakes.TxRunner
 	audit   *fakes.Audit
-	store   *fakes.Idempotency
 	auditor *middleware.DeniedAuditor
 
 	mu      sync.Mutex
@@ -76,18 +60,9 @@ func routeInfo(r *http.Request) (middleware.RouteInfo, bool) {
 	return middleware.RouteInfo{OperationID: rt.OperationID, Method: rt.Method, Public: rt.Scope == authz.ScopePublic, Idempotent: rt.Idempotent, Mutation: rt.Mutation}, true
 }
 
-func session(ctx context.Context) (port.Session, bool) {
-	p, ok := httpapi.PrincipalFrom(ctx)
-	if !ok {
-		return port.Session{}, false
-	}
-	return auth.SessionOf(p, httpapi.RequestIDFrom(ctx)), true
-}
-
 func newEnv(t *testing.T) *env {
 	t.Helper()
-	e := &env{runner: &fakes.TxRunner{}, audit: &fakes.Audit{}, store: &fakes.Idempotency{}, version: 3, logs: &strings.Builder{}}
-	e.flaky = &flakyStore{Idempotency: e.store}
+	e := &env{runner: &fakes.TxRunner{}, audit: &fakes.Audit{}, version: 3, logs: &strings.Builder{}}
 	log := slogTo(e.logs)
 	limiter := middleware.NewLimiter(middleware.LimiterConfig{Now: func() time.Time { return time.Unix(1_800_000_000, 0) }})
 	principals := creds{
@@ -96,8 +71,6 @@ func newEnv(t *testing.T) *env {
 		"viewer-a": {ID: "usr_viewer_a", Type: authz.PrincipalUser, Bindings: []authz.Binding{{Role: authz.RoleTeamViewer, TeamID: teamA}}},
 		"outsider": {ID: "usr_out", Type: authz.PrincipalUser, Bindings: []authz.Binding{{Role: authz.RoleTeamAdmin, TeamID: teamB}}},
 	}
-	idem := &middleware.Idempotency{Store: e.flaky, Runner: e.runner, Session: session, Routes: routeInfo, Errors: httpapi.WriteError, Log: log, Backoff: time.Millisecond}
-	txr := idem.WrapRunner(e.runner)
 	e.auditor = &middleware.DeniedAuditor{Audit: e.audit, Session: auth.SessionOf, RequestID: httpapi.RequestIDFrom, Log: log}
 	required, err := middleware.IfMatchRules(api.OpenAPI)
 	if err != nil {
@@ -112,7 +85,7 @@ func newEnv(t *testing.T) *env {
 		}
 		must("CreateApiKey", func(w http.ResponseWriter, r *http.Request) {
 			p, _ := httpapi.PrincipalFrom(r.Context())
-			err := txr.InTx(r.Context(), auth.SessionOf(p, httpapi.RequestIDFrom(r.Context())), func(_ context.Context, tx port.Tx) error {
+			err := e.runner.InTx(r.Context(), auth.SessionOf(p, httpapi.RequestIDFrom(r.Context())), func(_ context.Context, tx port.Tx) error {
 				if e.createFn != nil {
 					if err := e.createFn(tx); err != nil {
 						return err
@@ -163,7 +136,6 @@ func newEnv(t *testing.T) *env {
 			e.auditor.Stage(routeInfo, httpapi.PrincipalFrom),
 			middleware.RequireIfMatch(required, routeInfo, httpapi.WriteError),
 			middleware.AutoETag(),
-			idem.Middleware(),
 		},
 		Hooks: httpapi.Hooks{
 			Denied: func(ctx context.Context, d httpapi.Denial) {
@@ -218,167 +190,6 @@ func envelope(t *testing.T, rec *httptest.ResponseRecorder) errEnvelope {
 }
 
 const keysPath = "/v1/teams/" + teamA + "/api-keys"
-
-// RA-US-9.1: replay writes nothing; a different body conflicts; 5xx is not stored.
-func TestIdempotencyReplayMismatchAnd5xx(t *testing.T) {
-	e := newEnv(t)
-	first := e.do(t, "POST", keysPath, "admin-a", `{"name":"ci","role":"team_viewer"}`, "Idempotency-Key", "k-1")
-	if first.Code != 201 || first.Header().Get("Idempotent-Replayed") != "" || !strings.Contains(first.Body.String(), `"secretKey":"afsk_1_secret"`) {
-		t.Fatalf("first: %d %s", first.Code, first.Body)
-	}
-	// Replay: same status, no secretKey (D52), header set, nothing written.
-	again := e.do(t, "POST", keysPath, "admin-a", `{"name":"ci","role":"team_viewer"}`, "Idempotency-Key", "k-1")
-	if again.Code != 201 || again.Header().Get("Idempotent-Replayed") != "true" || strings.Contains(again.Body.String(), "secretKey") ||
-		!strings.Contains(again.Body.String(), `"id":"key_1"`) {
-		t.Fatalf("replay: %d %v %s", again.Code, again.Header(), again.Body)
-	}
-	if again.Header().Get("X-Request-Id") == "" || again.Header().Get("X-Afs-Contract-Version") == "" {
-		t.Fatal("replay lost the contract headers")
-	}
-	if e.created != 1 {
-		t.Fatalf("replay wrote again: %d rows", e.created)
-	}
-	// A different body with the same key.
-	diff := e.do(t, "POST", keysPath, "admin-a", `{"name":"other","role":"team_viewer"}`, "Idempotency-Key", "k-1")
-	b := envelope(t, diff)
-	if diff.Code != 409 || b.Code != domain.KindConflict || b.Details["reason"] != domain.ReasonIdempotencyMismatch {
-		t.Fatalf("mismatch: %d %s", diff.Code, diff.Body)
-	}
-	// RA-US-9.2: another caller with the same key is a new request.
-	other := e.do(t, "POST", keysPath, "admin-a2", `{"name":"ci","role":"team_viewer"}`, "Idempotency-Key", "k-1")
-	if other.Code != 201 || other.Header().Get("Idempotent-Replayed") != "" || e.created != 2 {
-		t.Fatalf("another principal: %d created=%d", other.Code, e.created)
-	}
-
-	// A 5xx rolls back and stores nothing: the retry runs again and can succeed.
-	fail := true
-	e.createFn = func(port.Tx) error {
-		if fail {
-			return errors.New("boom")
-		}
-		return nil
-	}
-	if r := e.do(t, "POST", keysPath, "admin-a", `{"name":"x"}`, "Idempotency-Key", "k-5xx"); r.Code != 500 {
-		t.Fatalf("failing create: %d", r.Code)
-	}
-	fail = false
-	retry := e.do(t, "POST", keysPath, "admin-a", `{"name":"x"}`, "Idempotency-Key", "k-5xx")
-	if retry.Code != 201 || retry.Header().Get("Idempotent-Replayed") != "" {
-		t.Fatalf("retry after 5xx: %d %v", retry.Code, retry.Header())
-	}
-	if e.created != 3 {
-		t.Fatalf("created = %d", e.created)
-	}
-}
-
-// A validation failure (4xx) inside the transaction rolls the claim back too.
-func TestIdempotencyClientErrorLeavesNoKey(t *testing.T) {
-	e := newEnv(t)
-	bad := true
-	e.createFn = func(port.Tx) error {
-		if bad {
-			return domain.Validation(domain.FieldError{Field: "name", Reason: "required"})
-		}
-		return nil
-	}
-	if r := e.do(t, "POST", keysPath, "admin-a", `{}`, "Idempotency-Key", "k-400"); r.Code != 400 {
-		t.Fatalf("%d", r.Code)
-	}
-	bad = false
-	if r := e.do(t, "POST", keysPath, "admin-a", `{}`, "Idempotency-Key", "k-400"); r.Code != 201 {
-		t.Fatalf("the failed request left a key behind: %d %s", r.Code, r.Body)
-	}
-}
-
-// CT-API-12: key of 1–255 characters; in progress carries Retry-After: 1.
-func TestIdempotencyKeyRulesAndInProgress(t *testing.T) {
-	e := newEnv(t)
-	cases := []struct {
-		name string
-		key  string
-		want int
-	}{
-		{"255 characters", strings.Repeat("k", 255), 201},
-		{"256 characters", strings.Repeat("k", 256), 400},
-		{"empty", "", 400},
-		{"space inside", "a b", 400},
-		{"non-ascii", "ключ", 400},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			r := httptest.NewRequestWithContext(t.Context(), "POST", keysPath, strings.NewReader(`{}`))
-			r.Header.Set("Authorization", "Bearer admin-a")
-			r.Header["Idempotency-Key"] = []string{c.key}
-			rec := httptest.NewRecorder()
-			e.h.ServeHTTP(rec, r)
-			if rec.Code != c.want {
-				t.Fatalf("%d %s", rec.Code, rec.Body)
-			}
-			if c.want == 400 && envelope(t, rec).Details["fields"] == nil {
-				t.Fatalf("no field details: %s", rec.Body)
-			}
-		})
-	}
-	// Two Idempotency-Key headers.
-	r := httptest.NewRequestWithContext(t.Context(), "POST", keysPath, strings.NewReader(`{}`))
-	r.Header.Set("Authorization", "Bearer admin-a")
-	r.Header["Idempotency-Key"] = []string{"a", "b"}
-	rec := httptest.NewRecorder()
-	e.h.ServeHTTP(rec, r)
-	if rec.Code != 400 {
-		t.Fatalf("two keys: %d", rec.Code)
-	}
-
-	// A request in flight: the claim exists and is not completed, so a duplicate is told to retry.
-	started, release := make(chan struct{}), make(chan struct{})
-	e.createFn = func(tx port.Tx) error {
-		close(started)
-		<-release
-		return nil
-	}
-	done := make(chan *httptest.ResponseRecorder)
-	go func() { done <- e.do(t, "POST", keysPath, "admin-a", `{"n":1}`, "Idempotency-Key", "slow") }()
-	<-started
-	e.createFn = nil
-	dup := e.do(t, "POST", keysPath, "admin-a", `{"n":1}`, "Idempotency-Key", "slow")
-	b := envelope(t, dup)
-	if dup.Code != 409 || b.Details["reason"] != domain.ReasonIdempotencyInProgress || dup.Header().Get("Retry-After") != "1" {
-		t.Fatalf("in progress: %d %v %s", dup.Code, dup.Header(), dup.Body)
-	}
-	close(release)
-	if first := <-done; first.Code != 201 {
-		t.Fatalf("first: %d", first.Code)
-	}
-	if replay := e.do(t, "POST", keysPath, "admin-a", `{"n":1}`, "Idempotency-Key", "slow"); replay.Code != 201 || replay.Header().Get("Idempotent-Replayed") != "true" {
-		t.Fatalf("after completion: %d %v", replay.Code, replay.Header())
-	}
-}
-
-// Requests without a key behave as before, and the key only matters on idempotent routes.
-func TestIdempotencyOptional(t *testing.T) {
-	e := newEnv(t)
-	for i := 0; i < 2; i++ {
-		if r := e.do(t, "POST", keysPath, "admin-a", `{}`); r.Code != 201 || r.Header().Get("Idempotent-Replayed") != "" {
-			t.Fatalf("no key: %d", r.Code)
-		}
-	}
-	if e.created != 2 {
-		t.Fatalf("created = %d", e.created)
-	}
-	// PATCH is not idempotent-keyed: the header is ignored there.
-	if r := e.do(t, "PATCH", "/v1/teams/"+teamA, "admin-a", `{}`, "If-Match", `"3"`, "Idempotency-Key", "x"); r.Code != 200 {
-		t.Fatalf("patch with a key: %d %s", r.Code, r.Body)
-	}
-	// Unauthorized callers never reach the store: viewer 403, outsider 404, no token 401.
-	for token, want := range map[string]int{"viewer-a": 403, "outsider": 404, "": 401} {
-		if r := e.do(t, "POST", keysPath, token, `{}`, "Idempotency-Key", "z"); r.Code != want {
-			t.Fatalf("token %q: %d, want %d", token, r.Code, want)
-		}
-	}
-	if e.created != 2 {
-		t.Fatal("an unauthorized request wrote")
-	}
-}
 
 // RA-US-1.7, RA-US-6.3: every 403 writes one denied audit record, the request's own transaction writes
 // nothing; a cross-team 404 is counted.
@@ -564,27 +375,4 @@ func TestPostAuthStagesLeaveRefusalsIntact(t *testing.T) {
 
 func slogTo(b *strings.Builder) *slog.Logger {
 	return slog.New(slog.NewTextHandler(b, &slog.HandlerOptions{Level: slog.LevelInfo}))
-}
-
-// A handler that bypasses the IdempotentRunner is answered normally, but the unhonored key is logged;
-// a response that cannot be stored is logged and still returned.
-func TestIdempotencyDiagnostics(t *testing.T) {
-	e := newEnv(t)
-	if r := e.do(t, "POST", "/v1/teams/"+teamA+"/members", "admin-a", `{}`, "Idempotency-Key", "bypass"); r.Code != 201 {
-		t.Fatalf("%d", r.Code)
-	}
-	if !strings.Contains(e.logs.String(), "Idempotency-Key not honored") {
-		t.Fatalf("log = %s", e.logs)
-	}
-	e.flaky.failComplete = true
-	r := e.do(t, "POST", keysPath, "admin-a", `{}`, "Idempotency-Key", "nostore")
-	if r.Code != 201 || !strings.Contains(e.logs.String(), "idempotent response not stored") {
-		t.Fatalf("%d log=%s", r.Code, e.logs)
-	}
-	// The key was claimed but never completed: a retry is told it is in progress (documented edge).
-	e.flaky.failComplete = false
-	retry := e.do(t, "POST", keysPath, "admin-a", `{}`, "Idempotency-Key", "nostore")
-	if retry.Code != 409 || envelope(t, retry).Details["reason"] != domain.ReasonIdempotencyInProgress {
-		t.Fatalf("retry: %d %s", retry.Code, retry.Body)
-	}
 }

@@ -27,10 +27,6 @@ type components struct {
 	Creds  *postgres.Credentials
 	// Settings reads service settings (CORS origins, ...).
 	Settings *postgres.SettingsReader
-	// Tx is the transaction runner use cases are built on. It claims an Idempotency-Key inside the use
-	// case's own transaction (wirePipeline); use cases of creating POSTs and :verb actions must not be
-	// given Runner directly.
-	Tx port.TxRunner
 	// Auth authenticates bearer credentials (wireAuth).
 	Auth    *auth.Service
 	Handler http.Handler

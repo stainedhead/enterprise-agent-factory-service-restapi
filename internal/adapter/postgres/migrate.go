@@ -66,14 +66,14 @@ type Querier interface {
 var ErrSchemaTooOld = fmt.Errorf("postgres: database schema is older than this build expects")
 
 // CheckSchema refuses to start on a schema older than ExpectedSchemaVersion (database contract
-// §1). It reads the tracking table directly: migrate.Version creates the table first, which
-// service roles may not do.
+// §1). It calls afs.schema_version() (-db 000017), which every service role may execute, because
+// migrate.Version creates the tracking table first and service roles may not.
 func CheckSchema(ctx context.Context, q Querier) (have, want int, err error) {
 	want, err = ExpectedSchemaVersion()
 	if err != nil {
 		return 0, 0, err
 	}
-	err = q.QueryRow(ctx, `SELECT coalesce(max(version), 0) FROM public.afs_schema_migrations`).Scan(&have)
+	err = q.QueryRow(ctx, `SELECT afs.schema_version()`).Scan(&have)
 	if err != nil {
 		return 0, want, MapError(err, OpRead, "schema version")
 	}

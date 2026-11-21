@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"errors"
-	"sync/atomic"
 
 	"github.com/jackc/pgx/v5"
 
@@ -13,43 +12,16 @@ import (
 )
 
 // IdPRepo implements idp.Repository on afs.identity_providers. CD-9: the console client id is the
-// column client_id; the CLI client id is cli_client_id, which migration 000017 adds. Until the
-// module in use has it, the CLI client id is not stored and reads back empty.
-type IdPRepo struct{ hasCLI atomic.Bool }
+// column client_id; the CLI client id is cli_client_id (migration 000017).
+type IdPRepo struct{}
 
 // NewIdPRepo returns an IdPRepo.
 func NewIdPRepo() *IdPRepo { return &IdPRepo{} }
 
 var _ idp.Repository = (*IdPRepo)(nil)
 
-func (r *IdPRepo) cliColumn(ctx context.Context, pt *Tx) (bool, error) {
-	if r.hasCLI.Load() {
-		return true, nil
-	}
-	var ok bool
-	err := pt.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.columns
-WHERE table_schema='afs' AND table_name='identity_providers' AND column_name='cli_client_id')`).Scan(&ok)
-	if err != nil {
-		return false, MapError(err, OpRead, "identity provider")
-	}
-	if ok {
-		r.hasCLI.Store(true)
-	}
-	return ok, nil
-}
-
-func (r *IdPRepo) selectSQL(ctx context.Context, pt *Tx) (string, error) {
-	has, err := r.cliColumn(ctx, pt)
-	if err != nil {
-		return "", err
-	}
-	cli := `''`
-	if has {
-		cli = `coalesce(cli_client_id, '')`
-	}
-	return `SELECT id, kind, name, issuer_url, client_id, ` + cli + `, coalesce(client_secret_arn, ''), groups_claim,
-  is_default, enabled, version, created_at, created_by, updated_at FROM afs.identity_providers`, nil
-}
+const idpSelect = `SELECT id, kind, name, issuer_url, client_id, coalesce(cli_client_id, ''), coalesce(client_secret_arn, ''), groups_claim,
+  is_default, enabled, version, created_at, created_by, updated_at FROM afs.identity_providers`
 
 func scanIdP(row pgx.Row) (domain.IdentityProvider, error) {
 	var p domain.IdentityProvider
@@ -67,11 +39,7 @@ func (r *IdPRepo) List(ctx context.Context, tx port.Tx, after string, limit int)
 	if err != nil {
 		return nil, err
 	}
-	sel, err := r.selectSQL(ctx, pt)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := pt.Query(ctx, sel+` WHERE id > $1 ORDER BY id LIMIT $2`, after, limit)
+	rows, err := pt.Query(ctx, idpSelect+` WHERE id > $1 ORDER BY id LIMIT $2`, after, limit)
 	if err != nil {
 		return nil, MapError(err, OpRead, "identity provider")
 	}
@@ -93,11 +61,7 @@ func (r *IdPRepo) Get(ctx context.Context, tx port.Tx, id string, forUpdate bool
 	if err != nil {
 		return domain.IdentityProvider{}, err
 	}
-	sel, err := r.selectSQL(ctx, pt)
-	if err != nil {
-		return domain.IdentityProvider{}, err
-	}
-	q := sel + ` WHERE id=$1`
+	q := idpSelect + ` WHERE id=$1`
 	if forUpdate {
 		q += ` FOR UPDATE`
 	}
@@ -143,19 +107,9 @@ func (r *IdPRepo) Insert(ctx context.Context, tx port.Tx, p domain.IdentityProvi
 	if err != nil {
 		return err
 	}
-	has, err := r.cliColumn(ctx, pt)
-	if err != nil {
-		return err
-	}
-	if has {
-		_, err = pt.Exec(ctx, `INSERT INTO afs.identity_providers (id, kind, name, issuer_url, client_id, cli_client_id, client_secret_arn, groups_claim, is_default, enabled)
+	_, err = pt.Exec(ctx, `INSERT INTO afs.identity_providers (id, kind, name, issuer_url, client_id, cli_client_id, client_secret_arn, groups_claim, is_default, enabled)
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, p.ID, string(p.Kind), p.Name, p.IssuerURL, p.ConsoleClientID, nullable(p.CLIClientID),
-			nullable(p.ClientSecretARN), p.GroupsClaim, p.IsDefault, p.Enabled)
-	} else {
-		_, err = pt.Exec(ctx, `INSERT INTO afs.identity_providers (id, kind, name, issuer_url, client_id, client_secret_arn, groups_claim, is_default, enabled)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, p.ID, string(p.Kind), p.Name, p.IssuerURL, p.ConsoleClientID,
-			nullable(p.ClientSecretARN), p.GroupsClaim, p.IsDefault, p.Enabled)
-	}
+		nullable(p.ClientSecretARN), p.GroupsClaim, p.IsDefault, p.Enabled)
 	return MapError(err, OpWrite, "identity provider")
 }
 
@@ -165,18 +119,9 @@ func (r *IdPRepo) Update(ctx context.Context, tx port.Tx, p domain.IdentityProvi
 	if err != nil {
 		return domain.IdentityProvider{}, err
 	}
-	has, err := r.cliColumn(ctx, pt)
-	if err != nil {
-		return domain.IdentityProvider{}, err
-	}
-	cliSet := ``
-	args := []any{p.ID, int64(expect), p.Name, p.ConsoleClientID, nullable(p.ClientSecretARN), p.GroupsClaim, p.IsDefault, p.Enabled}
-	if has {
-		cliSet = `, cli_client_id=$9`
-		args = append(args, nullable(p.CLIClientID))
-	}
 	tag, err := pt.Exec(ctx, `UPDATE afs.identity_providers SET name=$3, client_id=$4, client_secret_arn=$5, groups_claim=$6,
-  is_default=$7, enabled=$8`+cliSet+` WHERE id=$1 AND version=$2`, args...)
+  is_default=$7, enabled=$8, cli_client_id=$9 WHERE id=$1 AND version=$2`,
+		p.ID, int64(expect), p.Name, p.ConsoleClientID, nullable(p.ClientSecretARN), p.GroupsClaim, p.IsDefault, p.Enabled, nullable(p.CLIClientID))
 	if err != nil {
 		return domain.IdentityProvider{}, MapError(err, OpWrite, "identity provider")
 	}

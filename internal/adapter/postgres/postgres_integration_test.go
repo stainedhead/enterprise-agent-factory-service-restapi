@@ -55,7 +55,7 @@ func countTeams(t *testing.T, tx port.Tx) int {
 func TestMigrateAndSchema(t *testing.T) {
 	db := pgtest.Get(t)
 	want, err := postgres.ExpectedSchemaVersion()
-	if err != nil || want != 16 {
+	if err != nil || want != 17 {
 		t.Fatalf("expected version %d, %v", want, err)
 	}
 	// Three concurrent starts under the advisory lock: all succeed, none applies anything twice.
@@ -108,10 +108,10 @@ func TestServiceRoleSystemActor(t *testing.T) {
 	if actor != "system:afs-reconciler" || timeout != "5s" {
 		t.Fatalf("actor %q timeout %q", actor, timeout)
 	}
-	// Gap X-DB-7: service roles have no SELECT on public.afs_schema_migrations, so they cannot run
-	// the startup version check of database contract §1 yet. This assertion flips when -db grants it.
-	if _, _, err := postgres.CheckSchema(t.Context(), pool); domain.KindOf(err) != domain.KindAccessDenied {
-		t.Fatalf("service role schema check: %v (X-DB-7 delivered? update this test)", err)
+	// X-DB-7: every service role can run the startup version check through afs.schema_version().
+	have, want, err := postgres.CheckSchema(t.Context(), pool)
+	if err != nil || have != want {
+		t.Fatalf("service role schema check: have %d want %d err %v", have, want, err)
 	}
 }
 

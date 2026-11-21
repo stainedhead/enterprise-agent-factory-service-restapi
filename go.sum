@@ -185,8 +185,8 @@ github.com/rogpeppe/go-internal v1.16.0 h1:O9DK+vNMDVGLr2BeZqmpLeMjiMNkuXfcqntWb
 github.com/rogpeppe/go-internal v1.16.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs=
 github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
 github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
-github.com/stainedhead/enterprise-agent-factory-service-db v0.0.0-20261121211911-23e924052840 h1:DYKmrSSHLGdLxIilYa5ZUcdkF89lmA/3cGEWuz37T6o=
-github.com/stainedhead/enterprise-agent-factory-service-db v0.0.0-20261121211911-23e924052840/go.mod h1:Zr8s7ESewi0jwI/oKqjd/6eqkBkQggUqDyIZ/Y6pEmc=
+github.com/stainedhead/enterprise-agent-factory-service-db v0.0.0-20261121215943-a6ecc3cb0ea3 h1:kwKcHupxaAFE+6YBMc2u4qeVe7UdApn/YfT8JCMEAK0=
+github.com/stainedhead/enterprise-agent-factory-service-db v0.0.0-20261121215943-a6ecc3cb0ea3/go.mod h1:Zr8s7ESewi0jwI/oKqjd/6eqkBkQggUqDyIZ/Y6pEmc=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.5.3 h1:jmXUvGomnU1o3W/V5h2VEradbpJDwGrzugQQvL0POH4=
 github.com/stretchr/objx v0.5.3/go.mod h1:rDQraq+vQZU7Fde9LOZLr8Tax6zZvy4kuNKF+QYS+U0=

@@ -42,9 +42,8 @@ func sessionFromContext(ctx context.Context) (port.Session, bool) {
 
 // wirePipeline installs the request pipeline of M1-D into cfg: request metadata and CORS around the
 // router, the public-route source limit before authentication, and after authorization the denied
-// audit, If-Match and ETag rules and Idempotency-Key handling (architecture.md §1). It sets c.Tx, the
-// transaction runner every use case of a creating POST or :verb action must be built on, because it
-// claims the Idempotency-Key inside the use case's own transaction.
+// audit and the If-Match and ETag rules (architecture.md §1). Idempotency-Key is not handled here: a
+// use case that creates claims and completes the key in its own transaction (acting.Idem).
 func wirePipeline(c *components, cfg *httpapi.Config, s settings, log *slog.Logger) (*pipeline, error) {
 	required, err := middleware.IfMatchRules(api.OpenAPI)
 	if err != nil {
@@ -54,9 +53,6 @@ func wirePipeline(c *components, cfg *httpapi.Config, s settings, log *slog.Logg
 		Limiter: middleware.NewLimiter(middleware.LimiterConfig{Replicas: s.APIReplicas, RatePerSecond: s.RatePerSecond, Burst: s.RateBurst}),
 		Auditor: &middleware.DeniedAuditor{Audit: c.Audit, Session: auth.SessionOf, RequestID: httpapi.RequestIDFrom, Log: log},
 	}
-	idem := &middleware.Idempotency{Store: c.Idem, Runner: c.Runner, Session: sessionFromContext,
-		Routes: routeInfo, Errors: httpapi.WriteError, Log: log}
-	c.Tx = idem.WrapRunner(c.Runner)
 
 	origins := func(ctx context.Context) ([]string, error) {
 		raw, err := c.Settings.Setting(ctx, domain.SettingAPICORSOrigins)
@@ -75,7 +71,6 @@ func wirePipeline(c *components, cfg *httpapi.Config, s settings, log *slog.Logg
 		p.Auditor.Stage(routeInfo, httpapi.PrincipalFrom),
 		middleware.RequireIfMatch(required, routeInfo, httpapi.WriteError),
 		middleware.AutoETag(),
-		idem.Middleware(),
 	)
 	cfg.Hooks.Denied = func(ctx context.Context, d httpapi.Denial) {
 		p.Auditor.Record(ctx, middleware.Denied{Principal: d.Principal, OperationID: d.OperationID, TeamID: d.TeamID, Required: d.RequiredPermission})
