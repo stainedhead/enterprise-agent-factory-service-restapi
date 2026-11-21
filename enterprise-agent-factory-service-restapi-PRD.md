@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Status** | Draft for review, feature-complete scope (2026-11-21); revised after the `review-prd` pass of 2026-11-21 (decisions D23–D46 of the root PRD §10.1) |
+| **Status** | Draft for review, feature-complete scope (2026-11-21); revised after the `review-prd` pass of 2026-11-21 (decisions D23–D56 of the root PRD §10.1) |
 | **Author** | J (Enterprise Architecture), drafted with Claude |
-| **Parent** | [Root PRD](https://github.com/stainedhead/enterprise-agent-factory-service/blob/main/enterprise-agent-factory-service-initial-PRD.md) (stories US-1..US-18 and the stories added after them); [solution design](https://github.com/stainedhead/enterprise-agent-factory-service/blob/main/docs/solution-design.md) |
+| **Parent** | [Root PRD](https://github.com/stainedhead/enterprise-agent-factory-service/blob/main/enterprise-agent-factory-service-initial-PRD.md) (stories US-1..US-24); [solution design](https://github.com/stainedhead/enterprise-agent-factory-service/blob/main/docs/solution-design.md) |
 | **Provides** | [API contract](https://github.com/stainedhead/enterprise-agent-factory-service/blob/main/docs/contracts/api-contract.md) → `api/openapi.yaml`; [gateway contract](https://github.com/stainedhead/enterprise-agent-factory-service/blob/main/docs/contracts/gateway-contract.md) (`afs-gateway` ↔ agents, new, D28); EventBridge events (API contract §7) |
 | **Consumes** | [Database contract](https://github.com/stainedhead/enterprise-agent-factory-service/blob/main/docs/contracts/database-contract.md) at `-db` `v0.13.0` (schema 000013); the platform, AWS and third-party dependencies in §7 |
 
