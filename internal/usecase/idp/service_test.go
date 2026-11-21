@@ -95,7 +95,7 @@ var (
 
 func provider(issuer string, def bool) domain.IdentityProvider {
 	return domain.IdentityProvider{Kind: domain.IdPKindOkta, Name: "Okta", IssuerURL: issuer, ConsoleClientID: "console",
-		CLIClientID: "cli", Enabled: true, IsDefault: def}
+		CLIClientID: "cli", GroupsClaim: "groups", Enabled: true, IsDefault: def}
 }
 
 func TestCreateDefaultReplacesPrevious(t *testing.T) {
@@ -184,3 +184,5 @@ func TestDeniedForTeamAdmins(t *testing.T) {
 		t.Errorf("denied audit = %d", len(audit.Entries))
 	}
 }
+
+func pageOne() acting.Page { return acting.Page{Limit: 5} }
