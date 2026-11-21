@@ -39,7 +39,7 @@ func TestMetricsRED(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := observability.NewMetrics("afs-api", "v")
 			h := Metrics(m, tt.handler)
-			h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(tt.method, tt.path, nil))
+			h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(t.Context(), tt.method, tt.path, nil))
 			if got := testutil.ToFloat64(m.APIRequests.WithLabelValues(tt.wantRoute, tt.method, tt.wantCode)); got != 1 {
 				t.Fatalf("requests{%s,%s,%s} = %v", tt.wantRoute, tt.method, tt.wantCode, got)
 			}
@@ -58,7 +58,7 @@ func TestMetricsPanicStillRecordsAndReleases(t *testing.T) {
 	h := Metrics(m, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("boom") }))
 	func() {
 		defer func() { _ = recover() }()
-		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/v1/teams", nil))
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(t.Context(), "GET", "/v1/teams", nil))
 	}()
 	if testutil.ToFloat64(m.APIInFlight) != 0 {
 		t.Fatal("in-flight gauge leaked on panic")

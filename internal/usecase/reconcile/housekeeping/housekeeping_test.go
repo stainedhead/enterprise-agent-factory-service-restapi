@@ -129,7 +129,7 @@ func TestPublishesInOrderPerAggregate(t *testing.T) {
 	for i, k := range sk.sent {
 		pos[k] = i
 	}
-	if len(sk.sent) != 5 || !(pos[1] < pos[3] && pos[3] < pos[4] && pos[2] < pos[5]) {
+	if len(sk.sent) != 5 || pos[1] >= pos[3] || pos[3] >= pos[4] || pos[2] >= pos[5] {
 		t.Fatalf("sent %v", sk.sent)
 	}
 	// events of one aggregate never share a call

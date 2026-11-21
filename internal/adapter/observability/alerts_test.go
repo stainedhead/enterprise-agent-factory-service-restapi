@@ -28,7 +28,7 @@ func declared() map[string]bool {
 
 func checkRefs(t *testing.T, file string, extra ...string) {
 	t.Helper()
-	b, err := os.ReadFile(chartDir + file)
+	b, err := os.ReadFile(chartDir + file) //nolint:gosec // fixed chart paths named in this file
 	if err != nil {
 		t.Fatal(err)
 	}

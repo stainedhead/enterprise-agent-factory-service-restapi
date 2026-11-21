@@ -5,14 +5,13 @@ import (
 	"context"
 	"io"
 	"net"
-	"net/http"
 	"strings"
 	"testing"
 	"time"
 )
 
 func TestStartServesOpsAndShutsDown(t *testing.T) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	l, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +25,7 @@ func TestStartServesOpsAndShutsDown(t *testing.T) {
 	}
 	var body string
 	for i := 0; i < 50; i++ {
-		res, err := http.Get("http://" + addr + "/metrics")
+		res, err := httpGet(t, "http://"+addr+"/metrics")
 		if err == nil {
 			b, _ := io.ReadAll(res.Body)
 			_ = res.Body.Close()
@@ -38,7 +37,7 @@ func TestStartServesOpsAndShutsDown(t *testing.T) {
 	if !strings.Contains(body, `afs_build_info{service="afs-billing",version="v9"} 1`) {
 		t.Fatalf("metrics not served: %q", body)
 	}
-	res, err := http.Get("http://" + addr + "/readyz")
+	res, err := httpGet(t, "http://"+addr+"/readyz")
 	if err != nil || res.StatusCode != 200 {
 		t.Fatalf("readyz %v %v", res, err)
 	}
@@ -50,13 +49,16 @@ func TestStartServesOpsAndShutsDown(t *testing.T) {
 	if err := rt.Shutdown(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := http.Get("http://" + addr + "/healthz"); err == nil {
+	if res, err := httpGet(t, "http://"+addr+"/healthz"); err == nil {
+		_ = res.Body.Close()
 		t.Error("ops server still serving after Shutdown")
 	}
 }
 
 func TestEnvConfig(t *testing.T) {
-	c := EnvConfig("afs-api", "v1", func(k string) string { return map[string]string{"AFS_LOG_LEVEL": "debug", "AFS_OTLP_ENDPOINT": "http://x:4318"}[k] })
+	c := EnvConfig("afs-api", "v1", func(k string) string {
+		return map[string]string{"AFS_LOG_LEVEL": "debug", "AFS_OTLP_ENDPOINT": "http://x:4318"}[k]
+	})
 	if c.MetricsAddr != ":9090" || c.LogLevel != "debug" || c.OTLP != "http://x:4318" || c.Service != "afs-api" {
 		t.Fatalf("%+v", c)
 	}

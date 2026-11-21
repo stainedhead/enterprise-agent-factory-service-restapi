@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -62,7 +63,7 @@ func Start(ctx context.Context, c Config) (*Runtime, error) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		if err := ServeOps(opsCtx, srv); err != nil && err != http.ErrServerClosed {
+		if err := ServeOps(opsCtx, srv); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error("operations server stopped", "err", err)
 		}
 	}()

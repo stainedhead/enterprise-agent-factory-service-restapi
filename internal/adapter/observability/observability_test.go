@@ -152,7 +152,7 @@ func TestMetricsEndpointAndRecorder(t *testing.T) {
 		t.Error("outbox lag not recorded")
 	}
 	rec := httptest.NewRecorder()
-	m.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
+	m.Handler().ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), "GET", "/metrics", nil))
 	body := rec.Body.String()
 	for _, name := range []string{
 		MetricOutboxPending, MetricOutboxOldestAge, MetricOutboxPublished, MetricOutboxFailed, MetricLeader, MetricBuildInfo,
@@ -213,7 +213,7 @@ func TestHealthEndpoints(t *testing.T) {
 	srv := httptest.NewServer(OpsServer(":0", NewMetrics("afs-api", "v"), checks...).Handler)
 	defer srv.Close()
 	get := func(path string) (int, map[string]any) {
-		res, err := http.Get(srv.URL + path)
+		res, err := httpGet(t, srv.URL+path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -243,8 +243,10 @@ func TestHealthEndpoints(t *testing.T) {
 	if c, _ := get("/healthz"); c != 200 {
 		t.Error("healthz depends on the database")
 	}
-	if res, err := http.Get(srv.URL + "/metrics"); err != nil || res.StatusCode != 200 {
+	if res, err := httpGet(t, srv.URL+"/metrics"); err != nil || res.StatusCode != 200 {
 		t.Errorf("metrics %v %v", res, err)
+	} else {
+		_ = res.Body.Close()
 	}
 }
 
@@ -274,7 +276,7 @@ func TestReadyzTimesOutAHungCheck(t *testing.T) {
 	h := Readyz(Check{Name: "db", Fn: func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }})
 	start := time.Now()
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/readyz", nil))
+	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), "GET", "/readyz", nil))
 	if rec.Code != 503 || time.Since(start) > checkTimeout+time.Second {
 		t.Fatalf("code %d after %v", rec.Code, time.Since(start))
 	}
@@ -340,4 +342,13 @@ func TestOTelExportsTracesAndMetrics(t *testing.T) {
 	if m["traceId"] == nil || m["spanId"] == nil {
 		t.Errorf("log carries no trace ids: %s", buf.String())
 	}
+}
+
+func httpGet(t *testing.T, url string) (*http.Response, error) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	return http.DefaultClient.Do(req)
 }
