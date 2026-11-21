@@ -8,7 +8,7 @@
 | **Scope** | Feature complete: every requirement of the PRD §4 and every story of §5. Milestones M0–M6 are build order only; all are in scope |
 | **Contracts (followed exactly)** | Root `docs/contracts/api-contract.md` v1.1.0, `database-contract.md` (schema 000014), `gateway-contract.md` v1.0.0 |
 | **Schema** | `enterprise-agent-factory-service-db` migrations 000001–000014 at commit `b0d8754` (no tag yet), adopted as Go pseudo-version `v0.0.0-20261121202720-b0d8754e4659` |
-| **Status** | Draft (step 1); review in step 2 |
+| **Status** | Reviewed (step 2, 2026-11-21): implementation-ready, with six `-db` dependencies tracked in tasks.md *External dependencies* |
 
 ## 1. Executive summary
 
@@ -703,6 +703,7 @@ Criteria the contracts impose that no PRD story states. Same test levels as §9.
 | Route table and wiring edited by many streams | Merge conflicts | Generated route table; per-area handler files and wiring files (architecture.md §3) |
 | Secrets in EventBridge connections and GitHub keys | Secret handling outside `afs-api` | research.md R-6, R-9; open questions OQ-S3, OQ-S4 |
 | Gateway on the critical path | Outage blocks all agents | Fail closed, 3 replicas, load test in M3 (root R2) |
+| Schema access gaps X-DB-1..6 (research.md §6) | API key auth, denied audit on service routes, security operator writes, team directory, workload mapping, remediation teams and pool deletion cannot work at 000014 | Requested from `-db` at M0 exit; adoption tasks M1-D7, M5-C6, M6-E6, M6-X0; read-only interim lookup for X-DB-1..3 (M0-F8, OQ-S7) |
 
 ## 11. Timeline and milestones
 
@@ -719,8 +720,8 @@ Criteria the contracts impose that no PRD story states. Same test levels as §9.
 ## 12. Open questions
 
 PRD OQ-1 to OQ-9 stand with their defaults (PRD §9); tasks build to the defaults and record the answer if
-one arrives. Spec-level questions found in review (owner J unless stated), each with the default the tasks
-build to: see research.md §5 (OQ-S1 to OQ-S6).
+one arrives. Spec-level questions found while writing and reviewing the spec (owner J unless stated), each
+with the default the tasks build to: research.md §5 (OQ-S1 to OQ-S8). Schema gaps: research.md §6.
 
 ## 13. References
 

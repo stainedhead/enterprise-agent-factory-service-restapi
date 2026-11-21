@@ -113,3 +113,20 @@ Found while writing and reviewing the spec. Each has a default the tasks build t
 | OQ-S4 | Where the GitHub App private keys come from | Mounted into the reconciler from a Kubernetes Secret that ESO syncs from Secrets Manager (`deploy/helm` value `github.apps[]` with host, org, app id, secret name); never in the database | M6-E |
 | OQ-S5 | `GetTeamKubeconfig` needs the cluster endpoint and CA, but `afs-api` never calls Kubernetes or EKS | Helm passes `AFS_CLUSTER_NAME`, `AFS_CLUSTER_ENDPOINT`, `AFS_CLUSTER_CA_DATA`, `AFS_AWS_REGION`; the kubeconfig uses `aws eks get-token` as its exec plugin | M5-E1 |
 | OQ-S6 | PRD §8 places no milestone for RC-8 (outbox publisher, partitions, retention, org mirror, purge) | Outbox, partitions, retention and purge in M1 (every later milestone emits events); the org account mirror in M4 with role links | M1-J, M4-A |
+| OQ-S7 | May `afs-api` run a read-only lookup with `afs.service_admin = 'on'` until `-db` provides the X-DB-1..3 functions (§6)? | Yes, as an interim only: one registered, named, read-only query per lookup (API key by hash, workload by namespace and ServiceAccount, team directory), actor `system:afs-api-lookup`, a test that fails on any other use; removed by M6-X0. If J says no, M1-A4 waits for X-DB-1 and M6-A3/M6-D2 wait for X-DB-2/3 | M0-F8 |
+| OQ-S8 | Six schema gaps block parts of the PRD (§6) | Requested from `-db` at M0 exit; tasks that need them depend on the adoption tasks in tasks.md *External dependencies* | tasks.md |
+
+## 6. Schema access gaps (found in the spec review)
+
+Checked against the RLS policies and grants of migrations 000001–000014 (and the unmerged 000015 on
+`-db` branch `feat/db-feature-complete`, which does not address them). Each is a `-db` request with the
+task that adopts it in tasks.md *External dependencies*.
+
+| Id | Gap | Evidence | Request |
+|---|---|---|---|
+| X-DB-1 | `afs-api` cannot find an API key by hash before it knows the caller's team | `api_keys` has only `app_team_scope` for `afs_app` (000002); service keys have `team_id` NULL, and `caller_sees_team(NULL)` is false for non-admins | SECURITY DEFINER `afs.authenticate_api_key(key_hash)` |
+| X-DB-2 | `afs-api` cannot map a workload's namespace and ServiceAccount to its team, agent or pool before scope exists | `teams`, `agents`, `agent_pools` policies for `afs_app` are team-scoped | SECURITY DEFINER `afs.resolve_workload(namespace, service_account)` |
+| X-DB-3 | Security operators see no team rows, so `ListTeamDirectory` is empty for them | `caller_sees_team` is service admin or `afs.team_ids` only (000002); no security-operator policy on `teams` | SECURITY DEFINER `afs.team_directory()` for service admins and security operators |
+| X-DB-4 | The reconciler cannot create a remediation team (RC-12) | `afs_reconciler` has `SELECT` on teams, pools and budgets and only column updates (000002, 000012, 000013) | SECURITY DEFINER `afs.instantiate_work_order_team(work_order_id)` writing rows, audit, outbox and revisions |
+| X-DB-5 | The reconciler cannot mark a pool `deleted` (RC-17) | 000002 grants `UPDATE (state, deleted_at)` on `teams` and `agents` only; 000012 grants pools `SELECT` | `GRANT UPDATE (state, deleted_at) ON afs.agent_pools TO afs_reconciler` |
+| X-DB-6 | Denied-request audit on service routes and every security operator mutation cannot be written | `audit_log` and `outbox_events` have only `app_team_scope` WITH CHECK `caller_sees_team(team_id)` for `afs_app` (000002) | `FOR INSERT` policies for rows whose `actor = afs.current_actor()` (audit) and for security operator work order events (outbox) |

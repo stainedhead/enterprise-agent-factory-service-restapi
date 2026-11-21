@@ -4,7 +4,7 @@
 |---|---|
 | **Feature** | restapi-feature-complete |
 | **Date** | 2026-11-21 |
-| **Status** | Planning complete; M0 not started |
+| **Status** | Reviewed (step 2, 2026-11-21); M0 not started |
 
 ## How to use this file
 
@@ -19,6 +19,8 @@
   criteria as `RA-US-3.2` (story RA-US-3, second bullet; catalogue in spec.md §9.1) and contract criteria
   as `CT-…` (spec.md §9.2). A partial AC is marked `(part)`: the rest is proven by the other tasks that cite
   it. **Req** names the PRD requirement (§4). **Depends** names tasks (earlier milestones are implicit).
+- **Matrix fixtures.** The M1-D6 harness enumerates implemented operations itself; each API stream adds
+  the seed data its operations need in `internal/adapter/httpapi/matrix/fixtures_<area>_test.go` (its own file).
 - **Every task is TDD:** write the AC tests first (red), implement (green), refactor; `make gate` green
   before the commit. Every route task includes allowed and denied tests per role (rows in the M1-D6 matrix
   harness). Every mutation task asserts row + audit + outbox in one transaction (CT-API-8).
@@ -30,15 +32,32 @@
 
 | Milestone | Streams | Tasks | Done |
 |---|---|---|---|
-| M0 Contract and foundation | 10 (+ exit) | 40 | 0 |
-| M1 Teams and core | 13 (+ exit) | 59 | 0 |
-| M2 Agents | 9 (+ exit) | 43 | 0 |
+| M0 Contract and foundation | 10 (+ exit) | 41 | 0 |
+| M1 Teams and core | 13 (+ exit) | 60 | 0 |
+| M2 Agents | 9 (+ exit) | 44 | 0 |
 | M3 Gateway and budgets | 9 (+ exit) | 36 | 0 |
-| M4 Accounts, tags, billing | 7 (+ exit) | 25 | 0 |
-| M5 Swarms | 6 (+ exit) | 20 | 0 |
-| M6 CVE remediation and completion | 6 (+ exit) | 25 | 0 |
-| **Total** | **60** | **248** | **0** |
+| M4 Accounts, tags, billing | 7 (+ exit) | 26 | 0 |
+| M5 Swarms | 6 (+ exit) | 21 | 0 |
+| M6 CVE remediation and completion | 6 (+ exit) | 27 | 0 |
+| **Total** | **60** | **255** | **0** |
 
+
+## External dependencies (`-db` changes this spec needs)
+
+Found in the spec review (research.md §6): the schema at 000014 does not let the four services do
+everything the PRD asks. Each item is requested from `-db` by M0-X1 (folded into the open
+`feat/db-feature-complete` PR with 000015 if it is still open, else as 000016) and adopted by the task
+named here. Items with an interim path keep their milestone unblocked; items without one block only the
+named tasks.
+
+| Id | Needed from `-db` | Why | Adopted by | Interim until adopted |
+|---|---|---|---|---|
+| X-DB-1 | `afs.authenticate_api_key(key_hash) → (id, team_id, role, expires_at)` SECURITY DEFINER for `afs_app`, also setting `last_used_at` at most once a minute | RLS hides `api_keys` rows before the caller's team scope is known | M1-D7 (used by M1-A4) | M0-F8 lookup transaction |
+| X-DB-2 | `afs.resolve_workload(namespace, service_account) → (team_id, agent_id, pool_id)` SECURITY DEFINER for `afs_app` | Same, for workload tokens (RA-2b) | M6-X0 (used by M6-D2) | M0-F8 lookup transaction |
+| X-DB-3 | `afs.team_directory() → (id, slug, display_name)` SECURITY DEFINER, only for service admins and security operators | `teams` RLS hides every team from security operators, so `ListTeamDirectory` returns nothing for them | M6-X0 (used by M6-A3) | M0-F8 lookup transaction |
+| X-DB-4 | `afs.instantiate_work_order_team(work_order_id) → team_id` SECURITY DEFINER for `afs_reconciler` (team, lifetime budget, models, stages, pools, handoffs, config from the template; audit, outbox, revisions) | `afs_reconciler` may not insert teams, budgets, pools or `team_models`, so RC-12 cannot create remediation teams | M6-E6 (used by M6-E2) | None: M6-E2 blocked |
+| X-DB-5 | `GRANT UPDATE (state, deleted_at) ON afs.agent_pools TO afs_reconciler` | The delete finalizer cannot mark a pool `deleted` (agents and teams have this grant) | M5-C6 (used by M5-C4) | None: pool delete completion blocked |
+| X-DB-6 | Insert policies on `audit_log` and `outbox_events` for `afs_app` rows whose `actor = afs.current_actor()` when `team_id` is NULL or a team the caller does not see (denied requests on service routes; security operator work order actions on any team) | `app_team_scope` WITH CHECK refuses these inserts, so RA-US-1.7, RA-US-3.4 and every security operator mutation would fail | M1-D7 (used by M1-D5, M1-B3, M6-A, M6-C) | None: the denied-audit tests for service routes and M6 security operator mutations wait |
 
 ---
 
@@ -133,7 +152,7 @@ Owns: `internal/adapter/httpapi/{server,router,errors,pagination,csv,decode,hand
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
 | [ ] | M0-D1 | Router from `routes_gen.go`; every operation registered with a placeholder (`501`, `InternalError`, `details.reason = not_implemented`); `handlers.go` lists one empty registrar per area (`teams`, `members`, `apikeys`, `me`, `agents`, `pools`, `identity`, `secrets`, `config`, `extsys`, `budgets`, `reports`, `delivery`, `audit`, `revisions`, `workorders`, `swarmtemplates`, `admin*`, `exports`); route test fails for a route without a permission or explicit `Public` | RA-US-1.1, RA-1 (part) | M0-A4 |
-| [ ] | M0-D2 | Middleware: request id (client id ≤ 64 chars echoed, else generated; in the error body), `X-Afs-Contract-Version` on every response incl. errors and `401`/`404`/`429`, error envelope and domain error → HTTP mapping, panic recovery, body limit (1 MiB; route override), strict query parameters (unknown → `ValidationError`), `teamId` from the path only (body `teamId` that differs → `ValidationError`) | RA-US-6.3 (part), RA-US-6.5 (part), RA-US-1.6, CT-API-2, CT-API-5 (part) | M0-D1, M0-A7 |
+| [ ] | M0-D2 | Middleware: request id (client id of 1–64 printable characters echoed; a longer or invalid one is replaced by a generated id, not refused; in the error body), `X-Afs-Contract-Version` on every response incl. errors and `401`/`404`/`429`, error envelope and domain error → HTTP mapping, panic recovery, body limit (1 MiB; route override), strict query parameters (unknown → `ValidationError`), `teamId` from the path only (body `teamId` that differs → `ValidationError`) | RA-US-6.3 (part), RA-US-6.5 (part), RA-US-1.6, CT-API-2, CT-API-5 (part) | M0-D1, M0-A7 |
 | [ ] | M0-D3 | Route authorization middleware applying PRD §3 in order: `401` → unbound or unknown team `404` → security operator on a team route `403` → bound without permission `403` + `details.requiredPermission` → service route `403`; hooks for denied audit and cross-team `404` metric; unit tests with fake authenticator and team lookup | RA-US-1.3 (part), RA-US-1.4 (part) | M0-D1, M0-C2 |
 | [ ] | M0-D4 | `GET /v1/openapi.yaml` (public), `GetHealth`, `GetReadiness` (injected checks: database, schema version); `cmd/afs-api` with a `wire()` component list | RA-1 (part) | M0-D1 |
 | [ ] | M0-D5 | Pagination (1–100, default 50; HMAC-signed opaque `nextToken`, expires after 24 h → `ValidationError`); CSV writer for operations flagged CSV (`Accept: text/csv`, `X-Afs-Next-Token`) | CT-API-1, CT-API-3 (part) | M0-D1 |
@@ -159,16 +178,17 @@ Owns: `internal/adapter/postgres/{db,tx,session,errors,migrate,audit,outbox,idem
 | [ ] | M0-F1 | `pgtest`: per-package fresh database, `bootstrap.RolesSQL`, `migrate.Up`, LOGIN users for `afs_owner`, `afs_app`, `afs_reconciler`, `afs_gateway`, `afs_billing`; skip when `AFS_TEST_DATABASE_URL` is unset; seed helpers | — | M0-S1 |
 | [ ] | M0-F2 | Pool (optional RDS IAM auth token), `migrate.Up` on the owner connection under the advisory lock (3 concurrent starts safe), `migrate.Version` check that refuses to start on an older schema; service roles set `afs.actor = 'system:<service>'` | CT-DB-1, CT-DB-4 | M0-F1 |
 | [ ] | M0-F3 | `TxRunner` with `SET LOCAL` session settings (`afs.actor`, `afs.service_admin`, `afs.team_ids`, `afs.security_operator`), `READ COMMITTED`, retry `40001`/`40P01` ×3 with jitter; a transaction without settings sees no team rows | RA-4 (part), RA-US-6.2, CT-DB-2 | M0-F1 |
-| [ ] | M0-F4 | SQLSTATE → domain errors (database contract §6), incl. `23503` on write vs delete and `22023` logged | CT-DB-3 | M0-F3 |
+| [ ] | M0-F4 | SQLSTATE → domain errors (database contract §6), incl. `23503` on write vs delete and `22023` logged; connection failures and statement timeouts → `503 Unavailable` | CT-DB-3 | M0-F3 |
 | [ ] | M0-F5 | `AuditWriter` (request id, actor type, before/after without secret values, outcome) and `OutboxWriter` (contract §7 envelope); row + audit + outbox in one transaction, all rolled back together; denied audit in its own transaction | CT-API-8 (part), CT-API-9 (part), RA-US-6.3 (part) | M0-F3 |
 | [ ] | M0-F6 | `IdempotencyStore` per database contract §7.1 (`in_progress`, `completed`, replay, mismatch, in progress, 5xx not stored) with `secretKey` stripping before storage | RA-US-9.1 (part), RA-US-9.3 (part) | M0-F3 |
+| [ ] | M0-F8 | Interim lookup transaction (X-DB-1..3): `TxRunner.Lookup(ctx, name, args)` runs one named, read-only (`SET TRANSACTION READ ONLY`) query with `afs.service_admin = 'on'` and actor `system:afs-api-lookup`; only the API key, workload and team directory lookups are registered; a test fails if any other query is registered or the transaction writes; removed when X-DB-1..3 are adopted | RA-2 (part), RA-2b (part) | M0-F3 |
 | [ ] | M0-F7 | Ports `TxRunner`, `Session`, `AuditWriter`, `OutboxWriter`, `IdempotencyStore`, `Clock`, `IDGen`, `SettingsReader` and their fakes in `port/fakes` | — | M0-F3 |
 
 ### M0-X · Milestone exit
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M0-X1 | Merge streams; `make gate`, `make test-db`; M0-A6 equality green (all 182 operations documented); write the contract delta list (shapes the contract does not fix, the `notification.test_requested` event of OQ-S1, `requestMetadataDroppedKeys`) into implementation-notes.md and open the root `contract` PR; notify `-cli` and `-website` that `api/openapi.yaml` 1.1.0 is on the branch; update status.md | — | all M0 |
+| [ ] | M0-X1 | Merge streams; `make gate`, `make test-db`; M0-A6 equality green (all 182 operations documented); request X-DB-1..6 from `-db`; write the contract delta list (shapes the contract does not fix, the `notification.test_requested` event of OQ-S1, `requestMetadataDroppedKeys`) into implementation-notes.md and open the root `contract` PR; notify `-cli` and `-website` that `api/openapi.yaml` 1.1.0 is on the branch; update status.md | — | all M0 |
 
 ---
 
@@ -183,10 +203,10 @@ Owns: `internal/adapter/oidc/`, `internal/usecase/auth/`, `internal/usecase/me/`
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-A1 | JWKS cache: 10 min TTL, single-flight refetch on unknown `kid`, removed key stops validating after refetch; issuer, audience, expiry checks [unit with fake JWKS] | RA-US-2.3, RA-US-2.1 (part) | — |
+| [ ] | M1-A1 | JWKS cache: 10 min TTL, single-flight refetch on unknown `kid`, removed key stops validating after refetch; issuer, audience, expiry checks with 30 s clock leeway; a JWKS fetch failure keeps using cached keys, and with none cached → `503 Unavailable` (not `401`) [unit with fake JWKS] | RA-US-2.3, RA-US-2.1 (part) | — |
 | [ ] | M1-A2 | Providers from `identity_providers` (enabled only; audiences `consoleClientId`, `cliClientId`); a disabled provider's token → `401` | RA-US-2.1 | M1-A1 |
 | [ ] | M1-A3 | Principal resolution: JIT `users` upsert (own row), bindings from `role_bindings` incl. groups (`groupsClaim`); a group binding on team A counts only when the issuer is A's provider or the default when A has none | RA-US-2.2, RA-2 | M1-A2 |
-| [ ] | M1-A4 | API key auth: `afsk_` prefix, SHA-256 lookup, expired or deleted → `401`, `lastUsedAt` written at most once a minute | RA-US-2.4 | — |
+| [ ] | M1-A4 | API key auth: `afsk_` prefix, SHA-256 lookup (through `afs.authenticate_api_key` once M1-D7 adopts X-DB-1, else the M0-F8 lookup), expired or deleted → `401`, `lastUsedAt` written at most once a minute | RA-US-2.4 | — |
 | [ ] | M1-A5 | `ListSignInProviders` (public): every enabled provider with `consoleClientId`, `cliClientId`, `isDefault`, no client secret ARN | RA-US-2.5 | M1-A2 |
 | [ ] | M1-A6 | `GetMe`: principal type, `serviceAdmin`, `securityOperator`, per bound team role and `authz.Effective` permissions (flag-dependent) for viewer, team-admin, service admin, security operator, team API key | RA-US-3a.1 (part), RA-US-3a.2, RA-3 | M1-A3, M1-A4 |
 | [ ] | M1-A7 | Authn middleware: bearer dispatch (IdP JWT, `afsk_`, later workload), `401` for missing/expired/unknown with contract headers; `Authorization` never logged | RA-US-6.5 (part), NFR Security | M1-A3, M1-A4 |
@@ -200,9 +220,9 @@ Owns: `internal/domain/team.go`, `internal/usecase/teams/`, `internal/adapter/po
 |---|---|---|---|---|
 | [ ] | M1-B1 | `Team` aggregate: guardrail field set, `kind` immutable, effective ceiling (override while unexpired), state transitions, override validation (both fields, reason, future expiry, above `maxBudgetUsd`) [unit] | RA-US-6.4 (part), RA-14 (part) | — |
 | [ ] | M1-B2 | Teams repository: insert, get, list (RLS), update with `version`, mark deleting; `team_models`, `team_tags` | RA-4 (part) | — |
-| [ ] | M1-B3 | `CreateTeam` (persistent): required tags (`details.missingTags`), models, provider, first team-admin binding, one transaction, one audit, one `team.created`; any failure writes nothing; team-admin or viewer → `403` + one denied audit | RA-US-3.1, RA-US-3.2, RA-US-3.4 | M1-B1, M1-B2 |
+| [ ] | M1-B3 | `CreateTeam` (persistent; `Idempotency-Key` replay returns the first response, a different body → `409`): required tags (`details.missingTags`), models, provider, first team-admin binding, one transaction, one audit, one `team.created`; any failure writes nothing; team-admin or viewer → `403` + one denied audit | RA-US-3.1, RA-US-3.2, RA-US-3.3, RA-US-3.4 | M1-B1, M1-B2, M1-D1, M1-D7 |
 | [ ] | M1-B4 | `ListTeams` (bound teams; service admins all), `GetTeam`, `GetTeamStatus` (from `resource_status`) | RA-1 (part), TEAM-5 | M1-B2 |
-| [ ] | M1-B5 | `UpdateTeam`: `teams:write` fields; guardrail fields need `teams:set-guardrails` (team-admin changing `isolationTier` or `viewerKubectl` → `403`); `allowedAwsAccounts` by the conditional grant; ceiling override (reason audit only, `team.ceiling_override_set`); `maxBudgetUsd` below budget → `400`; `kind` change → `400`; `team.updated` | RA-US-6.4, RA-US-12.1 (part), RA-US-13.2 (part), RA-14 (part) | M1-B3 |
+| [ ] | M1-B5 | `UpdateTeam`: `teams:write` fields; guardrail fields need `teams:set-guardrails` (team-admin changing `isolationTier` or `viewerKubectl` → `403`); `allowedAwsAccounts` by the conditional grant; ceiling override (reason audit only, `team.ceiling_override_set`); `maxBudgetUsd` below budget → `400`; `kind` change → `400`; `team.updated` | RA-US-6.4, RA-US-6.1 (part), RA-US-12.1 (part), RA-US-13.2 (part), RA-14 (part) | M1-B3, M1-D2 |
 | [ ] | M1-B6 | `SuspendTeam`/`ResumeTeam` (`teams:suspend`, team-admin allowed), `DeleteTeam` (service admin; team-admin → `403` + denied audit; returns `state = deleting`, `status.phase = Deleting`); events | RA-US-16.2 | M1-B3 |
 | [ ] | M1-B7 | Suspended-team guard: on a suspended team every mutation except `ResumeTeam` and `DeleteTeam` → `409` `details.reason = team_suspended`; reads succeed | RA-US-16.1 | M1-B6 |
 | [ ] | M1-B8 | `ListTeamModels`/`PutTeamModels` (`teams:set-guardrails`), `GetTeamTags`/`PutTeamTags` (team-owned keys only; `requestMetadataDroppedKeys` computed by `domain.TagSet.BedrockMetadata`; `team.tags_changed`) | RA-1 (part), TAG-1 (part) | M1-B3, M1-E3 |
@@ -225,11 +245,12 @@ Owns: `internal/adapter/httpapi/middleware/{idempotency,ifmatch,ratelimit,cors,d
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-D1 | Idempotency middleware for creating `POST`s and `:verb` actions (key 1–255): replay with `Idempotent-Replayed: true` writes nothing; different body → `409 idempotency_mismatch`; concurrent duplicate → `409 idempotency_in_progress` + `Retry-After: 1`; 5xx not stored; per principal | RA-US-9.1, RA-US-9.2, RA-US-3.3, CT-API-12 | — |
-| [ ] | M1-D2 | `If-Match` helpers: missing → `428`, stale → `412`, current → `200` with `ETag` + 1; PUT that creates needs none; `ETag` on every GET of a mutable resource | RA-US-6.1, CT-API-6, CT-API-13 | — |
-| [ ] | M1-D3 | Rate limiter: 20 req/s, burst 40 per principal, divided by `AFS_API_REPLICAS`; `429 Throttled` + `Retry-After`; another principal unaffected | RA-US-15.1, RA-15 | — |
+| [ ] | M1-D1 | Idempotency middleware for creating `POST`s and `:verb` actions (key 1–255): replay with `Idempotent-Replayed: true` writes nothing; different body → `409 idempotency_mismatch`; concurrent duplicate → `409 idempotency_in_progress` + `Retry-After: 1`; 5xx not stored; per principal | RA-US-9.1, RA-US-9.2, CT-API-12 | — |
+| [ ] | M1-D2 | `If-Match` helpers: missing → `428`, stale → `412`, current → `200` with `ETag` + 1; PUT that creates needs none; `ETag` on every GET of a mutable resource | RA-US-6.1 (part), CT-API-6, CT-API-13 | — |
+| [ ] | M1-D3 | Rate limiter: 20 req/s, burst 40 per principal, divided by `AFS_API_REPLICAS`; `429 Throttled` + `Retry-After`; another principal unaffected; unauthenticated requests (public routes, failed auth) limited per source IP with the same rate | RA-US-15.1, RA-15 | — |
 | [ ] | M1-D4 | CORS from `api.cors_origins` (preflight, allowed and exposed headers of contract §1, no credentials mode) | RA-US-15.2, CT-API-4 | M1-E1 |
-| [ ] | M1-D5 | Denied audit: every `403` writes one audit record (actor, operation, team when known, required permission, `denied`, request id) in its own transaction; the request transaction writes nothing; cross-team `404` counted in metric `afs_api_cross_team_not_found_total` | RA-US-1.7, RA-US-6.3 (part) | — |
+| [ ] | M1-D5 | Denied audit: every `403` writes one audit record (actor, operation, team when known, required permission, `denied`, request id) in its own transaction; the request transaction writes nothing; cross-team `404` counted in metric `afs_api_cross_team_not_found_total` | RA-US-1.7, RA-US-6.3 (part) | M1-D7 |
+| [ ] | M1-D7 | Adopt the `-db` release with X-DB-1 and X-DB-6 (bump the module, `make test-db`); denied audit on service routes and with no visible team succeeds | RA-US-1.7 (part), RA-US-3.4 (part) | X-DB-1, X-DB-6 |
 | [ ] | M1-D6 | Matrix harness: for every implemented operation × caller type (viewer, team-admin, service admin, security operator, team key per role, service key, workload, unbound user), expected outcome computed from `permissions.json` and the PRD §3 rule, asserting 2xx/404/403; each mutating op asserts row + audit + outbox (CT-API-8) | RA-US-1.3 (part), CT-API-8 (part) | — |
 
 ### M1-E · Service administration I
@@ -253,8 +274,8 @@ Owns: `internal/usecase/reconcile/engine/`, `internal/adapter/postgres/{changefe
 |---|---|---|---|---|
 | [ ] | M1-F1 | Kubernetes base: client, server-side apply (field manager `afs-reconciler`, managed labels), envtest harness with pinned CRDs (Cilium, Karpenter, ESO, Agentic Teammates OQ-7 placeholder, VolumeSnapshot) | RC-1 (part) | — |
 | [ ] | M1-F2 | Leader election on a `Lease`; readiness reports leader state; failover < 30 s [envtest] | NFR Availability | M1-F1 |
-| [ ] | M1-F3 | Change feed: `LISTEN afs_desired_state` (payload `<table>:<team_id>:<id>`), reconnect → poll; 30 s `generation <> observed_generation` poll; full resync every 10 min and at startup; pickup within 5 s, and by the poll with notifications blocked | RC-US-1.2, RC-4 | — |
-| [ ] | M1-F4 | Engine: work queue keyed `(kind, id)`, table → controller registry, backoff retries, per-team ordering; leader-only periodic job scheduler (`Every`) | RC-4 (part) | M1-F3 |
+| [ ] | M1-F3 | Change feed: `LISTEN afs_desired_state` (payload `<table>:<team_id>:<id>`), reconnect → poll; 30 s `generation <> observed_generation` poll; full resync every 10 min and at startup; pickup within 5 s, and by the poll with notifications blocked; a payload with an empty team part (service-level tables: `agent_templates`, `models`, `external_systems` catalog, `service_tags`, `storage_classes`) fans out to every affected team resource | RC-US-1.2, RC-4 | — |
+| [ ] | M1-F4 | Engine: work queue keyed `(kind, id)`, table → controller registry, per-team ordering; a failed reconcile sets `Degraded` or `Failed` with a condition whose reason carries the AWS or Kubernetes error code and retries with capped exponential backoff (1 s → 5 min, never a hot loop); leader-only periodic job scheduler (`Every`) | RC-4 (part) | M1-F3 |
 | [ ] | M1-F5 | Status writer: `resource_status` upsert with D24 vocabulary only, `observedGeneration`, conditions; `team.status_changed`/`agent.status_changed`/`pool.status_changed` on phase change | RC-5, CT-API-7 (part), CT-API-9 (part) | M1-F4 |
 | [ ] | M1-F6 | Drift: watch owned objects, revert edits and deletes within 60 s, one `drift.corrected` audit record and event, `DriftCorrected` condition | RC-US-3.1 | M1-F1, M1-F5 |
 | [ ] | M1-F7 | `cmd/afs-reconciler`: wiring list, schema version check, health, readiness, metrics | CT-DB-1 (part) | M1-F2 |
@@ -292,7 +313,7 @@ Owns: `internal/usecase/reconcile/admission/`, `internal/adapter/k8s/render/admi
 
 ### M1-I · Team lifecycle (RC-17 team part)
 
-Owns: `internal/usecase/reconcile/lifecycle/`, `internal/adapter/aws/secretsmanager/delete.go`, `internal/adapter/aws/eks/accessentry_delete.go`.
+Owns: `internal/usecase/reconcile/lifecycle/`, `internal/adapter/aws/secretsmanager/{client,delete}.go`, `internal/adapter/aws/eks/{client,accessentry_delete}.go`.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
@@ -301,7 +322,7 @@ Owns: `internal/usecase/reconcile/lifecycle/`, `internal/adapter/aws/secretsmana
 
 ### M1-J · Housekeeping (RC-8)
 
-Owns: `internal/usecase/reconcile/housekeeping/`, `internal/adapter/aws/eventbridge/putevents.go`, `internal/adapter/postgres/housekeeping.go`.
+Owns: `internal/usecase/reconcile/housekeeping/`, `internal/adapter/aws/eventbridge/{client,putevents}.go`, `internal/adapter/postgres/housekeeping.go`.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
@@ -369,14 +390,15 @@ Owns: `internal/domain/agent.go`, `internal/usecase/agents/`, `internal/adapter/
 
 ### M2-C · Secrets (RA-5)
 
-Owns: `internal/domain/secret.go`, `internal/usecase/secrets/`, `internal/adapter/aws/secretsmanager/{write,client}.go`, `internal/adapter/postgres/secrets_repo.go`,
+Owns: `internal/domain/secret.go`, `internal/usecase/secrets/`, `internal/adapter/aws/secretsmanager/{write,list}.go`, `internal/usecase/reconcile/housekeeping/orphansecrets.go`, `internal/adapter/postgres/secrets_repo.go`,
 `internal/adapter/httpapi/{h_secrets,dto_secrets}.go`, `cmd/afs-api/wire_secrets.go`, `test/fuzz/secrets/`.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
 | [ ] | M2-C1 | Secrets Manager writer adapter and fake: `CreateSecret` (name, tags `afs-team-id`, `afs-agent-id`), `PutSecretValue`, new version for rotate; `SecretValue` type never marshals or prints | RA-5 | — |
-| [ ] | M2-C2 | `CreateSecret` (team and agent scope): name from `afs.secret_path`, Secrets Manager first, then the ARN row; Secrets Manager failure → no row, `503 Unavailable` without the value | RA-US-5.1, RA-US-5.2 | M2-C1 |
-| [ ] | M2-C3 | `ListSecrets`, `GetSecret`, `UpdateSecret`, `DeleteSecret` (bound → `409` listing agents), `PutSecretValue` (`204`), `RotateSecret` (`{value}` → new version, `secret.rotated`); events carry no value | RA-1 (part), CT-API-14, SEC-4 | M2-C2 |
+| [ ] | M2-C2 | `CreateSecret` (team and agent scope): name from `afs.secret_path`, Secrets Manager first (`ClientRequestToken` derived from the idempotency key or request id, so a retry does not create a second secret), then the ARN row; Secrets Manager failure → no row, `503 Unavailable` without the value; a database failure after Secrets Manager succeeded force-deletes the new secret (compensation), and a failed compensation tags it `afs-orphan=true` and increments `afs_api_orphan_secrets_total` | RA-US-5.1, RA-US-5.2 | M2-C1 |
+| [ ] | M2-C3 | `ListSecrets`, `GetSecret`, `UpdateSecret`, `DeleteSecret` (bound → `409` listing agents), `PutSecretValue` (`204`), `RotateSecret` (`{value}` → new version, `secret.rotated`); events carry no value; Secrets Manager failure on put or rotate → `503`, metadata unchanged; a value over 64 KiB → `400` | RA-1 (part), CT-API-14, SEC-4 | M2-C2 |
+| [ ] | M2-C5 | Orphan sweep in the reconciler: secrets under `<prefix>/` tagged `afs-orphan=true` or with no database row for 1 hour are scheduled for deletion with the 30-day window; audited [adapter with fake AWS] | RA-5 (part), SEC-1 | M2-C2, M1-I1 |
 | [ ] | M2-C4 | Fuzz test over every secret route: the value never appears in a response body, header, log line, trace attribute, audit record or event | RA-US-5.3 | M2-C3, M1-L1 |
 
 ### M2-D · Configuration values
@@ -405,7 +427,7 @@ Owns: `internal/usecase/reconcile/agent/`, `internal/adapter/k8s/render/{agent,a
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M2-F1 | Agentic Teammates custom resource (pinned version, OQ-7) rendering a 1-replica StatefulSet, ServiceAccount, Pod Identity association, volume claim; pod-template hash of referenced versions [envtest] | RC-2 (part), AGT-3 | M1-G1d |
+| [ ] | M2-F1 | Agentic Teammates custom resource (pinned version, OQ-7) rendering a StatefulSet (replicas 1, or 0 when paused; restart nonce annotation as inputs from M2-G3), ServiceAccount, Pod Identity association, volume claim template with PVC retention `Retain` for scale-down and delete; pod-template hash of referenced versions [envtest] | RC-2 (part), AGT-3 | M1-G1d |
 | [ ] | M2-F2 | ConfigMap (`envFrom` + `/etc/afs/config/<NAME>`); ExternalSecrets for env and file bindings at exact targets; a secret naming an external system that is off for the agent is not delivered, and is again within 60 s of switching on [envtest] | RC-US-2.1 (part), RC-US-2.3 | M2-F1 |
 | [ ] | M2-F3 | `/etc/afs/aws/config` (each profile `role_session_name` = agent id), `/etc/afs/tags.json` and `AFS_TAGS`; gateway environment and CA bundle per gateway contract §3; optional gateway token projection; `afs-api` token projection only in teams with an assigned work order; no AWS keys [envtest] | RC-US-2.1, RC-US-2.4, RC-US-4.3 (part) | M2-F1 |
 | [ ] | M2-F4 | Rotating a secret or changing a config value changes the pod-template hash of the referencing agents only [envtest] | RC-US-2.2 | M2-F2 |
@@ -420,7 +442,7 @@ Owns: `internal/usecase/reconcile/snapshot/`, `internal/usecase/reconcile/lifecy
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M2-G1 | PVC retention `Retain`; growing `sizeGiB` patches the PVC (online expansion) [envtest]; `[e2e]` data kept | RC-US-14.5 (part), RC-16 | M2-F1 |
+| [ ] | M2-G1 | Growing `sizeGiB` patches the existing PVC (online expansion; retention is set by M2-F1) [envtest]; `[e2e]` data kept | RC-US-14.5 (part), RC-16 | M2-F1 |
 | [ ] | M2-G2 | Snapshots via `VolumeSnapshot` on the daily or weekly schedule and on manual requests, pruned to `snapshotRetain`, recorded in `agent_volume_snapshots`, tagged [envtest with fake clock] | RC-US-14.3, RC-US-14.4 | M2-F1 |
 | [ ] | M2-G3 | Pause (replicas 0, PVC kept), resume (same volume), restart (pod-template annotation) [envtest]; `[e2e]` files survive | RC-US-14.1 | M2-F1 |
 | [ ] | M2-G4 | Agent delete steps in the finalizer: `snapshot_then_delete` waits for a ready snapshot then deletes, `retain` keeps and records, `delete` deletes without snapshot; Pod Identity association and dedicated role revoked [envtest] | RC-US-14.2, RC-US-15.2 (part) | M2-G2, M1-I1 |
@@ -445,9 +467,9 @@ Owns: `internal/domain/delivery_log.go`, `internal/usecase/logdest/`, `internal/
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M2-I1 | Log destinations API: list, create (CloudWatch, S3, OTLP, Splunk HEC, Datadog; credentials only as a secret reference, inline value → `400`), get, update, delete; viewer create → `403` + denied audit, viewer list and describe allowed | RA-US-17.1, RA-US-17.2 (part) | — |
-| [ ] | M2-I2 | Redaction library: passwords, bearer tokens, AWS keys, private keys, JWTs; bound secret values → `[redacted:<first 8 hex of HMAC-SHA-256 with a per-team key>]`, deterministic [unit] | RC-US-16.2, RC-US-16.1 (part) | — |
-| [ ] | M2-I3 | Per-team Fluent Bit aggregator: routing by namespace from the node DaemonSet, one output per destination, redaction filter before every output, credentials only through an ESO Secret only the aggregator reads; outputs change within 60 s of a destination change [envtest]; `[e2e]` cases | RC-US-16.4, RC-US-16.3 (part), RC-US-16.1 (part) | M2-I1, M2-I2 |
+| [ ] | M2-I1 | Log destinations API: list, create (CloudWatch, S3, OTLP, Splunk HEC, Datadog; credentials only as a secret reference, inline value → `400`), get, update, delete; viewer create → `403` + denied audit, viewer list and describe allowed | RA-US-17.1, RA-US-17.2 (part), RC-18 (part) | — |
+| [ ] | M2-I2 | Redaction library: passwords, bearer tokens, AWS keys, private keys, JWTs; bound secret values → `[redacted:<first 8 hex of HMAC-SHA-256 with a per-team key>]`, deterministic [unit] | RC-US-16.2, RC-US-16.1 (part), RC-18 (part) | — |
+| [ ] | M2-I3 | Per-team Fluent Bit aggregator: routing by namespace from the node DaemonSet, one output per destination, redaction filter before every output, credentials only through an ESO Secret only the aggregator reads; outputs change within 60 s of a destination change [envtest]; `[e2e]` cases | RC-US-16.4, RC-US-16.3 (part), RC-US-16.1 (part), RC-18 | M2-I1, M2-I2 |
 
 ### M2-X · Milestone exit
 
@@ -464,28 +486,28 @@ Merge order: E, F, H, I, G, A, B, C, D.
 ### M3-A · Gateway identity and routing (GW-1, GW-3)
 
 Owns: `cmd/afs-gateway/`, `internal/usecase/gateway/{identity,route,model}*.go`, `internal/adapter/gatewayhttp/{server,routes,errors}.go`,
-`internal/adapter/k8s/{podcache,tokenreview}/`, `internal/adapter/aws/bedrock/runtime*.go`, `internal/adapter/aws/sts/assume.go`.
+`internal/adapter/k8s/{podcache,tokenreview}/`, `internal/adapter/aws/bedrock/runtime*.go`, `internal/adapter/aws/sts/{client,assume}.go`.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
 | [ ] | M3-A1 | `afs-gateway` binary: TLS listener, `/healthz`, `X-Afs-Gateway-Contract-Version: 1.0.0` on every response, error body of gateway contract §7, schema version check | CT-GW-1, CT-GW-10, CT-DB-1 (part) | — |
-| [ ] | M3-A2 | Pod cache: watch pods in team namespaces and Cilium endpoint identities; source IP → pod → namespace, ServiceAccount → team, agent or pool, worker pod; unknown IP → `401` [unit with fake clientset] | GW-US-6.2 (part), GW-1 | — |
-| [ ] | M3-A3 | Optional `X-Afs-Gateway-Token`: TokenReview (audience `afs-gateway`), result cached ≤ 5 min, must name the source pod, else `401` [unit with fake clock] | GW-US-6.2 (part), GW-US-6.5 | M3-A2 |
-| [ ] | M3-A4 | Paths `converse`, `converse-stream`, `invoke`, `invoke-with-response-stream`, `/anthropic/v1/messages`; SigV4 `Authorization` and `x-api-key` ignored and never logged; agent `requestMetadata` replaced; unsupported → `404`; body > 20 MB → `413`; malformed → `400`; model not enabled → `403` recorded `rejected_model`; suspended team → `403 team_suspended`; deleted team's former IP → `401` | GW-US-2.3, GW-US-6.3, CT-GW-2, CT-GW-3, CT-GW-7 | M3-A2 |
+| [ ] | M3-A2 | Pod cache: watch pods in team namespaces and Cilium endpoint identities; source IP → pod → namespace, ServiceAccount → team, agent or pool, worker pod; unknown IP → `401`; readiness waits for the initial cache sync, and a lost watch keeps serving the cache while it re-lists [unit with fake clientset] | GW-US-6.2 (part), GW-1 | — |
+| [ ] | M3-A3 | Optional `X-Afs-Gateway-Token`: TokenReview (audience `afs-gateway`), result cached ≤ 5 min, must name the source pod, else `401`; TokenReview unavailable while a token is sent → `503` (fail closed) [unit with fake clock] | GW-US-6.2 (part), GW-US-6.5 | M3-A2 |
+| [ ] | M3-A4 | Paths `converse`, `converse-stream`, `invoke`, `invoke-with-response-stream`, `/anthropic/v1/messages`; SigV4 `Authorization` and `x-api-key` ignored and never logged; agent `requestMetadata` replaced; unsupported → `404`; body > 20 MB → `413`; malformed → `400`; model not enabled → `403`; suspended team → `403 team_suspended`; deleted team's former IP → `401` | GW-US-2.3 (part), GW-US-6.3, RC-US-15.1 (part), CT-GW-2, CT-GW-3, CT-GW-7 | M3-A2 |
 | [ ] | M3-A5 | Bedrock runtime adapter: assume the team's Bedrock role (cached credentials), call through the team's inference profile, TLS to the VPC endpoint only; a pod of team A can never use team B's profile [unit] | GW-US-2.2, GW-3 (part) | M3-A4 |
 
 ### M3-B · Reservation, settlement, usage, thresholds (GW-2, GW-3, GW-4, GW-7)
 
-Owns: `internal/usecase/gateway/{reserve,settle,usage,threshold,cache}*.go`, `internal/adapter/postgres/spend.go`, `internal/adapter/postgres/usage_writer.go`.
+Owns: `internal/usecase/gateway/{service,reserve,settle,usage,threshold,cache}*.go` (`service.go` orchestrates identify → check → reserve → invoke → settle), `internal/adapter/postgres/spend.go`, `internal/adapter/postgres/usage_writer.go`.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
 | [ ] | M3-B1 | Reservation math: `maxTokens` else `max_output_tokens`, capped to it; input bytes ÷ 3; prices effective at call time [unit] | GW-US-1.4, CT-GW-4, GW-2 | — |
 | [ ] | M3-B2 | Spend adapter: `ensure_spend_counter` then `reserve_spend_held(holder = pod)`; NULL → `402 BudgetExceeded` with `budgetId`, `period`, `remainingUsd`; `settle_reservation(id, budget_id, period_start, actual)` always with the reserved budget and period; every reservation settled on success, error or abort | GW-US-6.4, RC-US-12.1 (part), CT-GW-9, GW-7 | M3-B1 |
 | [ ] | M3-B3 | Fail closed: database or reservation unavailable → `503` within 2 s, nothing sent to Bedrock [adapter] | GW-US-1.2, GW-3 | M3-B2, M3-A4 |
-| [ ] | M3-B4 | Usage writer: batched `COPY` within 1 s; `tag_set_id` current at the call (new set within 60 s of a tag change, old rows keep theirs), pool and worker pod, latency, outcomes `ok`, `error`, `rejected_budget`, `rejected_model`; no prompt or completion content stored or logged | GW-US-2.4, GW-US-2.5, GW-US-3.1, CT-GW-8 | M3-B2 |
+| [ ] | M3-B4 | Usage writer: batched `COPY` within 1 s; `tag_set_id` current at the call (new set within 60 s of a tag change, old rows keep theirs), pool and worker pod, latency, outcomes `ok`, `error`, `rejected_budget`, `rejected_model`; no prompt or completion content stored or logged | GW-US-2.3 (part), GW-US-2.4, GW-US-2.5, GW-US-3.1, CT-GW-8 | M3-B2 |
 | [ ] | M3-B5 | Thresholds: insert-once `budget_threshold_events` → one `budget.threshold_crossed` per threshold per period; one `budget.exhausted` on the first refusal at 100% (200 concurrent callers) [adapter] | GW-US-4.1, GW-4 | M3-B2 |
-| [ ] | M3-B6 | Upstream errors: Bedrock throttling → `429` with `Retry-After`; Bedrock 5xx → `502 UpstreamError` and the reservation released | CT-GW-5 | M3-B2, M3-A5 |
+| [ ] | M3-B6 | Upstream errors: Bedrock throttling → `429` with `Retry-After`; Bedrock 5xx → `502 UpstreamError` and the reservation released; a failure to assume the team's Bedrock role after reserving → reservation released, `503` | CT-GW-5 | M3-B2, M3-A5 |
 | [ ] | M3-B7 | Caches (team state, models, prices, budgets, tags) invalidated by `LISTEN afs_desired_state` and a 60 s TTL | GW-US-3.1 (part), A-8 | M3-B2 |
 
 ### M3-C · Streaming (GW-6)
@@ -548,7 +570,7 @@ Owns: `internal/domain/report.go`, `internal/usecase/reports/`, `internal/adapte
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M3-H1 | Report query parsing; ranges over two days read daily views, shorter ranges 5-minute tables [unit] | RA-US-7.2 (part) | — |
+| [ ] | M3-H1 | Report query parsing (`from` after `to`, a range over 400 days, or an unknown `groupBy` → `400`); ranges over two days read daily views, shorter ranges 5-minute tables [unit] | RA-US-7.2 (part) | — |
 | [ ] | M3-H2 | `GetUsage`, `GetTeamReport`, `GetAgentReport`, `GetServiceReport` (usage, costs, activity, traffic): totals equal the underlying sums; `groupBy=tag:<key>` one row per value plus `(untagged)`; `poolId` filter and `groupBy=pool`; traffic without cost; `notes`; viewer of A → `404` for B, `403` for service reports; deleted team readable by service admins | RA-US-7.1, RA-US-7.4, RA-US-7.6, RA-US-16.3 (part), RA-6 | M3-H1 |
 | [ ] | M3-H3 | `Accept: text/csv` returns the same rows as JSON, `X-Afs-Next-Token` | RA-US-7.3, CT-API-3 (part) | M3-H2 |
 | [ ] | M3-H4 | Report p99 < 1 s for 90 days at the initial scale [load] | RA-US-7.2 (part) | M3-H2 |
@@ -602,7 +624,7 @@ Owns: `cmd/afs-billing/`, `internal/usecase/billing/{cur,reconcile}/`, `internal
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
 | [ ] | M4-C1 | `afs-billing` binary: jobs selected by flag, schema version check, health, metrics | CT-DB-1 (part) | — |
-| [ ] | M4-C2 | CUR ingest via Athena: Bedrock by inference-profile tag, EKS split cost by namespace (incl. dedicated nodes), EBS volumes and snapshots by `afs-team-id` → `cost_daily` [adapter with fixture CUR] | BI-US-1.1 (part), BI-1 | M4-C1 |
+| [ ] | M4-C2 | CUR ingest via Athena: Bedrock by inference-profile tag, EKS split cost by namespace (incl. dedicated nodes), EBS volumes and snapshots by `afs-team-id` → `cost_daily`; rerunning a day replaces that day's rows (idempotent); an Athena failure is retried with backoff and alerts after 3 failed days [adapter with fixture CUR] | BI-US-1.1 (part), BI-1 | M4-C1 |
 | [ ] | M4-C3 | Tag sets from CUR line item tags; a day with a tag change split by line items; pool workers carry the pool | BI-US-6.1, BI-7 | M4-C2 |
 | [ ] | M4-C4 | Reconciliation per team-day: `over_threshold` above `billing.variance_alert_pct`, one `cost.variance_detected` | BI-US-1.1, BI-2 | M4-C2 |
 | [ ] | M4-C5 | `ListCosts` (team, CSV) and `ListCostReconciliations` (`admin:reports`); deleted team costs readable by service admins | RA-1 (part), RA-US-16.3 (part) | M4-C2 |
@@ -618,25 +640,26 @@ Owns: `internal/usecase/billing/prices/`, `internal/usecase/pricing/`, `internal
 
 ### M4-E · Showback and scheduled reports (BI-4, BI-5, RA-6 schedules)
 
-Owns: `internal/usecase/billing/{showback,schedules}/`, `internal/usecase/reportschedules/`, `internal/adapter/aws/s3/`, matching repo and handlers, `cmd/afs-api/wire_schedules.go`.
+Owns: `internal/usecase/billing/{showback,schedules}/`, `internal/usecase/reportschedules/`, `internal/adapter/aws/s3/{client,put,presign}.go` and its fake, matching repo and handlers, `cmd/afs-api/wire_schedules.go`.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M4-E1 | Showback CSV per month: one row per cost center and per value of a chosen tag key, totals equal `cost_daily`, `(untagged)` row; written to the reports bucket | BI-US-5.1, BI-4 | M4-C3 |
+| [ ] | M4-E4 | S3 adapter and port fake: put with SSE-KMS, pre-signed GET with expiry, list; used by billing and export bundles [adapter with `awstest`] | BI-4 (part), RC-20 (part) | — |
+| [ ] | M4-E1 | Showback CSV per month: one row per cost center and per value of a chosen tag key, totals equal `cost_daily`, `(untagged)` row; written to the reports bucket | BI-US-5.1, BI-4 | M4-C3, M4-E4 |
 | [ ] | M4-E2 | Report schedules API: list (`reports:read`), create, update, delete (`reports:schedule`); the team's own channel only (service-level or another team's channel → `400`); viewer → `403` | RA-US-7a.1, RA-US-7a.2, RA-US-15.6 (part) | — |
-| [ ] | M4-E3 | Schedule runner: due schedules produce a CSV equal to the on-demand report, stored and announced per OQ-S2 (`report.delivered`), `next_run_at` advances; failure records `failed` with the error (`report.failed`) and retries next cycle | BI-US-3.1, BI-5 | M4-E2 |
+| [ ] | M4-E3 | Schedule runner: due schedules produce a CSV equal to the on-demand report, stored and announced per OQ-S2 (`report.delivered`), `next_run_at` advances; failure records `failed` with the error (`report.failed`) and retries next cycle | BI-US-3.1, BI-5 | M4-E2, M4-E4 |
 
 ### M4-F · Export and import (RA-12, RC-20)
 
-Owns: `internal/domain/export.go`, `internal/usecase/{exports,imports}/`, `internal/usecase/reconcile/export/`, `internal/adapter/aws/s3/bundle.go`, matching repo and handlers, `cmd/afs-api/wire_exports.go`.
+Owns: `internal/domain/export.go`, `internal/usecase/{exports,imports}/`, `internal/usecase/reconcile/export/`, matching repo and handlers, `cmd/afs-api/wire_exports.go`.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
 | [ ] | M4-F1 | Bundle model: `schemaVersion`, canonical JSON, SHA-256, contents of root CFG-5; never a secret value, key hash or client secret [unit] | RA-US-14.1 (part) | — |
 | [ ] | M4-F2 | `CreateExport` (`202`, `pending`), `GetExport`, `ListExports`; non-service-admin → `403` | RA-US-14.7 (part), RA-12 | M4-F1 |
-| [ ] | M4-F3 | Bundle builder: KMS-encrypted S3 object, `sha256`, `size_bytes`, `s3_uri`, 7-day pre-signed `download_url` and `download_expires_at`, `succeeded`; failure → `failed` with summary, no checksum; `export.completed`/`export.failed`; checksum matches content [adapter with fake S3] | RC-US-17.1, RC-US-17.2, RC-US-17.3, RA-US-14.1, RC-20 | M4-F2 |
+| [ ] | M4-F3 | Bundle builder: KMS-encrypted S3 object, `sha256`, `size_bytes`, `s3_uri`, 7-day pre-signed `download_url` and `download_expires_at`, `succeeded`; failure → `failed` with summary, no checksum; `export.completed`/`export.failed`; checksum matches content [adapter with fake S3] | RC-US-17.1, RC-US-17.2, RC-US-17.3, RA-US-14.1, RC-20 | M4-F2, M4-E4 |
 | [ ] | M4-F4 | `CreateImport` dry run (default): per-team create/update/skip, secrets needing values, nothing written; checksum mismatch or body over 100 MB → `400` | RA-US-14.2, RA-US-14.4 | M4-F1 |
-| [ ] | M4-F5 | `CreateImport` apply: one transaction per team, account map, one audit per resource, role links `pending_trust`, a failed team reported with nothing written; `import.applied`; no S3 call [unit] | RA-US-14.3, RA-US-14.5 | M4-F4 |
+| [ ] | M4-F5 | `CreateImport` apply: one transaction per team, account map, one audit per resource, role links `pending_trust`, a failed team reported with nothing written (an account id missing from the account map fails that team); `import.applied`; no S3 call [unit] | RA-US-14.3, RA-US-14.5 | M4-F4 |
 
 ### M4-G · Restore (RA-13)
 
@@ -645,7 +668,7 @@ Owns: `internal/domain/revision.go`, `internal/usecase/restore/`, `internal/adap
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
 | [ ] | M4-G1 | `RestoreRevision` dry run: diff, nothing written | RA-US-14.6 (part) | — |
-| [ ] | M4-G2 | Apply in one transaction (team settings, agents, bindings, config values, external system switches, tags, budget); `generation` + 1; one audit naming the source revision; a binding to a missing secret skipped and reported; viewer → `403` | RA-US-14.6, RA-US-14.7 (part), RA-13 | M4-G1 |
+| [ ] | M4-G2 | Apply in one transaction (team settings, agents, bindings, config values, external system switches, tags, budget); `generation` + 1; one audit naming the source revision; a binding to a missing secret skipped and reported; the team row is locked for the restore so concurrent mutations serialize, and an `If-Match` on the team, when sent, is checked (`412`); viewer → `403` | RA-US-14.6, RA-US-14.7 (part), RA-13 | M4-G1 |
 
 ### M4-X · Milestone exit
 
@@ -661,7 +684,7 @@ Merge order: A, B, F, E, C, D.
 
 ### M5-A · Ephemeral teams (RA-8 team part)
 
-Owns: `internal/usecase/teams/ephemeral*.go` (new files in M1-B's package, coordinated by this stream only).
+Owns: `internal/usecase/teams/{ephemeral*.go,create.go}`, `internal/domain/team.go` (the only M5 stream touching them).
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
@@ -670,7 +693,7 @@ Owns: `internal/usecase/teams/ephemeral*.go` (new files in M1-B's package, coord
 
 ### M5-B · Pools API (RA-8 pools)
 
-Owns: `internal/domain/pool.go`, `internal/usecase/pools/`, `internal/adapter/postgres/pools_repo.go`, `internal/adapter/httpapi/{h_pools,dto_pools}.go`, `internal/usecase/secrets/pool_scope.go`, `cmd/afs-api/wire_pools.go`.
+Owns: `internal/domain/pool.go`, `internal/usecase/pools/`, `internal/adapter/postgres/pools_repo.go`, `internal/adapter/httpapi/{h_pools,dto_pools}.go`, `internal/usecase/secrets/{pool_scope,create}.go`, `cmd/afs-api/wire_pools.go`.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
@@ -691,7 +714,8 @@ Owns: `internal/usecase/reconcile/pool/`, `internal/adapter/k8s/render/pool.go`,
 | [ ] | M5-C1 | One Deployment per pool with `workers` replicas, own ServiceAccount and Pod Identity role, secrets, ConfigMap, egress policy, scratch volume, optional EFS; scaling changes replicas only [envtest] | RC-US-9.1, RC-11 | M5-B2 |
 | [ ] | M5-C2 | Inbox queue `afs-<team ulid>-<short hash>` per receiving pool; `AFS_INBOX_QUEUE_URL` and `AFS_HANDOFF_<TO_POOL>_QUEUE_URL`; only senders' roles may send, only the receiver may receive [adapter with fake AWS] | RC-US-9.2 | M5-C1 |
 | [ ] | M5-C3 | Shared named role linked and verified in each listed account | RC-US-9.3 | M5-C1 |
-| [ ] | M5-C4 | Pool pause and resume; team suspend and resume for pools (prior state kept); pool delete steps (volumes, queues) in the finalizer [envtest] | RC-US-15.1 (part), RC-US-15.2 (part), RC-17 (part) | M5-C1 |
+| [ ] | M5-C4 | Pool pause and resume; team suspend and resume for pools (prior state kept); pool delete steps (volumes, queues) in the finalizer [envtest] | RC-US-15.1 (part), RC-US-15.2 (part), RC-17 (part) | M5-C1, M5-C6 |
+| [ ] | M5-C6 | Adopt the `-db` release with X-DB-5; the finalizer marks a pool `deleted` | RC-17 (part) | X-DB-5 |
 | [ ] | M5-C5 | Pool usage, activity and traffic rows carry the pool and worker pod (collector and gateway tests extended) | GW-US-2.4 (part), RC-7 (part), AGT-8 | M5-C1 |
 
 ### M5-D · Ephemeral teardown (RC-10)
@@ -741,7 +765,7 @@ Owns: `internal/usecase/secops/`, `internal/usecase/apikeys/service*.go`, `inter
 | [ ] | M6-A1 | `ListSecurityOperators`, `AddSecurityOperator`, `RemoveSecurityOperator` (`admin:settings`); a team-admin adding one → `403` | RA-US-11.10 | — |
 | [ ] | M6-A2 | `ListServiceApiKeys`, `CreateServiceApiKey` (role `security_operator` only, secret once, replay without `secretKey`), `DeleteServiceApiKey` | RA-US-9.3 (part), RA-US-15.5 (part) | — |
 | [ ] | M6-A3 | `ListTeamDirectory` (`teams:read-directory`: id, slug, display name of every non-deleted team) | RA-US-11.1 (part), RA-1 (part) | — |
-| [ ] | M6-A4 | Security operator access: `403` on every team-scoped route for existing and unknown teams; a service key may call the work order operations, swarm list/get, directory and `GetMe` and nothing else; `GetMe` for operators | RA-US-1.4, RA-US-15.5, RA-US-3a.2 (part) | M6-A2 |
+| [ ] | M6-A4 | Security operator access: `403` on every team-scoped route for existing and unknown teams; a service key may call the work order operations, swarm list/get, directory and `GetMe` and nothing else; `GetMe` for operators | RA-US-1.4, RA-US-15.5, RA-US-3a.1 (part), RA-US-3a.2 (part), RA-US-11.1 (part) | M6-A2, M6-C4 |
 
 ### M6-B · Swarm templates
 
@@ -765,7 +789,7 @@ Owns: `internal/domain/workorder.go`, `internal/usecase/workorders/`, `internal/
 
 ### M6-D · Workload principal (RA-2b)
 
-Owns: `internal/adapter/oidc/cluster.go`, `internal/usecase/auth/workload*.go`, `internal/adapter/postgres/workload_repo.go`.
+Owns: `internal/adapter/oidc/cluster.go`, `internal/usecase/auth/workload*.go`, `internal/adapter/postgres/workload_repo.go`, `internal/adapter/httpapi/middleware/authn.go` (workload branch).
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
@@ -780,8 +804,9 @@ Owns: `internal/usecase/reconcile/workorder/`, `internal/adapter/github/`, `inte
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
 | [ ] | M6-E1 | Intake: drain the EventBridge intake queue, one work order per `source_event_id` even when delivered twice [adapter] | RC-US-10.1 | — |
-| [ ] | M6-E2 | Remediation team from the template within 2 minutes: lifetime budget = cap, expiry = TTL, rule `at_work_complete`, stages, pools, handoffs, secrets and config from the template; `work_order.assigned` [envtest] | RC-US-10.2 | — |
-| [ ] | M6-E3 | GitHub adapter (OQ-5, OQ-S4): App JWT, installation token, PR state with conditional requests; 500 repositories every 10 minutes stay under 5,000 requests per hour per installation [adapter with recorded GitHub] | RC-US-10.4 | — |
+| [ ] | M6-E2 | Remediation team from the template within 2 minutes: lifetime budget = cap, expiry = TTL, rule `at_work_complete`, stages, pools, handoffs, secrets and config from the template; `work_order.assigned` [envtest] | RC-US-10.2 | M6-E6 |
+| [ ] | M6-E6 | Adopt the `-db` release with X-DB-4 (bump the module) | RC-12 (part) | X-DB-4 |
+| [ ] | M6-E3 | GitHub adapter (OQ-5, OQ-S4): App JWT, installation token, PR state with conditional requests; 500 repositories every 10 minutes stay under 5,000 requests per hour per installation; a rate-limit `403`/`429` or a 5xx backs off until the reset time and keeps the last known state [adapter with recorded GitHub] | RC-US-10.4 | — |
 | [ ] | M6-E4 | Tracking: repositories to `pr_opened` and `merged`; all merged, not affected or skipped → work order done and team torn down; failed and cancelled; `work_order.merged`, `completed`, `failed`, `cancelled` | RC-US-10.3 | M6-E3, M6-E2 |
 | [ ] | M6-E5 | Owners notified once per event and recipient through RC-15 (assigned, PR opened, merged, SLA warning `work_orders.sla_warning_hours` before due, SLA breached, completed); outside contacts emailed through `work_orders.notification_channel_id`, nothing when unset | RC-US-10.5, RC-12 | M6-E4 |
 
@@ -793,7 +818,7 @@ Owns: `test/e2e/**`, `test/load/**`, `internal/domain/events_coverage_test.go`, 
 |---|---|---|---|---|
 | [ ] | M6-F1 | No placeholder route remains; `test/contract` replays every OpenAPI example; every §7 event type has an emission test (`events_coverage_test.go`); every response carries `X-Afs-Contract-Version` | CT-API-7, CT-API-9, RA-US-6.5, RA-1 | all M6 |
 | [ ] | M6-F2 | Full matrix: every operation × every caller type | RA-US-1.3, CT-API-8 | M6-F1 |
-| [ ] | M6-F3 | Run the `[e2e]` suite on the dev cluster: RC-US-1.1, RC-US-1a.1, RC-US-1a.4, RC-US-2.5, RC-US-2.6, RC-US-11.1, RC-US-14.1, RC-US-14.5, RC-US-16.1, RC-US-16.3, RA-US-8.1; record results | (listed) | M6-F1 |
+| [ ] | M6-F3 | Run the `[e2e]` suite on the dev cluster: RC-US-1.1, RC-US-1a.1, RC-US-1a.4, RC-US-2.5, RC-US-2.6, RC-US-11.1, RC-US-14.1, RC-US-14.5, RC-US-16.1, RC-US-16.3, RA-US-8.1; record results | RC-US-1.1 (part), RC-US-1a.1 (part), RC-US-1a.4 (part), RC-US-2.5 (part), RC-US-2.6 (part), RC-US-11.1 (part), RC-US-14.1 (part), RC-US-14.5 (part), RC-US-16.1 (part), RC-US-16.3 (part), RA-US-8.1 (part) | M6-F1 |
 | [ ] | M6-F4 | Restore drill: fresh cluster and a database restored to a point in time converge with volumes from snapshots, no manual step, within 1 hour | RC-US-3.2, NFR Recovery | M6-F3 |
 | [ ] | M6-F5 | Load at initial scale: API reads p99 < 300 ms, reports < 1 s, gateway rerun, reconcile lag p95 < 60 s for 200 teams and 2,000 agents | RA-US-7.2, GW-US-1.1, GW-US-1.3, NFR Performance | M6-F3 |
 | [ ] | M6-F6 | OWASP ASVS L2 checklist, `govulncheck`, coverage ≥ 90% on `domain`, `usecase`, `authz` | NFR Security, NFR Quality | M6-F2 |
@@ -802,4 +827,352 @@ Owns: `test/e2e/**`, `test/load/**`, `internal/domain/events_coverage_test.go`, 
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
+| [ ] | M6-X0 | After the merges: use `afs.resolve_workload` and `afs.team_directory` (X-DB-2, X-DB-3), remove `TxRunner.Lookup` and its test allowlist | RA-2b (part), RA-US-11.1 (part) | M6-E6, M6-A3, M6-D2 |
 | [ ] | M6-X1 | Merge, full gate and suites; status.md at 100% for Phase 5; hand over to step 4 (documentation) | — | all M6 |
+
+---
+
+## Appendix A · Operation → task index
+
+Every operationId of API contract §4 (182) and the task that implements its handler. The route, its
+permission and its OpenAPI entry exist from M0 (M0-A4, M0-D1, M0-B*). M6-F1 checks that no placeholder remains.
+
+| Operation | Task |
+|---|---|
+| `GetMe` | M1-A6 |
+| `ListSignInProviders` | M1-A5 |
+| `ListTeams` | M1-B4 |
+| `CreateTeam` | M1-B3, M5-A1 |
+| `GetTeam` | M1-B4 |
+| `UpdateTeam` | M1-B5 |
+| `DeleteTeam` | M1-B6 |
+| `SuspendTeam` | M1-B6 |
+| `ResumeTeam` | M1-B6 |
+| `GetTeamStatus` | M1-B4 |
+| `ListTeamModels` | M1-B8 |
+| `PutTeamModels` | M1-B8 |
+| `GetTeamTags` | M1-B8 |
+| `PutTeamTags` | M1-B8 |
+| `ListAllowedAccounts` | M4-A2 |
+| `GetTeamKubeconfig` | M5-E1 |
+| `ListTeamDirectory` | M6-A3 |
+| `ListMembers` | M1-C1 |
+| `AddMember` | M1-C1 |
+| `UpdateMember` | M1-C1 |
+| `RemoveMember` | M1-C1 |
+| `ListApiKeys` | M1-C2 |
+| `CreateApiKey` | M1-C2 |
+| `DeleteApiKey` | M1-C2 |
+| `ListServiceApiKeys` | M6-A2 |
+| `CreateServiceApiKey` | M6-A2 |
+| `DeleteServiceApiKey` | M6-A2 |
+| `ListSecurityOperators` | M6-A1 |
+| `AddSecurityOperator` | M6-A1 |
+| `RemoveSecurityOperator` | M6-A1 |
+| `ListAgents` | M2-B3 |
+| `CreateAgent` | M2-B2 |
+| `GetAgent` | M2-B3 |
+| `UpdateAgent` | M2-B3 |
+| `DeleteAgent` | M2-B3 |
+| `PauseAgent` | M2-B4 |
+| `ResumeAgent` | M2-B4 |
+| `RestartAgent` | M2-B4 |
+| `GetAgentStatus` | M2-B4 |
+| `ListAgentSnapshots` | M2-B5 |
+| `CreateAgentSnapshot` | M2-B5 |
+| `ListStorageClasses` | M2-A3 |
+| `ListAgentTemplates` | M2-A4 |
+| `ListStages` | M5-B1 |
+| `CreateStage` | M5-B1 |
+| `UpdateStage` | M5-B1 |
+| `DeleteStage` | M5-B1 |
+| `ListPools` | M5-B2 |
+| `CreatePool` | M5-B2 |
+| `GetPool` | M5-B2 |
+| `UpdatePool` | M5-B2 |
+| `DeletePool` | M5-B2 |
+| `ScalePool` | M5-B3 |
+| `PausePool` | M5-B3 |
+| `ResumePool` | M5-B3 |
+| `GetPoolStatus` | M5-B3 |
+| `ListPoolHandoffs` | M5-B4 |
+| `PutPoolHandoffs` | M5-B4 |
+| `ListPoolSecretBindings` | M5-B4 |
+| `PutPoolSecretBindings` | M5-B4 |
+| `ListPoolConfigValues` | M5-B5 |
+| `PutPoolConfigValue` | M5-B5 |
+| `DeletePoolConfigValue` | M5-B5 |
+| `ListPoolExternalSystems` | M5-B5 |
+| `PutPoolExternalSystem` | M5-B5 |
+| `ListPoolRoleLinks` | M5-B6 |
+| `CreatePoolRoleLink` | M5-B6 |
+| `DeletePoolRoleLink` | M5-B6 |
+| `VerifyPoolRoleLink` | M5-B6 |
+| `ListAgentRoleLinks` | M4-A3 |
+| `CreateAgentRoleLink` | M4-A3 |
+| `GetAgentRoleLink` | M4-A3 |
+| `DeleteAgentRoleLink` | M4-A3 |
+| `VerifyAgentRoleLink` | M4-A3 |
+| `ListAgentIdentities` | M4-A3 |
+| `CreateAgentIdentity` | M4-A3 |
+| `DeleteAgentIdentity` | M4-A3 |
+| `ListSecrets` | M2-C3 |
+| `CreateSecret` | M2-C2, M5-B4 |
+| `GetSecret` | M2-C3 |
+| `UpdateSecret` | M2-C3 |
+| `DeleteSecret` | M2-C3 |
+| `PutSecretValue` | M2-C3 |
+| `RotateSecret` | M2-C3 |
+| `ListNamespaceConfigValues` | M2-D1 |
+| `PutNamespaceConfigValue` | M2-D1 |
+| `DeleteNamespaceConfigValue` | M2-D1 |
+| `ListAgentConfigValues` | M2-D2 |
+| `PutAgentConfigValue` | M2-D2 |
+| `DeleteAgentConfigValue` | M2-D2 |
+| `ListTeamExternalSystems` | M2-E1 |
+| `SetTeamExternalSystemState` | M2-E1 |
+| `DeclareTeamExternalSystem` | M2-E2 |
+| `UpdateTeamExternalSystem` | M2-E2 |
+| `DeleteTeamExternalSystem` | M2-E2 |
+| `ListAgentExternalSystems` | M2-E3 |
+| `SetAgentExternalSystemState` | M2-E3 |
+| `GetBudget` | M3-E2 |
+| `PutBudget` | M3-E3 |
+| `GetUsage` | M3-H2 |
+| `ListCosts` | M4-C5 |
+| `GetTeamReport` | M3-H2 |
+| `GetAgentReport` | M3-H2 |
+| `GetServiceReport` | M3-H2 |
+| `ListReportSchedules` | M4-E2 |
+| `CreateReportSchedule` | M4-E2 |
+| `UpdateReportSchedule` | M4-E2 |
+| `DeleteReportSchedule` | M4-E2 |
+| `ListCostTagStatus` | M5-F2 |
+| `ListLogDestinations` | M2-I1 |
+| `CreateLogDestination` | M2-I1 |
+| `GetLogDestination` | M2-I1 |
+| `UpdateLogDestination` | M2-I1 |
+| `DeleteLogDestination` | M2-I1 |
+| `ListNotificationChannels` | M3-G1 |
+| `CreateNotificationChannel` | M3-G1 |
+| `GetNotificationChannel` | M3-G1 |
+| `UpdateNotificationChannel` | M3-G1 |
+| `DeleteNotificationChannel` | M3-G1 |
+| `TestNotificationChannel` | M3-G4 |
+| `ListAuditEvents` | M1-E4 |
+| `ListRevisions` | M1-E5 |
+| `GetRevision` | M1-E5 |
+| `RestoreRevision` | M4-G1, M4-G2 |
+| `ListWorkOrders` | M6-C4 |
+| `CreateWorkOrder` | M6-C2, M6-C3 |
+| `GetWorkOrder` | M6-C4 |
+| `UpdateWorkOrder` | M6-C4 |
+| `CancelWorkOrder` | M6-C4 |
+| `ListWorkOrderRepos` | M6-C4 |
+| `UpdateWorkOrderRepo` | M6-C5 |
+| `ListTeamWorkOrders` | M6-C4 |
+| `ListSwarmTemplates` | M6-B1 |
+| `CreateSwarmTemplate` | M6-B1 |
+| `GetSwarmTemplate` | M6-B1 |
+| `UpdateSwarmTemplate` | M6-B1 |
+| `DeleteSwarmTemplate` | M6-B1 |
+| `EnableSwarmTemplate` | M6-B1 |
+| `DisableSwarmTemplate` | M6-B1 |
+| `GetSettings` | M1-E1 |
+| `PutSetting` | M1-E1 |
+| `ListIdentityProviders` | M1-E2 |
+| `CreateIdentityProvider` | M1-E2 |
+| `GetIdentityProvider` | M1-E2 |
+| `UpdateIdentityProvider` | M1-E2 |
+| `DeleteIdentityProvider` | M1-E2 |
+| `ListServiceNotificationChannels` | M3-G2 |
+| `CreateServiceNotificationChannel` | M3-G2 |
+| `UpdateServiceNotificationChannel` | M3-G2 |
+| `DeleteServiceNotificationChannel` | M3-G2 |
+| `ListServiceTags` | M1-E3 |
+| `PutServiceTag` | M1-E3 |
+| `DeleteServiceTag` | M1-E3 |
+| `ListModels` | M2-A1 |
+| `ListAdminModels` | M2-A1 |
+| `CreateModel` | M2-A1 |
+| `UpdateModel` | M2-A1 |
+| `ListModelPrices` | M2-A2 |
+| `CreateModelPrice` | M2-A2 |
+| `ListModelPriceProposals` | M4-D2 |
+| `ApproveModelPriceProposal` | M4-D2 |
+| `RejectModelPriceProposal` | M4-D2 |
+| `ListCostReconciliations` | M4-C5 |
+| `ListCatalogSystems` | M2-A5 |
+| `CreateCatalogSystem` | M2-A5 |
+| `GetCatalogSystem` | M2-A5 |
+| `UpdateCatalogSystem` | M2-A5 |
+| `DeleteCatalogSystem` | M2-A5 |
+| `ListStorageClassesAdmin` | M2-A3 |
+| `PutStorageClass` | M2-A3 |
+| `DeleteStorageClass` | M2-A3 |
+| `ListAdminAgentTemplates` | M2-A4 |
+| `PutAgentTemplate` | M2-A4 |
+| `DeleteAgentTemplate` | M2-A4 |
+| `ListOrgAccounts` | M4-A2 |
+| `ListAdminAuditEvents` | M1-E4 |
+| `CreateExport` | M4-F2 |
+| `GetExport` | M4-F2 |
+| `ListExports` | M4-F2 |
+| `CreateImport` | M4-F4, M4-F5 |
+| `GetHealth` | M0-D4 |
+| `GetReadiness` | M0-D4 |
+
+---
+
+## Appendix B · Traceability
+
+Generated in the spec review from the *AC / Req* column above; regenerate it when tasks change. A requirement or criterion with no task here is a gap.
+
+### B.1 PRD requirements (§4) → tasks
+
+| Req | Tasks |
+|---|---|
+| RA-1 | M0-A1, M0-A4, M0-A5, M0-A7, M0-B1b, M0-B2a, M0-B2b, M0-B3a, M0-B3b, M0-B4a, M0-B4b, M0-D1, M0-D4, M1-B4, M1-B8, M1-C1, M1-E3, M1-E4, M1-E5, M2-A1, M2-A2, M2-A3, M2-A4, M2-A5, M2-B3, M2-B4, M2-B5, M2-C3, M2-D1, M2-E1, M2-E3, M3-E2, M4-A2, M4-A3, M4-C5, M5-B1, M5-B4, M5-B5, M6-A3, M6-F1 |
+| RA-1a | M0-A2, M0-C1 |
+| RA-2 | M0-F8, M1-A3 |
+| RA-2b | M0-F8, M6-D2, M6-X0 |
+| RA-3 | M0-C4, M1-A6 |
+| RA-4 | M0-S1, M0-F3, M1-B2, M1-C2 |
+| RA-5 | M2-C1, M2-C5 |
+| RA-6 | M3-H2 |
+| RA-7 | M4-D2 |
+| RA-8 | M5-A1 |
+| RA-9 | M6-B1 |
+| RA-10 | M5-E1 |
+| RA-11 | M5-F2 |
+| RA-12 | M4-F2 |
+| RA-13 | M4-G2 |
+| RA-14 | M1-B1, M1-B5, M3-E1 |
+| RA-15 | M1-D3 |
+| RA-16 | M0-A3, M1-E1 |
+| RC-1 | M1-F1, M1-G1a, M1-G1b, M1-G1c, M1-G2b, M1-G2c |
+| RC-2 | M0-E1, M1-G2d, M2-F1, M2-F7 |
+| RC-3 | M0-E1, M4-A4 |
+| RC-4 | M1-F3, M1-F4 |
+| RC-5 | M1-F5, M2-F6 |
+| RC-6 | M3-F5 |
+| RC-7 | M2-H2, M3-I1, M5-C5 |
+| RC-8 | M1-J2 |
+| RC-9 | M0-E2, M4-B1 |
+| RC-10 | M5-D1 |
+| RC-11 | M5-C1 |
+| RC-12 | M6-E6, M6-E5 |
+| RC-13 | M5-E2 |
+| RC-14 | M3-F1 |
+| RC-15 | M3-G3 |
+| RC-16 | M2-G1, M2-G5 |
+| RC-17 | M1-I1, M1-I2, M5-C4, M5-C6 |
+| RC-18 | M2-I1, M2-I2, M2-I3 |
+| RC-19 | M1-H1 |
+| RC-20 | M4-E4, M4-F3 |
+| GW-1 | M3-A1, M3-A2 |
+| GW-2 | M3-A4, M3-B1, M3-D2 |
+| GW-3 | M3-A4, M3-A5, M3-B3 |
+| GW-4 | M3-B1, M3-B5 |
+| GW-5 | M0-E2, M3-B6, M4-B2 |
+| GW-6 | M3-C1, M3-C3 |
+| GW-7 | M3-A4, M3-B2, M3-F3 |
+| BI-1 | M4-C2 |
+| BI-2 | M4-C4 |
+| BI-3 | M4-D1 |
+| BI-4 | M4-E4, M4-E1 |
+| BI-5 | M4-E3 |
+| BI-6 | M5-F1 |
+| BI-7 | M4-C3 |
+| DP-1 | M1-K1, M1-K2 |
+
+### B.2 PRD acceptance criteria (§5) → tasks
+
+| Story | Criteria → tasks |
+|---|---|
+| RA-US-1 | .1 M0-D1; .2 M0-A2 M0-C1; .3 M0-D3 M1-C3 M1-D6 M2-B7 M5-B7 M6-F2; .4 M0-C2 M0-D3 M6-A4; .5 M0-C3 M2-E2; .6 M0-D2; .7 M1-D5 M1-D7 |
+| RA-US-2 | .1 M1-A1 M1-A2; .2 M1-A3; .3 M1-A1; .4 M1-A4; .5 M1-A5 |
+| RA-US-2b | .1 M6-D3; .2 M0-C2 M6-D3; .3 M6-D1; .4 M0-S3 M6-D1 |
+| RA-US-3 | .1 M1-B3; .2 M1-B3; .3 M1-B3; .4 M1-B3 M1-D7 |
+| RA-US-3a | .1 M0-C4 M1-A6 M6-A4 M6-D2; .2 M0-C4 M1-A6 M6-A4 |
+| RA-US-4 | .1 M0-S2 M2-B1 M2-B2; .2 M2-B1; .3 M2-B2 M5-B2; .4 M2-A4; .5 M2-B6 M2-F6; .6 M0-A6 M0-B2a |
+| RA-US-5 | .1 M2-C2; .2 M2-C2; .3 M2-C4; .4 M0-S3 |
+| RA-US-6 | .1 M1-B5 M1-D2; .2 M0-F3; .3 M0-D2 M0-F5 M1-D5; .4 M1-B1 M1-B5; .5 M0-A7 M0-D2 M0-D6 M1-A7 M6-F1 |
+| RA-US-7 | .1 M3-H2; .2 M3-H1 M3-H4 M6-F5; .3 M3-H3; .4 M3-H2; .5 M3-E1; .6 M3-H2 |
+| RA-US-7a | .1 M4-E2; .2 M4-E2 |
+| RA-US-8 | .1 M4-D2 M6-F3; .2 M4-D2 |
+| RA-US-9 | .1 M0-F6 M1-D1; .2 M1-D1; .3 M0-F6 M1-C2 M6-A2 |
+| RA-US-10 | .1 M5-A1; .2 M5-A2; .3 M5-B2 M5-B3; .4 M5-B6; .5 M5-B7 |
+| RA-US-11 | .1 M6-A3 M6-A4 M6-B1 M6-C4 M6-X0; .2 M6-C2; .3 M6-C2; .4 M6-C2; .5 M6-C2; .6 M6-C3; .7 M6-C3; .8 M6-C4; .9 M6-C1 M6-C5; .10 M6-A1 |
+| RA-US-12 | .1 M1-B5 M5-E1 |
+| RA-US-13 | .1 M3-E3; .2 M1-B5 M3-E3; .3 M3-E3 |
+| RA-US-14 | .1 M4-F1 M4-F3; .2 M4-F4; .3 M4-F5; .4 M4-F4; .5 M0-S3 M4-F5; .6 M4-G1 M4-G2; .7 M4-F2 M4-G2 |
+| RA-US-15 | .1 M1-D3; .2 M1-D4; .3 M1-E1; .4 M1-E2; .5 M0-C2 M6-A2 M6-A4; .6 M3-G2 M4-E2 |
+| RA-US-16 | .1 M1-B7; .2 M1-B6; .3 M1-B9 M3-H2 M4-C5; .4 M1-I1 |
+| RA-US-17 | .1 M2-I1; .2 M2-I1 M3-G1; .3 M3-G4 |
+| RA-US-18 | .1 M5-F2; .2 M1-E1 M5-F2 |
+| RC-US-1 | .1 M1-G1d M6-F3; .2 M1-F3; .3 M2-F6; .4 M1-G2b |
+| RC-US-1a | .1 M1-H1 M6-F3; .2 M1-H1; .3 M1-H2; .4 M1-G1b M6-F3 |
+| RC-US-2 | .1 M2-F2 M2-F3; .2 M2-F4; .3 M2-F2; .4 M2-F3; .5 M2-F8 M6-F3; .6 M2-F5 M6-F3 |
+| RC-US-3 | .1 M1-F6; .2 M2-G5 M6-F4 |
+| RC-US-4 | .1 M4-A4; .2 M4-A5; .3 M2-F3 M4-A4 |
+| RC-US-5 | .1 M2-H1; .2 M2-H2; .3 M2-H3 |
+| RC-US-6 | .1 M3-I1 |
+| RC-US-7 | .1 M4-B1; .2 M4-B1 |
+| RC-US-8 | .1 M5-D1 |
+| RC-US-9 | .1 M5-C1; .2 M5-C2; .3 M5-C3 |
+| RC-US-10 | .1 M6-E1; .2 M6-E2; .3 M6-E4; .4 M6-E3; .5 M6-E5 |
+| RC-US-11 | .1 M5-E2 M6-F3 |
+| RC-US-12 | .1 M3-B2 M3-F1; .2 M3-F2 M3-F5; .3 M3-F5; .4 M3-F3; .5 M3-F4 |
+| RC-US-13 | .1 M3-G3; .2 M3-G3; .3 M3-G4; .4 M3-G3 |
+| RC-US-14 | .1 M2-G3 M6-F3; .2 M2-G4; .3 M2-G2; .4 M2-G2; .5 M2-G1 M6-F3 |
+| RC-US-15 | .1 M1-I2 M2-G6 M3-A4 M5-C4; .2 M1-I1 M2-G4 M5-C4; .3 M1-I1 |
+| RC-US-16 | .1 M2-I2 M2-I3 M6-F3; .2 M2-I2; .3 M2-I3 M6-F3; .4 M2-I3; .5 M2-H4 |
+| RC-US-17 | .1 M4-F3; .2 M4-F3; .3 M4-F3 |
+| RC-US-18 | .1 M1-J1; .2 M1-J2; .3 M4-A1; .4 M1-J3 |
+| GW-US-1 | .1 M3-D3 M6-F5; .2 M3-B3; .3 M3-D3 M6-F5; .4 M3-B1 |
+| GW-US-2 | .1 M4-B2; .2 M3-A5; .3 M3-A4 M3-B4; .4 M3-B4 M5-C5; .5 M3-B4 |
+| GW-US-3 | .1 M3-B4 M3-B7 |
+| GW-US-4 | .1 M3-B5 |
+| GW-US-5 | .1 M3-C1 M3-C2; .2 M3-C3; .3 M3-C3 |
+| GW-US-6 | .1 M3-D2; .2 M3-A2 M3-A3; .3 M3-A4; .4 M3-B2; .5 M3-A3 |
+| BI-US-1 | .1 M4-C2 M4-C4 |
+| BI-US-2 | .1 M4-D1 |
+| BI-US-3 | .1 M4-E3 |
+| BI-US-4 | .1 M5-F1 |
+| BI-US-5 | .1 M4-E1 |
+| BI-US-6 | .1 M4-C3 |
+
+### B.3 Contract criteria → tasks
+
+| AC | Tasks |
+|---|---|
+| CT-API-1 | M0-B1a, M0-D5 |
+| CT-API-2 | M0-D2 |
+| CT-API-3 | M0-B3a, M0-D5, M1-E4, M3-H3 |
+| CT-API-4 | M1-D4 |
+| CT-API-5 | M0-A3, M0-A6, M0-B1a, M0-D2 |
+| CT-API-6 | M0-B1a, M1-D2 |
+| CT-API-7 | M0-D6, M1-F5, M6-F1 |
+| CT-API-8 | M0-F5, M1-D6, M6-F2 |
+| CT-API-9 | M0-A3, M0-F5, M1-F5, M1-J1, M6-F1 |
+| CT-API-10 | M0-S2 |
+| CT-API-11 | M0-S2 |
+| CT-API-12 | M1-D1 |
+| CT-API-13 | M1-D2 |
+| CT-API-14 | M2-C3 |
+| CT-API-15 | M1-E1 |
+| CT-DB-1 | M0-F2, M1-F7, M3-A1, M4-C1 |
+| CT-DB-2 | M0-F3 |
+| CT-DB-3 | M0-F4 |
+| CT-DB-4 | M0-F2 |
+| CT-GW-1 | M3-A1 |
+| CT-GW-2 | M3-A4, M3-D2 |
+| CT-GW-3 | M3-A4 |
+| CT-GW-4 | M3-B1 |
+| CT-GW-5 | M3-B6 |
+| CT-GW-6 | M3-C3 |
+| CT-GW-7 | M3-A4 |
+| CT-GW-8 | M3-B4 |
+| CT-GW-9 | M3-B2 |
+| CT-GW-10 | M3-A1 |

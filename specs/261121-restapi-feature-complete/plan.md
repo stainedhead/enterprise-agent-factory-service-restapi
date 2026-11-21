@@ -82,8 +82,9 @@ Coverage: `make cover` gate ≥ 90% for `domain`, `usecase`, `authz` (extended t
   (pseudo-version of `b0d8754`, migrations 000001–000014). `afs-api` embeds `migrations.FS` and runs
   `migrate.Up`; others check `migrate.Version` ≥ 14.
 - When `-db` tags `v0.13.0` at or after `b0d8754`, switch to the tag in the next milestone's first task.
-- A later 000015: a task in the milestone that needs it bumps the version, runs `make test-db`, and adjusts
-  repositories. Nothing in this spec depends on 000015.
+- A later 000015 (in progress on `-db` branch `feat/db-feature-complete`, not needed by this spec) or 000016:
+  this spec needs the six changes X-DB-1..6 (research.md §6), requested at M0 exit and adopted by M1-D7,
+  M5-C6, M6-E6 and M6-X0. Each adoption bumps the module, runs `make test-db`, and adjusts repositories.
 
 ## 7. Success metrics
 

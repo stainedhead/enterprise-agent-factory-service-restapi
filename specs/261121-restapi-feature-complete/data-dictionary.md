@@ -78,7 +78,7 @@ package. Every port has an in-memory fake in `internal/usecase/port/fakes` (cros
 
 | Port | Package | Methods (summary) | Adapters |
 |---|---|---|---|
-| `TxRunner` | port | `InTx(ctx, Session, func(Tx) error)` with session settings, retry of `40001`/`40P01` ×3 | postgres |
+| `TxRunner` | port | `InTx(ctx, Session, func(Tx) error)` with session settings, retry of `40001`/`40P01` ×3; interim `Lookup(ctx, name, args)` for the registered read-only lookups (M0-F8, removed by M6-X0) | postgres |
 | `Session` | port | actor, serviceAdmin, teamIDs, securityOperator | — |
 | `AuditWriter`, `OutboxWriter` | port | `Write(ctx, Tx, AuditRecord)`, `Publish(ctx, Tx, Event)`; denied audit in its own transaction | postgres |
 | `IdempotencyStore` | port | `Begin`, `Complete`, `Lookup` per database contract §7.1 | postgres |

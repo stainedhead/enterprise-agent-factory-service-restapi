@@ -14,12 +14,12 @@
 
 | Phase | Name | Status | Notes |
 |---|---|---|---|
-| 0 | Initial research (PRD) | In Progress | PRD reviewed twice before this run |
-| 1 | Specification (`spec.md`) | Not Started | |
-| 2 | Research and data modeling | Not Started | |
-| 3 | Architecture and planning | Not Started | |
-| 4 | Task breakdown | Not Started | |
-| 5 | Implementation (M0–M6) | Not Started | Task progress in tasks.md |
+| 0 | Initial research (PRD) | Complete | PRD reviewed twice before this run |
+| 1 | Specification (`spec.md`) | Complete | Reviewed in step 2 |
+| 2 | Research and data modeling | Complete | research.md, data-dictionary.md |
+| 3 | Architecture and planning | Complete | architecture.md, plan.md |
+| 4 | Task breakdown | Complete | tasks.md: 60 streams, 255 tasks |
+| 5 | Implementation (M0–M6) | Not Started | Next: M0. Task progress in tasks.md |
 | 6 | Completion and archival | Not Started | |
 
 ## Phase 0 checklist
@@ -42,8 +42,10 @@
 
 ## Blockers
 
-None.
+- X-DB-4, X-DB-5, X-DB-6 (`-db` changes, research.md §6) block M6-E2, pool delete completion (M5-C4) and the
+  denied-audit and security operator writes (M1-D7). Requested at M0 exit.
 
 ## Recent activity
 
 - 2026-11-21: spec created by `create-spec` (step 1 of `implm-frm-prd`).
+- 2026-11-21: `review-spec` (step 2): gaps fixed; Phases 0–4 complete; implementation-ready.
