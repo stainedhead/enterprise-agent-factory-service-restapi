@@ -131,7 +131,7 @@ Minor ones are fixed if quick, otherwise recorded as a task in the active spec.
 
 ## Agent workflow
 
-1. **Understand:** read the root `docs/solution-design.md`, this file and the active spec.
+1. **Understand:** this repository's PRD (`enterprise-agent-factory-service-restapi-PRD.md`), the shared contracts in the root's `docs/contracts/`, the root `docs/solution-design.md`, this file and the active spec.
 2. **Plan:** name the affected layers (domain, usecase, adapter, cmd).
 3. **Red → Green → Refactor.**
 4. **Quality gate:** `make gate`.
