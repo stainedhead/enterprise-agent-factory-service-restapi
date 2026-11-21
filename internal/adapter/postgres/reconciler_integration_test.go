@@ -332,3 +332,49 @@ func TestDriftRecorder(t *testing.T) {
 		t.Errorf("event = %v", m)
 	}
 }
+
+// M1-G1d: the team source reads the row, quotas and enabled models, and records an inference profile ARN.
+func TestTeamSource(t *testing.T) {
+	db := pgtest.Get(t)
+	tm := db.SeedTeam(t)
+	admin := db.Admin(t)
+	ctx := t.Context()
+	model := "m-" + tm.Slug
+	if _, err := admin.Exec(ctx, `INSERT INTO afs.models (id, provider, display_name) VALUES ($1, 'Anthropic', 'M'), ($1 || '-off', 'Anthropic', 'Off')`, model); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(ctx, `UPDATE afs.models SET enabled = false WHERE id = $1 || '-off'`, model); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(ctx, `INSERT INTO afs.team_models (team_id, model_id) VALUES ($1, $2), ($1, $2 || '-off')`, tm.ID, model); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(ctx, `UPDATE afs.teams SET quotas = '{"cpu":"8","memory":"16Gi","pods":20}' WHERE id = $1`, tm.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	src := postgres.NewTeamSource(reconcilerPool(t, db))
+	got, err := src.LoadTeam(ctx, tm.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Slug != tm.Slug || got.Namespace != "afs-t-"+tm.Slug || got.Quotas.CPU != "8" || got.Quotas.Pods != 20 || got.State != "active" {
+		t.Errorf("team = %+v", got)
+	}
+	if len(got.Models) != 1 || got.Models[0].ID != model || got.Models[0].ProfileARN != "" {
+		t.Errorf("only enabled catalog models are returned: %+v", got.Models)
+	}
+	arn := "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/abc"
+	if err := src.SetInferenceProfileARN(ctx, tm.ID, model, arn); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = src.LoadTeam(ctx, tm.ID); got.Models[0].ProfileARN != arn {
+		t.Errorf("ARN not recorded: %+v", got.Models)
+	}
+	if err := src.SetInferenceProfileARN(ctx, tm.ID, "nope", arn); err == nil {
+		t.Errorf("unknown model: %v", err)
+	}
+	if _, err := src.LoadTeam(ctx, "team_01JD0000000000000000009999"); err == nil {
+		t.Error("an unknown team must be NotFound")
+	}
+}

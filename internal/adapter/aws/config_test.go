@@ -59,7 +59,7 @@ func TestWrapErrorAndNotFound(t *testing.T) {
 		t.Error("nil")
 	}
 	plain := errors.New("x")
-	if WrapError(plain) != plain {
+	if !errors.Is(WrapError(plain), plain) {
 		t.Error("non-AWS error changed")
 	}
 	if got := WrapError(fmt.Errorf("op: %w", apiErr("Throttling"))); engine.CodeOf(got) != "Throttling" {

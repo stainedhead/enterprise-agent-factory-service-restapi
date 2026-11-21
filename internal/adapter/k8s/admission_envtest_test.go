@@ -43,6 +43,7 @@ func asUser(t *testing.T, user string) kubernetes.Interface {
 
 func installAdmission(t *testing.T, c *k8s.Client) {
 	t.Helper()
+	t.Cleanup(func() { removeAdmission(c) })
 	envtesting.EnsureNamespace(t, env.Config, admNS, map[string]string{render.LabelTeamNamespace: "true", render.LabelTeamID: admTeam})
 	envtesting.EnsureNamespace(t, env.Config, "adm-free", nil)
 	if _, err := k8s.NewAdmissionCluster(c).ApplyAdmission(t.Context(), admission.Spec{ReconcilerUsers: []string{reconciler}}); err != nil {
@@ -82,6 +83,15 @@ func waitEnforced(t *testing.T, agent kubernetes.Interface) {
 			n++
 			return apierrors.IsForbidden(probe(n)) || apierrors.IsInvalid(probe(n))
 		})
+	}
+}
+
+// removeAdmission deletes the policies afterwards: they are cluster-wide and would refuse the other
+// suites' network policies, which are applied as an administrator.
+func removeAdmission(c *k8s.Client) {
+	for _, n := range render.AdmissionPolicyNames {
+		_ = c.Delete(context.Background(), gvkVAPB, "", n+"-binding")
+		_ = c.Delete(context.Background(), gvkVAP, "", n)
 	}
 }
 
@@ -215,7 +225,8 @@ func TestAdmissionPolicies(t *testing.T) {
 func TestAdmissionPolicyRestored(t *testing.T) {
 	c := newClient(t)
 	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
+	t.Cleanup(func() { removeAdmission(c) })
+	t.Cleanup(cancel) // runs first: the engine must stop before the policies are removed
 	ctl, err := admission.NewController(k8s.NewAdmissionCluster(c), admission.Spec{ReconcilerUsers: []string{reconciler}})
 	if err != nil {
 		t.Fatal(err)

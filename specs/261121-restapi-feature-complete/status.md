@@ -69,3 +69,4 @@
 - 2026-11-21: M1-G1a..G1d: team environment applied by TeamCluster and team controller; envtest TestTeamEnvironmentConverges (e2e cases deferred to the cluster suite)
 - 2026-11-21: M1-F6: drift end-to-end (watcher, engine, DriftCorrected); engine now matches drift flags after the pass (race fix); envtest TestDriftIsRevertedAndRecordedOnce
 - 2026-11-21: M1-H1, M1-H2: admission policies and bindings (usecase/reconcile/admission, render/admission.go, AdmissionCluster); envtest TestAdmissionPolicies and TestAdmissionPolicyRestored ([e2e] case deferred to the cluster suite)
+- 2026-11-21: M1-F7: cmd/afs-reconciler wired (settings, schema check with afs.schema_version fallback, leader election, probes, metrics); user-docs/reconciler.md; render and TeamSource tests added

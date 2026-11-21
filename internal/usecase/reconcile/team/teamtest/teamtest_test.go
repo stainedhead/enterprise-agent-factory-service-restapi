@@ -1,6 +1,7 @@
 package teamtest
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
@@ -25,10 +26,10 @@ func TestSourceCluster(t *testing.T) {
 	}
 	c := &Cluster{Changed: []string{"a"}, Err: ErrBoom}
 	res, err := c.ApplyTeam(t.Context(), team.Environment{})
-	if err != ErrBoom || len(res.Changed) != 1 || len(c.Envs) != 1 {
+	if !errors.Is(err, ErrBoom) || len(res.Changed) != 1 || len(c.Envs) != 1 {
 		t.Errorf("ApplyTeam = %+v, %v", res, err)
 	}
-	if _, err := c.ApplyPlatform(t.Context(), team.PlatformSpec{}); err != ErrBoom || len(c.Platforms) != 1 {
+	if _, err := c.ApplyPlatform(t.Context(), team.PlatformSpec{}); !errors.Is(err, ErrBoom) || len(c.Platforms) != 1 {
 		t.Errorf("ApplyPlatform: %v", err)
 	}
 }
@@ -45,7 +46,7 @@ func TestIAMAndProfiles(t *testing.T) {
 		t.Error("role not stored")
 	}
 	i.Err, i.ErrRole = ErrBoom, "afs-Y"
-	if _, err := i.EnsureRole(t.Context(), team.RoleSpec{Name: "afs-Y"}); err != ErrBoom {
+	if _, err := i.EnsureRole(t.Context(), team.RoleSpec{Name: "afs-Y"}); !errors.Is(err, ErrBoom) {
 		t.Errorf("ErrRole ignored: %v", err)
 	}
 	if _, err := i.EnsureRole(t.Context(), team.RoleSpec{Name: "afs-X"}); err != nil {

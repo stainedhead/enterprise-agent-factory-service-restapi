@@ -118,7 +118,7 @@ func TestWrapGivesReasonAsCode(t *testing.T) {
 		t.Error("nil")
 	}
 	plain := errors.New("x")
-	if wrap(plain) != plain {
+	if !errors.Is(wrap(plain), plain) {
 		t.Error("non-API errors pass through")
 	}
 }
