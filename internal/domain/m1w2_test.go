@@ -327,7 +327,7 @@ func TestValidateTeamTags(t *testing.T) {
 }
 
 func TestIdentityProviderValidate(t *testing.T) {
-	ok := IdentityProvider{Kind: IdPKindOkta, Name: "Okta", IssuerURL: "https://example.okta.com", ConsoleClientID: "c", GroupsClaim: "groups", Enabled: true, IsDefault: true,
+	ok := IdentityProvider{Kind: IdPKindOkta, Name: "Okta", IssuerURL: "https://example.okta.com", ConsoleClientID: "c", GroupsClaim: "groups", Enabled: true, IsDefault: true, //nolint:gosec // an example ARN, not a credential
 		ClientSecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:x-AbCd"}
 	if err := ok.Validate(); err != nil {
 		t.Fatal(err)

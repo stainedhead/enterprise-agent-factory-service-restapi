@@ -109,7 +109,7 @@ func w2Replay(w http.ResponseWriter, st *port.StoredResponse) {
 		w.Header().Set("ETag", domain.Version(*v.Version).ETag())
 	}
 	w.WriteHeader(st.Status)
-	_, _ = w.Write(st.Body)
+	_, _ = w.Write(st.Body) //nolint:gosec // st.Body is this API's own stored JSON response, not request data
 }
 
 // w2Renderer produces the status and body of a stored response.

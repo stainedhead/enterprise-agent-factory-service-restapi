@@ -244,7 +244,7 @@ func (*TeamRepo) InsertBudget(ctx context.Context, tx port.Tx, teamID string, b 
 	}
 	th := make([]int16, len(b.Thresholds))
 	for i, v := range b.Thresholds {
-		th[i] = int16(v)
+		th[i] = int16(v) //nolint:gosec // thresholds are 1 to 100, checked by the database
 	}
 	if len(th) == 0 {
 		th = []int16{50, 80, 100}
