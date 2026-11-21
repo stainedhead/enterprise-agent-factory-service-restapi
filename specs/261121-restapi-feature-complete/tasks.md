@@ -286,10 +286,10 @@ Owns: `internal/usecase/reconcile/team/`, `internal/adapter/k8s/render/{namespac
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-G1a | Namespace `afs-t-<slug>`, Pod Security `restricted` labels, ResourceQuota and LimitRange from `quotas` [envtest] | RC-1 (part), TEAM-2 | M1-F1 |
-| [ ] | M1-G1b | Default-deny NetworkPolicies; Cilium policies allowing DNS and `afs-gateway`; Cilium ingress policy on `afs-gateway` admitting only `afs-t-*` pods (D57) [envtest]; `[e2e]` case for RC-US-1a.4 | RC-1 (part), RC-US-1a.4 (part) | M1-F1 |
-| [ ] | M1-G1c | ESO `SecretStore` bound to the team role; gateway CA bundle ConfigMap copied into the namespace | RC-1 (part) | M1-F1 |
-| [ ] | M1-G1d | Team controller: compose Kubernetes and AWS ports, conditions `NamespaceReady`, `IamReady`, `Ready` with `observedGeneration = generation` within 60 s p95 [envtest]; `[e2e]` case | RC-US-1.1 (part) | M1-G1a, M1-G1b, M1-G1c, M1-G2b, M1-G2c |
+| [x] | M1-G1a | Namespace `afs-t-<slug>`, Pod Security `restricted` labels, ResourceQuota and LimitRange from `quotas` [envtest] | RC-1 (part), TEAM-2 | M1-F1 |
+| [x] | M1-G1b | Default-deny NetworkPolicies; Cilium policies allowing DNS and `afs-gateway`; Cilium ingress policy on `afs-gateway` admitting only `afs-t-*` pods (D57) [envtest]; `[e2e]` case for RC-US-1a.4 | RC-1 (part), RC-US-1a.4 (part) | M1-F1 |
+| [x] | M1-G1c | ESO `SecretStore` bound to the team role; gateway CA bundle ConfigMap copied into the namespace | RC-1 (part) | M1-F1 |
+| [x] | M1-G1d | Team controller: compose Kubernetes and AWS ports, conditions `NamespaceReady`, `IamReady`, `Ready` with `observedGeneration = generation` within 60 s p95 [envtest]; `[e2e]` case | RC-US-1.1 (part) | M1-G1a, M1-G1b, M1-G1c, M1-G2b, M1-G2c |
 
 ### M1-G2 · Team environment, AWS side (RC-1)
 
