@@ -25,6 +25,8 @@ type Config struct {
 	Teams TeamLookup
 	// Hooks observe denials and cross-team 404s.
 	Hooks Hooks
+	// TeamState feeds the suspended-team guard (M1-B7); nil disables it.
+	TeamState TeamStateLookup
 	// Ready maps a dependency name to its readiness check (GetReadiness).
 	Ready map[string]ReadinessCheck
 	// Registrars bind handlers; the default is Areas.
@@ -97,7 +99,7 @@ func New(cfg Config) (http.Handler, error) {
 	}
 	mux := http.NewServeMux()
 	mount(mux, ops, func(op *operation) http.Handler {
-		inner := chain(authorize(op, cfg.Auth, cfg.Teams, cfg.Hooks, chain(op.handler, cfg.PostAuth)), cfg.PreAuth)
+		inner := chain(authorize(op, cfg.Auth, cfg.Teams, cfg.Hooks, suspendedGuard(op, cfg.TeamState, chain(op.handler, cfg.PostAuth))), cfg.PreAuth)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			r = r.WithContext(context.WithValue(r.Context(), keyRoute, op))
 			if err := checkQuery(op, r); err != nil {

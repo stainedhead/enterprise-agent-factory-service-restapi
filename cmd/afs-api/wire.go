@@ -117,6 +117,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 			return nil, err
 		}
 		wireAuth(c, &cfg, p, s)
+		wireM1W2(c, &cfg, log)
 	}
 	if cfg.Hooks.CrossTeamNotFound == nil {
 		cfg.Hooks.CrossTeamNotFound = func(ctx context.Context, op string) {
