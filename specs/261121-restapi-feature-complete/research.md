@@ -91,6 +91,20 @@ Pod Identity association and prints the session tags seen by `sts:GetCallerIdent
 from a chained role, and creates an EBS volume through the CSI driver and counts its tags. Until the probe
 runs, the defaults in §1 are built to.
 
+**Desk research (M0-E1, M0-E2, 2026-11-21).** From AWS documentation as known to the agent; nothing here
+was verified against an account. Items marked *probe* are what `test/e2e/spike_test.go` confirms.
+
+| Question | Finding | Consequence for the build | Probe |
+|---|---|---|---|
+| OQ-1 Built-in Pod Identity session tags | The Pod Identity agent assumes the association's role with session tags `eks-cluster-arn`, `eks-cluster-name`, `kubernetes-namespace`, `kubernetes-service-account`, `kubernetes-pod-name`, `kubernetes-pod-uid`. The role's trust policy must allow `sts:AssumeRole` and `sts:TagSession` for `pods.eks.amazonaws.com` | IAM conditions use `aws:PrincipalTag/kubernetes-namespace` (and `kubernetes-service-account` where an agent-level condition is needed); trust policies rendered by RC-2 include `sts:TagSession` | Tag names and values printed from the pod |
+| OQ-1 Transitivity through a role chain | Session tags pass to a chained `AssumeRole` only when they are transitive. Whether the Pod Identity tags are marked transitive must not be relied on; role tags (`afs-team-id`, `afs-agent-id`, `afs-pool-id`) are a property of the role and are visible as `aws:PrincipalTag/*` on any session of that role | Cross-account trust conditions use `aws:PrincipalTag/afs-team-id` from the **role tag** (D26), never a Pod Identity session tag; CloudTrail in the target account identifies the agent through the role name, role tags and `role_session_name` = agent or pool id (D51) | `PackedPolicySize` of the chained session (> 0 means tags were carried) |
+| OQ-1 `role_session_name` | 2 to 64 characters of `[\w+=,.@-]`; AFS ids (`agt_…` 30 characters, `pool_…` 31) fit | Every profile of `/etc/afs/aws/config` sets `role_session_name` to the agent or pool id (D51); a unit test checks the length and character set | Chained ARN ends with the id |
+| OQ-2 Tags per AWS resource | 50 user tags per resource (EC2, EBS, IAM roles; `aws:` tags do not count) | Effective tag set capped at 40 keys (RC-9, D27), leaving 10 for drivers and controllers | — |
+| OQ-2 EBS CSI driver tags | The driver adds `CSIVolumeName`, `ebs.csi.aws.com/cluster`, `kubernetes.io/cluster/<id>` (when a cluster id is set) and, with `--extra-create-metadata`, `kubernetes.io/created-for/pvc/name`, `kubernetes.io/created-for/pvc/namespace`, `kubernetes.io/created-for/pv/name`: up to 6 | Fits within the 10 left by the cap; the reconciler never removes tags it did not set | Tag count of a CSI-created volume |
+| OQ-2 Bedrock `requestMetadata` | At most 16 key-value pairs per request; keys and values up to 256 characters | The gateway sends at most 16 pairs in the D27 order and reports the rest in `TeamTags.requestMetadataDroppedKeys` (CD-6) | — (gateway contract test with the fake Bedrock) |
+
+Until the probe is run on the dev account (M6-F, or earlier by anyone with access), these defaults stand.
+
 ## 4. Existing implementations and API documentation
 
 - `-db/migrate`: `Load`, `Up`, `Down`, `Version`, advisory lock, checksum guard. `afs-api` calls `Up`

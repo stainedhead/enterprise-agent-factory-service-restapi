@@ -97,6 +97,8 @@ Decisions taken while creating the spec (step 1, 2026-11-21, under J's authoriza
 | 2026-11-21 | M0-D1 | Unmatched paths and unknown `:verb`s answer `404 NotFound` in the error envelope; ServeMux's own 405 is not used | One error shape for every response |
 | 2026-11-21 | M0-D6 | The replay validates every response the server gives, not only non-placeholder operations: with no authenticator wired yet, every non-public operation answers `401`, and that envelope is validated against each operation's documented `401`. Placeholders (`501`, not in the document) are counted and skipped | Proves the error envelope and headers on all 182 operations from M0 |
 | 2026-11-21 | M0-D4 | `afs-api` starts without a database when `AFS_DATABASE_URL` is unset (health, OpenAPI and placeholders only); `AFS_DATABASE_OWNER_URL` enables startup migration | Local development and the `--version` gate step need no database |
+| 2026-11-21 | M0-E1, M0-E2 | Spikes are desk research only; the probes shell out to `kubectl` and the AWS CLI instead of using client-go and the AWS SDK, and have not been run | No AWS account or cluster is available to agents; the module does not depend on client-go yet. Defaults in research.md §3.3 stand until a person runs `make e2e` |
+| 2026-11-21 | M0-E3 | A-1..A-10 recorded as ADR-002 (accepted) and ADR-003..ADR-011 | ADR numbering continues the existing file |
 | 2026-11-21 | M0-F | Local integration tests ran against PostgreSQL 16.15 (the sandbox server), not 17; CI uses `postgres:17` | Only PostgreSQL 16 is installed in the build sandbox |
 
 ## Contract deltas for the root repository

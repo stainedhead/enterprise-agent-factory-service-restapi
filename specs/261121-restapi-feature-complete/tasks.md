@@ -164,9 +164,9 @@ Owns: `test/e2e/spike_test.go`, `docs/architectural-decision-record.md`, researc
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M0-E1 | OQ-1: document Pod Identity session tags (desk research), IAM condition shape and the D51 `role_session_name` rule; `[e2e]` probe that prints session tags from a pod and a chained role | OQ-1, RC-2 (part), RC-3 (part) | M0-S4 |
-| [ ] | M0-E2 | OQ-2: document per-resource tag limit after EBS CSI tags and the Bedrock `requestMetadata` limit; `[e2e]` probe counting a CSI volume's tags | OQ-2, RC-9 (part), GW-5 (part) | M0-S4 |
-| [ ] | M0-E3 | Record ADRs A-1..A-10 of architecture.md §8 (ADR-002 accepted) | — | — |
+| [x] | M0-E1 | OQ-1: document Pod Identity session tags (desk research), IAM condition shape and the D51 `role_session_name` rule; `[e2e]` probe that prints session tags from a pod and a chained role | OQ-1, RC-2 (part), RC-3 (part) | M0-S4 |
+| [x] | M0-E2 | OQ-2: document per-resource tag limit after EBS CSI tags and the Bedrock `requestMetadata` limit; `[e2e]` probe counting a CSI volume's tags | OQ-2, RC-9 (part), GW-5 (part) | M0-S4 |
+| [x] | M0-E3 | Record ADRs A-1..A-10 of architecture.md §8 (ADR-002 accepted) | — | — |
 
 ### M0-F · PostgreSQL foundation and cross-cutting ports
 
