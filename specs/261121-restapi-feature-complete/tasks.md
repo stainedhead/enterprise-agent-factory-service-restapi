@@ -308,8 +308,8 @@ Owns: `internal/usecase/reconcile/admission/`, `internal/adapter/k8s/render/admi
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-H1 | ValidatingAdmissionPolicies and bindings for `afs-t-*`: refuse NetworkPolicy/CiliumNetworkPolicy changes except by the reconciler, LoadBalancer/NodePort Services, hostNetwork/PID/IPC, hostPath, privileged, AFS label changes, another team's dedicated tolerations or selectors [envtest]; `[e2e]` case | RC-US-1a.2, RC-US-1a.1 (part), RC-19 | M1-F1 |
-| [ ] | M1-H2 | Deleted policy or binding restored within 60 s with `drift.corrected` [envtest] | RC-US-1a.3 | M1-H1, M1-F6 |
+| [x] | M1-H1 | ValidatingAdmissionPolicies and bindings for `afs-t-*`: refuse NetworkPolicy/CiliumNetworkPolicy changes except by the reconciler, LoadBalancer/NodePort Services, hostNetwork/PID/IPC, hostPath, privileged, AFS label changes, another team's dedicated tolerations or selectors [envtest]; `[e2e]` case | RC-US-1a.2, RC-US-1a.1 (part), RC-19 | M1-F1 |
+| [x] | M1-H2 | Deleted policy or binding restored within 60 s with `drift.corrected` [envtest] | RC-US-1a.3 | M1-H1, M1-F6 |
 
 ### M1-I · Team lifecycle (RC-17 team part)
 
