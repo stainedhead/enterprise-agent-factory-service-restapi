@@ -29,9 +29,30 @@ type Config struct {
 	Ready map[string]ReadinessCheck
 	// Registrars bind handlers; the default is Areas.
 	Registrars []Registrar
+	// Outer wrap the whole router, inside the request id and panic recovery: request metadata and CORS
+	// preflight, which no route answers. The first element is the outermost.
+	Outer []Middleware
+	// PreAuth wrap each operation before authentication, after strict query checking and the body
+	// limit: limits on routes that carry no credential. The route is available to them (RouteFrom).
+	PreAuth []Middleware
+	// PostAuth wrap each operation's handler after authorization has allowed the call: the suspended
+	// team guard, denied-request audit, If-Match, ETag and Idempotency-Key handling. The first element
+	// is the outermost.
+	PostAuth []Middleware
 	// Now and Entropy feed request ids; defaults are time.Now and crypto/rand.
 	Now     func() time.Time
 	Entropy io.Reader
+}
+
+// Middleware wraps a handler.
+type Middleware = func(http.Handler) http.Handler
+
+// chain wraps h in ms, the first being outermost.
+func chain(h http.Handler, ms []Middleware) http.Handler {
+	for i := len(ms) - 1; i >= 0; i-- {
+		h = ms[i](h)
+	}
+	return h
 }
 
 // NewHandler returns the root handler with a single readiness check named database. It is kept
@@ -76,7 +97,7 @@ func New(cfg Config) (http.Handler, error) {
 	}
 	mux := http.NewServeMux()
 	mount(mux, ops, func(op *operation) http.Handler {
-		inner := authorize(op, cfg.Auth, cfg.Teams, cfg.Hooks, op.handler)
+		inner := chain(authorize(op, cfg.Auth, cfg.Teams, cfg.Hooks, chain(op.handler, cfg.PostAuth)), cfg.PreAuth)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			r = r.WithContext(context.WithValue(r.Context(), keyRoute, op))
 			if err := checkQuery(op, r); err != nil {
@@ -102,7 +123,7 @@ func New(cfg Config) (http.Handler, error) {
 	if entropy == nil {
 		entropy = defaultEntropy()
 	}
-	return withRequestID(now, entropy, withRecovery(mux)), nil
+	return withRequestID(now, entropy, withRecovery(chain(mux, cfg.Outer))), nil
 }
 
 type healthStatus struct {
