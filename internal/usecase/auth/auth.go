@@ -170,6 +170,10 @@ func (s *Service) providers(ctx context.Context) ([]Provider, error) {
 	return ps, nil
 }
 
+// SignInProviders lists the enabled providers for the public sign-in screen (RA-US-2.5). The list is
+// the one used to validate tokens, so what a client is offered is what the API accepts.
+func (s *Service) SignInProviders(ctx context.Context) ([]Provider, error) { return s.providers(ctx) }
+
 func (s *Service) user(ctx context.Context, token string) (*authz.Principal, error) {
 	providers, err := s.providers(ctx)
 	if err != nil {
