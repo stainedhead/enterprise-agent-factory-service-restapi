@@ -203,13 +203,13 @@ Owns: `internal/adapter/oidc/`, `internal/usecase/auth/`, `internal/usecase/me/`
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-A1 | JWKS cache: 10 min TTL, single-flight refetch on unknown `kid`, removed key stops validating after refetch; issuer, audience, expiry checks with 30 s clock leeway; a JWKS fetch failure keeps using cached keys, and with none cached → `503 Unavailable` (not `401`) [unit with fake JWKS] | RA-US-2.3, RA-US-2.1 (part) | — |
-| [ ] | M1-A2 | Providers from `identity_providers` (enabled only; audiences `consoleClientId`, `cliClientId`); a disabled provider's token → `401` | RA-US-2.1 | M1-A1 |
-| [ ] | M1-A3 | Principal resolution: JIT `users` upsert (own row), bindings from `role_bindings` incl. groups (`groupsClaim`); a group binding on team A counts only when the issuer is A's provider or the default when A has none | RA-US-2.2, RA-2 | M1-A2 |
-| [ ] | M1-A4 | API key auth: `afsk_` prefix, SHA-256 lookup (through `afs.authenticate_api_key` once M1-D7 adopts X-DB-1, else the M0-F8 lookup), expired or deleted → `401`, `lastUsedAt` written at most once a minute | RA-US-2.4 | — |
-| [ ] | M1-A5 | `ListSignInProviders` (public): every enabled provider with `consoleClientId`, `cliClientId`, `isDefault`, no client secret ARN | RA-US-2.5 | M1-A2 |
-| [ ] | M1-A6 | `GetMe`: principal type, `serviceAdmin`, `securityOperator`, per bound team role and `authz.Effective` permissions (flag-dependent) for viewer, team-admin, service admin, security operator, team API key | RA-US-3a.1 (part), RA-US-3a.2, RA-3 | M1-A3, M1-A4 |
-| [ ] | M1-A7 | Authn middleware: bearer dispatch (IdP JWT, `afsk_`, later workload), `401` for missing/expired/unknown with contract headers; `Authorization` never logged | RA-US-6.5 (part), NFR Security | M1-A3, M1-A4 |
+| [x] | M1-A1 | JWKS cache: 10 min TTL, single-flight refetch on unknown `kid`, removed key stops validating after refetch; issuer, audience, expiry checks with 30 s clock leeway; a JWKS fetch failure keeps using cached keys, and with none cached → `503 Unavailable` (not `401`) [unit with fake JWKS] | RA-US-2.3, RA-US-2.1 (part) | — |
+| [x] | M1-A2 | Providers from `identity_providers` (enabled only; audiences `consoleClientId`, `cliClientId`); a disabled provider's token → `401` | RA-US-2.1 | M1-A1 |
+| [x] | M1-A3 | Principal resolution: JIT `users` upsert (own row), bindings from `role_bindings` incl. groups (`groupsClaim`); a group binding on team A counts only when the issuer is A's provider or the default when A has none | RA-US-2.2, RA-2 | M1-A2 |
+| [x] | M1-A4 | API key auth: `afsk_` prefix, SHA-256 lookup (through `afs.authenticate_api_key` once M1-D7 adopts X-DB-1, else the M0-F8 lookup), expired or deleted → `401`, `lastUsedAt` written at most once a minute | RA-US-2.4 | — |
+| [x] | M1-A5 | `ListSignInProviders` (public): every enabled provider with `consoleClientId`, `cliClientId`, `isDefault`, no client secret ARN | RA-US-2.5 | M1-A2 |
+| [x] | M1-A6 | `GetMe`: principal type, `serviceAdmin`, `securityOperator`, per bound team role and `authz.Effective` permissions (flag-dependent) for viewer, team-admin, service admin, security operator, team API key | RA-US-3a.1 (part), RA-US-3a.2, RA-3 | M1-A3, M1-A4 |
+| [x] | M1-A7 | Authn middleware: bearer dispatch (IdP JWT, `afsk_`, later workload), `401` for missing/expired/unknown with contract headers; `Authorization` never logged | RA-US-6.5 (part), NFR Security | M1-A3, M1-A4 |
 
 ### M1-B · Teams (RA-1 teams, RA-4, RA-14 fields, RA-10 guardrails)
 
@@ -245,13 +245,13 @@ Owns: `internal/adapter/httpapi/middleware/{idempotency,ifmatch,ratelimit,cors,d
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-D1 | Idempotency middleware for creating `POST`s and `:verb` actions (key 1–255): replay with `Idempotent-Replayed: true` writes nothing; different body → `409 idempotency_mismatch`; concurrent duplicate → `409 idempotency_in_progress` + `Retry-After: 1`; 5xx not stored; per principal | RA-US-9.1, RA-US-9.2, CT-API-12 | — |
-| [ ] | M1-D2 | `If-Match` helpers: missing → `428`, stale → `412`, current → `200` with `ETag` + 1; PUT that creates needs none; `ETag` on every GET of a mutable resource | RA-US-6.1 (part), CT-API-6, CT-API-13 | — |
-| [ ] | M1-D3 | Rate limiter: 20 req/s, burst 40 per principal, divided by `AFS_API_REPLICAS`; `429 Throttled` + `Retry-After`; another principal unaffected; unauthenticated requests (public routes, failed auth) limited per source IP with the same rate | RA-US-15.1, RA-15 | — |
-| [ ] | M1-D4 | CORS from `api.cors_origins` (preflight, allowed and exposed headers of contract §1, no credentials mode) | RA-US-15.2, CT-API-4 | M1-E1 |
-| [ ] | M1-D5 | Denied audit: every `403` writes one audit record (actor, operation, team when known, required permission, `denied`, request id) in its own transaction; the request transaction writes nothing; cross-team `404` counted in metric `afs_api_cross_team_not_found_total` | RA-US-1.7, RA-US-6.3 (part) | M1-D7 |
-| [ ] | M1-D7 | Adopt the `-db` release with X-DB-1 and X-DB-6 (bump the module, `make test-db`); denied audit on service routes and with no visible team succeeds | RA-US-1.7 (part), RA-US-3.4 (part) | X-DB-1, X-DB-6 |
-| [ ] | M1-D6 | Matrix harness: for every implemented operation × caller type (viewer, team-admin, service admin, security operator, team key per role, service key, workload, unbound user), expected outcome computed from `permissions.json` and the PRD §3 rule, asserting 2xx/404/403; each mutating op asserts row + audit + outbox (CT-API-8) | RA-US-1.3 (part), CT-API-8 (part) | — |
+| [x] | M1-D1 | Idempotency middleware for creating `POST`s and `:verb` actions (key 1–255): replay with `Idempotent-Replayed: true` writes nothing; different body → `409 idempotency_mismatch`; concurrent duplicate → `409 idempotency_in_progress` + `Retry-After: 1`; 5xx not stored; per principal | RA-US-9.1, RA-US-9.2, CT-API-12 | — |
+| [x] | M1-D2 | `If-Match` helpers: missing → `428`, stale → `412`, current → `200` with `ETag` + 1; PUT that creates needs none; `ETag` on every GET of a mutable resource | RA-US-6.1 (part), CT-API-6, CT-API-13 | — |
+| [x] | M1-D3 | Rate limiter: 20 req/s, burst 40 per principal, divided by `AFS_API_REPLICAS`; `429 Throttled` + `Retry-After`; another principal unaffected; unauthenticated requests (public routes, failed auth) limited per source IP with the same rate | RA-US-15.1, RA-15 | — |
+| [x] | M1-D4 | CORS from `api.cors_origins` (preflight, allowed and exposed headers of contract §1, no credentials mode) | RA-US-15.2, CT-API-4 | M1-E1 |
+| [x] | M1-D5 | Denied audit: every `403` writes one audit record (actor, operation, team when known, required permission, `denied`, request id) in its own transaction; the request transaction writes nothing; cross-team `404` counted in metric `afs_api_cross_team_not_found_total` | RA-US-1.7, RA-US-6.3 (part) | M1-D7 |
+| [x] | M1-D7 | Adopt the `-db` release with X-DB-1 and X-DB-6 (bump the module, `make test-db`); denied audit on service routes and with no visible team succeeds | RA-US-1.7 (part), RA-US-3.4 (part) | X-DB-1, X-DB-6 |
+| [x] | M1-D6 | Matrix harness: for every implemented operation × caller type (viewer, team-admin, service admin, security operator, team key per role, service key, workload, unbound user), expected outcome computed from `permissions.json` and the PRD §3 rule, asserting 2xx/404/403; each mutating op asserts row + audit + outbox (CT-API-8) | RA-US-1.3 (part), CT-API-8 (part) | — |
 
 ### M1-E · Service administration I
 

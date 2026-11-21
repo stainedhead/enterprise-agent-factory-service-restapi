@@ -61,7 +61,9 @@ func authorize(op *operation, auth Authenticator, teams TeamLookup, hooks Hooks,
 			p, err = auth.Authenticate(r)
 		}
 		if err != nil {
-			if domain.KindOf(err) != domain.KindUnauthenticated && domain.KindOf(err) != domain.KindUnavailable {
+			switch domain.KindOf(err) {
+			case domain.KindUnauthenticated, domain.KindUnavailable, domain.KindThrottled:
+			default:
 				err = domain.Unauthenticated()
 			}
 			WriteError(w, r, err)

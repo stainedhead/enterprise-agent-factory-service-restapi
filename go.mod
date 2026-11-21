@@ -5,6 +5,7 @@ go 1.27.0
 toolchain go1.27.4
 
 require (
+	github.com/go-jose/go-jose/v4 v4.0.5
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/pb33f/go-yaml v0.2.0
 	github.com/pb33f/libopenapi v0.44.0
@@ -26,6 +27,7 @@ require (
 	github.com/pb33f/jsonschema/v6 v6.0.3 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.2 // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
+	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/text v0.44.0 // indirect
