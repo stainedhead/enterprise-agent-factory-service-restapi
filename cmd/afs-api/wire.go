@@ -44,6 +44,8 @@ type settings struct {
 	MigrationTimeout time.Duration
 	// APIReplicas divides the rate limits among replicas (AFS_API_REPLICAS, default 1).
 	APIReplicas int
+	// RatePerSecond and RateBurst override the per-principal limit (tests only; zero keeps the contract default).
+	RatePerSecond, RateBurst float64
 	// TrustedProxyHops is how many reverse proxies in front of afs-api append to X-Forwarded-For
 	// (AFS_TRUSTED_PROXY_HOPS, default 0: only the socket peer is trusted as the client address).
 	TrustedProxyHops int

@@ -79,7 +79,7 @@ func (b *bufferedWriter) finish(adjust func(h http.Header, status int, body []by
 		status = http.StatusOK
 	}
 	if adjust != nil {
-		adjust(b.ResponseWriter.Header(), status, b.body.Bytes())
+		adjust(b.Header(), status, b.body.Bytes())
 	}
 	b.ResponseWriter.WriteHeader(status)
 	if b.body.Len() > 0 {

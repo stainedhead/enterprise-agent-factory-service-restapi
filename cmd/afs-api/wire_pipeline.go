@@ -51,7 +51,7 @@ func wirePipeline(c *components, cfg *httpapi.Config, s settings, log *slog.Logg
 		return nil, err
 	}
 	p := &pipeline{
-		Limiter: middleware.NewLimiter(middleware.LimiterConfig{Replicas: s.APIReplicas}),
+		Limiter: middleware.NewLimiter(middleware.LimiterConfig{Replicas: s.APIReplicas, RatePerSecond: s.RatePerSecond, Burst: s.RateBurst}),
 		Auditor: &middleware.DeniedAuditor{Audit: c.Audit, Session: auth.SessionOf, RequestID: httpapi.RequestIDFrom, Log: log},
 	}
 	idem := &middleware.Idempotency{Store: c.Idem, Runner: c.Runner, Session: sessionFromContext,
