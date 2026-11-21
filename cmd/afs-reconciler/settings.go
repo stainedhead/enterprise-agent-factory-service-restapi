@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -15,6 +16,8 @@ type settings struct {
 	PodName        string // POD_NAME or the hostname: the leader election identity
 	Kubeconfig     string // AFS_KUBECONFIG: out-of-cluster development only
 
+	DBIAMAuth              bool     // AFS_DB_IAM_AUTH: sign an RDS IAM token as the database password
+	EventBusName           string   // AFS_EVENT_BUS_NAME: the EventBridge bus the outbox publishes to
 	ClusterName            string   // AFS_CLUSTER_NAME
 	GatewayRoleARN         string   // AFS_GATEWAY_ROLE_ARN
 	PermissionsBoundaryARN string   // AFS_PERMISSIONS_BOUNDARY_ARN
@@ -31,7 +34,7 @@ type settings struct {
 func settingsFrom(env func(string) string, hostname func() (string, error)) (settings, error) {
 	s := settings{
 		DatabaseURL: env("AFS_DATABASE_URL"), MetricsAddr: env("AFS_METRICS_ADDR"), LeaseNamespace: env("AFS_LEADER_LEASE_NAMESPACE"),
-		PodName: env("POD_NAME"), Kubeconfig: env("AFS_KUBECONFIG"), ClusterName: env("AFS_CLUSTER_NAME"),
+		PodName: env("POD_NAME"), Kubeconfig: env("AFS_KUBECONFIG"), ClusterName: env("AFS_CLUSTER_NAME"), EventBusName: env("AFS_EVENT_BUS_NAME"),
 		GatewayRoleARN: env("AFS_GATEWAY_ROLE_ARN"), PermissionsBoundaryARN: env("AFS_PERMISSIONS_BOUNDARY_ARN"),
 		ESORoleARN: env("AFS_ESO_ROLE_ARN"), SecretsPrefix: env("AFS_SECRETS_PREFIX"),
 		GatewayNamespace: env("AFS_GATEWAY_NAMESPACE"), GatewayName: env("AFS_GATEWAY_NAME"), GatewayCAConfigMap: env("AFS_GATEWAY_CA_CONFIGMAP"),
@@ -59,6 +62,13 @@ func settingsFrom(env func(string) string, hostname func() (string, error)) (set
 			s.ReconcilerUsers = append(s.ReconcilerUsers, u)
 		}
 	}
+	if v := env("AFS_DB_IAM_AUTH"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return s, fmt.Errorf("AFS_DB_IAM_AUTH: %q is not a boolean", v)
+		}
+		s.DBIAMAuth = b
+	}
 	for name, d := range map[string]*time.Duration{"AFS_POLL_INTERVAL": &s.PollInterval, "AFS_RESYNC_INTERVAL": &s.ResyncInterval} {
 		if v := env(name); v != "" {
 			p, err := time.ParseDuration(v)
@@ -69,7 +79,8 @@ func settingsFrom(env func(string) string, hostname func() (string, error)) (set
 		}
 	}
 	var missing []string
-	for name, v := range map[string]string{"AFS_DATABASE_URL": s.DatabaseURL, "AFS_GATEWAY_ROLE_ARN": s.GatewayRoleARN} {
+	for name, v := range map[string]string{"AFS_DATABASE_URL": s.DatabaseURL, "AFS_GATEWAY_ROLE_ARN": s.GatewayRoleARN,
+		"AFS_EVENT_BUS_NAME": s.EventBusName, "AFS_CLUSTER_NAME": s.ClusterName} {
 		if v == "" {
 			missing = append(missing, name)
 		}

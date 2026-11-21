@@ -43,6 +43,7 @@ type api interface {
 	PutRolePolicy(ctx context.Context, in *awsiam.PutRolePolicyInput, opts ...func(*awsiam.Options)) (*awsiam.PutRolePolicyOutput, error)
 	DeleteRolePolicy(ctx context.Context, in *awsiam.DeleteRolePolicyInput, opts ...func(*awsiam.Options)) (*awsiam.DeleteRolePolicyOutput, error)
 	DeleteRole(ctx context.Context, in *awsiam.DeleteRoleInput, opts ...func(*awsiam.Options)) (*awsiam.DeleteRoleOutput, error)
+	ListRoles(ctx context.Context, in *awsiam.ListRolesInput, opts ...func(*awsiam.Options)) (*awsiam.ListRolesOutput, error)
 }
 
 // Client implements team.IAM.
@@ -239,6 +240,54 @@ func (c *Client) DeleteRole(ctx context.Context, path, name string) error {
 		return afsaws.WrapError(err)
 	}
 	return nil
+}
+
+// rolesRoot is the path prefix of every role the reconciler creates (/afs/<namespace>/).
+const rolesRoot = "/afs/"
+
+// RevokeTeam deletes every role under /afs/ that carries the managed-by tag and the team's
+// afs-team-id tag: the team role, dedicated agent roles and the Bedrock role (lifecycle.IAMRevoker).
+// Roles of other teams and roles the reconciler did not create are left alone; a role that is
+// already gone is success. Every role is attempted and the errors are joined.
+func (c *Client) RevokeTeam(ctx context.Context, teamID string) error {
+	var errs []error
+	var marker *string
+	for {
+		page, err := c.api.ListRoles(ctx, &awsiam.ListRolesInput{PathPrefix: awssdk.String(rolesRoot), Marker: marker})
+		if err != nil {
+			return afsaws.WrapError(err)
+		}
+		for _, r := range page.Roles {
+			name, path := awssdk.ToString(r.RoleName), awssdk.ToString(r.Path)
+			got, err := c.api.GetRole(ctx, &awsiam.GetRoleInput{RoleName: &name})
+			if afsaws.IsNotFound(err) {
+				continue
+			}
+			if err != nil {
+				errs = append(errs, afsaws.WrapError(err))
+				continue
+			}
+			if !ownedBy(got.Role.Tags) || !taggedWith(got.Role.Tags, team.TagTeamID, teamID) {
+				continue
+			}
+			if err := c.DeleteRole(ctx, path, name); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		if !page.IsTruncated || page.Marker == nil {
+			return errors.Join(errs...)
+		}
+		marker = page.Marker
+	}
+}
+
+func taggedWith(tags []types.Tag, key, value string) bool {
+	for _, t := range tags {
+		if awssdk.ToString(t.Key) == key && awssdk.ToString(t.Value) == value {
+			return true
+		}
+	}
+	return false
 }
 
 func ownedBy(tags []types.Tag) bool {

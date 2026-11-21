@@ -7,12 +7,12 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/observability"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/buildinfo"
 )
 
@@ -38,28 +38,34 @@ func run(ctx context.Context, log *slog.Logger, env func(string) string) error {
 		return err
 	}
 	log.Info("afs-reconciler starting", "version", buildinfo.Version, "identity", s.PodName)
-	r, err := wire(ctx, log, s, env)
+	m := observability.NewMetrics("afs-reconciler", buildinfo.Version)
+	r, err := wire(ctx, log, s, env, m)
 	if err != nil {
 		return err
 	}
 	defer r.Close()
 
-	srv := &http.Server{Addr: s.MetricsAddr, Handler: probeHandler(r.probes()), ReadHeaderTimeout: 5 * time.Second}
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Error("probe server", "err", err)
-		}
-	}()
+	// slog, metrics, OpenTelemetry and the probe server (/healthz, /readyz, /metrics) come from
+	// observability; the engine's own counters were registered on m by wire.
+	oc := observability.EnvConfig("afs-reconciler", buildinfo.Version, env)
+	oc.Metrics, oc.Checks = m, r.Checks
+	rt, err := observability.Start(ctx, oc)
+	if err != nil {
+		return err
+	}
 	defer func() {
-		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		sctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(sctx)
+		_ = rt.Shutdown(sctx)
 	}()
+	log = rt.Log
 
 	// Leadership: the engine and the drift watch run only while this replica holds the Lease; losing it
 	// cancels them, and the elector campaigns again.
 	err = r.Elector.Run(ctx, func(lctx context.Context) {
 		log.Info("leading")
+		m.SetLeader(true)
+		defer m.SetLeader(false)
 		go func() {
 			if err := r.Watcher.Run(lctx); err != nil && lctx.Err() == nil {
 				log.Error("drift watch", "err", err)

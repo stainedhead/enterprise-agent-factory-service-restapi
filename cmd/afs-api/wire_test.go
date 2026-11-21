@@ -90,3 +90,21 @@ func TestSessionOf(t *testing.T) {
 		}
 	}
 }
+
+// DP-1: AFS_DB_IAM_AUTH signs an RDS IAM token per connection and needs a region.
+func TestSettingsDBIAMAuth(t *testing.T) {
+	if _, err := settingsFrom(env(map[string]string{"AFS_DB_IAM_AUTH": "true"})); err == nil {
+		t.Fatal("IAM auth without a region accepted")
+	}
+	if _, err := settingsFrom(env(map[string]string{"AFS_DB_IAM_AUTH": "maybe"})); err == nil {
+		t.Fatal("bad boolean accepted")
+	}
+	s, err := settingsFrom(env(map[string]string{"AFS_DB_IAM_AUTH": "true", "AWS_REGION": "us-east-1"}))
+	if err != nil || !s.DBIAMAuth || s.AWSRegion != "us-east-1" {
+		t.Fatal(s, err)
+	}
+	s, err = settingsFrom(env(map[string]string{"AFS_DB_IAM_AUTH": "true", "AWS_REGION": "us-east-1", "AFS_AWS_REGION": "eu-west-1"}))
+	if err != nil || s.AWSRegion != "eu-west-1" {
+		t.Fatal("AFS_AWS_REGION must win", s, err)
+	}
+}

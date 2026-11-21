@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/httpapi"
@@ -45,6 +46,10 @@ type settings struct {
 	// TrustedProxyHops is how many reverse proxies in front of afs-api append to X-Forwarded-For
 	// (AFS_TRUSTED_PROXY_HOPS, default 0: only the socket peer is trusted as the client address).
 	TrustedProxyHops int
+	// DBIAMAuth signs an RDS IAM token as the database password of every new connection
+	// (AFS_DB_IAM_AUTH); AWSRegion (AFS_AWS_REGION, AWS_REGION as fallback) is then required.
+	DBIAMAuth bool
+	AWSRegion string
 	// OIDCHTTP fetches identity provider discovery documents and JWKS; nil uses a client with a 5 s
 	// timeout. Tests point it at a fake provider.
 	OIDCHTTP *http.Client
@@ -73,6 +78,20 @@ func settingsFrom(env func(string) string) (settings, error) {
 			*v.dst = n
 		}
 	}
+	s.AWSRegion = env("AFS_AWS_REGION")
+	if s.AWSRegion == "" {
+		s.AWSRegion = env("AWS_REGION")
+	}
+	if v := env("AFS_DB_IAM_AUTH"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return s, fmt.Errorf("AFS_DB_IAM_AUTH: %q is not a boolean", v)
+		}
+		s.DBIAMAuth = b
+	}
+	if s.DBIAMAuth && s.AWSRegion == "" {
+		return s, fmt.Errorf("AFS_DB_IAM_AUTH needs AFS_AWS_REGION")
+	}
 	if s.OwnerURL != "" && s.DatabaseURL == "" {
 		return s, fmt.Errorf("AFS_DATABASE_OWNER_URL is set without AFS_DATABASE_URL")
 	}
@@ -93,7 +112,19 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 			}
 			log.Info("migrations applied", "count", n)
 		}
-		pool, err := postgres.OpenPool(ctx, postgres.Config{URL: s.DatabaseURL, Service: "afs-api", StatementTimeout: 30 * time.Second})
+		dbCfg := postgres.Config{URL: s.DatabaseURL, Service: "afs-api", StatementTimeout: 30 * time.Second}
+		if s.DBIAMAuth {
+			// Plain SDK configuration, not adapter/aws: afs-api builds no AWS service client but
+			// Secrets Manager, and signs the RDS token locally.
+			awsCfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(s.AWSRegion))
+			if err != nil {
+				return nil, fmt.Errorf("load AWS configuration: %w", err)
+			}
+			if dbCfg.Password, err = postgres.IAMPassword(s.DatabaseURL, s.AWSRegion, awsCfg.Credentials); err != nil {
+				return nil, err
+			}
+		}
+		pool, err := postgres.OpenPool(ctx, dbCfg)
 		if err != nil {
 			return nil, fmt.Errorf("open database: %w", err)
 		}

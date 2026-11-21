@@ -71,3 +71,37 @@ func TestEnvConfig(t *testing.T) {
 		t.Fatal("explicit address ignored")
 	}
 }
+
+// A composition root that recorded into its own registry while wiring gets that registry served.
+func TestStartServesTheSuppliedMetrics(t *testing.T) {
+	l, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := l.Addr().String()
+	_ = l.Close()
+	m := NewMetrics("afs-reconciler", "v1")
+	m.OutboxLag(7, 3*time.Second)
+	rt, err := Start(t.Context(), Config{Service: "afs-reconciler", Version: "v1", MetricsAddr: addr, LogOutput: io.Discard, Metrics: m})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rt.Shutdown(t.Context()) }()
+	if rt.Metrics != m {
+		t.Fatal("Start built its own registry")
+	}
+	var body string
+	for i := 0; i < 50; i++ {
+		res, err := httpGet(t, "http://"+addr+"/metrics")
+		if err == nil {
+			b, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			body = string(b)
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !strings.Contains(body, "afs_outbox_pending_events 7") {
+		t.Fatalf("supplied registry not served: %q", body)
+	}
+}

@@ -312,3 +312,68 @@ func TestSameJSONAndDecode(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+func listRolesXML(roles ...[2]string) string {
+	var b strings.Builder
+	for _, r := range roles {
+		fmt.Fprintf(&b, "<member><Path>%s</Path><RoleName>%s</RoleName><RoleId>AROAEXAMPLE</RoleId><Arn>arn:aws:iam::111122223333:role%s%s</Arn><CreateDate>2026-11-21T00:00:00Z</CreateDate></member>", r[0], r[1], r[0], r[1])
+	}
+	return "<Roles>" + b.String() + "</Roles><IsTruncated>false</IsTruncated>"
+}
+
+// RC-US-15.3: RevokeTeam deletes the team's roles under /afs/ (team role, Bedrock role) and only
+// those: another team's role and a role without the managed-by tag are left alone.
+func TestRevokeTeamDeletesOnlyTheTeamsOwnedRoles(t *testing.T) {
+	c, srv := newClient(t)
+	other := map[string]string{team.TagTeamID: "team_01JD0000000000000000000002", team.TagManagedBy: team.ManagedByValue}
+	byName := map[string]map[string]string{
+		"afs-01JD0000000000000000000001":              ownedTags(),
+		"afs-team_01JD0000000000000000000001-bedrock": ownedTags(),
+		"afs-01JD0000000000000000000009":              other,
+	}
+	srv.OnAction("ListRoles", awstest.QueryOK("ListRoles", listRolesXML(
+		[2]string{rolePath, "afs-01JD0000000000000000000001"},
+		[2]string{rolePath, "afs-team_01JD0000000000000000000001-bedrock"},
+		[2]string{"/afs/afs-t-other/", "afs-01JD0000000000000000000009"})))
+	srv.On(func(r awstest.Request) *awstest.Response {
+		if r.Action != "GetRole" {
+			return nil
+		}
+		name := r.Form.Get("RoleName")
+		path := rolePath
+		if name == "afs-01JD0000000000000000000009" {
+			path = "/afs/afs-t-other/"
+		}
+		resp := awstest.QueryOK("GetRole", roleXML(path, trustDoc, "", byName[name]))
+		return &resp
+	})
+	srv.OnAction("ListRolePolicies", awstest.QueryOK("ListRolePolicies", policyNames()))
+	srv.OnAction("DeleteRole", awstest.QueryEmptyOK("DeleteRole"))
+	if err := c.RevokeTeam(t.Context(), "team_01JD0000000000000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	if n := srv.Count("DeleteRole"); n != 2 {
+		t.Fatalf("DeleteRole called %d times, want 2 (actions %v)", n, srv.Actions())
+	}
+	for _, r := range srv.Requests() {
+		if r.Action == "DeleteRole" && r.Form.Get("RoleName") == "afs-01JD0000000000000000000009" {
+			t.Error("another team's role was deleted")
+		}
+	}
+	if req, _ := srv.Find("ListRoles"); req.Form.Get("PathPrefix") != "/afs/" {
+		t.Errorf("PathPrefix = %q", req.Form.Get("PathPrefix"))
+	}
+}
+
+func TestRevokeTeamNoRolesAndErrors(t *testing.T) {
+	c, srv := newClient(t)
+	srv.OnAction("ListRoles", awstest.QueryOK("ListRoles", listRolesXML()))
+	if err := c.RevokeTeam(t.Context(), "team_01JD0000000000000000000001"); err != nil {
+		t.Errorf("no roles: %v", err)
+	}
+	c2, srv2 := newClient(t)
+	srv2.OnAction("ListRoles", awstest.QueryError(403, "AccessDenied", "no"))
+	if err := c2.RevokeTeam(t.Context(), "team_01JD0000000000000000000001"); engine.CodeOf(err) != "AccessDenied" {
+		t.Errorf("list error code = %q (%v)", engine.CodeOf(err), err)
+	}
+}

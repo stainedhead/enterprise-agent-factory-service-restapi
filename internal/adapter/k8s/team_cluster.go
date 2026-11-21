@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -101,4 +102,36 @@ func (c *TeamCluster) gatewayCA(ctx context.Context) (string, error) {
 		return "", &engine.CodedError{Code: "GatewayCAMissing", Err: fmt.Errorf("%w: key %s in ConfigMap %s/%s", ErrGatewayCAMissing, render.GatewayCAKey, c.ca.Namespace, c.ca.Name)}
 	}
 	return data[render.GatewayCAKey], nil
+}
+
+// teamNamespacePrefix is the prefix of every team namespace (afs-t-<slug>).
+const teamNamespacePrefix = "afs-t-"
+
+var gvkNamespaceObj = schema.GroupVersionKind{Version: "v1", Kind: "Namespace"}
+
+// DeleteNamespace implements lifecycle.Namespaces: it asks for the deletion of a team namespace the
+// reconciler created and reports whether it is already gone. A namespace outside afs-t-* or without the
+// managed-by label is refused (ErrNotManaged); one that does not exist is gone. A terminating
+// namespace is not gone: the finalizer checks again on its next pass.
+func (c *TeamCluster) DeleteNamespace(ctx context.Context, name string) (bool, error) {
+	if !strings.HasPrefix(name, teamNamespacePrefix) {
+		return false, fmt.Errorf("%w: namespace %s is not a team namespace", ErrNotManaged, name)
+	}
+	live, err := c.client.Get(ctx, gvkNamespaceObj, "", name)
+	if err != nil {
+		return false, err
+	}
+	if live == nil {
+		return true, nil
+	}
+	if !render.IsManaged(live) {
+		return false, fmt.Errorf("%w: namespace %s", ErrNotManaged, name)
+	}
+	if live.GetDeletionTimestamp() != nil {
+		return false, nil
+	}
+	if err := c.client.Delete(ctx, gvkNamespaceObj, "", name); err != nil {
+		return false, err
+	}
+	return false, nil
 }

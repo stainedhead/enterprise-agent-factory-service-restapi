@@ -115,6 +115,23 @@ func (c *Control) DeleteProfile(ctx context.Context, arn string) error {
 	return nil
 }
 
+// DeleteTeamProfiles deletes every application inference profile the reconciler created for the team
+// (lifecycle.InferenceProfiles). A profile already gone is success; every profile is attempted and the
+// errors are joined.
+func (c *Control) DeleteTeamProfiles(ctx context.Context, teamID string) error {
+	profiles, err := c.ListProfiles(ctx, team.TagTeamID, teamID)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, p := range profiles {
+		if err := c.DeleteProfile(ctx, p.ARN); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // list returns every application inference profile whose name starts with afs-.
 func (c *Control) list(ctx context.Context) ([]team.Profile, error) {
 	var out []team.Profile

@@ -2,10 +2,15 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/lifecycle"
 )
 
@@ -91,3 +96,50 @@ func (l *TeamLifecycle) Complete(ctx context.Context, tgt lifecycle.Target) erro
 var (
 	_ lifecycle.Completer = (*TeamLifecycle)(nil)
 )
+
+// ConditionStore implements lifecycle.ConditionStore on resource_status. Writes go through the engine's
+// StatusWriter, so the phase change to Deleting publishes <kind>.status_changed once and the stored
+// observedGeneration is kept.
+type ConditionStore struct {
+	status *StatusWriter
+	runner port.TxRunner
+}
+
+// NewConditionStore returns a ConditionStore.
+func NewConditionStore(status *StatusWriter, runner port.TxRunner) *ConditionStore {
+	return &ConditionStore{status: status, runner: runner}
+}
+
+// Conditions implements lifecycle.ConditionStore; a resource without a status row has none.
+func (s *ConditionStore) Conditions(ctx context.Context, kind, id string) ([]domain.Condition, error) {
+	var conds []domain.Condition
+	err := s.runner.ReadTx(ctx, reconcilerSession, func(ctx context.Context, tx port.Tx) error {
+		t, err := Unwrap(tx)
+		if err != nil {
+			return err
+		}
+		var raw []byte
+		err = t.QueryRow(ctx, `SELECT conditions FROM afs.resource_status WHERE resource_kind = $1 AND resource_id = $2`, kind, id).Scan(&raw)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(raw, &conds)
+	})
+	if err != nil {
+		return nil, MapError(err, OpRead, "resource status")
+	}
+	return conds, nil
+}
+
+// Write implements lifecycle.ConditionStore.
+func (s *ConditionStore) Write(ctx context.Context, t lifecycle.Target, phase domain.Phase, conds []domain.Condition) error {
+	return s.status.Apply(ctx, engine.Report{
+		Ref:   engine.NewRef(engine.Kind(t.Kind), t.ID, t.TeamID),
+		Phase: phase, Conditions: conds, Replace: true, ReconciledAt: s.status.clock.Now(),
+	})
+}
+
+var _ lifecycle.ConditionStore = (*ConditionStore)(nil)

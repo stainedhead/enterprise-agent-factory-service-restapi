@@ -688,3 +688,25 @@ func TestEnqueueBackgroundSkipsFailingResources(t *testing.T) {
 		t.Error("a poll did not queue a healthy resource")
 	}
 }
+
+// M1-I1: a failing delete step is retried with the engine's backoff and the resource stays Deleting;
+// the controller (the finalizer) owns the step conditions, so the failure report adds none.
+func TestFailureWhileDeletingKeepsPhaseDeleting(t *testing.T) {
+	r := newRig(t, nil)
+	r.ctl.fn = func(_ context.Context, _ Ref, call int) (Outcome, error) {
+		if call <= 1 {
+			return Outcome{Phase: domain.PhaseDeleting, NoStatus: true}, errors.New("step failed")
+		}
+		return Outcome{NoStatus: true}, nil
+	}
+	r.start(t)
+	r.feed.send(Change{"teams", "team_A", "team_A"})
+	eventually(t, "retried", func() bool { return r.ctl.calls(Key{KindTeam, "team_A"}) >= 2 })
+	reps := r.status.all()
+	if len(reps) != 1 {
+		t.Fatalf("reports = %+v", reps)
+	}
+	if reps[0].Phase != domain.PhaseDeleting || len(reps[0].Conditions) != 0 || reps[0].Replace {
+		t.Errorf("failure report while deleting = %+v", reps[0])
+	}
+}

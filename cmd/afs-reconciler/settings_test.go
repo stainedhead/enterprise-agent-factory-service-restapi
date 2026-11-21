@@ -12,7 +12,8 @@ func envOf(m map[string]string) func(string) string { return func(k string) stri
 func host() func() (string, error) { return func() (string, error) { return "pod-0", nil } }
 
 func TestSettingsFrom(t *testing.T) {
-	base := map[string]string{"AFS_DATABASE_URL": "postgres://x", "AFS_GATEWAY_ROLE_ARN": "arn:aws:iam::111122223333:role/gw", "AFS_RECONCILER_USERS": " a , b,,"}
+	base := map[string]string{"AFS_DATABASE_URL": "postgres://x", "AFS_GATEWAY_ROLE_ARN": "arn:aws:iam::111122223333:role/gw", "AFS_RECONCILER_USERS": " a , b,,",
+		"AFS_EVENT_BUS_NAME": "afs-events", "AFS_CLUSTER_NAME": "afs-dev"}
 	s, err := settingsFrom(envOf(base), host())
 	if err != nil {
 		t.Fatal(err)
@@ -24,11 +25,14 @@ func TestSettingsFrom(t *testing.T) {
 		mut  func(map[string]string)
 		want string
 	}{
-		"no db":    {func(m map[string]string) { delete(m, "AFS_DATABASE_URL") }, "AFS_DATABASE_URL"},
-		"no gw":    {func(m map[string]string) { delete(m, "AFS_GATEWAY_ROLE_ARN") }, "AFS_GATEWAY_ROLE_ARN"},
-		"no users": {func(m map[string]string) { delete(m, "AFS_RECONCILER_USERS") }, "AFS_RECONCILER_USERS"},
-		"bad poll": {func(m map[string]string) { m["AFS_POLL_INTERVAL"] = "soon" }, "AFS_POLL_INTERVAL"},
-		"neg":      {func(m map[string]string) { m["AFS_RESYNC_INTERVAL"] = "-1s" }, "AFS_RESYNC_INTERVAL"},
+		"no db":      {func(m map[string]string) { delete(m, "AFS_DATABASE_URL") }, "AFS_DATABASE_URL"},
+		"no gw":      {func(m map[string]string) { delete(m, "AFS_GATEWAY_ROLE_ARN") }, "AFS_GATEWAY_ROLE_ARN"},
+		"no bus":     {func(m map[string]string) { delete(m, "AFS_EVENT_BUS_NAME") }, "AFS_EVENT_BUS_NAME"},
+		"no cluster": {func(m map[string]string) { delete(m, "AFS_CLUSTER_NAME") }, "AFS_CLUSTER_NAME"},
+		"bad iam":    {func(m map[string]string) { m["AFS_DB_IAM_AUTH"] = "maybe" }, "AFS_DB_IAM_AUTH"},
+		"no users":   {func(m map[string]string) { delete(m, "AFS_RECONCILER_USERS") }, "AFS_RECONCILER_USERS"},
+		"bad poll":   {func(m map[string]string) { m["AFS_POLL_INTERVAL"] = "soon" }, "AFS_POLL_INTERVAL"},
+		"neg":        {func(m map[string]string) { m["AFS_RESYNC_INTERVAL"] = "-1s" }, "AFS_RESYNC_INTERVAL"},
 	}
 	for name, tc := range cases {
 		m := map[string]string{}
@@ -39,6 +43,13 @@ func TestSettingsFrom(t *testing.T) {
 		if _, err := settingsFrom(envOf(m), host()); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: err = %v, want mention of %s", name, err, tc.want)
 		}
+	}
+	iam := map[string]string{"AFS_DB_IAM_AUTH": "true"}
+	for k, v := range base {
+		iam[k] = v
+	}
+	if s, err := settingsFrom(envOf(iam), host()); err != nil || !s.DBIAMAuth || s.EventBusName != "afs-events" {
+		t.Errorf("IAM auth: %+v %v", s, err)
 	}
 	if _, err := settingsFrom(envOf(base), func() (string, error) { return "", errors.New("no") }); err == nil {
 		t.Error("without POD_NAME the hostname is the identity; its failure must be reported")

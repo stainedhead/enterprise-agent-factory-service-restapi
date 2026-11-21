@@ -24,6 +24,9 @@ type Config struct {
 	RequestID func(context.Context) string
 	// Checks are the readiness checks served on /readyz.
 	Checks []Check
+	// Metrics is the registry to serve; nil builds one. A composition root that records metrics while
+	// it wires (the outbox lag, RED middleware) builds it first with NewMetrics and passes it here.
+	Metrics *Metrics
 }
 
 // EnvConfig reads the shared environment variables for service.
@@ -53,7 +56,10 @@ func Start(ctx context.Context, c Config) (*Runtime, error) {
 	}
 	log := NewLogger(out, LogConfig{Level: c.LogLevel, Service: c.Service, RequestID: c.RequestID})
 	slog.SetDefault(log)
-	m := NewMetrics(c.Service, c.Version)
+	m := c.Metrics
+	if m == nil {
+		m = NewMetrics(c.Service, c.Version)
+	}
 	shutdownOTel, err := SetupOTel(ctx, OTelConfig{Endpoint: c.OTLP, Service: c.Service, Version: c.Version})
 	if err != nil {
 		return nil, err

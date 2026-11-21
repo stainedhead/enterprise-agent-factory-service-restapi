@@ -203,3 +203,43 @@ func TestDeleteProfile(t *testing.T) {
 		t.Errorf("delete error code = %q", engine.CodeOf(err))
 	}
 }
+
+// RC-US-15.3: a deleted team's inference profiles are removed, and only that team's, only ours.
+func TestDeleteTeamProfiles(t *testing.T) {
+	c, srv := newControl(t)
+	srv.On(listHandler(map[string]any{"inferenceProfileSummaries": []any{summary("afs-a", "arn:a"), summary("afs-b", "arn:b")}}))
+	srv.On(func(r awstest.Request) *awstest.Response {
+		if r.Method != "POST" || !strings.HasPrefix(r.Path, "/listTagsForResource") {
+			return nil
+		}
+		var in struct {
+			ResourceARN string `json:"resourceARN"`
+		}
+		_ = r.JSON(&in)
+		team := "team_X"
+		if in.ResourceARN == "arn:b" {
+			team = "team_Y"
+		}
+		resp := awstest.JSONOK(map[string]any{"tags": []map[string]string{{"key": "afs-managed-by", "value": "afs-reconciler"}, {"key": "afs-team-id", "value": team}}})
+		return &resp
+	})
+	srv.On(func(r awstest.Request) *awstest.Response {
+		if r.Method == "DELETE" {
+			resp := awstest.JSONOK(map[string]any{})
+			return &resp
+		}
+		return nil
+	})
+	if err := c.DeleteTeamProfiles(t.Context(), "team_X"); err != nil {
+		t.Fatal(err)
+	}
+	var deleted []string
+	for _, r := range srv.Requests() {
+		if r.Method == "DELETE" {
+			deleted = append(deleted, r.Path)
+		}
+	}
+	if len(deleted) != 1 || !strings.Contains(deleted[0], "arn:a") && !strings.Contains(deleted[0], "arn%3Aa") {
+		t.Errorf("deleted = %v, want only team_X's profile", deleted)
+	}
+}
