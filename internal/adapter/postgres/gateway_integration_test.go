@@ -58,6 +58,10 @@ func seedGateway(t *testing.T, amount string) gwWorld {
 VALUES ($1, now() - interval '2 days', 1, 5, 0, 0), ($1, now() - interval '1 hour', 3, 15, 0.3, 3.75), ($1, now() + interval '1 day', 99, 99, 0, 0)`, w.model)
 	exec(`INSERT INTO afs.team_models (team_id, model_id) VALUES ($1, $2)`, w.team, w.model)
 	exec(`UPDATE afs.team_models SET inference_profile_arn = $3 WHERE team_id = $1 AND model_id = $2`, w.team, w.model, w.profile)
+	// Other tests read the outbox as a whole, so what the gateway tests publish is removed afterwards.
+	t.Cleanup(func() {
+		_, _ = adm.Exec(context.Background(), `DELETE FROM afs.outbox_events WHERE team_id = $1`, w.team)
+	})
 	return w
 }
 
