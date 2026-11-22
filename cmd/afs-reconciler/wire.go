@@ -56,12 +56,12 @@ type reconciler struct {
 
 // routes is the table → controller registry (architecture §3): a row of teams is the team itself, a
 // row of team_models belongs to its team, and a service-level model change reconciles every team.
-func routes() (*engine.Registry, error) {
-	return engine.NewRegistry(
-		engine.Route{Table: "teams", Targets: []engine.Target{{Kind: engine.KindTeam, Self: true}}},
-		engine.Route{Table: "team_models", Targets: []engine.Target{{Kind: engine.KindTeam}}},
-		engine.Route{Table: "models", FanOut: []engine.Kind{engine.KindTeam}},
-	)
+func routes(extra ...engine.Route) (*engine.Registry, error) {
+	return engine.NewRegistry(append([]engine.Route{
+		{Table: "teams", Targets: []engine.Target{{Kind: engine.KindTeam, Self: true}}},
+		{Table: "team_models", Targets: []engine.Target{{Kind: engine.KindTeam}}},
+		{Table: "models", FanOut: []engine.Kind{engine.KindTeam}},
+	}, extra...)...)
 }
 
 func restConfig(kubeconfig string) (*rest.Config, error) {
@@ -171,13 +171,21 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	if err != nil {
 		return fail(err)
 	}
-	reg, err := routes()
+	lg, err := wireLogs(kc, runner, status, pool, env, clock.Now, log)
+	if err != nil {
+		return fail(err)
+	}
+	controllers := []engine.Controller{teams, platform, adm}
+	if lg.Controller != nil {
+		controllers = append(controllers, lg.Controller)
+	}
+	reg, err := routes(lg.Routes...)
 	if err != nil {
 		return fail(err)
 	}
 	r.Engine, err = engine.New(engine.Config{
-		Feed: postgres.NewChangeFeed(dbCfg, log), Lister: postgres.NewLister(pool), Registry: reg,
-		Controllers:  []engine.Controller{teams, platform, adm},
+		Feed: postgres.NewChangeFeed(dbCfg, log), Lister: lg.WrapLister(postgres.NewLister(pool)), Registry: reg,
+		Controllers:  controllers,
 		Status:       status,
 		Drift:        postgres.NewDriftRecorder(runner, audit, outbox, ids),
 		Singletons:   []engine.Ref{team.PlatformRef, admission.Ref},

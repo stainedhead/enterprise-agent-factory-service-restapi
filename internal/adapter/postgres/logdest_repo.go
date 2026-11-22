@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -11,6 +12,8 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/logdest"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/logs"
 )
 
 // LogDestinationStatusKind is the resource_status kind of a log destination (written by the
@@ -184,4 +187,126 @@ func (r *LogDestRepo) missOrStale(ctx context.Context, tx port.Tx, teamID, id st
 		return err
 	}
 	return domain.PreconditionFailed()
+}
+
+// LogSource implements logs.Source for the reconciler: the team's namespace and state and all its log
+// destinations with the ARN of the referenced secret (never a value).
+type LogSource struct{ runner *TxRunner }
+
+// NewLogSource returns a LogSource on the afs_reconciler pool's TxRunner.
+func NewLogSource(runner *TxRunner) *LogSource { return &LogSource{runner: runner} }
+
+var _ logs.Source = (*LogSource)(nil)
+
+const loadLogTeamSQL = `SELECT id, slug, namespace, state FROM afs.teams WHERE id = $1`
+
+const loadLogDestinationsSQL = `SELECT d.id, d.name, d.kind, d.config, coalesce(s.secrets_manager_arn, ''), d.enabled, d.version
+FROM afs.log_destinations d
+LEFT JOIN afs.secrets s ON s.team_id = d.team_id AND s.id = d.secret_id
+WHERE d.team_id = $1 ORDER BY d.id`
+
+// LoadLogs implements logs.Source.
+func (s *LogSource) LoadLogs(ctx context.Context, teamID string) (logs.Desired, error) {
+	var d logs.Desired
+	err := s.runner.ReadTx(ctx, ReconcilerSession(), func(ctx context.Context, tx port.Tx) error {
+		t, err := Unwrap(tx)
+		if err != nil {
+			return err
+		}
+		err = t.QueryRow(ctx, loadLogTeamSQL, teamID).Scan(&d.TeamID, &d.Slug, &d.Namespace, &d.State)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.NotFound("team")
+		}
+		if err != nil {
+			return MapError(err, OpRead, "team")
+		}
+		rows, err := t.Query(ctx, loadLogDestinationsSQL, teamID)
+		if err != nil {
+			return MapError(err, OpRead, "log destinations")
+		}
+		defer rows.Close()
+		d.Destinations = nil
+		for rows.Next() {
+			var (
+				dest logs.Destination
+				kind string
+				cfg  []byte
+			)
+			if err := rows.Scan(&dest.ID, &dest.Name, &kind, &cfg, &dest.SecretARN, &dest.Enabled, &dest.Version); err != nil {
+				return MapError(err, OpRead, "log destinations")
+			}
+			dest.Kind = domain.LogDestinationKind(kind)
+			if err := json.Unmarshal(cfg, &dest.Config); err != nil {
+				return fmt.Errorf("postgres: config of %s: %w", dest.ID, err)
+			}
+			d.Destinations = append(d.Destinations, dest)
+		}
+		return rows.Err()
+	})
+	return d, err
+}
+
+// LogLister adds the per-team log delivery resources to another engine.Lister: every team that is not
+// deleting or deleted has one (the destinations are rows of the team, not resources of their own). The
+// stale-generation poll does not apply, since a destination change notifies the engine directly.
+type LogLister struct {
+	engine.Lister
+	pool Querier2
+}
+
+// NewLogLister wraps base; pool is the afs_reconciler pool.
+func NewLogLister(base engine.Lister, pool Querier2) *LogLister {
+	return &LogLister{Lister: base, pool: pool}
+}
+
+var _ engine.Lister = (*LogLister)(nil)
+
+// List implements engine.Lister.
+func (l *LogLister) List(ctx context.Context, kinds []engine.Kind) ([]engine.Ref, error) {
+	var rest []engine.Kind
+	wantLogs := false
+	for _, k := range kinds {
+		if k == logs.Kind {
+			wantLogs = true
+		} else {
+			rest = append(rest, k)
+		}
+	}
+	var out []engine.Ref
+	if len(rest) > 0 {
+		var err error
+		if out, err = l.Lister.List(ctx, rest); err != nil {
+			return nil, err
+		}
+	}
+	if !wantLogs {
+		return out, nil
+	}
+	rows, err := l.pool.Query(ctx, `SELECT id FROM afs.teams WHERE state IN ('active', 'suspended') ORDER BY id`)
+	if err != nil {
+		return nil, MapError(err, OpRead, "teams")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, MapError(err, OpRead, "teams")
+		}
+		out = append(out, engine.NewRef(logs.Kind, id, id))
+	}
+	return out, MapError(rows.Err(), OpRead, "teams")
+}
+
+// Stale implements engine.Lister: log delivery has no generation to compare.
+func (l *LogLister) Stale(ctx context.Context, kinds []engine.Kind) ([]engine.Ref, error) {
+	var rest []engine.Kind
+	for _, k := range kinds {
+		if k != logs.Kind {
+			rest = append(rest, k)
+		}
+	}
+	if len(rest) == 0 {
+		return nil, nil
+	}
+	return l.Lister.Stale(ctx, rest)
 }
