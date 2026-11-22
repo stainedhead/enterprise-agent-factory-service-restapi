@@ -1372,12 +1372,20 @@ spec:
                       value: http://otel-collector.observability:4318
                     - name: AFS_API_ADDR
                       value: :8080
-                    - name: AFS_MAX_BODY_BYTES
-                      value: "1048576"
                     - name: AFS_METRICS_ADDR
                       value: :9090
                     - name: AFS_API_REPLICAS
                       value: "3"
+                    - name: AFS_PAGE_TOKEN_KEY
+                      valueFrom:
+                        secretKeyRef:
+                            key: pageTokenKey
+                            name: afs-api-keys
+                    - name: AFS_IDEMPOTENCY_HMAC_KEY
+                      valueFrom:
+                        secretKeyRef:
+                            key: idempotencyHmacKey
+                            name: afs-api-keys
                   image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-api:v0.1.0
                   imagePullPolicy: IfNotPresent
                   livenessProbe:

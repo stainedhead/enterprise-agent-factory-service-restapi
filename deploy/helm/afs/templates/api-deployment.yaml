@@ -52,6 +52,17 @@ spec:
             {{- end }}
             - name: AFS_API_REPLICAS
               value: {{ default $c.replicas $c.rateLimitReplicas | quote }}
+            # Both keys must be identical on every replica, so they come from one Secret, never a value.
+            - name: AFS_PAGE_TOKEN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $c.keysSecret.name }}
+                  key: pageTokenKey
+            - name: AFS_IDEMPOTENCY_HMAC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $c.keysSecret.name }}
+                  key: idempotencyHmacKey
             {{- if $c.migrate.ownerUser }}
             - name: AFS_DATABASE_OWNER_URL
               value: {{ include "afs.databaseURL" (dict "root" $ "user" $c.migrate.ownerUser) | quote }}

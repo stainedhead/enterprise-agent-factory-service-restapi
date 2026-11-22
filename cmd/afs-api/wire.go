@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	crand "crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -42,6 +43,9 @@ type components struct {
 	Close   func()
 }
 
+// minKeyBytes is the shortest accepted HMAC or page-token key.
+const minKeyBytes = 32
+
 // settings are read from the environment (user-docs/configuration.md).
 type settings struct {
 	DatabaseURL      string // AFS_DATABASE_URL: the afs_app login
@@ -58,6 +62,14 @@ type settings struct {
 	// (AFS_DB_IAM_AUTH); AWSRegion (AFS_AWS_REGION, AWS_REGION as fallback) is then required.
 	DBIAMAuth bool
 	AWSRegion string
+	// PageTokenKey signs nextToken values (AFS_PAGE_TOKEN_KEY, at least 32 bytes). Every replica must
+	// hold the same key, so more than one replica refuses to start without it. Empty with one replica:
+	// wire draws a random per-process key.
+	PageTokenKey []byte
+	// IdempotencyHMACKey keys the HMAC of secret values in the idempotency fingerprint
+	// (AFS_IDEMPOTENCY_HMAC_KEY, at least 32 bytes, the same on every replica). Empty with one
+	// replica: wire draws a random per-process key.
+	IdempotencyHMACKey []byte
 	// OIDCHTTP fetches identity provider discovery documents and JWKS; nil uses a client with a 5 s
 	// timeout. Tests point it at a fake provider.
 	OIDCHTTP *http.Client
@@ -89,6 +101,18 @@ func settingsFrom(env func(string) string) (settings, error) {
 			*v.dst = n
 		}
 	}
+	if k := env("AFS_PAGE_TOKEN_KEY"); len(k) >= minKeyBytes {
+		s.PageTokenKey = []byte(k)
+	}
+	if s.APIReplicas > 1 && s.PageTokenKey == nil {
+		return s, fmt.Errorf("AFS_API_REPLICAS=%d needs AFS_PAGE_TOKEN_KEY of at least %d bytes, the same on every replica", s.APIReplicas, minKeyBytes)
+	}
+	if k := env("AFS_IDEMPOTENCY_HMAC_KEY"); len(k) >= minKeyBytes {
+		s.IdempotencyHMACKey = []byte(k)
+	}
+	if s.APIReplicas > 1 && s.IdempotencyHMACKey == nil {
+		return s, fmt.Errorf("AFS_API_REPLICAS=%d needs AFS_IDEMPOTENCY_HMAC_KEY of at least %d bytes, the same on every replica", s.APIReplicas, minKeyBytes)
+	}
 	s.AWSRegion = env("AFS_AWS_REGION")
 	if s.AWSRegion == "" {
 		s.AWSRegion = env("AWS_REGION")
@@ -117,10 +141,18 @@ func settingsFrom(env func(string) string) (settings, error) {
 // pool and wires the database-backed components.
 func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error) {
 	c := &components{Close: func() {}, Metrics: observability.NewMetrics("afs-api", buildinfo.Version)}
+	setPageTokenKey(s.PageTokenKey, log)
+	if len(s.IdempotencyHMACKey) < minKeyBytes {
+		log.Warn("AFS_IDEMPOTENCY_HMAC_KEY is unset; using a random per-process key (single replica only)")
+		s.IdempotencyHMACKey = make([]byte, minKeyBytes)
+		_, _ = crand.Read(s.IdempotencyHMACKey)
+	}
 	cfg := httpapi.Config{
 		// RED metrics outermost, labelled by the operationId the router reports.
 		Outer:   []httpapi.Middleware{func(next http.Handler) http.Handler { return middleware.Metrics(c.Metrics, next) }},
 		OnRoute: middleware.SetRoute,
+		// Keyed fingerprint of secret values in idempotency claims (FR-R14).
+		IdempotencyHMACKey: s.IdempotencyHMACKey,
 	}
 	if s.DatabaseURL != "" {
 		if s.OwnerURL != "" {

@@ -44,6 +44,9 @@ type Config struct {
 	// team guard, denied-request audit, If-Match, ETag and Idempotency-Key handling. The first element
 	// is the outermost.
 	PostAuth []Middleware
+	// IdempotencyHMACKey keys the HMAC-SHA-256 that fingerprints secret values in idempotency claims
+	// (at least 32 bytes, the same on every replica). The secrets handlers read it; it is never logged.
+	IdempotencyHMACKey []byte
 	// Now and Entropy feed request ids; defaults are time.Now and crypto/rand.
 	Now     func() time.Time
 	Entropy io.Reader

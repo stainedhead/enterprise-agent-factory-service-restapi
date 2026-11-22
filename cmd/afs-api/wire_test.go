@@ -124,3 +124,67 @@ func TestSettingsDBIAMAuth(t *testing.T) {
 		t.Fatal("AFS_AWS_REGION must win", s, err)
 	}
 }
+
+// D-2 (FR-R07 AC2): the page-token key is a setting; more than one replica needs a shared key of at
+// least 32 bytes.
+func TestSettingsPageTokenKey(t *testing.T) {
+	key32 := strings.Repeat("k", 32)
+	cases := []struct {
+		name    string
+		env     map[string]string
+		wantErr bool
+		wantKey string
+	}{
+		{"one replica, no key", nil, false, ""},
+		{"one replica, key", map[string]string{"AFS_PAGE_TOKEN_KEY": key32}, false, key32},
+		{"one replica, short key is not used", map[string]string{"AFS_PAGE_TOKEN_KEY": "short"}, false, ""},
+		{"three replicas, no key", map[string]string{"AFS_API_REPLICAS": "3"}, true, ""},
+		{"three replicas, 31 bytes", map[string]string{"AFS_API_REPLICAS": "3", "AFS_PAGE_TOKEN_KEY": key32[:31]}, true, ""},
+		{"three replicas, 32 bytes", map[string]string{"AFS_API_REPLICAS": "3", "AFS_PAGE_TOKEN_KEY": key32, "AFS_IDEMPOTENCY_HMAC_KEY": key32}, false, key32},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s, err := settingsFrom(env(c.env))
+			if (err != nil) != c.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, c.wantErr)
+			}
+			if err == nil && string(s.PageTokenKey) != c.wantKey {
+				t.Fatalf("key = %q, want %q", s.PageTokenKey, c.wantKey)
+			}
+			if err != nil && strings.Contains(err.Error(), key32[:31]) {
+				t.Fatalf("error leaks the key: %v", err)
+			}
+		})
+	}
+}
+
+// D-5 (FR-R14, RD-2): the idempotency HMAC key is a setting; more than one replica needs a shared key of
+// at least 32 bytes, so a replay is recognised on any replica.
+func TestSettingsIdempotencyHMACKey(t *testing.T) {
+	key32 := strings.Repeat("h", 32)
+	pk := "0123456789abcdef0123456789abcdef"
+	cases := []struct {
+		name    string
+		env     map[string]string
+		wantErr bool
+		wantKey string
+	}{
+		{"one replica, no key", nil, false, ""},
+		{"one replica, key", map[string]string{"AFS_IDEMPOTENCY_HMAC_KEY": key32}, false, key32},
+		{"one replica, short key is not used", map[string]string{"AFS_IDEMPOTENCY_HMAC_KEY": "short"}, false, ""},
+		{"two replicas, no key", map[string]string{"AFS_API_REPLICAS": "2", "AFS_PAGE_TOKEN_KEY": pk}, true, ""},
+		{"two replicas, 31 bytes", map[string]string{"AFS_API_REPLICAS": "2", "AFS_PAGE_TOKEN_KEY": pk, "AFS_IDEMPOTENCY_HMAC_KEY": key32[:31]}, true, ""},
+		{"two replicas, 32 bytes", map[string]string{"AFS_API_REPLICAS": "2", "AFS_PAGE_TOKEN_KEY": pk, "AFS_IDEMPOTENCY_HMAC_KEY": key32}, false, key32},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s, err := settingsFrom(env(c.env))
+			if (err != nil) != c.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, c.wantErr)
+			}
+			if err == nil && string(s.IdempotencyHMACKey) != c.wantKey {
+				t.Fatalf("key = %q, want %q", s.IdempotencyHMACKey, c.wantKey)
+			}
+		})
+	}
+}
