@@ -12,6 +12,9 @@ import (
 type SecretsAPI struct {
 	Svc   *secrets.Service
 	Pages PageTokens
+	// IdemKey is the server key (at least 32 bytes, the same on every replica) of the idempotency
+	// fingerprint of secret values (FR-R14).
+	IdemKey []byte
 }
 
 // BindSecrets binds the secret handlers as the secrets area.
@@ -95,7 +98,12 @@ func (a *SecretsAPI) create(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
-	idem, err := w2Idem(r, "CreateSecret", teamID, idemBody(raw, req.Value), func(v any) (int, json.RawMessage, error) {
+	fp, err := idemBody(a.IdemKey, raw, req.Value)
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	idem, err := w2Idem(r, "CreateSecret", teamID, fp, func(v any) (int, json.RawMessage, error) {
 		return w2Render(http.StatusCreated, toSecretBody(v.(domain.Secret)))
 	})
 	if err != nil {
@@ -222,7 +230,12 @@ func (a *SecretsAPI) rotate(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
-	idem, err := w2Idem(r, "RotateSecret", teamID, idemBody(raw, req.Value), func(v any) (int, json.RawMessage, error) {
+	fp, err := idemBody(a.IdemKey, raw, req.Value)
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	idem, err := w2Idem(r, "RotateSecret", teamID, fp, func(v any) (int, json.RawMessage, error) {
 		return w2Render(http.StatusOK, toSecretBody(v.(domain.Secret)))
 	})
 	if err != nil {
