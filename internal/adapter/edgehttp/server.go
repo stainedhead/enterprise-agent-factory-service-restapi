@@ -27,11 +27,18 @@ import (
 // DefaultIdleTimeout ends a WebSocket or event stream with no traffic (EDGE-5).
 const DefaultIdleTimeout = 10 * time.Minute
 
+// DefaultRecheckEvery is how often an open WebSocket or event stream is authorized again.
+const DefaultRecheckEvery = 60 * time.Second
+
 // Decider is what the adapter needs of the use case.
 type Decider interface {
 	Handle(ctx context.Context, req edge.Request) edge.Result
 	OnScan(ctx context.Context, r edge.Result, matches []collab.Match) (edge.Result, bool)
 	FrameAllowed(r edge.Result) bool
+	// Recheck decides an open stream again with fresh data (finding 2).
+	Recheck(ctx context.Context, req edge.Request) edge.Result
+	// OnUnreadable answers a body the scanner could not decode (415).
+	OnUnreadable(r edge.Result) edge.Result
 }
 
 // Observer receives one call per request for metrics.
@@ -46,8 +53,12 @@ type Config struct {
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
 	// IdleTimeout defaults to DefaultIdleTimeout.
 	IdleTimeout time.Duration
-	Log         *slog.Logger
-	Observer    Observer
+	// RecheckEvery is the re-authorization interval of open streams; default DefaultRecheckEvery.
+	RecheckEvery time.Duration
+	// NewTicker is the clock of the re-authorization; default time.NewTicker. Tests inject their own.
+	NewTicker func(d time.Duration) (<-chan time.Time, func())
+	Log       *slog.Logger
+	Observer  Observer
 }
 
 // Server is the edge's http.Handler.
@@ -55,6 +66,8 @@ type Server struct {
 	svc       Decider
 	dial      func(ctx context.Context, network, addr string) (net.Conn, error)
 	idle      time.Duration
+	recheck   time.Duration
+	ticker    func(d time.Duration) (<-chan time.Time, func())
 	log       *slog.Logger
 	obs       Observer
 	transport *http.Transport
@@ -69,6 +82,16 @@ func New(cfg Config) *Server {
 	}
 	if s.idle <= 0 {
 		s.idle = DefaultIdleTimeout
+	}
+	s.recheck, s.ticker = cfg.RecheckEvery, cfg.NewTicker
+	if s.recheck <= 0 {
+		s.recheck = DefaultRecheckEvery
+	}
+	if s.ticker == nil {
+		s.ticker = func(d time.Duration) (<-chan time.Time, func()) {
+			t := time.NewTicker(d)
+			return t.C, t.Stop
+		}
 	}
 	if s.log == nil {
 		s.log = slog.Default()
@@ -97,7 +120,13 @@ func (s *Server) request(r *http.Request, id string) edge.Request {
 	if c, err := r.Cookie(edge.CookieName); err == nil {
 		cookie = c.Value
 	}
-	return edge.Request{Method: r.Method, Host: r.Host, Path: r.URL.Path, Query: r.URL.RawQuery, Cookie: cookie,
+	var signin string
+	if c, err := r.Cookie(edge.SigninCookieName); err == nil {
+		signin = c.Value
+	}
+	return edge.Request{Method: r.Method, Host: r.Host, Path: r.URL.Path, Query: r.URL.RawQuery, Cookie: cookie, SigninCookie: signin,
+		Origin: r.Header.Get("Origin"), SecFetchSite: r.Header.Get("Sec-Fetch-Site"),
+		EventStream:       strings.Contains(strings.ToLower(r.Header.Get("Accept")), "text/event-stream"),
 		XAfsAuthorization: r.Header.Get("X-Afs-Authorization"), Navigate: navigation(r), ContentLength: r.ContentLength,
 		ContentEncoding: r.Header.Get("Content-Encoding"), ContentType: r.Header.Get("Content-Type"), Upgrade: isUpgrade(r),
 		RemoteAddr: r.RemoteAddr, RequestID: id}
@@ -155,6 +184,12 @@ func (s *Server) redirect(w http.ResponseWriter, res edge.Result, id string) {
 	case res.ClearCookie:
 		http.SetCookie(w, edgesession.ClearCookie(edge.CookieName))
 	}
+	switch {
+	case res.SetSigninCookie:
+		http.SetCookie(w, edgesession.Cookie(edge.SigninCookieName, res.SigninCookie, edge.SigninCookieTTL))
+	case res.ClearSigninCookie:
+		http.SetCookie(w, edgesession.ClearCookie(edge.SigninCookieName))
+	}
 	w.WriteHeader(http.StatusFound)
 }
 
@@ -174,7 +209,7 @@ func stripCookie(h http.Header) {
 	for _, line := range lines {
 		for _, c := range strings.Split(line, ";") {
 			c = strings.TrimSpace(c)
-			if c != "" && !strings.HasPrefix(c, edge.CookieName+"=") {
+			if c != "" && !strings.HasPrefix(c, edge.CookieName+"=") && !strings.HasPrefix(c, edge.SigninCookieName+"=") {
 				keep = append(keep, c)
 			}
 		}
@@ -191,6 +226,11 @@ func stripCookie(h http.Header) {
 func sanitize(h http.Header) {
 	stripCookie(h)
 	h.Del("X-Afs-Authorization")
+	// A method override would turn a request the edge decided as one method into another (finding 11), and
+	// a negotiated compression extension would hide WebSocket frames from the scan (finding 3).
+	for _, k := range []string{"X-Http-Method-Override", "X-Http-Method", "X-Method-Override", "Sec-Websocket-Extensions"} {
+		h.Del(k)
+	}
 	for k := range h {
 		l := strings.ToLower(k)
 		if strings.HasPrefix(l, "x-amzn-") || strings.HasPrefix(l, "x-forwarded-") || l == "forwarded" || l == "x-real-ip" {
@@ -218,9 +258,12 @@ func (s *Server) forward(w *statusWriter, r *http.Request, res edge.Result, id s
 			writeError(w, r, edge.Result{Status: 400, Code: "ValidationError", Reason: "body_too_large"}, id, navigation(r))
 			return
 		}
-		st := collab.NewStream()
-		st.Write(body)
-		if out, blocked := s.svc.OnScan(r.Context(), res, st.Finish()); blocked {
+		matches, readable := collab.ScanBody(body, r.Header.Get("Content-Type"))
+		if !readable {
+			writeError(w, r, s.svc.OnUnreadable(res), id, false)
+			return
+		}
+		if out, blocked := s.svc.OnScan(r.Context(), res, matches); blocked {
 			writeError(w, r, out, id, false)
 			return
 		}
@@ -243,9 +286,10 @@ func (s *Server) forward(w *statusWriter, r *http.Request, res edge.Result, id s
 		out.Header.Set("X-Forwarded-For", clientIP(r.RemoteAddr))
 		out.Header.Set("X-Forwarded-Proto", "https")
 		out.Header.Set("X-Request-Id", id)
-		s.tunnel(w, r, res, out)
+		s.tunnel(w, r, res, out, s.request(r, id))
 		return
 	}
+	rq := s.request(r, id)
 	proxy := &httputil.ReverseProxy{
 		Transport:     s.transport,
 		FlushInterval: -1,
@@ -266,8 +310,9 @@ func (s *Server) forward(w *statusWriter, r *http.Request, res edge.Result, id s
 					delete(resp.Header, k)
 				}
 			}
+			scrubSetCookies(resp.Header)
 			if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
-				resp.Body = newIdleBody(resp.Body, s.idle)
+				resp.Body = s.watchBody(r.Context(), newIdleBody(resp.Body, s.idle), rq, res)
 			}
 			return nil
 		},
@@ -313,4 +358,73 @@ func (b *idleBody) Close() error {
 	b.timer.Stop()
 	b.mu.Unlock()
 	return b.ReadCloser.Close()
+}
+
+// scrubSetCookies keeps Paperclip's cookies host-only and away from ours: the Domain attribute is removed
+// (a cookie for the whole base domain would reach every other team's host) and any cookie named like an AFS
+// cookie is dropped (finding 10).
+func scrubSetCookies(h http.Header) {
+	vals := h.Values("Set-Cookie")
+	if len(vals) == 0 {
+		return
+	}
+	h.Del("Set-Cookie")
+	for _, v := range vals {
+		parts := strings.Split(v, ";")
+		name := strings.ToLower(strings.TrimSpace(strings.SplitN(parts[0], "=", 2)[0]))
+		if strings.HasPrefix(name, "__host-afs") {
+			continue
+		}
+		keep := []string{parts[0]}
+		for _, p := range parts[1:] {
+			if a := strings.ToLower(strings.TrimSpace(p)); a != "domain" && !strings.HasPrefix(a, "domain=") {
+				keep = append(keep, p)
+			}
+		}
+		h.Add("Set-Cookie", strings.Join(keep, ";"))
+	}
+}
+
+// stillAllowed reports whether an open stream may go on: the request is still forwarded, with the same
+// right to send and the same scan mode it started with.
+func (s *Server) stillAllowed(ctx context.Context, rq edge.Request, res edge.Result) bool {
+	out := s.svc.Recheck(ctx, rq)
+	return out.Action == edge.Forward && s.svc.FrameAllowed(out) == s.svc.FrameAllowed(res) && out.ScanMode == res.ScanMode
+}
+
+// watch runs the periodic re-authorization until stop is closed; kill ends the stream when it fails.
+func (s *Server) watch(ctx context.Context, rq edge.Request, res edge.Result, stop <-chan struct{}, kill func()) {
+	ticks, stopTicker := s.ticker(s.recheck)
+	defer stopTicker()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ctx.Done():
+			return
+		case <-ticks:
+			if !s.stillAllowed(ctx, rq, res) {
+				kill()
+				return
+			}
+		}
+	}
+}
+
+// recheckedBody ends an event stream when its re-authorization fails.
+type recheckedBody struct {
+	io.ReadCloser
+	stop chan struct{}
+	once sync.Once
+}
+
+func (b *recheckedBody) Close() error {
+	b.once.Do(func() { close(b.stop) })
+	return b.ReadCloser.Close()
+}
+
+func (s *Server) watchBody(ctx context.Context, body io.ReadCloser, rq edge.Request, res edge.Result) io.ReadCloser {
+	b := &recheckedBody{ReadCloser: body, stop: make(chan struct{})}
+	go s.watch(ctx, rq, res, b.stop, func() { _ = body.Close() })
+	return b
 }

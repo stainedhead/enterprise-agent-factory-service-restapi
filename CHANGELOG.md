@@ -8,6 +8,8 @@ Paperclip team collaboration (spec `specs/archive/261122-paperclip-collaboration
 
 - API contract v1.3.1: seven collaboration operations (`GetTeamCollaboration`, `PutTeamCollaboration`, `ListCollaborationLinks`,
   `ConnectAgentToCollaboration`, `DisconnectAgentFromCollaboration`, `RotateCollaborationKeys`, `ListCollaborationEndpoints`), 189 operations in all.
+- `afs-edge` security review fixes: cross-origin writes, upgrades and streams refused (`cross_origin`); open streams re-authorized every 60 s; WebSocket scan bypasses closed (no compression, reserved bits and opcodes, binary and fragmented messages); body scan decodes JSON escapes, forms, multipart parts and UTF-16, and refuses unreadable media types (415); upstream WebSocket handshake validated; bearer audience follows `afs-api`; bounded caches and a per-source limit on unknown credentials; sign-in bound to the starting browser; redirect, `Set-Cookie`, method-override and Host hardening; group-only sessions re-authenticate after 60 minutes.
+- `PutSetting` key list includes the seven `collab.*` settings.
 - Role `team_collaborator` and permissions `collaboration:read|manage|access|contribute|api`.
 - Collaboration agent (`role: collaboration`) with AFS-generated boot secrets; managed secrets (`managedBy`, `managed_secret`, reserved names).
 - `AgentTemplate.capabilities`, `Team.mayExposeCollaboration`, identity provider `collabClientId` and `collabClientSecretArn`.

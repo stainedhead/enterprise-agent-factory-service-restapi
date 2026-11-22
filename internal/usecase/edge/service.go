@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,17 @@ const (
 	PathSignout  = "/_afs/signout"
 	PathCallback = "/oauth2/callback"
 )
+
+// SigninCookieName is the short-lived host-only cookie that binds a sign-in to the browser that started it
+// (finding 8). It holds a random value; only its hash travels in the sealed state and handoff envelope.
+const SigninCookieName = "__Host-afs-signin"
+
+// SigninCookieTTL is its lifetime in seconds (the state's lifetime).
+const SigninCookieTTL = 600
+
+// GroupReauthAfter is how old a session may get when its access comes only from an IdP group binding
+// (RD-24): after it the person signs in again through the provider so group removals take effect.
+const GroupReauthAfter = 60 * time.Minute
 
 // Cache lifetimes (EDGE-4): decisions are cached at most 60 s, a negative result 10 s.
 const (
@@ -50,7 +62,16 @@ type Request struct {
 	ContentEncoding string
 	ContentType     string
 	// Upgrade is true for a WebSocket handshake.
-	Upgrade    bool
+	Upgrade bool
+	// EventStream is true when the client asks for text/event-stream (Server-Sent Events).
+	EventStream bool
+	// Origin and SecFetchSite are the request headers of the same names (CSRF check).
+	Origin, SecFetchSite string
+	// SigninCookie is the value of SigninCookieName, "" when absent.
+	SigninCookie string
+	// Recheck marks the periodic re-authorization of an open stream: caches are bypassed and no rate
+	// limit or count is charged.
+	Recheck    bool
 	RemoteAddr string
 	RequestID  string
 }
@@ -86,6 +107,10 @@ type Result struct {
 	CookieMaxAge int
 	ClearCookie  bool
 	SetCookie    bool
+	// SigninCookie is set when SetSigninCookie is true (SigninCookieTTL seconds); ClearSigninCookie expires it.
+	SigninCookie      string
+	SetSigninCookie   bool
+	ClearSigninCookie bool
 
 	Route     collab.Route
 	Class     collab.Class
@@ -115,15 +140,19 @@ type Service struct {
 	Alerts     Alerts
 	Records    Records
 	Limiter    *collab.Limiter
-	Now        func() time.Time
+	// CacheSize bounds each decision cache (DefaultCacheSize when 0); UnknownPerMinute bounds the lookups of
+	// unknown credentials per source address per minute (DefaultUnknownPerMinute when 0).
+	CacheSize, UnknownPerMinute int
+	Now                         func() time.Time
 	// Rand is the random source of codes and session ids (crypto/rand.Reader in production).
 	Rand io.Reader
 
-	mu     sync.Mutex
-	people map[string]cached[[]Binding]
-	sess   map[[32]byte]cached[Session]
-	keys   map[string]cached[KeyInfo]
-	alerts map[string]*alertState
+	mu      sync.Mutex
+	people  *lru[string, cached[[]Binding]]
+	sess    *lru[[32]byte, cached[Session]]
+	keys    *lru[string, cached[KeyInfo]]
+	unknown *lru[string, missWindow]
+	alerts  map[string]*alertState
 }
 
 type cached[T any] struct {
@@ -141,7 +170,12 @@ func (s *Service) now() time.Time {
 
 func (s *Service) init() {
 	if s.people == nil {
-		s.people, s.sess, s.keys, s.alerts = map[string]cached[[]Binding]{}, map[[32]byte]cached[Session]{}, map[string]cached[KeyInfo]{}, map[string]*alertState{}
+		n := s.CacheSize
+		if n <= 0 {
+			n = DefaultCacheSize
+		}
+		s.people, s.sess, s.keys = newLRU[string, cached[[]Binding]](n), newLRU[[32]byte, cached[Session]](n), newLRU[string, cached[KeyInfo]](n)
+		s.unknown, s.alerts = newLRU[string, missWindow](n), map[string]*alertState{}
 	}
 }
 
@@ -233,6 +267,7 @@ func (s *Service) Handle(ctx context.Context, req Request) Result {
 	s.init()
 	s.mu.Unlock()
 	started := s.now()
+	req.Host = NormalizeHost(req.Host)
 	r := s.handle(ctx, req)
 	if r.Outcome == "" {
 		r.Outcome = collab.OutcomeOf(collab.Decision{Allow: r.Action == Forward, Status: r.Status, Code: r.Code, Reason: r.Reason})
@@ -249,6 +284,32 @@ func (s *Service) Handle(ctx context.Context, req Request) Result {
 		s.event(req, r, "denied", started)
 	}
 	return r
+}
+
+// Recheck decides an open WebSocket or event stream again with fresh data (no cache, no rate limit, no
+// count). The adapter closes the stream unless the result is Forward with the same permissions.
+func (s *Service) Recheck(ctx context.Context, req Request) Result {
+	s.mu.Lock()
+	s.init()
+	s.mu.Unlock()
+	req.Recheck, req.Host = true, NormalizeHost(req.Host)
+	return s.handle(ctx, req)
+}
+
+// crossOrigin reports a cookie-authenticated request that a page on another origin could have caused:
+// every non-safe method, WebSocket upgrade and event stream must carry Origin equal to this team host, or,
+// when Origin is absent and the request is not an upgrade, Sec-Fetch-Site: same-origin (finding 1).
+func crossOrigin(req Request) bool {
+	if collab.Safe(req.Method) && !req.Upgrade && !req.EventStream {
+		return false
+	}
+	if req.Origin != "" {
+		return req.Origin != "https://"+req.Host
+	}
+	if req.Upgrade {
+		return true
+	}
+	return !strings.EqualFold(req.SecFetchSite, "same-origin")
 }
 
 func (s *Service) handle(ctx context.Context, req Request) Result {
@@ -274,6 +335,9 @@ func (s *Service) handle(ctx context.Context, req Request) Result {
 	case req.Path == PathHandoff && req.Method == "GET":
 		return s.handoff(ctx, req, route)
 	case req.Path == PathSignout && req.Method == "POST":
+		if req.Cookie != "" && crossOrigin(req) {
+			return Result{Route: route, Class: collab.ClassWeb}.deny(403, "AccessDenied", "cross_origin")
+		}
 		return s.signout(ctx, req, route)
 	case strings.HasPrefix(req.Path, "/_afs/"):
 		return Result{Action: Respond, Status: 404, Code: "NotFound", Route: route}
@@ -292,6 +356,9 @@ type identity struct {
 	status int
 	code   string
 	reason string
+	// reauth is true when a session ended only because its access comes from a group binding and it is
+	// older than GroupReauthAfter (RD-24): the sign-in redirect asks the provider silently.
+	reauth bool
 }
 
 func (s *Service) proxy(ctx context.Context, req Request, route collab.Route) Result {
@@ -305,6 +372,9 @@ func (s *Service) proxy(ctx context.Context, req Request, route collab.Route) Re
 	if hasCookie || (!hasAPI && req.Navigate) {
 		base.Class = collab.ClassWeb
 	}
+	if hasCookie && crossOrigin(req) {
+		return base.deny(403, "AccessDenied", "cross_origin")
+	}
 	if !route.Effective(base.Class.Surface()) {
 		// With exactly one surface not effective the caller needs a binding to learn that (PC-D31): resolve first.
 		return s.refusedSurface(ctx, req, base)
@@ -312,8 +382,8 @@ func (s *Service) proxy(ctx context.Context, req Request, route collab.Route) Re
 	id := s.identify(ctx, req, route, base.Class)
 	base.Kind, base.Principal = id.kind, id.id
 	if id.status != 0 {
-		if base.Class == collab.ClassWeb && req.Navigate && id.reason != "malformed_credential" {
-			return s.signinRedirect(req, base)
+		if base.Class == collab.ClassWeb && req.Navigate && id.reason != "malformed_credential" && id.status != 429 {
+			return s.signinRedirect(req, base, id.reauth)
 		}
 		return base.deny(id.status, id.code, id.reason)
 	}
@@ -324,7 +394,12 @@ func (s *Service) proxy(ctx context.Context, req Request, route collab.Route) Re
 	}
 	base.ServiceAdminEntry = sae(req.Method, base.Class)
 	base.Caller = p
-	if ok, wait := s.Limiter.Allow(route.TeamID + "|" + string(id.kind) + "|" + id.id); !ok {
+	if methodOverride(req.Query) && (!p.Has(collab.PermContribute) || collab.Safe(req.Method)) {
+		r := base.deny(403, "AccessDenied", "permission_required")
+		r.Required = collab.PermContribute
+		return r
+	}
+	if ok, wait := s.Limiter.Allow(route.TeamID + "|" + string(id.kind) + "|" + id.id); !ok && !req.Recheck {
 		r := base.deny(429, "Throttled", "")
 		r.RetryAfter = wait
 		return r
@@ -344,11 +419,46 @@ func (s *Service) proxy(ctx context.Context, req Request, route collab.Route) Re
 		case req.Upgrade:
 			// Text frames of a WebSocket are scanned by the adapter; ScanBody stays false (no request body).
 			base.ScanMode = set.ContentScan
-		case !collab.Safe(req.Method) && collab.TextContentType(mediaType(req.ContentType)):
-			base.ScanBody, base.ScanMode = true, set.ContentScan
+		case !collab.Safe(req.Method) && req.ContentLength != 0:
+			switch collab.ClassifyBody(mediaType(req.ContentType)) {
+			case collab.BodyScan:
+				base.ScanBody, base.ScanMode = true, set.ContentScan
+			case collab.BodyUnsupported:
+				if set.ContentScan == "block" {
+					// A body the scanner cannot read could hide a credential (finding 4, RD-25).
+					return base.unsupportedMedia()
+				}
+			}
 		}
 	}
 	return base
+}
+
+func (r Result) unsupportedMedia() Result {
+	r = r.deny(415, "ValidationError", "unsupported_media_type")
+	r.Outcome = collab.OutcomeDeniedBad
+	return r
+}
+
+// OnUnreadable answers a body the scanner could not decode (an unknown charset, a malformed multipart).
+func (s *Service) OnUnreadable(r Result) Result {
+	s.mu.Lock()
+	s.init()
+	s.mu.Unlock()
+	out := r.unsupportedMedia()
+	s.record(out, collab.OutcomeDeniedBad, 0)
+	return out
+}
+
+// methodOverride reports a "_method" query parameter, which some frameworks treat as the HTTP method.
+func methodOverride(query string) bool {
+	q, _ := url.ParseQuery(query)
+	for k := range q {
+		if strings.EqualFold(k, "_method") {
+			return true
+		}
+	}
+	return false
 }
 
 func mediaType(ct string) string {
@@ -385,8 +495,14 @@ func (s *Service) refusedSurface(ctx context.Context, req Request, base Result) 
 	return base.deny(404, "NotFound", "")
 }
 
-func (s *Service) signinRedirect(req Request, base Result) Result {
+// signinRedirect sends the browser to sign in. It is not counted: the contract's outcome list has no value
+// for it and denied_unauthenticated feeds the denied-spike alert, which a person simply opening a link must
+// not raise (RD-26). silent asks the provider for prompt=none (RD-24).
+func (s *Service) signinRedirect(req Request, base Result, silent bool) Result {
 	q := url.Values{"return": {safeReturn(req.Path, req.Query)}}
+	if silent {
+		q.Set("silent", "1")
+	}
 	base.Action, base.Status, base.Location = Redirect, 302, PathSignin+"?"+q.Encode()
 	base.Outcome = collab.OutcomeDeniedUnauth
 	return base
@@ -438,6 +554,7 @@ func (s *Service) identify(ctx context.Context, req Request, route collab.Route,
 	bad := func(status int, code, reason string) identity {
 		return identity{status: status, code: code, reason: reason}
 	}
+	ip := sourceIP(req.RemoteAddr)
 	if class == collab.ClassWeb {
 		if req.Cookie == "" {
 			return bad(401, "Unauthenticated", "session_expired")
@@ -446,11 +563,18 @@ func (s *Service) identify(ctx context.Context, req Request, route collab.Route,
 		if err != nil || len(raw) != 32 {
 			return bad(401, "Unauthenticated", "session_expired")
 		}
-		ses, ok := s.session(ctx, sha256.Sum256(raw))
+		ses, ok, limited := s.session(ctx, sha256.Sum256(raw), ip, req.Recheck)
+		if limited {
+			return bad(429, "Throttled", "")
+		}
 		if !ok || ses.TeamID != route.TeamID {
 			return bad(401, "Unauthenticated", "session_expired")
 		}
-		return s.person(ctx, route, ses.Issuer+"|"+ses.Subject, ses.Subject, ses.ProviderID, ses.Groups)
+		id := s.person(ctx, route, ses.Issuer+"|"+ses.Subject, ses.Subject, ses.ProviderID, ses.Groups, req.Recheck)
+		if id.status == 0 && s.groupOnly(id.bindings) && s.now().Sub(s.issuedAt(ses)) >= GroupReauthAfter {
+			id.status, id.code, id.reason, id.reauth = 401, "Unauthenticated", "session_expired", true
+		}
+		return id
 	}
 	tok, ok := bearer(req.XAfsAuthorization)
 	if !ok || tok == "" {
@@ -460,8 +584,10 @@ func (s *Service) identify(ctx context.Context, req Request, route collab.Route,
 		return bad(400, "ValidationError", "malformed_credential")
 	}
 	if strings.HasPrefix(tok, "afsk_") {
-		info, found := s.key(ctx, route.TeamID, hash(tok))
+		info, found, limited := s.key(ctx, route.TeamID, hash(tok), ip, req.Recheck)
 		switch {
+		case limited:
+			return bad(429, "Throttled", "")
 		case !found:
 			return bad(401, "Unauthenticated", "token_invalid")
 		case info.State == "revoked":
@@ -479,18 +605,50 @@ func (s *Service) identify(ctx context.Context, req Request, route collab.Route,
 		}
 		return bad(401, "Unauthenticated", "token_invalid")
 	}
-	return s.person(ctx, route, claims.Issuer+"|"+claims.Subject, claims.Subject, route.ProviderID, claims.Groups)
+	return s.person(ctx, route, claims.Issuer+"|"+claims.Subject, claims.Subject, route.ProviderID, claims.Groups, req.Recheck)
 }
 
-func (s *Service) person(ctx context.Context, route collab.Route, key, subject, provider string, groups []string) identity {
+// groupOnly is true when every binding of the caller comes from an IdP group.
+func (s *Service) groupOnly(b []Binding) bool {
+	if len(b) == 0 {
+		return false
+	}
+	for _, x := range b {
+		if !x.Group {
+			return false
+		}
+	}
+	return true
+}
+
+// issuedAt is when the session was created: the store's value when it has one, else the expiry minus the
+// configured lifetime.
+func (s *Service) issuedAt(ses Session) time.Time {
+	if !ses.CreatedAt.IsZero() {
+		return ses.CreatedAt
+	}
+	return ses.ExpiresAt.Add(-time.Duration(s.Table.Settings().SessionTTLMinutes) * time.Minute)
+}
+
+// groupsKey is a stable hash of a caller's groups: a changed group list never reuses a cached decision.
+func groupsKey(groups []string) string {
+	g := append([]string(nil), groups...)
+	sort.Strings(g)
+	h := sha256.Sum256([]byte(strings.Join(g, "\x00")))
+	return base64.RawStdEncoding.EncodeToString(h[:12])
+}
+
+func (s *Service) person(ctx context.Context, route collab.Route, key, subject, provider string, groups []string, fresh bool) identity {
 	id := identity{kind: collab.KindUser, id: subject}
-	ck := route.TeamID + "|" + key
-	s.mu.Lock()
-	c, hit := s.people[ck]
-	s.mu.Unlock()
-	if hit && s.now().Before(c.exp) {
-		id.bindings = c.v
-		return id
+	ck := route.TeamID + "|" + key + "|" + groupsKey(groups)
+	if !fresh {
+		s.mu.Lock()
+		c, hit := s.people.get(ck)
+		s.mu.Unlock()
+		if hit && s.now().Before(c.exp) {
+			id.bindings = c.v
+			return id
+		}
 	}
 	b, err := s.Principals.Person(ctx, route.TeamID, subject, provider, groups)
 	if err != nil {
@@ -501,53 +659,71 @@ func (s *Service) person(ctx context.Context, route collab.Route, key, subject, 
 		ttl = NegativeTTL
 	}
 	s.mu.Lock()
-	s.people[ck] = cached[[]Binding]{v: b, exp: s.now().Add(ttl)}
+	s.people.put(ck, cached[[]Binding]{v: b, exp: s.now().Add(ttl)})
 	s.mu.Unlock()
 	id.bindings = b
 	return id
 }
 
-func (s *Service) session(ctx context.Context, h [32]byte) (Session, bool) {
+// session returns the session for an id hash. limited is true when the source address has used up its
+// lookups of unknown credentials and the database was not asked.
+func (s *Service) session(ctx context.Context, h [32]byte, ip string, fresh bool) (ses Session, ok, limited bool) {
 	s.mu.Lock()
-	c, hit := s.sess[h]
-	s.mu.Unlock()
-	if hit && s.now().Before(c.exp) {
-		return c.v, c.ok
+	c, hit := s.sess.get(h)
+	if hit && !fresh && s.now().Before(c.exp) {
+		s.mu.Unlock()
+		return c.v, c.ok, false
 	}
+	if !fresh && s.unknownBlocked(ip) {
+		s.mu.Unlock()
+		return Session{}, false, true
+	}
+	s.mu.Unlock()
 	ses, ok, err := s.Sessions.Get(ctx, h)
 	if err != nil {
-		return Session{}, false
+		return Session{}, false, false
 	}
 	ttl := DecisionTTL
 	if !ok {
 		ttl = NegativeTTL
 	}
 	s.mu.Lock()
-	s.sess[h] = cached[Session]{v: ses, ok: ok, exp: s.now().Add(ttl)}
+	s.sess.put(h, cached[Session]{v: ses, ok: ok, exp: s.now().Add(ttl)})
+	if !ok && !fresh {
+		s.noteUnknown(ip)
+	}
 	s.mu.Unlock()
-	return ses, ok
+	return ses, ok, false
 }
 
-func (s *Service) key(ctx context.Context, teamID string, h [32]byte) (KeyInfo, bool) {
+func (s *Service) key(ctx context.Context, teamID string, h [32]byte, ip string, fresh bool) (info KeyInfo, ok, limited bool) {
 	ck := teamID + "|" + string(h[:])
 	s.mu.Lock()
-	c, hit := s.keys[ck]
-	s.mu.Unlock()
-	if hit && s.now().Before(c.exp) {
-		return c.v, c.ok
+	c, hit := s.keys.get(ck)
+	if hit && !fresh && s.now().Before(c.exp) {
+		s.mu.Unlock()
+		return c.v, c.ok, false
 	}
+	if !fresh && s.unknownBlocked(ip) {
+		s.mu.Unlock()
+		return KeyInfo{}, false, true
+	}
+	s.mu.Unlock()
 	info, ok, err := s.Principals.Key(ctx, teamID, h)
 	if err != nil {
-		return KeyInfo{}, false
+		return KeyInfo{}, false, false
 	}
 	ttl := DecisionTTL
 	if !ok {
 		ttl = NegativeTTL
 	}
 	s.mu.Lock()
-	s.keys[ck] = cached[KeyInfo]{v: info, ok: ok, exp: s.now().Add(ttl)}
+	s.keys.put(ck, cached[KeyInfo]{v: info, ok: ok, exp: s.now().Add(ttl)})
+	if !ok && !fresh {
+		s.noteUnknown(ip)
+	}
 	s.mu.Unlock()
-	return info, ok
+	return info, ok, false
 }
 
 // FrameAllowed reports whether a client WebSocket frame is allowed: only callers with contribute may send

@@ -20,6 +20,8 @@ type RouteSource interface {
 // Binding is a role binding that applies to a caller on a team (afs.collab_principal).
 type Binding struct {
 	Role string // team_admin, team_viewer, team_collaborator or service_admin
+	// Group is true when the binding comes from an IdP group rather than from the person (RD-24).
+	Group bool
 }
 
 // KeyInfo is a team API key as the database reports it (afs.collab_principal_key).
@@ -41,6 +43,8 @@ type Session struct {
 	TeamID, Issuer, Subject, ProviderID string
 	Groups                              []string
 	ExpiresAt                           time.Time
+	// CreatedAt is zero when the store does not report it.
+	CreatedAt time.Time
 }
 
 // Sessions is the session and handoff store (database contract 7.2.8). Only hashes cross this port.
@@ -72,8 +76,9 @@ func (e *TokenError) Error() string {
 
 // Identity talks to a team's sign-in provider.
 type Identity interface {
-	// AuthURL builds the authorization request (code flow, S256 challenge).
-	AuthURL(ctx context.Context, r collab.Route, redirectURI, state, challenge, nonce string) (string, error)
+	// AuthURL builds the authorization request (code flow, S256 challenge). prompt is "" or "none" (a silent
+	// re-authentication; the provider answers login_required when it cannot).
+	AuthURL(ctx context.Context, r collab.Route, redirectURI, state, challenge, nonce, prompt string) (string, error)
 	// Exchange trades the code for an ID token and validates it (issuer, audience = the collaboration client
 	// id, expiry, nonce, signature). The client secret is read inside the adapter and never returned.
 	Exchange(ctx context.Context, r collab.Route, redirectURI, code, verifier string) (Claims, error)

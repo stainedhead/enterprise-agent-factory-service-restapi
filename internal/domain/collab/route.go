@@ -38,6 +38,9 @@ type Route struct {
 	Port                                         int
 	ProviderID, IssuerURL, GroupsClaim           string
 	ClientID, ClientSecretARN                    string
+	// ProviderClientID is the provider's own client id, the audience afs-api accepts. Empty until the
+	// database reports it (see implementation notes, RD-27).
+	ProviderClientID string
 }
 
 // Upstream is the only address the edge forwards a team's traffic to.

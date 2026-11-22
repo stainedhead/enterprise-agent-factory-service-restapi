@@ -73,7 +73,7 @@ func (f *flowRig) token(t *testing.T, extra map[string]any) string {
 
 func TestCodeFlowAuthURL(t *testing.T) {
 	f := newFlow(t, secrets{val: "s"}) //nolint:gosec // test fixture
-	u, err := f.cf.AuthURL(t.Context(), f.route, "https://apex/oauth2/callback", "st", "ch", "n1")
+	u, err := f.cf.AuthURL(t.Context(), f.route, "https://apex/oauth2/callback", "st", "ch", "n1", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,17 +86,17 @@ func TestCodeFlowAuthURL(t *testing.T) {
 		}
 	}
 	// discovery is cached
-	if _, err := f.cf.AuthURL(t.Context(), f.route, "r", "s", "c", "n"); err != nil {
+	if _, err := f.cf.AuthURL(t.Context(), f.route, "r", "s", "c", "n", ""); err != nil {
 		t.Fatal(err)
 	}
 	r := f.route
 	r.ClientID = ""
-	if _, err := f.cf.AuthURL(t.Context(), r, "r", "s", "c", "n"); err == nil {
+	if _, err := f.cf.AuthURL(t.Context(), r, "r", "s", "c", "n", ""); err == nil {
 		t.Error("no client id must fail")
 	}
 	r = f.route
 	r.IssuerURL = "https://127.0.0.1:1"
-	if _, err := f.cf.AuthURL(t.Context(), r, "r", "s", "c", "n"); err == nil {
+	if _, err := f.cf.AuthURL(t.Context(), r, "r", "s", "c", "n", ""); err == nil {
 		t.Error("unreachable issuer must fail")
 	}
 }
@@ -110,7 +110,7 @@ func TestCodeFlowDiscoveryRejectsPlainHTTP(t *testing.T) {
 	v.opts.HTTP = bad.Client()
 	_ = p
 	cf := NewCodeFlow(v, secrets{})
-	if _, err := cf.AuthURL(t.Context(), collab.Route{IssuerURL: bad.URL, ClientID: "c"}, "r", "s", "c", "n"); err == nil {
+	if _, err := cf.AuthURL(t.Context(), collab.Route{IssuerURL: bad.URL, ClientID: "c"}, "r", "s", "c", "n", ""); err == nil {
 		t.Fatal("http authorization endpoint must be refused")
 	}
 }
@@ -196,5 +196,55 @@ func TestCodeFlowVerifyBearer(t *testing.T) {
 	f.p.addRSA(t, "k3")
 	if _, err := f.cf.VerifyBearer(ctx, f.route, tok); err == nil {
 		t.Error("signature by an unknown key")
+	}
+}
+
+func TestCodeFlowAuthURLPrompt(t *testing.T) {
+	f := newFlow(t, secrets{})
+	u, err := f.cf.AuthURL(t.Context(), f.route, "r", "s", "c", "n", "none")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pu, _ := url.Parse(u); pu.Query().Get("prompt") != "none" {
+		t.Errorf("prompt: %s", u)
+	}
+	u, _ = f.cf.AuthURL(t.Context(), f.route, "r", "s", "c", "n", "")
+	if pu, _ := url.Parse(u); pu.Query().Has("prompt") {
+		t.Errorf("no prompt expected: %s", u)
+	}
+}
+
+// Finding 6: bearer audiences follow afs-api (the provider's own client id); the collaboration client id is
+// an additional audience, never a requirement.
+func TestCodeFlowVerifyBearerAudience(t *testing.T) {
+	f := newFlow(t, secrets{})
+	ctx := t.Context()
+	tok := func(aud any) string { return f.token(t, map[string]any{"aud": aud}) }
+	r := f.route
+	r.ProviderClientID = "cli-client"
+	for name, c := range map[string]struct {
+		route collab.Route
+		aud   any
+		ok    bool
+	}{
+		"CLI SSO token issued to the provider's client":  {r, "cli-client", true},
+		"provider client among several audiences":        {r, []string{"x", "cli-client"}, true},
+		"collab client audience still accepted":          {r, "cid", true},
+		"neither audience":                               {r, "someone-else", false},
+		"REST API only team: no collab client":           {func() collab.Route { x := r; x.ClientID = ""; return x }(), "cli-client", true},
+		"REST API only team, token for another client":   {func() collab.Route { x := r; x.ClientID = ""; return x }(), "someone-else", false},
+		"empty audience entry never matches an empty id": {func() collab.Route { x := r; x.ClientID = ""; x.ProviderClientID = ""; return x }(), "", false},
+		"no client ids at all":                           {func() collab.Route { x := r; x.ClientID = ""; x.ProviderClientID = ""; return x }(), "cli-client", false},
+		"provider client id unknown, collab client":      {func() collab.Route { x := r; x.ProviderClientID = ""; return x }(), "cid", true},
+	} {
+		_, err := f.cf.VerifyBearer(ctx, c.route, tok(c.aud))
+		if (err == nil) != c.ok {
+			t.Errorf("%s: err=%v want ok=%v", name, err, c.ok)
+		}
+	}
+	// the ID token of the code flow stays bound to the collaboration client
+	f.idTok = tok("cli-client")
+	if _, err := f.cf.Exchange(ctx, r, "https://apex/cb", "code", "ver"); err == nil {
+		t.Error("an ID token for another client must not complete a web sign-in")
 	}
 }

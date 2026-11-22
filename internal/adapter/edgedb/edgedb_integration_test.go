@@ -81,7 +81,7 @@ VALUES ($1, $2, 'hermes', ARRAY[$3]::text[], $3)`, pgtest.NewID("tpl"), tpl, dig
 		t.Error("more than 500 groups must be refused")
 	}
 	exec(`INSERT INTO afs.role_bindings (id, role, team_id, subject_type, group_name) VALUES ($1, 'team_viewer', $2, 'group', 'eng')`, pgtest.NewID("rb"), tm.ID)
-	if b, err := e.Person(ctx, tm.ID, "x", idp, []string{"eng"}); err != nil || len(b) != 1 || b[0].Role != "team_viewer" {
+	if b, err := e.Person(ctx, tm.ID, "x", idp, []string{"eng"}); err != nil || len(b) != 1 || b[0].Role != "team_viewer" || !b[0].Group {
 		t.Fatalf("group binding: %v %v", b, err)
 	}
 	sum := sha256.Sum256([]byte("afsk_test"))

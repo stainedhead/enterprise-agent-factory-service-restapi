@@ -131,7 +131,7 @@ func (d *DB) Person(ctx context.Context, teamID, subject, providerID string, gro
 	if providerID != "" {
 		prov = providerID
 	}
-	rows, err := d.q.Query(ctx, `SELECT role FROM afs.collab_principal($1, $2, $3, $4)`, teamID, subject, prov, groups)
+	rows, err := d.q.Query(ctx, `SELECT role, subject_type FROM afs.collab_principal($1, $2, $3, $4)`, teamID, subject, prov, groups)
 	if err != nil {
 		return nil, mapErr(err, "collab principal")
 	}
@@ -139,9 +139,11 @@ func (d *DB) Person(ctx context.Context, teamID, subject, providerID string, gro
 	var out []edge.Binding
 	for rows.Next() {
 		var b edge.Binding
-		if err := rows.Scan(&b.Role); err != nil {
+		var subjectType string
+		if err := rows.Scan(&b.Role, &subjectType); err != nil {
 			return nil, mapErr(err, "collab principal")
 		}
+		b.Group = subjectType == "group"
 		out = append(out, b)
 	}
 	return out, mapErr(rows.Err(), "collab principal")

@@ -27,6 +27,10 @@ type stub struct {
 	block   bool
 	scanned int
 	frames  bool
+	// recheck answers Recheck; nil allows everything the first decision did.
+	recheck    func() edge.Result
+	rechecks   int
+	unreadable int
 }
 
 func (s *stub) Handle(_ context.Context, r edge.Request) edge.Result {
@@ -49,6 +53,24 @@ func (s *stub) OnScan(_ context.Context, r edge.Result, m []collab.Match) (edge.
 }
 
 func (s *stub) FrameAllowed(edge.Result) bool { return s.frames }
+
+func (s *stub) Recheck(_ context.Context, _ edge.Request) edge.Result {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rechecks++
+	if s.recheck != nil {
+		return s.recheck()
+	}
+	return s.res
+}
+
+func (s *stub) OnUnreadable(r edge.Result) edge.Result {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.unreadable++
+	r.Action, r.Status, r.Code, r.Reason = edge.Respond, 415, "ValidationError", "unsupported_media_type"
+	return r
+}
 
 type obs struct {
 	mu     sync.Mutex
@@ -384,3 +406,98 @@ func (r *rig) Path() string       { r.mu.Lock(); defer r.mu.Unlock(); return r.p
 func (r *rig) Host() string       { r.mu.Lock(); defer r.mu.Unlock(); return r.host }
 func (r *rig) Body() []byte       { r.mu.Lock(); defer r.mu.Unlock(); return r.body }
 func (s *stub) Got() edge.Request { s.mu.Lock(); defer s.mu.Unlock(); return s.got }
+
+// Finding 4 (adapter side): a body is scanned after decoding, and an undecodable one is refused with 415.
+func TestBodyScanDecoding(t *testing.T) {
+	r := newRig(t, 0, nil)
+	r.st.res.ScanBody, r.st.res.ScanMode = true, "block"
+	r.st.block = true
+	post := func(ct, body string) (*http.Response, string) {
+		req, _ := http.NewRequestWithContext(context.Background(), "POST", r.edge.URL+"/api", strings.NewReader(body))
+		req.Header.Set("Content-Type", ct)
+		return do(t, req)
+	}
+	for name, tc := range map[string][2]string{
+		"json unicode escapes": {"application/json", `{"k":"AKIA\u0041BCDEFGHIJKLMNOP"}`},
+		"form percent":         {"application/x-www-form-urlencoded", "k=AKIA%41BCDEFGHIJKLMNOP"},
+		"utf-16 declared":      {"text/plain; charset=utf-16le", "A\x00K\x00I\x00A\x00A\x00B\x00C\x00D\x00E\x00F\x00G\x00H\x00I\x00J\x00K\x00L\x00M\x00N\x00O\x00P\x00"},
+	} {
+		if resp, body := post(tc[0], tc[1]); resp.StatusCode != 422 || !strings.Contains(body, "aws_access_key") {
+			t.Errorf("%s: %d %s", name, resp.StatusCode, body)
+		}
+	}
+	if len(r.Body()) != 0 {
+		t.Error("a blocked body must not reach the upstream")
+	}
+	resp, body := post("text/plain; charset=utf-32", "x")
+	if resp.StatusCode != 415 || !strings.Contains(body, "unsupported_media_type") || r.st.unreadable != 1 {
+		t.Fatalf("%d %s", resp.StatusCode, body)
+	}
+}
+
+// Findings 10 and 11 through the proxy.
+func TestSetCookieAndOverridesThroughProxy(t *testing.T) {
+	r := newRig(t, 0, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Add("Set-Cookie", "pc=1; Domain=collab.example.com; Path=/; Secure")
+		w.Header().Add("Set-Cookie", "other=2; domain=.example.com; HttpOnly")
+		w.Header().Add("Set-Cookie", "__Host-afs-collab=forged; Path=/")
+		w.Header().Add("Set-Cookie", "__host-AFS-signin=forged; Path=/")
+		w.Header().Add("Set-Cookie", "plain=3")
+	})
+	req := mustGet(r.edge.URL + "/x")
+	req.Header.Set("X-HTTP-Method-Override", "DELETE")
+	req.Header.Set("X-Http-Method", "DELETE")
+	req.Header.Set("X-Method-Override", "DELETE")
+	req.Header.Set("Cookie", "__Host-afs-signin=v; p=1")
+	resp, _ := do(t, req)
+	want := []string{"pc=1; Path=/; Secure", "other=2; HttpOnly", "plain=3"}
+	got := resp.Header.Values("Set-Cookie")
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("Set-Cookie = %q, want %q", got, want)
+	}
+	for _, k := range []string{"X-Http-Method-Override", "X-Http-Method", "X-Method-Override"} {
+		if v := r.Seen().Get(k); v != "" {
+			t.Errorf("%s reached the upstream: %q", k, v)
+		}
+	}
+	if c := r.Seen().Get("Cookie"); c != "p=1" {
+		t.Errorf("the sign-in cookie must not reach the upstream: %q", c)
+	}
+}
+
+func TestRequestCarriesOriginAndSigninCookie(t *testing.T) {
+	r := newRig(t, 0, nil)
+	req := mustGet(r.edge.URL + "/events")
+	req.Header.Set("Origin", "https://alpha.collab.example.com")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Cookie", "__Host-afs-signin=bind")
+	do(t, req)
+	got := r.st.Got()
+	if got.Origin != "https://alpha.collab.example.com" || got.SecFetchSite != "same-origin" || !got.EventStream || got.SigninCookie != "bind" {
+		t.Errorf("%+v", got)
+	}
+}
+
+func TestSigninCookieRedirects(t *testing.T) {
+	r := newRig(t, 0, nil)
+	r.st.res = edge.Result{Action: edge.Redirect, Status: 302, Location: "https://idp.example/auth", SetSigninCookie: true, SigninCookie: "bind"}
+	resp, _ := do(t, mustGet(r.edge.URL))
+	ck := resp.Cookies()
+	if len(ck) != 1 || ck[0].Name != "__Host-afs-signin" || ck[0].Value != "bind" || !ck[0].Secure || !ck[0].HttpOnly ||
+		ck[0].SameSite != http.SameSiteLaxMode || ck[0].Domain != "" || ck[0].Path != "/" || ck[0].MaxAge != 600 {
+		t.Fatalf("%+v", ck)
+	}
+	r.st.res = edge.Result{Action: edge.Redirect, Status: 302, Location: "/", SetCookie: true, Cookie: "sid", CookieMaxAge: 60, ClearSigninCookie: true}
+	resp, _ = do(t, mustGet(r.edge.URL))
+	var names []string
+	for _, c := range resp.Cookies() {
+		names = append(names, c.Name)
+		if c.Name == "__Host-afs-signin" && c.MaxAge >= 0 {
+			t.Errorf("the sign-in cookie must be deleted: %+v", c)
+		}
+	}
+	if len(names) != 2 {
+		t.Errorf("cookies %v", names)
+	}
+}

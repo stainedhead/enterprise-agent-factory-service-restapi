@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -72,7 +73,7 @@ func (c *CodeFlow) discovery(ctx context.Context, issuer string) (discovery, err
 }
 
 // AuthURL implements edge.Identity.
-func (c *CodeFlow) AuthURL(ctx context.Context, r collab.Route, redirectURI, state, challenge, nonce string) (string, error) {
+func (c *CodeFlow) AuthURL(ctx context.Context, r collab.Route, redirectURI, state, challenge, nonce, prompt string) (string, error) {
 	if r.IssuerURL == "" || r.ClientID == "" {
 		return "", errors.New("oidc: the team has no collaboration client")
 	}
@@ -90,6 +91,9 @@ func (c *CodeFlow) AuthURL(ctx context.Context, r collab.Route, redirectURI, sta
 	q.Set("nonce", nonce)
 	q.Set("code_challenge", challenge)
 	q.Set("code_challenge_method", "S256")
+	if prompt != "" {
+		q.Set("prompt", prompt)
+	}
 	u.RawQuery = q.Encode()
 	return u.String(), nil
 }
@@ -123,7 +127,7 @@ func (c *CodeFlow) Exchange(ctx context.Context, r collab.Route, redirectURI, co
 	if resp.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(resp.Body, maxDocument)).Decode(&tok) != nil || tok.IDToken == "" {
 		return edge.Claims{}, fmt.Errorf("oidc: token endpoint answered %d", resp.StatusCode)
 	}
-	cl, err := c.verify(ctx, r, tok.IDToken)
+	cl, err := c.verify(ctx, r, tok.IDToken, []string{r.ClientID})
 	if err != nil {
 		return edge.Claims{}, err
 	}
@@ -131,15 +135,19 @@ func (c *CodeFlow) Exchange(ctx context.Context, r collab.Route, redirectURI, co
 }
 
 // VerifyBearer implements edge.Identity.
+//
+// A bearer token is checked with the rules afs-api uses (Verifier.Verify): the audience must contain the
+// provider's own client id. The collaboration client id is accepted as well when the provider has one, so a
+// token issued to it works too; the REST API surface itself needs no collaboration client (finding 6).
 func (c *CodeFlow) VerifyBearer(ctx context.Context, r collab.Route, token string) (edge.Claims, error) {
-	return c.verify(ctx, r, token)
+	return c.verify(ctx, r, token, []string{r.ProviderClientID, r.ClientID})
 }
 
-// verify checks signature, issuer, audience (the collaboration client id) and times of a token.
-func (c *CodeFlow) verify(ctx context.Context, r collab.Route, token string) (edge.Claims, error) {
+// verify checks signature, issuer, audience (one of aud, empty entries ignored) and times of a token.
+func (c *CodeFlow) verify(ctx context.Context, r collab.Route, token string, aud []string) (edge.Claims, error) {
 	bad := &edge.TokenError{}
 	jws, err := jose.ParseSignedCompact(token, signatureAlgorithms)
-	if err != nil || len(jws.Signatures) != 1 || r.IssuerURL == "" || r.ClientID == "" {
+	if err != nil || len(jws.Signatures) != 1 || r.IssuerURL == "" {
 		return edge.Claims{}, bad
 	}
 	k, err := c.v.key(ctx, normalize(r.IssuerURL), jws.Signatures[0].Header.KeyID)
@@ -160,7 +168,7 @@ func (c *CodeFlow) verify(ctx context.Context, r collab.Route, token string) (ed
 	if normalize(cl.Issuer) != normalize(r.IssuerURL) || cl.Subject == "" {
 		return edge.Claims{}, bad
 	}
-	if !containsStr(audiences(cl.Audience), r.ClientID) {
+	if !anyAudience(audiences(cl.Audience), aud) {
 		return edge.Claims{}, bad
 	}
 	now := c.v.opts.Now()
@@ -176,9 +184,10 @@ func (c *CodeFlow) verify(ctx context.Context, r collab.Route, token string) (ed
 	return edge.Claims{Issuer: cl.Issuer, Subject: cl.Subject, Groups: groups(payload, r.GroupsClaim), Nonce: extra.Nonce}, nil
 }
 
-func containsStr(l []string, s string) bool {
-	for _, x := range l {
-		if x == s {
+// anyAudience reports whether the token's audiences include one of the accepted, non-empty ones.
+func anyAudience(have, accepted []string) bool {
+	for _, a := range accepted {
+		if a != "" && slices.Contains(have, a) {
 			return true
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/url"
 	"strings"
@@ -95,9 +96,11 @@ type fakeIdentity struct {
 	authErr error
 	last    string
 	nonce   string
+	prompt  string
 }
 
-func (f *fakeIdentity) AuthURL(_ context.Context, _ collab.Route, redirect, state, challenge, nonce string) (string, error) {
+func (f *fakeIdentity) AuthURL(_ context.Context, _ collab.Route, redirect, state, challenge, nonce, prompt string) (string, error) {
+	f.prompt = prompt
 	f.nonce = nonce
 	if f.authErr != nil {
 		return "", f.authErr
@@ -174,6 +177,8 @@ type rig struct {
 	al   *alerts
 	rec  *records
 	now  time.Time
+	// lastSigninCookie is the binding cookie of the latest signIn2.
+	lastSigninCookie string
 }
 
 func (r *rig) clock() time.Time { return r.now }
@@ -349,7 +354,7 @@ func TestAPIKeys(t *testing.T) {
 		}
 	}
 	r.pr.err = errors.New("db")
-	r.svc.keys = map[string]cached[KeyInfo]{}
+	r.svc.keys = newLRU[string, cached[KeyInfo]](10)
 	req := get("/api")
 	req.XAfsAuthorization = "Bearer afsk_ok"
 	if got := r.svc.Handle(ctx, req); got.Status != 401 {
@@ -399,6 +404,7 @@ func TestDecisions(t *testing.T) {
 		r := newRig(t, c.mut)
 		req := get("/x")
 		req.Method = c.method
+		req.Origin = "https://" + host
 		req.Cookie = r.session(c.sub)
 		got := r.svc.Handle(ctx, req)
 		if c.status == 200 {
@@ -601,6 +607,7 @@ func TestFrameAllowed(t *testing.T) {
 	for sub, want := range map[string]bool{"alice": true, "viewer": false} {
 		req := get("/ws")
 		req.Upgrade = true
+		req.Origin = "https://" + host
 		req.Cookie = r.session(sub)
 		res := r.svc.Handle(ctx, req)
 		if res.Action != Forward || r.svc.FrameAllowed(res) != want || (want && res.ScanMode != "block") || res.ScanBody {
@@ -654,8 +661,19 @@ func signIn(t *testing.T, r *rig, ret string) (Result, Result, Result) {
 	hu, _ := url.Parse(s2.Location)
 	ho := get(PathHandoff)
 	ho.Query = hu.RawQuery
+	ho.SigninCookie = s1.SigninCookie
 	s3 := r.svc.Handle(ctx, ho)
 	return s1, s2, s3
+}
+
+// envReq is a handoff request for a database code, sealed with the sign-in cookie "ck".
+func envReq(code string) Request {
+	env, _ := json.Marshal(handoffEnvelope{Code: code, Bind: b64(hashSlice("ck")), Expires: t0.Add(48 * time.Hour).Unix()})
+	sealed, _ := plainSealer{}.Seal(env)
+	q := get(PathHandoff)
+	q.Query = url.Values{"code": {sealed}}.Encode()
+	q.SigninCookie = "ck"
+	return q
 }
 
 func TestSignInFlow(t *testing.T) {
@@ -684,7 +702,7 @@ func TestSignInFlow(t *testing.T) {
 	}
 	// sign out
 	so := get(PathSignout)
-	so.Method, so.Cookie = "POST", s3.Cookie
+	so.Method, so.Cookie, so.Origin = "POST", s3.Cookie, "https://"+host
 	out := r.svc.Handle(context.Background(), so)
 	if !out.ClearCookie || out.Location != "/" || len(r.ses.revoked) != 1 {
 		t.Fatalf("signout: %+v", out)
@@ -827,6 +845,7 @@ func TestSignInFailures(t *testing.T) {
 		if got := r.svc.Handle(ctx, ho); got.Status != 401 {
 			t.Fatalf("unknown: %+v", got)
 		}
+		ho = envReq("unknown")
 		r.ses.err = errors.New("db")
 		if got := r.svc.Handle(ctx, ho); got.Status != 503 {
 			t.Fatalf("store: %+v", got)
@@ -841,8 +860,7 @@ func TestSignInFailures(t *testing.T) {
 		r := newRig(t, nil)
 		code := "abc"
 		r.ses.handoffs[sha256.Sum256([]byte(code))] = Session{TeamID: "team_other"}
-		ho := get(PathHandoff)
-		ho.Query = "code=" + code
+		ho := envReq(code)
 		if got := r.svc.Handle(ctx, ho); got.Status != 401 {
 			t.Fatalf("%+v", got)
 		}
@@ -853,8 +871,7 @@ func TestSignInFailures(t *testing.T) {
 		r.ses.handoffs[sha256.Sum256([]byte(code))] = Session{TeamID: "team_01"}
 		r.now = t0.Add(9 * time.Hour)
 		r.svc.Table.Replace(r.rt.routes, r.rt.set)
-		ho := get(PathHandoff)
-		ho.Query = "code=" + code
+		ho := envReq(code)
 		if got := r.svc.Handle(ctx, ho); got.Status != 401 || got.Reason != "session_expired" {
 			t.Fatalf("%+v", got)
 		}
@@ -917,3 +934,5 @@ func TestRun(t *testing.T) {
 		t.Error("the final flush must write the counts")
 	}
 }
+
+func hash2(raw []byte) [32]byte { return sha256.Sum256(raw) }

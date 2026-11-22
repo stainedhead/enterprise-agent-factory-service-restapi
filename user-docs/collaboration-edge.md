@@ -98,7 +98,27 @@ The edge reads these through `afs.collab_settings()`; change them with `PutServi
   WebSocket or event stream to watch; a client frame closes it with code 1008.
 * Decisions are cached for 60 seconds (10 seconds when negative), so turning a surface off, revoking a key or removing
   a role takes effect within a minute. Ending the web UI refuses that team's sessions at once.
-* Limits: 20 requests per second per caller, burst 40 (`429` with `Retry-After`).
+* Limits: 20 requests per second per caller, burst 40 (`429` with `Retry-After`). A source address that presents more
+  than 20 unknown sessions or API keys in a minute gets `429` without a database lookup.
+* **Cross-site writes are refused.** On cookie traffic every non-safe method, WebSocket upgrade and event stream must
+  carry `Origin: https://<this team host>` (or, without `Origin` and not an upgrade, `Sec-Fetch-Site: same-origin`);
+  otherwise `403 cross_origin`. API traffic with `X-Afs-Authorization` is exempt.
+* **Open streams are re-checked every 60 seconds** (session, role binding, surface, scan mode). A WebSocket is closed
+  with 1008 and an event stream ends when the check fails.
+* **Body checks.** The scan decodes JSON escapes, form encoding, multipart parts (base64, quoted-printable) and UTF-16
+  before matching. A write with a media type the scan cannot read is refused `415 unsupported_media_type` (in `block`
+  mode). Images, audio, video and PDF uploads pass unscanned because Paperclip attachments need them; send anything
+  else as JSON, text, a form or multipart.
+* WebSocket compression is never negotiated; reserved bits and opcodes close the connection with 1002.
+* A session whose access comes only from an identity provider group is re-authenticated through the provider after
+  60 minutes (a silent `prompt=none` redirect, then an interactive sign-in if the provider needs one), so group
+  removals take effect. Sessions with a person-level role binding keep their lifetime; their bindings are re-read every
+  60 seconds.
+* Sign-in is bound to the browser that started it by the short-lived cookie `__Host-afs-signin`; a handoff link opened
+  elsewhere is refused.
+* Paperclip's `Set-Cookie` headers lose their `Domain` attribute and any cookie named `__Host-afs...` is dropped;
+  `X-HTTP-Method-Override`, `X-HTTP-Method`, `X-Method-Override` and `Sec-WebSocket-Extensions` are never forwarded, and
+  a `_method` query parameter is refused for callers who cannot contribute.
 
 Reserved paths on a team host, never forwarded: `GET /_afs/signin`, `GET /_afs/handoff`, `POST /_afs/signout`. On the
 apex only `GET /oauth2/callback` is served (the one redirect URI to register with the provider); every other apex path
@@ -126,8 +146,23 @@ Metrics: `afs_edge_requests_total{surface,code}`, `afs_edge_request_duration_sec
 ## Known limits
 
 * A `permission_required` refusal for a WebSocket is decided per frame, not at the handshake, so a viewer can watch.
-* Text WebSocket messages over 1 MiB close the connection with 1009; binary frames are not scanned.
+* WebSocket messages over 1 MiB (text or binary) close the connection with 1009; binary messages are scanned when
+  they are valid UTF-8.
+* A redirect to sign-in is not counted in the access counts (the outcome list has no value for it, and counting it as
+  `denied_unauthenticated` would feed the denied-spike alert).
+* Bearer tokens must be issued to the provider's own client id (as for `afs-api`) or to the collaboration client.
+  Until the database reports the provider's client id to the edge (see the follow-up below), only the collaboration
+  client id is accepted.
 * The Paperclip image must honour `AFS_PAPERCLIP_BOOTSTRAP` (`manual` or `managed`); until it does, first-admin setup is
   manual. In managed mode the reconciler registers connected workers in Paperclip (agent create, key to Secrets Manager,
   pause, revoke), guards the roster, probes readiness (including open sign-up) and sends the first-admin invite by email.
   The Paperclip API paths it calls are listed in `docs/technical-details.md`; live Paperclip has not been exercised.
+
+## Operator recommendation: do not make team hosts same-site
+
+Every team lives at `<slug>.<collab.base_domain>`, so all team hosts are the same site as each other: a page on one
+team's host can send cookie-bearing requests to another's, and browsers treat them as same-site for `SameSite=Lax`.
+The edge defends with the `Origin` check, host-only cookies and the sign-in binding, but the clean fix is to remove the
+relationship. Either register `collab.base_domain` on the Public Suffix List (publicsuffix.org, a private-section
+entry) so each team host is its own site, or give each environment its own dedicated registrable domain that serves
+nothing else (never a domain that also hosts the console or API). Follow-up for the release owner.

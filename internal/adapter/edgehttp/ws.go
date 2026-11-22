@@ -3,6 +3,8 @@ package edgehttp
 import (
 	"bufio"
 	"context"
+	"crypto/sha1" //nolint:gosec // RFC 6455 handshake, not a security hash
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -10,7 +12,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain/collab"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/edge"
@@ -19,6 +23,9 @@ import (
 // maxTextMessage is the largest WebSocket text message the edge buffers to scan; a larger one closes the
 // connection with 1009.
 const maxTextMessage = 1 << 20
+
+// wsGUID is the RFC 6455 handshake constant.
+const wsGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 // WebSocket close codes the edge sends.
 const (
@@ -29,6 +36,7 @@ const (
 	opText          = 0x1
 	opBinary        = 0x2
 	opClose         = 0x8
+	opPong          = 0xA
 	maxControlBytes = 125
 )
 
@@ -51,8 +59,10 @@ type frame struct {
 	opcode byte
 	mask   [4]byte
 	masked bool
-	n      uint64
-	raw    []byte // the header bytes as received
+	// rsv is true when a reserved bit is set: no extension is ever negotiated, so any is a violation.
+	rsv bool
+	n   uint64
+	raw []byte // the header bytes as received
 }
 
 func readHeader(r *bufio.Reader) (frame, error) {
@@ -61,7 +71,7 @@ func readHeader(r *bufio.Reader) (frame, error) {
 	if _, err := io.ReadFull(r, b); err != nil {
 		return f, err
 	}
-	f.fin, f.opcode, f.masked = b[0]&0x80 != 0, b[0]&0x0f, b[1]&0x80 != 0
+	f.fin, f.opcode, f.masked, f.rsv = b[0]&0x80 != 0, b[0]&0x0f, b[1]&0x80 != 0, b[0]&0x70 != 0
 	n := uint64(b[1] & 0x7f)
 	switch n {
 	case 126:
@@ -116,6 +126,11 @@ func relayClientFrames(src *bufio.Reader, dst, client io.Writer, p framePolicy) 
 		if err != nil {
 			return err
 		}
+		// No extension is negotiated, so reserved bits (compression) and reserved opcodes (3-7, 0xB-0xF) are
+		// protocol errors; letting them through would hide frames from the scan (finding 3).
+		if f.rsv || !f.masked || (f.opcode > opBinary && f.opcode < opClose) || f.opcode > opPong {
+			return refuse(closeProtocol)
+		}
 		if f.opcode >= opClose {
 			if f.n > maxControlBytes || !f.fin {
 				return refuse(closeProtocol)
@@ -143,20 +158,6 @@ func relayClientFrames(src *bufio.Reader, dst, client io.Writer, p framePolicy) 
 		} else if kind == 0 {
 			return refuse(closeProtocol)
 		}
-		if kind != opText {
-			// Binary frames are not scanned: stream them.
-			if _, err := dst.Write(f.raw); err != nil {
-				return err
-			}
-			n64 := int64(f.n) //nolint:gosec // n is bounded by readHeader (2^40)
-			if _, err := io.CopyN(dst, src, n64); err != nil {
-				return err
-			}
-			if f.fin {
-				kind = 0
-			}
-			continue
-		}
 		heldLen += int(f.n) //nolint:gosec // n is bounded by readHeader (2^40)
 		if heldLen > maxTextMessage || f.n > maxTextMessage {
 			return refuse(closeTooBig)
@@ -173,7 +174,9 @@ func relayClientFrames(src *bufio.Reader, dst, client io.Writer, p framePolicy) 
 		if !f.fin {
 			continue
 		}
-		if p.Scan != nil && p.Scan(text) {
+		// Text and binary messages are scanned alike (binary only when it is valid UTF-8, so a real file is
+		// not matched by accident); a fragmented message is scanned once reassembled.
+		if p.Scan != nil && (kind == opText || utf8.Valid(text)) && p.Scan(text) {
 			return refuse(closePolicy)
 		}
 		for _, fr := range held {
@@ -201,13 +204,64 @@ func (c idleConn) Write(p []byte) (int, error) {
 	return c.Conn.Write(p)
 }
 
-// tunnel carries a WebSocket upgrade to the team's Paperclip: the handshake is forwarded, server-to-client
-// bytes are copied, client-to-server frames pass through the policy. Both directions end after IdleTimeout
-// without traffic.
-func (s *Server) tunnel(w http.ResponseWriter, r *http.Request, res edge.Result, out *http.Request) {
+// syncWriter serializes writes to the client: the upstream copy and the edge's own close frame share it.
+type syncWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (s *syncWriter) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.w.Write(p)
+}
+
+func acceptKey(key string) string {
+	h := sha1.Sum([]byte(key + wsGUID)) //nolint:gosec // RFC 6455 handshake, not a security hash
+	return base64.StdEncoding.EncodeToString(h[:])
+}
+
+// validHandshake checks the upstream's answer: 101, the Upgrade and Connection tokens, the Accept value
+// for the client's key, and no extension (none was offered).
+func validHandshake(resp *http.Response, key string) bool {
+	return resp.StatusCode == http.StatusSwitchingProtocols &&
+		strings.EqualFold(resp.Header.Get("Upgrade"), "websocket") && headerHasToken(resp.Header, "Connection", "upgrade") &&
+		resp.Header.Get("Sec-WebSocket-Accept") == acceptKey(key) && resp.Header.Get("Sec-WebSocket-Extensions") == ""
+}
+
+// hopByHop headers never relayed from an upstream refusal.
+var hopByHop = []string{"Connection", "Keep-Alive", "Proxy-Connection", "Transfer-Encoding", "Upgrade", "Te", "Trailer"}
+
+// relayRefusal passes the upstream's non-101 answer to the client as an ordinary response.
+func relayRefusal(w http.ResponseWriter, resp *http.Response, id string) {
+	h := w.Header()
+	for k, v := range resp.Header {
+		h[k] = v
+	}
+	for _, k := range hopByHop {
+		h.Del(k)
+	}
+	h.Del("Content-Length")
+	securityHeaders(h)
+	scrubSetCookies(h)
+	h.Set("X-Request-Id", id)
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, io.LimitReader(resp.Body, 1<<20))
+}
+
+// tunnel carries a WebSocket upgrade to the team's Paperclip: the upstream's handshake answer is validated
+// before anything is relayed (a non-101 answer goes to the client as a plain response and the connection
+// closes), server-to-client bytes are copied, client-to-server frames pass through the policy, and the
+// stream is authorized again every RecheckEvery. Both directions end after IdleTimeout without traffic.
+func (s *Server) tunnel(w http.ResponseWriter, r *http.Request, res edge.Result, out *http.Request, rq edge.Request) {
 	target, err := url.Parse(res.Upstream)
 	if err != nil {
 		s.fail(w, r, res, 503)
+		return
+	}
+	key := r.Header.Get("Sec-WebSocket-Key")
+	if kb, err := base64.StdEncoding.DecodeString(key); err != nil || len(kb) != 16 || len(r.Header.Values("Sec-WebSocket-Key")) != 1 {
+		writeError(w, r, edge.Result{Status: 400, Code: "ValidationError", Message: "The WebSocket handshake is not valid."}, w.Header().Get("X-Request-Id"), false)
 		return
 	}
 	dctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -223,24 +277,52 @@ func (s *Server) tunnel(w http.ResponseWriter, r *http.Request, res edge.Result,
 		s.fail(w, r, res, 503)
 		return
 	}
+	upBR := bufio.NewReader(upstream)
+	resp, err := http.ReadResponse(upBR, out)
+	if err != nil {
+		s.fail(w, r, res, 503)
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusSwitchingProtocols {
+		relayRefusal(w, resp, w.Header().Get("X-Request-Id"))
+		return
+	}
+	if !validHandshake(resp, key) {
+		s.log.Warn("upstream websocket handshake is not valid", "afs.team_id", res.Route.TeamID)
+		s.fail(w, r, res, 503)
+		return
+	}
 	cc, brw, err := http.NewResponseController(w).Hijack()
 	if err != nil {
 		s.fail(w, r, res, 503)
 		return
 	}
-	client := idleConn{Conn: cc, d: s.idle}
-	defer func() { _ = client.Close() }()
+	rawClient := idleConn{Conn: cc, d: s.idle}
+	defer func() { _ = rawClient.Close() }()
+	client := &syncWriter{w: rawClient}
+	scrubSetCookies(resp.Header)
+	if err := resp.Write(client); err != nil {
+		return
+	}
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		_, _ = io.Copy(client, upstream)
-		_ = client.Close()
+		_, _ = io.Copy(client, upBR)
+		_ = rawClient.Close()
 	}()
+	stop := make(chan struct{})
+	defer close(stop)
+	go s.watch(r.Context(), rq, res, stop, func() {
+		_, _ = client.Write(closeFrame(closePolicy))
+		_ = rawClient.Close()
+		_ = upstream.Close()
+	})
 	policy := framePolicy{CanSend: s.svc.FrameAllowed(res)}
 	if res.ScanMode != "" {
 		policy.Scan = func(text []byte) bool {
-			matches := collab.Scan(text)
+			matches := collab.ScanMessage(text)
 			if len(matches) == 0 {
 				return false
 			}
@@ -248,8 +330,6 @@ func (s *Server) tunnel(w http.ResponseWriter, r *http.Request, res edge.Result,
 			return blocked
 		}
 	}
-	// The handshake response must reach the client before frames flow: the copy above does that, and
-	// client frames are read only after the client has them.
 	_ = relayClientFrames(brw.Reader, upstream, client, policy)
 	_ = upstream.Close()
 	<-done
