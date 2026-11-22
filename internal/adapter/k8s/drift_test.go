@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -133,5 +134,39 @@ func TestReportSkipsUnownedObjects(t *testing.T) {
 	w.report(render.Managed(render.New("v1", "ConfigMap", "ns", "x"), render.Owner{Kind: "team", ID: "team_X", TeamID: "team_X"}), "ConfigMap/ns/x")
 	if len(got) != 1 || got[0] != "team/team_X|ConfigMap/ns/x" {
 		t.Errorf("got %v", got)
+	}
+}
+
+// The watch event of a write can reach the informer before Patch returns to the writer. The decision
+// "is this our own write" must wait for the write in flight, or the echo is reported as drift (the
+// cause of the flaky TestDriftWatcher in M1-F6).
+func TestOwnWriteEchoBeforeThePatchReturns(t *testing.T) {
+	c := fakeClient()
+	const key = "ConfigMap/ns/a"
+	c.beginWrite(key)
+	got := make(chan bool)
+	go func() { got <- c.IsOwnWrite(key, "7") }() // the event arrives while the patch is in flight
+	select {
+	case <-got:
+		t.Fatal("IsOwnWrite decided before the write finished")
+	case <-time.After(50 * time.Millisecond):
+	}
+	c.rememberWrite(key, "7")
+	c.endWrite(key)
+	if !<-got {
+		t.Error("echo of our own write reported as someone else's")
+	}
+	if c.IsOwnWrite(key, "8") {
+		t.Error("a version we did not write is ours")
+	}
+}
+
+// Two quick writes: the echo of the first arrives after the second was remembered.
+func TestOwnWriteKeepsRecentVersions(t *testing.T) {
+	c := fakeClient()
+	c.rememberWrite("ConfigMap/ns/a", "5")
+	c.rememberWrite("ConfigMap/ns/a", "6")
+	if !c.IsOwnWrite("ConfigMap/ns/a", "5") || !c.IsOwnWrite("ConfigMap/ns/a", "6") || c.IsOwnWrite("ConfigMap/ns/a", "7") {
+		t.Error("recent own versions")
 	}
 }

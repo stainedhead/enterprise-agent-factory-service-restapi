@@ -31,8 +31,10 @@ type Client struct {
 	dyn    dynamic.Interface
 	mapper meta.ResettableRESTMapper
 
-	mu  sync.Mutex
-	own map[string]string // objectKey -> resourceVersion of our last write
+	mu      sync.Mutex
+	changed *sync.Cond          // signalled when a write in flight finishes
+	own     map[string][]string // objectKey -> resourceVersions of our most recent writes (or deletedMarker)
+	pending map[string]int      // objectKey -> writes in flight
 }
 
 // NewClient builds a Client for the cluster cfg points at.
@@ -50,7 +52,9 @@ func NewClient(cfg *rest.Config) (*Client, error) {
 
 // NewClientFor builds a Client from parts (tests use the fake dynamic client).
 func NewClientFor(dyn dynamic.Interface, mapper meta.ResettableRESTMapper) *Client {
-	return &Client{dyn: dyn, mapper: mapper, own: map[string]string{}}
+	c := &Client{dyn: dyn, mapper: mapper, own: map[string][]string{}, pending: map[string]int{}}
+	c.changed = sync.NewCond(&c.mu)
+	return c
 }
 
 // Dynamic returns the underlying dynamic client (the drift watch and tests share it).
@@ -106,9 +110,12 @@ func (c *Client) Delete(ctx context.Context, gvk schema.GroupVersionKind, namesp
 	if err != nil {
 		return err
 	}
-	c.rememberWrite(objectKey(gvk, namespace, name), deletedMarker)
+	key := objectKey(gvk, namespace, name)
+	c.beginWrite(key)
+	defer c.endWrite(key)
+	c.rememberWrite(key, deletedMarker)
 	if err := ri.Delete(ctx, name, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
-		c.forgetWrite(objectKey(gvk, namespace, name))
+		c.forgetWrite(key)
 		return wrap(err)
 	}
 	return nil
