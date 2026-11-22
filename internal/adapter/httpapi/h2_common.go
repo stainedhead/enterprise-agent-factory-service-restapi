@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/httpapi/middleware"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
@@ -31,16 +32,21 @@ func w2SetArea(name string, r Registrar) {
 	panic("httpapi: unknown area " + name)
 }
 
-// w2Caller builds the use case caller from the authenticated request. The source address is the
-// connection peer; a trusted proxy header is not honored here.
+// w2Caller builds the use case caller from the authenticated request. The source address is the client
+// address the request metadata middleware computed from AFS_TRUSTED_PROXY_HOPS, the same one the
+// denied-request auditor records (FR-R02). Without that middleware it is the connection peer; a client
+// header is never honored on its own.
 func w2Caller(r *http.Request) (acting.Caller, error) {
 	p, ok := PrincipalFrom(r.Context())
 	if !ok {
 		return acting.Caller{}, domain.Unauthenticated()
 	}
-	ip := r.RemoteAddr
-	if h, _, err := net.SplitHostPort(ip); err == nil {
-		ip = h
+	ip := middleware.MetaFrom(r.Context()).IP
+	if ip == "" {
+		ip = r.RemoteAddr
+		if h, _, err := net.SplitHostPort(ip); err == nil {
+			ip = h
+		}
 	}
 	ua := r.UserAgent()
 	if len(ua) > 500 {
