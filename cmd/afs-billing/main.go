@@ -48,26 +48,26 @@ func run(ctx context.Context, args []string, env func(string) string, stdout, st
 		return exitUsage
 	}
 	if *version {
-		fmt.Fprintln(stdout, buildinfo.String("afs-billing"))
+		_, _ = fmt.Fprintln(stdout, buildinfo.String("afs-billing"))
 		return 0
 	}
 	if *job == "" {
-		fmt.Fprintf(stderr, "afs-billing: --job is required (jobs: %s)\n", strings.Join(jobNames(), ", "))
+		_, _ = fmt.Fprintf(stderr, "afs-billing: --job is required (jobs: %s)\n", strings.Join(jobNames(), ", "))
 		return exitUsage
 	}
 	if _, ok := jobs[*job]; !ok {
-		fmt.Fprintf(stderr, "afs-billing: unknown job %q (jobs: %s)\n", *job, strings.Join(jobNames(), ", "))
+		_, _ = fmt.Fprintf(stderr, "afs-billing: unknown job %q (jobs: %s)\n", *job, strings.Join(jobNames(), ", "))
 		return exitUsage
 	}
 	var in jobInput
 	if *day != "" {
 		d, err := time.Parse(time.DateOnly, *day)
 		if err != nil {
-			fmt.Fprintf(stderr, "afs-billing: --day %q is not a date (YYYY-MM-DD)\n", *day)
+			_, _ = fmt.Fprintf(stderr, "afs-billing: --day %q is not a date (YYYY-MM-DD)\n", *day)
 			return exitUsage
 		}
 		if !d.Before(time.Now().UTC().Truncate(24 * time.Hour)) {
-			fmt.Fprintf(stderr, "afs-billing: --day %s is not complete yet\n", *day)
+			_, _ = fmt.Fprintf(stderr, "afs-billing: --day %s is not complete yet\n", *day)
 			return exitUsage
 		}
 		in.Day = &d
@@ -75,7 +75,7 @@ func run(ctx context.Context, args []string, env func(string) string, stdout, st
 
 	a, closeApp, err := open(ctx, env)
 	if err != nil {
-		fmt.Fprintln(stderr, "afs-billing:", err)
+		_, _ = fmt.Fprintln(stderr, "afs-billing:", err)
 		return exitFailed
 	}
 	defer closeApp()

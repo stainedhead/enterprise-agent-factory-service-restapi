@@ -72,7 +72,7 @@ func (r *Repo) ListReconciliations(_ context.Context, _ port.Tx, status string, 
 		if status != "" && rec.Status != status {
 			continue
 		}
-		if after != nil && !(rec.Day.Before(after.Day) || (rec.Day.Equal(after.Day) && rec.TeamID < after.TeamID)) {
+		if after != nil && !rec.Day.Before(after.Day) && (!rec.Day.Equal(after.Day) || rec.TeamID >= after.TeamID) {
 			continue
 		}
 		out = append(out, rec)

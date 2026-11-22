@@ -41,7 +41,7 @@ func startArg(day time.Time) string {
 }
 
 // Directory implements cur.Store. The inference profiles are read in a transaction of their own: the
-// afs_billing role has no SELECT on team_models yet (-db gap X-DB-8), and a refused statement would
+// afs_billing role has no SELECT on team_models yet (-db gap X-DB-9), and a refused statement would
 // abort the rest. Without them Bedrock lines are attributed by their afs-team-id tag and carry no model.
 func (s *BillingStore) Directory(ctx context.Context) (cur.Directory, error) {
 	d := cur.Directory{Namespaces: map[string]string{}, Teams: map[string]bool{}, Profiles: map[string]cur.ProfileRef{}, TagKeys: map[string]bool{}}

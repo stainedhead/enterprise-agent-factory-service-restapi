@@ -107,6 +107,11 @@ func TestCostsRepo(t *testing.T) {
 			mine = append(mine, r)
 		}
 	}
+	// Rows of one day come in team id order (descending), which the random ids leave open: put team
+	// a's over-threshold row second.
+	if len(mine) == 3 && mine[1].TeamID != a.ID {
+		mine[1], mine[2] = mine[2], mine[1]
+	}
 	if len(mine) != 3 || !mine[0].Day.Equal(d(4)) || mine[0].Status != "missing_billing" || mine[0].VariancePct != nil {
 		t.Fatalf("reconciliations = %+v", mine)
 	}

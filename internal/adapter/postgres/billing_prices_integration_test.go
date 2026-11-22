@@ -76,7 +76,7 @@ VALUES ($1, now() - interval '30 days', 3, 15, 0.3, 3.75, 'manual')`, model)
 	}
 }
 
-// The billing role cannot read service_settings yet (-db gap X-DB-8): the sync then uses the configured
+// The billing role cannot read service_settings yet (-db gap X-DB-9): the sync then uses the configured
 // value, and fails closed without one. The test skips once the role can read the setting.
 func TestPriceSyncEnabledFallsBackWhenTheSettingIsRefused(t *testing.T) {
 	g := newBillingRigAs(t, "afs_billing")

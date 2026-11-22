@@ -85,11 +85,17 @@ func TestVarianceThreshold(t *testing.T) {
 func TestEventAgainAfterRecovery(t *testing.T) {
 	r, repo, ob := setup()
 	repo.Set(day, teamA, "100", "50")
-	r.RunDay(t.Context(), dayT) // over
+	if _, err := r.RunDay(t.Context(), dayT); err != nil { // over
+		t.Fatal(err)
+	}
 	repo.Set(day, teamA, "100", "100")
-	r.RunDay(t.Context(), dayT) // back to ok
+	if _, err := r.RunDay(t.Context(), dayT); err != nil { // back to ok
+		t.Fatal(err)
+	}
 	repo.Set(day, teamA, "100", "50")
-	r.RunDay(t.Context(), dayT) // over again: a new detection
+	if _, err := r.RunDay(t.Context(), dayT); err != nil { // over again: a new detection
+		t.Fatal(err)
+	}
 	if n := len(ob.Events); n != 2 {
 		t.Fatalf("events = %d, want 2", n)
 	}

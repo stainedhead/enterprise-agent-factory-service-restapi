@@ -76,7 +76,7 @@ type Proposal struct {
 // Store is the billing store, used inside a transaction (except SyncEnabled).
 type Store interface {
 	// SyncEnabled reads pricing.price_list_sync. It runs outside the sync transaction, because the
-	// billing role may be refused the setting (-db gap X-DB-8) and a refusal aborts a transaction.
+	// billing role may be refused the setting (-db gap X-DB-9) and a refusal aborts a transaction.
 	SyncEnabled(ctx context.Context) (bool, error)
 	Models(ctx context.Context, tx port.Tx) ([]ModelState, error)
 	// Supersede marks the pending proposal superseded.

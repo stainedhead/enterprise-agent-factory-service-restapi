@@ -28,7 +28,7 @@ type settings struct {
 	// default us-east-1).
 	PriceRegion string
 	// PriceListSync is AFS_PRICING_PRICE_LIST_SYNC, used only while the billing role cannot read
-	// service_settings (-db gap X-DB-8); nil when unset.
+	// service_settings (-db gap X-DB-9); nil when unset.
 	PriceListSync *bool
 
 	// Lookback is how many days ending yesterday a CUR job covers (AFS_BILLING_LOOKBACK_DAYS, default 3).

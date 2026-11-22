@@ -39,7 +39,13 @@ func newBillingRigAs(t *testing.T, role string) *billingRig {
 	t.Cleanup(pool.Close)
 	runner := postgres.NewTxRunner(pool)
 	store := postgres.NewBillingStore(runner)
-	return &billingRig{t: t, db: db, admin: db.Admin(t), store: store, runner: runner, rec: &reconcile.Reconciler{
+	admin := db.Admin(t)
+	// Other tests of the package expect an outbox and a tag list holding only their own rows.
+	t.Cleanup(func() {
+		_, _ = admin.Exec(context.Background(), `DELETE FROM afs.outbox_events WHERE event_type IN ('cost.variance_detected', 'pricing.proposal_created')`)
+		_, _ = admin.Exec(context.Background(), `DELETE FROM afs.service_tags WHERE key LIKE 'bill-key-%'`)
+	})
+	return &billingRig{t: t, db: db, admin: admin, store: store, runner: runner, rec: &reconcile.Reconciler{
 		Tx: runner, Outbox: postgres.NewOutboxWriter(), Clock: &fakes.Clock{T: time.Now().UTC()}, IDs: billingIDs{},
 		Repo: store, Session: postgres.BillingSession(),
 	}}
@@ -88,7 +94,7 @@ func TestBillingDirectory(t *testing.T) {
 	if !d.TagKeys["bill-key-"+team.Slug] {
 		t.Fatalf("tag keys = %v", d.TagKeys)
 	}
-	// -db gap X-DB-8: afs_billing has no SELECT on team_models. Until -db grants it the directory
+	// -db gap X-DB-9: afs_billing has no SELECT on team_models. Until -db grants it the directory
 	// degrades instead of failing; when it does, this assertion is the one to flip.
 	if !d.ProfilesUnavailable {
 		t.Fatal("afs_billing can now read team_models: drop ProfilesUnavailable and the degraded path")
@@ -198,8 +204,7 @@ VALUES ($1, $2, 'm1', $3, $4, 100, 50, $5)`, at.Add(time.Duration(i)*time.Second
 	g.exec(`INSERT INTO afs.cost_daily (team_id, day, source, cost_usd) VALUES ($1, $2, 'cur_bedrock', 100)`, fine.ID, day)
 	g.exec(`INSERT INTO afs.cost_daily (team_id, day, source, cost_usd) VALUES ($1, $2, 'cur_eks', 40)`, fine.ID, day) // not compared
 
-	var from string
-	from = g.scalar(`SELECT coalesce(max(id), 0)::text FROM afs.outbox_events`)
+	from := g.scalar(`SELECT coalesce(max(id), 0)::text FROM afs.outbox_events`)
 	for range 2 {
 		res, err := g.rec.RunDay(t.Context(), day)
 		if err != nil {
