@@ -10,7 +10,7 @@ const (
 	MetricAPIInFlight          = "afs_api_requests_in_flight"
 	MetricAPICrossTeamNotFound = "afs_api_cross_team_not_found_total"
 	// MetricAPIOrphanSecrets counts Secrets Manager secrets left behind when the compensating delete failed (M2-C2).
-	MetricAPIOrphanSecrets = "afs_api_orphan_secrets_total"
+	MetricAPIOrphanSecrets = "afs_api_orphan_secrets_total" //nolint:gosec // a metric name, not a credential
 
 	// Reconciler.
 	MetricReconcileDuration = "afs_reconcile_duration_seconds" // kind (histogram)
