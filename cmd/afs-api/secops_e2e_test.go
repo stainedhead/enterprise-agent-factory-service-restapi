@@ -133,7 +133,7 @@ func TestServiceAPIKeyEndToEnd(t *testing.T) {
 			seenB = seenB || it.ID == g.w.TeamB.ID
 		}
 		path = ""
-		if page.NextToken != "" && !(seenA && seenB) {
+		if page.NextToken != "" && (!seenA || !seenB) {
 			path = "/v1/team-directory?nextToken=" + url.QueryEscape(page.NextToken)
 		}
 	}
