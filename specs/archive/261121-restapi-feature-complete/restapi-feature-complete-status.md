@@ -3,7 +3,8 @@
 **PRD:** specs/archive/261121-restapi-feature-complete/enterprise-agent-factory-service-restapi-PRD.md (root keeps a stub)
 **Spec:** specs/archive/261121-restapi-feature-complete (archived at step 7)
 **Branch:** feat/restapi-feature-complete
-**Review PRD:** restapi-feature-complete-review-PRD.md
+**Review PRD:** specs/261122-restapi-feature-complete-auto-review/restapi-feature-complete-review-PRD.md (moved in step 8)
+**Review Spec:** specs/261122-restapi-feature-complete-auto-review
 **Process Start:** 2026-11-21T20:31:38Z
 **Process End:** —
 **Total Runtime:** —
@@ -19,7 +20,7 @@
 | 5  | Code and Design Review          | ✅ Complete (1 P0, 6 P1, 10 P2) | 2026-11-22T07:52:13Z | 2026-11-22T08:05:43Z | 14 |
 | 6  | Prepare Review PRD              | ✅ Complete (review-prd: ready for spec; AC tightened, priorities confirmed, 5 fix streams) | 2026-11-22T08:05:43Z | 2026-11-22T08:06:36Z | 1 |
 | 7  | Archive Original Spec           | ✅ Complete (git mv to specs/archive/; root PRD stub link updated; no README, docs or AGENTS links pointed at the old path; archived with M2-F8 and M6-F3..F6 open, see decision below) | 2026-11-22T08:07:00Z | 2026-11-22T08:08:02Z | 1 |
-| 8  | Spec Review Fixes               | ⬜ Pending | — | — | — |
+| 8  | Spec Review Fixes               | ✅ Complete (review spec `specs/261122-restapi-feature-complete-auto-review/`: 17 findings, 5 streams A to E, 48 tasks; merge order A, C, then B and D, then E) | 2026-11-22T08:09:00Z | 2026-11-22T08:10:37Z | 5 |
 | 9  | Implement Review Fixes          | ⬜ Pending | — | — | — |
 | 10 | Archive Fixes Spec              | ⬜ Pending | — | — | — |
 | 11 | Final Quality Pass              | ⬜ Pending | — | — | — |
@@ -31,3 +32,5 @@
 
 - **D-7.1** Archived with 5 tasks still open (M2-F8, M6-F3, F4, F5, F6). They need the dev cluster, real AWS or a blocked toolchain download and are fenced off in the review PRD section 7. They stay open in `tasks.md` inside the archive and must not be marked done by the fix cycle. `archive-spec` asks for confirmation on an incomplete spec; J's authorization stood in for it.
 - **D-7.2** Links fixed: the root PRD stub. `README.md`, `docs/`, `AGENTS.md` and `user-docs/` held no path link to the old spec directory. ADR entries cite the spec by name only and were left unchanged. `user-docs/` links nowhere into `specs/`.
+- **D-8.1** Review spec created by hand from inline templates (`~/.claude/skills/prd-to-spec` is not installed; dev-flow plugin not installed). Date prefix 261122 is the creation date. The review PRD was moved with git mv.
+- **D-8.2** Open questions Q1 to Q4 took the PRD defaults. Further decisions RD-1 to RD-6 (settings and metric names, `AFS_MAX_BODY_BYTES` removed, wire-file ownership) are in the review spec's `research.md` and `implementation-notes.md`.

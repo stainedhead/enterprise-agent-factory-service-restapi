@@ -5,7 +5,7 @@
 | Repository | `enterprise-agent-factory-service-restapi` |
 | Branch | `feat/restapi-feature-complete` |
 | Reviewed commit | `9454fd5` (Step 4 of the dev-flow run) |
-| Source spec | `specs/261121-restapi-feature-complete/` |
+| Source spec | `specs/archive/261121-restapi-feature-complete/` |
 | Produced by | dev-flow `implm-frm-prd` Step 5 (code and design review), finalized in Step 6 (`review-prd`) |
 | Date | 2026-11-22 |
 | Status | Reviewed in Step 6: ready for spec (Step 8 turns this document into `specs/YYMMDD-restapi-feature-complete-auto-review/`) |
@@ -464,11 +464,11 @@ scrubbed nor bounded. Notification errors already go through `RedactURLs` and tr
 *Evidence.* The following decisions are recorded only in this repository:
 
 - **CD-7.** No outbox row for mutations that have no §7 event type, against CT-API-8 "every mutation
-  writes ... one outbox event" (`specs/261121-restapi-feature-complete/spec.md:671`).
+  writes ... one outbox event" (`specs/archive/261121-restapi-feature-complete/spec.md:671`).
 - **CD-9.** One `client_id` per identity provider, while the contract has separate console and CLI ids.
 - **CD-12.** A workload principal may omit `If-Match` on `UpdateWorkOrderRepo`.
 
-They are in `specs/261121-restapi-feature-complete/implementation-notes.md:281,283,286`. The root
+They are in `specs/archive/261121-restapi-feature-complete/implementation-notes.md:281,283,286`. The root
 `docs/contracts/api-contract.md` does not state them, and `-cli` and `-website` read the root.
 
 *Acceptance criteria.*
@@ -513,7 +513,7 @@ A value that cannot be marshalled turns into an empty `$1` and inserts or update
 
 ## 7. Deferred items (not findings)
 
-These are open in `specs/261121-restapi-feature-complete/tasks.md` and need infrastructure the build
+These are open in `specs/archive/261121-restapi-feature-complete/tasks.md` and need infrastructure the build
 sandbox does not have. They are not part of this fix cycle and must not be marked done by it:
 
 | Task | What it needs |
