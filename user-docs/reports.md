@@ -72,3 +72,43 @@ An agent is working in a window when it made a model call through the gateway, r
 status endpoint, or used more CPU than `reports.idle_cpu_millicores` (default 50) on average. Operators:
 `AFS_AGENT_STATUS=off` skips the status endpoint, `AFS_AGENT_STATUS_PORT` sets its pod port. The cluster
 needs metrics-server for the CPU signal; without it, model calls and the status endpoint decide.
+
+## Scheduled reports
+
+A team admin (or service admin) can have a report delivered on a schedule; a viewer can list schedules but
+not change them.
+
+```bash
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  "$AFS/v1/teams/$TEAM/report-schedules" -d '{
+    "name": "weekly-costs", "report": "costs", "cadence": "weekly", "channelId": "'$CHANNEL'",
+    "query": {"range": "30d", "groupBy": ["model", "tag:business-unit"], "filters": {"tag.env": "prod"}}
+  }'
+```
+
+- `cadence` is `daily`, `weekly` or `monthly`. Schedules run at 06:00 UTC: every day, every Monday, or the
+  first of the month. A query without a range reports the period the cadence repeats (24 hours, 7 days or
+  30 days).
+- `channelId` must be one of the team's own notification channels. A service-level channel, another team's
+  channel or an unknown one is a `400`.
+- `query` takes the report query parameters in the stored shape (`range` or `from` and `to`, `groupBy` as a
+  list, `filters` keyed `agentId`, `modelId`, `systemId`, `poolId` and `tag.<key>`). A schedule reports on
+  its own team only.
+- Update with `PATCH` and `If-Match`; delete with `DELETE` and `If-Match` (`204`). A channel that a schedule
+  uses cannot be deleted until the schedule is.
+- `nextRunAt`, `lastRunAt`, `lastStatus` (`succeeded` or `failed`) and `lastError` are read-only. The
+  version (ETag) changes each time a schedule runs, so read it again before an update.
+
+When a schedule is due, the billing job computes the same report you get from the API with
+`Accept: text/csv`, stores the CSV in the reports bucket under `reports/<team>/<schedule>/`, and publishes
+a `report.delivered` event whose data carries `channelId`, `scheduleId`, `downloadUrl` (a pre-signed link
+valid for 7 days, or until the job's temporary credentials expire if that is sooner) and `downloadExpiresAt`.
+The schedule's channel delivers the event; channels never receive another channel's report events. If the
+report cannot be computed, stored or signed, the schedule records `failed` with the error, a
+`report.failed` event is published, and the next cycle tries again.
+
+Operators: `afs-billing` needs `AFS_REPORTS_BUCKET` and, for a customer-managed key,
+`AFS_REPORTS_KMS_KEY_ID`; set `AFS_SHOWBACK_TAG_KEY` to add a tag dimension to the monthly showback CSV
+(`showback/<YYYY-MM>/`, cost centers and the tag's values with a total row each, an `(untagged)` row for
+spend without the tag).
+

@@ -644,10 +644,10 @@ Owns: `internal/usecase/billing/{showback,schedules}/`, `internal/usecase/report
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M4-E4 | S3 adapter and port fake: put with SSE-KMS, pre-signed GET with expiry, list; used by billing and export bundles [adapter with `awstest`] | BI-4 (part), RC-20 (part) | — |
-| [ ] | M4-E1 | Showback CSV per month: one row per cost center and per value of a chosen tag key, totals equal `cost_daily`, `(untagged)` row; written to the reports bucket | BI-US-5.1, BI-4 | M4-C3, M4-E4 |
-| [ ] | M4-E2 | Report schedules API: list (`reports:read`), create, update, delete (`reports:schedule`); the team's own channel only (service-level or another team's channel → `400`); viewer → `403` | RA-US-7a.1, RA-US-7a.2, RA-US-15.6 (part) | — |
-| [ ] | M4-E3 | Schedule runner: due schedules produce a CSV equal to the on-demand report, stored and announced per OQ-S2 (`report.delivered`), `next_run_at` advances; failure records `failed` with the error (`report.failed`) and retries next cycle | BI-US-3.1, BI-5 | M4-E2, M4-E4 |
+| [x] | M4-E4 | S3 adapter and port fake: put with SSE-KMS, pre-signed GET with expiry, list; used by billing and export bundles [adapter with `awstest`] | BI-4 (part), RC-20 (part) | — |
+| [x] | M4-E1 | Showback CSV per month: one row per cost center and per value of a chosen tag key, totals equal `cost_daily`, `(untagged)` row; written to the reports bucket | BI-US-5.1, BI-4 | M4-C3, M4-E4 |
+| [x] | M4-E2 | Report schedules API: list (`reports:read`), create, update, delete (`reports:schedule`); the team's own channel only (service-level or another team's channel → `400`); viewer → `403` | RA-US-7a.1, RA-US-7a.2, RA-US-15.6 (part) | — |
+| [x] | M4-E3 | Schedule runner: due schedules produce a CSV equal to the on-demand report, stored and announced per OQ-S2 (`report.delivered`), `next_run_at` advances; failure records `failed` with the error (`report.failed`) and retries next cycle | BI-US-3.1, BI-5 | M4-E2, M4-E4 |
 
 ### M4-F · Export and import (RA-12, RC-20)
 

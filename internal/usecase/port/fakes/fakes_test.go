@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -216,5 +217,49 @@ func TestCredentials(t *testing.T) {
 	}
 	if got, err := c.ListTeamDirectory(t.Context(), port.Session{SecurityOperator: true}); err != nil || len(got) != 1 {
 		t.Fatal(got, err)
+	}
+}
+
+func TestObjectStoreFake(t *testing.T) {
+	ctx := context.Background()
+	clock := &fakes.Clock{T: time.Date(2026, 11, 22, 6, 0, 0, 0, time.UTC)}
+	s := &fakes.ObjectStore{Clock: clock}
+	if _, err := s.PresignGet(ctx, "missing", time.Hour); err == nil {
+		t.Error("presigned a missing object")
+	}
+	res, err := s.Put(ctx, port.PutObject{Key: "reports/a.csv", Body: []byte("x,y\n"), ContentType: "text/csv"})
+	if err != nil || res.URI != "s3://example-reports/reports/a.csv" || res.Size != 4 {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if _, err := s.Put(ctx, port.PutObject{Key: "other/b.csv", Body: []byte("z")}); err != nil {
+		t.Fatal(err)
+	}
+	if body, err := s.Body("reports/a.csv"); err != nil || string(body) != "x,y\n" {
+		t.Fatalf("body %q %v", body, err)
+	}
+	if _, err := s.Body("nope"); !errors.Is(err, fakes.ErrNoObject) {
+		t.Errorf("body of a missing key: %v", err)
+	}
+	u, err := s.PresignGet(ctx, "reports/a.csv", 7*24*time.Hour)
+	if err != nil || !u.ExpiresAt.Equal(clock.T.Add(7*24*time.Hour)) || !strings.Contains(u.URL, "X-Amz-Expires=604800") {
+		t.Fatalf("%+v %v", u, err)
+	}
+	got, err := s.List(ctx, "reports/")
+	if err != nil || len(got) != 1 || got[0].Key != "reports/a.csv" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	boom := errors.New("boom")
+	s.PutErr, s.PresignErr, s.ListErr = boom, boom, boom
+	if _, err := s.Put(ctx, port.PutObject{Key: "k"}); !errors.Is(err, boom) {
+		t.Error(err)
+	}
+	if _, err := s.PresignGet(ctx, "reports/a.csv", time.Hour); !errors.Is(err, boom) {
+		t.Error(err)
+	}
+	if _, err := s.List(ctx, ""); !errors.Is(err, boom) {
+		t.Error(err)
+	}
+	if s.Puts != 2 {
+		t.Errorf("puts = %d", s.Puts)
 	}
 }
