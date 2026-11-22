@@ -22,7 +22,7 @@ import (
 )
 
 // ContractVersion is the API contract version the extract is built from.
-const contractVersion = "1.1.0"
+const contractVersion = "1.2.0"
 
 const (
 	contractPath = "docs/contracts/api-contract.md"

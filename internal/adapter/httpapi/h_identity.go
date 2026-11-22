@@ -19,7 +19,7 @@ type IdentityAPI struct {
 }
 
 // BindIdentity binds the handlers as the identity area.
-func BindIdentity(a *IdentityAPI) { w2SetArea("identity", a.Register) }
+func BindIdentity(a *IdentityAPI) Registrar { return a.Register }
 
 // Register binds the operations.
 func (a *IdentityAPI) Register(g *Registry) error {

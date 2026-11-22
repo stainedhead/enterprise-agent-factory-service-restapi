@@ -14,7 +14,7 @@ type BudgetsAPI struct {
 }
 
 // BindBudgets binds the budget handlers as the budgets area.
-func BindBudgets(a *BudgetsAPI) { w2SetArea("budgets", a.Register) }
+func BindBudgets(a *BudgetsAPI) Registrar { return a.Register }
 
 // Register binds the budget operations.
 func (a *BudgetsAPI) Register(g *Registry) error {

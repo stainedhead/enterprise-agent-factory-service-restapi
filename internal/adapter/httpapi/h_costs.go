@@ -7,10 +7,6 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/costs"
 )
 
-const costsAreaName = "costs"
-
-func init() { Areas = append(Areas, Area{costsAreaName, none}) }
-
 // CostsAPI serves ListCosts and ListCostReconciliations (M4-C5, RA-1). ListCosts answers text/csv as
 // well, with the same rows and the next page's token in X-Afs-Next-Token.
 type CostsAPI struct {
@@ -19,7 +15,7 @@ type CostsAPI struct {
 }
 
 // BindCosts binds the cost handlers as the costs area.
-func BindCosts(a *CostsAPI) { w2SetArea(costsAreaName, a.Register) }
+func BindCosts(a *CostsAPI) Registrar { return a.Register }
 
 // Register binds the cost operations.
 func (a *CostsAPI) Register(g *Registry) error {

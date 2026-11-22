@@ -16,7 +16,7 @@ type ChannelsAPI struct {
 }
 
 // BindChannels binds the channel handlers as the delivery area.
-func BindChannels(a *ChannelsAPI) { w2SetArea("delivery", a.Register) }
+func BindChannels(a *ChannelsAPI) Registrar { return a.Register }
 
 // Register binds the channel operations.
 func (a *ChannelsAPI) Register(g *Registry) error {

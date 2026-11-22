@@ -130,12 +130,11 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 
 	store := gateway.NewCachedStore(postgres.NewGatewayStore(pool), s.CacheTTL, time.Now)
 	runner := postgres.NewTxRunner(pool)
-	ctr := newGatewayCounters(m)
-	app.Usage = postgres.NewUsageWriter(pool, log, postgres.UsageWriterConfig{Recorder: usageDropRecorder{ctr.UsageRowsDropped}})
+	app.Usage = postgres.NewUsageWriter(pool, log, postgres.UsageWriterConfig{Recorder: usageDropRecorder{m}})
 	svc := gateway.NewService(gateway.Deps{
 		Pods: pods, Tokens: tokenreview.New(cs, time.Now), Store: store, Spend: postgres.NewSpendStore(pool),
 		Thresholds: postgres.NewThresholdStore(runner, ulidGen{}, realClock{}), Usage: app.Usage,
-		SettleRecorder: settleRecorder{ctr.SettleFailures},
+		SettleRecorder: settleRecorder{m},
 	}, gateway.Config{Partition: as.Partition, AccountID: account, AsyncSettle: true, Now: time.Now, Log: log})
 	app.Service = svc
 	app.Handler = gatewayhttp.New(gatewayhttp.Config{Service: svc, Upstream: rt, MaxBody: s.MaxBody, Log: log, Observer: metricsObserver{m}})

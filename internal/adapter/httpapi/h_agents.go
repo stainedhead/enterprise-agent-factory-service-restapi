@@ -17,7 +17,7 @@ type AgentsAPI struct {
 }
 
 // BindAgents binds the agent handlers as the agents area.
-func BindAgents(a *AgentsAPI) { w2SetArea("agents", a.Register) }
+func BindAgents(a *AgentsAPI) Registrar { return a.Register }
 
 // Register binds the agent operations.
 func (a *AgentsAPI) Register(g *Registry) error {

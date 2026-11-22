@@ -42,7 +42,7 @@ func server(t *testing.T) http.Handler {
 	}
 	t.Cleanup(pool.Close)
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	h, err := httpapi.New(httpapi.Config{Ready: map[string]httpapi.ReadinessCheck{
+	h, err := httpapi.New(httpapi.Config{AllowUnbound: true, Ready: map[string]httpapi.ReadinessCheck{
 		"database": func(r *http.Request) error { return pool.Ping(r.Context()) },
 	}})
 	if err != nil {

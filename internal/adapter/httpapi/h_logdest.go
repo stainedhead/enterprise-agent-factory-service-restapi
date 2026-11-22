@@ -8,12 +8,6 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/logdest"
 )
 
-// logDestAreaName is the area bound by BindLogDestinations. It has its own area, added here, because
-// the "delivery" area is shared with the notification channels of M3-G.
-const logDestAreaName = "logdest"
-
-func init() { Areas = append(Areas, Area{logDestAreaName, none}) }
-
 // LogDestinationsAPI serves the five log destination operations (M2-I1, RC-18).
 type LogDestinationsAPI struct {
 	Svc   *logdest.Service
@@ -21,7 +15,7 @@ type LogDestinationsAPI struct {
 }
 
 // BindLogDestinations binds the log destination handlers as the logdest area.
-func BindLogDestinations(a *LogDestinationsAPI) { w2SetArea(logDestAreaName, a.Register) }
+func BindLogDestinations(a *LogDestinationsAPI) Registrar { return a.Register }
 
 // Register binds the log destination operations.
 func (a *LogDestinationsAPI) Register(g *Registry) error {

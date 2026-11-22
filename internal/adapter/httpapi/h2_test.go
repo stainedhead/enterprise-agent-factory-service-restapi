@@ -81,7 +81,7 @@ func newW2Rig(t *testing.T) *w2Rig {
 		}
 		return nil
 	}
-	h, err := New(Config{Auth: r.auth, Teams: look, TeamState: look, Registrars: []Registrar{reg},
+	h, err := New(Config{AllowUnbound: true, Auth: r.auth, Teams: look, TeamState: look, Registrars: []Registrar{reg},
 		Hooks: Hooks{Denied: func(_ context.Context, d Denial) { r.denied = append(r.denied, d) }},
 		Now:   func() time.Time { return w2Now }})
 	if err != nil {

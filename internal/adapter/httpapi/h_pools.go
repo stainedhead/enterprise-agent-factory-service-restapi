@@ -19,7 +19,7 @@ type PoolsAPI struct {
 }
 
 // BindPools binds the pool handlers as the pools area.
-func BindPools(a *PoolsAPI) { w2SetArea("pools", a.Register) }
+func BindPools(a *PoolsAPI) Registrar { return a.Register }
 
 // Register binds the pool operations.
 func (a *PoolsAPI) Register(g *Registry) error {

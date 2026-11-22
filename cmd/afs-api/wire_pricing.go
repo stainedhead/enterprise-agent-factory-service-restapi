@@ -13,6 +13,6 @@ import (
 // wirePricing builds the price proposal use cases (M4-D2) and binds their handlers.
 func wirePricing(c *components, log *slog.Logger) {
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
-	pages := httpapi.NewPageTokens(pageTokenKey(log), nil)
-	httpapi.BindPricing(&httpapi.PricingAPI{Svc: &pricing.Service{Deps: deps, Repo: postgres.NewPricingRepo()}, Pages: pages})
+	pages := httpapi.NewPageTokens(c.PageKey, nil)
+	c.bind(httpapi.BindPricing(&httpapi.PricingAPI{Svc: &pricing.Service{Deps: deps, Repo: postgres.NewPricingRepo()}, Pages: pages}))
 }

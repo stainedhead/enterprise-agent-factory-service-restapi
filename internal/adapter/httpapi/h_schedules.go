@@ -15,19 +15,8 @@ type SchedulesAPI struct {
 	Pages PageTokens
 }
 
-// schedulesArea names the handler area of the schedule operations.
-const schedulesArea = "reportschedules"
-
-// BindSchedules binds the schedule handlers as their own area.
-func BindSchedules(a *SchedulesAPI) {
-	for i := range Areas {
-		if Areas[i].Name == schedulesArea {
-			Areas[i].Register = a.Register
-			return
-		}
-	}
-	Areas = append(Areas, Area{Name: schedulesArea, Register: a.Register})
-}
+// BindSchedules returns the registrar of the schedule handlers.
+func BindSchedules(a *SchedulesAPI) Registrar { return a.Register }
 
 // Register binds the schedule operations.
 func (a *SchedulesAPI) Register(g *Registry) error {

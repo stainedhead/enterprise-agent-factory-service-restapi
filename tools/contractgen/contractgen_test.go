@@ -115,7 +115,7 @@ func TestPermissionsErrorsEventsSettings(t *testing.T) {
 	if len(ex.Permissions) != 58 {
 		t.Errorf("permissions = %d", len(ex.Permissions))
 	}
-	if len(ex.Errors) != 12 || len(ex.Events) != 53 || len(ex.Settings) != 12 {
+	if len(ex.Errors) != 12 || len(ex.Events) != 54 || len(ex.Settings) != 12 {
 		t.Errorf("errors %d events %d settings %d", len(ex.Errors), len(ex.Events), len(ex.Settings))
 	}
 	gw := 0
@@ -147,5 +147,21 @@ func TestSplitRowAndHelpers(t *testing.T) {
 	}
 	if _, err := extract([]byte("Contract v9.9.9"), nil); err == nil {
 		t.Error("wrong contract version must fail")
+	}
+}
+
+// CD-8: a database-only setting (default "unset") is in PRD §6.13 but GetSettings does not expose it, so
+// the extract skips it instead of failing.
+func TestParseSettingsSkipsDatabaseOnlyKeys(t *testing.T) {
+	lines := strings.Split("### 6.13 Service settings\n\n| Key | Default | Allowed | Used by | Since |\n|---|---|---|---|---|\n"+
+		"| `reports.idle_cpu_millicores` | `50` | 1 to 4000 | RPT-5 | 000013 |\n"+
+		"| `work_orders.cost_center` | unset | string of 1 to 100 characters | WO-1 | 000016 |\n"+
+		"| `work_orders.owner_email` | unset | string `local@domain` | WO-1 | 000016 |\n", "\n")
+	got, err := parseSettings(lines)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Key != "reports.idle_cpu_millicores" {
+		t.Fatalf("settings = %+v, want only reports.idle_cpu_millicores", got)
 	}
 }

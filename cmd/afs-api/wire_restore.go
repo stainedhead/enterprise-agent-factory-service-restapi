@@ -12,6 +12,6 @@ import (
 // wireRestore builds the restore use case (M4-G) and binds its handler.
 func wireRestore(c *components) {
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
-	httpapi.BindRestore(&httpapi.RestoreAPI{Svc: &restore.Service{Deps: deps, Repo: postgres.NewRestoreRepo(),
-		Guards: postgres.NewAgentRepo()}}) // the same catalog reads CreateAgent and UpdateAgent check against
+	c.bind(httpapi.BindRestore(&httpapi.RestoreAPI{Svc: &restore.Service{Deps: deps, Repo: postgres.NewRestoreRepo(),
+		Guards: postgres.NewAgentRepo()}})) // the same catalog reads CreateAgent and UpdateAgent check against
 }

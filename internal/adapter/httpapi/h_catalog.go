@@ -24,7 +24,7 @@ type CatalogAPI struct {
 }
 
 // BindCatalog binds the catalog handlers as the adminmodels area.
-func BindCatalog(a *CatalogAPI) { w2SetArea("adminmodels", a.Register) }
+func BindCatalog(a *CatalogAPI) Registrar { return a.Register }
 
 // Register binds the catalog operations.
 func (a *CatalogAPI) Register(g *Registry) error {

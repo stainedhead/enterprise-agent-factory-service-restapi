@@ -89,7 +89,7 @@ func newRig(t testing.TB) *rig {
 		Clock: &fakes.Clock{T: time.Now()}, IDs: &fakes.IDGen{}}, Repo: repo, Writer: r.w}
 	api := &httpapi.SecretsAPI{Svc: svc, Pages: httpapi.NewPageTokens(bytes.Repeat([]byte("k"), 32), nil),
 		IdemKey: bytes.Repeat([]byte("i"), 32)}
-	h, err := httpapi.New(httpapi.Config{Auth: auth{}, Registrars: []httpapi.Registrar{api.Register}})
+	h, err := httpapi.New(httpapi.Config{AllowUnbound: true, Auth: auth{}, Registrars: []httpapi.Registrar{api.Register}})
 	if err != nil {
 		t.Fatal(err)
 	}

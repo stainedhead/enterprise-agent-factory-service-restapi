@@ -9,15 +9,13 @@ import (
 )
 
 // The restore handlers are their own area: the revisions area is bound by the M1 revision reads.
-func init() { Areas = append(Areas, Area{"restore", none}) }
-
 // RestoreAPI serves RestoreRevision (M4-G, RA-13).
 type RestoreAPI struct {
 	Svc *restore.Service
 }
 
 // BindRestore binds the restore handler as the restore area.
-func BindRestore(a *RestoreAPI) { w2SetArea("restore", a.Register) }
+func BindRestore(a *RestoreAPI) Registrar { return a.Register }
 
 // Register binds the restore operation.
 func (a *RestoreAPI) Register(g *Registry) error {

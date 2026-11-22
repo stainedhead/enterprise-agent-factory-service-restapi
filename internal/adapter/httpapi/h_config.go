@@ -17,7 +17,7 @@ type ConfigAPI struct {
 }
 
 // BindConfig binds the configuration handlers as the config area.
-func BindConfig(a *ConfigAPI) { w2SetArea("config", a.Register) }
+func BindConfig(a *ConfigAPI) Registrar { return a.Register }
 
 // Register binds the configuration operations.
 func (a *ConfigAPI) Register(g *Registry) error {

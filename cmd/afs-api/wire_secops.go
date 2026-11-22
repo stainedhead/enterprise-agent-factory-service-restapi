@@ -17,10 +17,10 @@ import (
 // lookup, because row-level security hides every team from a security operator.
 func wireSecOps(c *components, log *slog.Logger) {
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
-	httpapi.BindSecOps(&httpapi.SecOpsAPI{
+	c.bind(httpapi.BindSecOps(&httpapi.SecOpsAPI{
 		Operators: &secops.Service{Deps: deps, Repo: postgres.NewSecOpsRepo()},
 		Keys:      &apikeys.ServiceKeys{Deps: deps, Repo: postgres.NewServiceAPIKeyRepo(), Entropy: crand.Reader},
 		Directory: &teams.Directory{Source: c.Creds},
-		Pages:     httpapi.NewPageTokens(pageTokenKey(log), nil),
-	})
+		Pages:     httpapi.NewPageTokens(c.PageKey, nil),
+	}))
 }

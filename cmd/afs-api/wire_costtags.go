@@ -14,6 +14,6 @@ import (
 // table; afs-billing's daily check writes it.
 func wireCostTags(c *components, log *slog.Logger) {
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
-	httpapi.BindCostTags(&httpapi.CostTagsAPI{Svc: &costtags.Service{Deps: deps, Repo: postgres.NewCostTagsRepo()},
-		Pages: httpapi.NewPageTokens(pageTokenKey(log), nil)})
+	c.bind(httpapi.BindCostTags(&httpapi.CostTagsAPI{Svc: &costtags.Service{Deps: deps, Repo: postgres.NewCostTagsRepo()},
+		Pages: httpapi.NewPageTokens(c.PageKey, nil)}))
 }

@@ -17,6 +17,6 @@ var channelTestWait = notify.DefaultTestWait
 // components and binds their handlers.
 func wireChannels(c *components, log *slog.Logger) {
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
-	pages := httpapi.NewPageTokens(pageTokenKey(log), nil)
-	httpapi.BindChannels(&httpapi.ChannelsAPI{Svc: &notify.Service{Deps: deps, Repo: postgres.NewChannelRepo(), TestWait: channelTestWait}, Pages: pages})
+	pages := httpapi.NewPageTokens(c.PageKey, nil)
+	c.bind(httpapi.BindChannels(&httpapi.ChannelsAPI{Svc: &notify.Service{Deps: deps, Repo: postgres.NewChannelRepo(), TestWait: channelTestWait}, Pages: pages}))
 }

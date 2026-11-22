@@ -47,10 +47,7 @@ var writers = map[string][]string{
 // deferredWriters are metrics registered and charted whose writer lands in another stream's commit.
 // The writer is exempt from the source check until then; once a writer exists the test demands the
 // entry be removed, so the list cannot hide a dead metric for longer than it takes to wire it.
-var deferredWriters = map[string]string{
-	MetricGatewaySettleFailures:   "stream B, B-10: afs-gateway binds SettleRecorder",
-	MetricGatewayUsageRowsDropped: "stream B, B-10: afs-gateway binds the usage drop recorder",
-}
+var deferredWriters = map[string]string{}
 
 var suffixRe = regexp.MustCompile(`_(bucket|sum|count)$`)
 

@@ -17,7 +17,7 @@ type SwarmTemplatesAPI struct {
 }
 
 // BindSwarmTemplates binds the swarm template handlers as the swarmtemplates area.
-func BindSwarmTemplates(a *SwarmTemplatesAPI) { w2SetArea("swarmtemplates", a.Register) }
+func BindSwarmTemplates(a *SwarmTemplatesAPI) Registrar { return a.Register }
 
 // Register binds the swarm template operations.
 func (a *SwarmTemplatesAPI) Register(g *Registry) error {

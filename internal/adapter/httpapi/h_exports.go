@@ -20,7 +20,7 @@ type ExportsAPI struct {
 }
 
 // BindExports binds the export and import handlers as the exports area.
-func BindExports(a *ExportsAPI) { w2SetArea("exports", a.Register) }
+func BindExports(a *ExportsAPI) Registrar { return a.Register }
 
 // Register binds the export and import operations.
 func (a *ExportsAPI) Register(g *Registry) error {

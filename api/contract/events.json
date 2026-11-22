@@ -390,5 +390,12 @@
       "reconciler"
     ],
     "when": "A channel's EventBridge target failed (D46)"
+  },
+  {
+    "type": "notification.test_requested",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "`TestNotificationChannel`; `data` has `channelId` and `testId`. The reconciler tests the channel and reports the result on the channel's status (condition `DeliveryHealthy`, `lastTestId`), which the API returns (CD-3)"
   }
 ]

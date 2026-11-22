@@ -4,10 +4,12 @@ package httpapi
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/api"
@@ -32,8 +34,13 @@ type Config struct {
 	OnRoute func(ctx context.Context, operationID string)
 	// Ready maps a dependency name to its readiness check (GetReadiness).
 	Ready map[string]ReadinessCheck
-	// Registrars bind handlers; the default is Areas.
+	// Registrars bind handlers: the explicit list of handler areas the caller wires (FR-R15). There is no
+	// package-level default list.
 	Registrars []Registrar
+	// AllowUnbound lets New succeed when some contract operations have no handler; they answer 501. Only
+	// development without a database and tests that exercise part of the API set it. Without it New returns
+	// an error naming every unbound operation, so a forgotten Bind cannot ship.
+	AllowUnbound bool
 	// Outer wrap the whole router, inside the request id and panic recovery: request metadata and CORS
 	// preflight, which no route answers. The first element is the outermost.
 	Outer []Middleware
@@ -64,9 +71,10 @@ func chain(h http.Handler, ms []Middleware) http.Handler {
 }
 
 // NewHandler returns the root handler with a single readiness check named database. It is kept
-// for callers that need no other configuration.
+// for callers that need no other configuration. It binds nothing else, so it sets AllowUnbound: every
+// other operation answers 501.
 func NewHandler(ready ReadinessCheck) http.Handler {
-	cfg := Config{}
+	cfg := Config{AllowUnbound: true}
 	if ready != nil {
 		cfg.Ready = map[string]ReadinessCheck{"database": ready}
 	}
@@ -92,15 +100,15 @@ func New(cfg Config) (http.Handler, error) {
 	if err := reg.Handle("GetReadiness", readiness(cfg.Ready)); err != nil {
 		return nil, err
 	}
-	registrars := cfg.Registrars
-	if registrars == nil {
-		for _, a := range Areas {
-			registrars = append(registrars, a.Register)
-		}
-	}
-	for _, register := range registrars {
+	for _, register := range cfg.Registrars {
 		if err := register(reg); err != nil {
 			return nil, err
+		}
+	}
+	if !cfg.AllowUnbound {
+		if missing := reg.Unbound(); len(missing) > 0 {
+			return nil, fmt.Errorf("httpapi: %d unbound operations (set Config.AllowUnbound only for development or partial tests): %s",
+				len(missing), strings.Join(missing, ", "))
 		}
 	}
 	mux := http.NewServeMux()

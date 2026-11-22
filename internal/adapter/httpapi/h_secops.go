@@ -12,10 +12,6 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/teams"
 )
 
-const secOpsAreaName = "secops"
-
-func init() { Areas = append(Areas, Area{secOpsAreaName, none}) }
-
 // SecOpsAPI serves security operators, service-level API keys and the team directory (M6-A):
 // ListSecurityOperators, AddSecurityOperator, RemoveSecurityOperator, ListServiceApiKeys,
 // CreateServiceApiKey, DeleteServiceApiKey and ListTeamDirectory.
@@ -27,7 +23,7 @@ type SecOpsAPI struct {
 }
 
 // BindSecOps binds the M6-A handlers as the secops area.
-func BindSecOps(a *SecOpsAPI) { w2SetArea(secOpsAreaName, a.Register) }
+func BindSecOps(a *SecOpsAPI) Registrar { return a.Register }
 
 // Register binds the operations.
 func (a *SecOpsAPI) Register(g *Registry) error {

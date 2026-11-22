@@ -18,9 +18,9 @@ import (
 // afs-api never calls the cluster. With any of them unset, GetTeamKubeconfig answers 503.
 func wireKubeconfig(c *components, s settings) {
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
-	httpapi.BindKubeconfig(&httpapi.KubeconfigAPI{Svc: &kubeconfig.Service{Deps: deps, Repo: postgres.NewKubeconfigRepo(),
+	c.bind(httpapi.BindKubeconfig(&httpapi.KubeconfigAPI{Svc: &kubeconfig.Service{Deps: deps, Repo: postgres.NewKubeconfigRepo(),
 		Cluster: kubeconfig.Cluster{Name: s.ClusterName, Endpoint: s.ClusterEndpoint,
-			CAData: s.ClusterCAData, Region: s.AWSRegion}}})
+			CAData: s.ClusterCAData, Region: s.AWSRegion}}}))
 }
 
 var accountIDPattern = regexp.MustCompile(`^[0-9]{12}$`)

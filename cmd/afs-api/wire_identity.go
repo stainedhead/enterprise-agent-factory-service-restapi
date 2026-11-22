@@ -44,10 +44,10 @@ func cutPrefix(id string) (prefix, body string, ok bool) {
 // (M4-A2), and binds their handlers.
 func wireIdentity(c *components, s settings, log *slog.Logger) {
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
-	httpapi.BindIdentity(&httpapi.IdentityAPI{
+	c.bind(httpapi.BindIdentity(&httpapi.IdentityAPI{
 		Identity: &identity.Service{Deps: deps, Repo: postgres.NewIdentityRepo(), Entropy: crand.Reader,
 			Roles: roleARNs(s.AWSRegion, s.AWSAccountID)},
 		Accounts: &accounts.Service{Deps: deps, Repo: postgres.NewAccountsRepo()},
-		Pages:    httpapi.NewPageTokens(pageTokenKey(log), nil),
-	})
+		Pages:    httpapi.NewPageTokens(c.PageKey, nil),
+	}))
 }

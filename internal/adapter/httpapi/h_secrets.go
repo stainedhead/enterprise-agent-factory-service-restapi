@@ -18,7 +18,7 @@ type SecretsAPI struct {
 }
 
 // BindSecrets binds the secret handlers as the secrets area.
-func BindSecrets(a *SecretsAPI) { w2SetArea("secrets", a.Register) }
+func BindSecrets(a *SecretsAPI) Registrar { return a.Register }
 
 // Register binds the secret operations.
 func (a *SecretsAPI) Register(g *Registry) error {

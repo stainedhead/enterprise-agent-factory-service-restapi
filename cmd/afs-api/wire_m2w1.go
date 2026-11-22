@@ -19,15 +19,15 @@ import (
 // systems) on the database components and binds their handlers.
 func wireM2W1(c *components, log *slog.Logger) {
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
-	pages := httpapi.NewPageTokens(pageTokenKey(log), nil)
+	pages := httpapi.NewPageTokens(c.PageKey, nil)
 
-	httpapi.BindCatalog(&httpapi.CatalogAPI{
+	c.bind(httpapi.BindCatalog(&httpapi.CatalogAPI{
 		Models:         &models.Service{Deps: deps, Repo: postgres.NewModelRepo()},
 		StorageClasses: &storageclasses.Service{Deps: deps, Repo: postgres.NewStorageClassRepo()},
 		Templates:      &agenttemplates.Service{Deps: deps, Repo: postgres.NewAgentTemplateRepo()},
 		Systems:        &catalogsystems.Service{Deps: deps, Repo: postgres.NewCatalogSystemRepo()},
 		Pages:          pages,
-	})
-	httpapi.BindConfig(&httpapi.ConfigAPI{Config: &configuc.Service{Deps: deps, Repo: postgres.NewConfigRepo()}, Pages: pages})
-	httpapi.BindExtSystems(&httpapi.ExtSystemsAPI{Systems: &extsys.Service{Deps: deps, Repo: postgres.NewExtSystemRepo()}, Pages: pages})
+	}))
+	c.bind(httpapi.BindConfig(&httpapi.ConfigAPI{Config: &configuc.Service{Deps: deps, Repo: postgres.NewConfigRepo()}, Pages: pages}))
+	c.bind(httpapi.BindExtSystems(&httpapi.ExtSystemsAPI{Systems: &extsys.Service{Deps: deps, Repo: postgres.NewExtSystemRepo()}, Pages: pages}))
 }

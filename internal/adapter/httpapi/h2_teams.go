@@ -17,7 +17,7 @@ type TeamsAPI struct {
 }
 
 // BindTeams binds the team handlers as the teams area.
-func BindTeams(a *TeamsAPI) { w2SetArea("teams", a.Register) }
+func BindTeams(a *TeamsAPI) Registrar { return a.Register }
 
 type teamBody struct {
 	ID                       string        `json:"id"`

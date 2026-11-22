@@ -16,9 +16,9 @@ import (
 func wireExports(c *components, log *slog.Logger) {
 	ids := m1w2IDs{crand.Reader}
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: ids}
-	httpapi.BindExports(&httpapi.ExportsAPI{
+	c.bind(httpapi.BindExports(&httpapi.ExportsAPI{
 		Exports: &exports.Service{Deps: deps, Repo: postgres.NewExportRepo()},
 		Imports: &imports.Service{Deps: deps, Repo: postgres.NewImportRepo(ids)},
-		Pages:   httpapi.NewPageTokens(pageTokenKey(log), nil),
-	})
+		Pages:   httpapi.NewPageTokens(c.PageKey, nil),
+	}))
 }

@@ -14,8 +14,8 @@ import (
 // handlers as the pools area.
 func wirePools(c *components, log *slog.Logger) {
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
-	httpapi.BindPools(&httpapi.PoolsAPI{
+	c.bind(httpapi.BindPools(&httpapi.PoolsAPI{
 		Svc:   &pools.Service{Deps: deps, Repo: postgres.NewPoolRepo(), Entropy: crand.Reader},
-		Pages: httpapi.NewPageTokens(pageTokenKey(log), nil),
-	})
+		Pages: httpapi.NewPageTokens(c.PageKey, nil),
+	}))
 }

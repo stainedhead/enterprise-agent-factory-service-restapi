@@ -6,17 +6,13 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/kubeconfig"
 )
 
-const kubeconfigAreaName = "kubeconfig"
-
-func init() { Areas = append(Areas, Area{kubeconfigAreaName, none}) }
-
 // KubeconfigAPI serves GetTeamKubeconfig (M5-E1, RA-10).
 type KubeconfigAPI struct {
 	Svc *kubeconfig.Service
 }
 
 // BindKubeconfig binds the kubeconfig handler as the kubeconfig area.
-func BindKubeconfig(a *KubeconfigAPI) { w2SetArea(kubeconfigAreaName, a.Register) }
+func BindKubeconfig(a *KubeconfigAPI) Registrar { return a.Register }
 
 // Register binds the operation.
 func (a *KubeconfigAPI) Register(g *Registry) error {

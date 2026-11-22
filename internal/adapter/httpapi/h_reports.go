@@ -16,7 +16,7 @@ type ReportsAPI struct {
 }
 
 // BindReports binds the report handlers as the reports area.
-func BindReports(a *ReportsAPI) { w2SetArea("reports", a.Register) }
+func BindReports(a *ReportsAPI) Registrar { return a.Register }
 
 // Register binds the report operations.
 func (a *ReportsAPI) Register(g *Registry) error {

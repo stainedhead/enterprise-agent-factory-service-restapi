@@ -502,6 +502,9 @@ func parseSettings(lines []string) ([]SettingEntry, error) {
 		if len(row) != 5 {
 			continue
 		}
+		if strings.TrimSpace(row[1]) == "unset" {
+			continue // a database-only key (CD-8): in §6.13, never exposed by GetSettings
+		}
 		key := codes(row[0])
 		def := codes(row[1])
 		if len(key) != 1 || len(def) != 1 {

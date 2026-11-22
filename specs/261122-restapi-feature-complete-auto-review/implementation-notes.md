@@ -255,7 +255,34 @@ across replicas answer 409.
 
 ## Orchestrator
 
-(cross-stream requests and their resolution; merge log)
+Integration (step 9), branches merged with `--no-ff` in the order A, C, B, D, E. Only `status.md` conflicted (one row
+per stream; all rows kept). The helm golden did not conflict.
+
+- **B-10.** `cmd/afs-gateway/recorders.go` binds `gateway.SettleRecorder` and `gateway.UsageDropRecorder` to C's
+  `Metrics.SettleFailed()` and `Metrics.UsageRowDropped(reason)` (one call per dropped row). B's local counters and
+  `newGatewayCounters` are gone, so both series are now registered and scraped. The two `deferredWriters` entries are
+  deleted; the map is empty and the test still fails if one is added without a writer.
+- **E wiring.** `wireSecrets` passes `s.IdempotencyHMACKey` (resolved in `wire`, never empty). E's
+  `idempotencyHMACKey(log)` environment lookup and its test are deleted. `user-docs/configuration.md` already held the text
+  (D).
+- **D-9, D-10 (FR-R15).** `httpapi.Bind*` now return a `Registrar` and mutate nothing; `Areas`, `Area`, `w2SetArea`, the
+  `init()` appends and the `*AreaName` constants are gone. `Registry.Unbound()` lists operations without a handler;
+  `httpapi.New` returns an error naming them unless `Config.AllowUnbound`. The explicit list is the existing
+  `Config.Registrars` field (RD: kept the name rather than adding `Config.Areas`). `wire` collects registrars with
+  `components.bind` and hands them to the config; `AllowUnbound` is set only without a database (development: health,
+  readiness and the OpenAPI document). `NewHandler` (health only) sets it. About ten tests set it.
+  `TestNewRefusesUnboundOperations` needs no database.
+- **Page key.** `pageTokenKey(log)` and its mutex-guarded package variable are replaced by `components.PageKey`
+  (`resolvePageKey`), read by every wire function.
+- **Contract check (gate).** `make contract-check` uses `AFS_ROOT_DIR` (default `../enterprise-agent-factory-service`)
+  with `-skip-missing`, so a worktree under `/home/user/wt` silently skipped it (C's finding). Run against the real root it
+  failed: the extract was cut from contract 1.1.0 while root `main` has been 1.2.0 (CD-1 to CD-12) since 2026-11-21, so
+  CI (`ref: main`) was failing too. Fixed: `contractgen` pins 1.2.0 and skips database-only `unset` settings in PRD
+  §6.13 (CD-8, with a test); extracts and generated files regenerated; `events_ext.go` no longer declares
+  `notification.test_requested` (the root lists it now); the contractgen fixtures are the 1.2.0 contract and the current
+  §6.13. The local root checkout is on branch `docs/contracts-feature-complete-alignment` (unmerged, differs from `main`
+  only in notes), so the gate ran with `AFS_ROOT_DIR` set to an export of root `main`. After the root PR merges, run
+  `make contract` once (the SOURCE hash changes).
 
 ## Lessons learned
 

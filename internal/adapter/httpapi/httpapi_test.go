@@ -63,8 +63,9 @@ func newServer(t *testing.T, regs ...Registrar) (http.Handler, *recorder) {
 		regs = []Registrar{none}
 	}
 	h, err := New(Config{
-		Auth:  principals,
-		Teams: fakeTeams{teamA: {}, teamB: {}},
+		AllowUnbound: true,
+		Auth:         principals,
+		Teams:        fakeTeams{teamA: {}, teamB: {}},
 		Hooks: Hooks{
 			Denied:            func(_ context.Context, d Denial) { rec.denied = append(rec.denied, d) },
 			CrossTeamNotFound: func(_ context.Context, op string) { rec.notFound = append(rec.notFound, op) },
@@ -221,9 +222,6 @@ func TestRegistry(t *testing.T) {
 	_ = g.Handle("A", ok)
 	if strings.Join(g.Bound(), ",") != "A,B" {
 		t.Fatal(g.Bound())
-	}
-	if len(Areas) < 20 {
-		t.Fatal("areas missing")
 	}
 	if h := NewHandler(nil); h == nil {
 		t.Fatal("nil handler")
@@ -450,7 +448,7 @@ type errAuth struct{ err error }
 func (e errAuth) Authenticate(*http.Request) (*authz.Principal, error) { return nil, e.err }
 
 func TestAuthorizationDependencyFailures(t *testing.T) {
-	h, err := New(Config{Auth: principals, Teams: errTeams{}, Registrars: []Registrar{none}})
+	h, err := New(Config{AllowUnbound: true, Auth: principals, Teams: errTeams{}, Registrars: []Registrar{none}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -461,12 +459,12 @@ func TestAuthorizationDependencyFailures(t *testing.T) {
 		err  error
 		code int
 	}{{domain.Unavailable("idp", nil), 503}, {errors.New("weird"), 401}} {
-		h, _ := New(Config{Auth: errAuth{c.err}, Registrars: []Registrar{none}})
+		h, _ := New(Config{AllowUnbound: true, Auth: errAuth{c.err}, Registrars: []Registrar{none}})
 		if r := do(t, h, "GET", "/v1/me", "x", ""); r.Code != c.code {
 			t.Errorf("%v: %d", c.err, r.Code)
 		}
 	}
-	h, _ = New(Config{Registrars: []Registrar{none}})
+	h, _ = New(Config{AllowUnbound: true, Registrars: []Registrar{none}})
 	if r := do(t, h, "GET", "/v1/me", "x", ""); r.Code != 401 {
 		t.Fatalf("no authenticator: %d", r.Code)
 	}
@@ -474,7 +472,7 @@ func TestAuthorizationDependencyFailures(t *testing.T) {
 
 // M0-D4.
 func TestHealthReadinessAndOpenAPI(t *testing.T) {
-	h, err := New(Config{Ready: map[string]ReadinessCheck{
+	h, err := New(Config{AllowUnbound: true, Ready: map[string]ReadinessCheck{
 		"database": func(*http.Request) error { return nil },
 		"schema":   func(*http.Request) error { return errors.New("have 000015, want 000016") },
 	}, Registrars: []Registrar{none}})
@@ -609,7 +607,8 @@ func TestSplitVerb(t *testing.T) {
 func TestOnRouteReportsTheMatchedOperation(t *testing.T) {
 	var got []string
 	h, err := New(Config{
-		Auth: principals, Teams: fakeTeams{teamA: {}}, Registrars: []Registrar{none},
+		AllowUnbound: true,
+		Auth:         principals, Teams: fakeTeams{teamA: {}}, Registrars: []Registrar{none},
 		OnRoute: func(_ context.Context, op string) { got = append(got, op) },
 		Now:     func() time.Time { return time.Unix(1_800_000_000, 0) },
 	})
@@ -647,3 +646,22 @@ func TestTagFiltersAreOnlyForReportOperations(t *testing.T) {
 		t.Errorf("verb split = %s %s", b, v)
 	}
 }
+
+// FR-R15 AC2, AC3: New refuses a contract operation nobody bound, naming it, unless AllowUnbound is
+// set; no database is needed to prove it.
+func TestNewRefusesUnboundOperations(t *testing.T) {
+	ok := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+	one := []Registrar{func(g *Registry) error { return g.Handle("ListTeams", ok) }}
+	_, err := New(Config{Registrars: one})
+	if err == nil || !strings.Contains(err.Error(), "unbound") || !strings.Contains(err.Error(), "CreateTeam") {
+		t.Fatalf("err = %v, want an error naming an unbound operation such as CreateTeam", err)
+	}
+	if _, err := New(Config{Registrars: one, AllowUnbound: true}); err != nil {
+		t.Fatalf("AllowUnbound: %v", err)
+	}
+	if _, err := New(Config{}); err == nil {
+		t.Fatal("no registrars at all must also be refused")
+	}
+}
+
+func none(*Registry) error { return nil }

@@ -21,7 +21,7 @@
 | 6  | Prepare Review PRD              | ✅ Complete (review-prd: ready for spec; AC tightened, priorities confirmed, 5 fix streams) | 2026-11-22T08:05:43Z | 2026-11-22T08:06:36Z | 1 |
 | 7  | Archive Original Spec           | ✅ Complete (git mv to specs/archive/; root PRD stub link updated; no README, docs or AGENTS links pointed at the old path; archived with M2-F8 and M6-F3..F6 open, see decision below) | 2026-11-22T08:07:00Z | 2026-11-22T08:08:02Z | 1 |
 | 8  | Spec Review Fixes               | ✅ Complete (review spec `specs/261122-restapi-feature-complete-auto-review/`: 17 findings, 5 streams A to E, 48 tasks; merge order A, C, then B and D, then E) | 2026-11-22T08:09:00Z | 2026-11-22T08:10:37Z | 5 |
-| 9  | Implement Review Fixes          | ⬜ Pending | — | — | — |
+| 9  | Implement Review Fixes          | ✅ Complete (48 of 48 tasks, 5 streams merged; FR-R15, B-10 and E wiring by the integrator; contract check repaired against root main 1.2.0; gate, cover, test-db, envtest, conformance and load green) | 2026-11-22T08:11:00Z | 2026-11-22T10:10:00Z | 119 |
 | 10 | Archive Fixes Spec              | ⬜ Pending | — | — | — |
 | 11 | Final Quality Pass              | ⬜ Pending | — | — | — |
 | 12 | Process Analysis Report         | ⬜ Pending | — | — | — |

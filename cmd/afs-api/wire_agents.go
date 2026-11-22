@@ -13,6 +13,6 @@ import (
 // wireAgents binds the agent operations (M2-B).
 func wireAgents(c *components, log *slog.Logger) {
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
-	httpapi.BindAgents(&httpapi.AgentsAPI{Svc: &agents.Service{Deps: deps, Repo: postgres.NewAgentRepo()},
-		Pages: httpapi.NewPageTokens(pageTokenKey(log), nil)})
+	c.bind(httpapi.BindAgents(&httpapi.AgentsAPI{Svc: &agents.Service{Deps: deps, Repo: postgres.NewAgentRepo()},
+		Pages: httpapi.NewPageTokens(c.PageKey, nil)}))
 }

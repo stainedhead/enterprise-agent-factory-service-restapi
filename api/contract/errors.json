@@ -2,7 +2,7 @@
   {
     "http": 400,
     "code": "ValidationError",
-    "when": "Malformed or out-of-range input; `details.fields[]` lists `{field, reason}`",
+    "when": "Malformed or out-of-range input, a body over the size limit (`field: body`; there is no `413`), a page token issued to another caller or for another operation; `details.fields[]` lists `{field, reason}`",
     "dbOrigin": "`23514`, `23502`, `22xxx`"
   },
   {
@@ -13,13 +13,13 @@
   {
     "http": 403,
     "code": "AccessDenied",
-    "when": "Valid caller without the permission; `details.requiredPermission`",
+    "when": "Valid caller without the permission, including a signed-in caller with no team binding on a route not scoped to one team (CD-10); `details.requiredPermission`",
     "dbOrigin": "`42501`"
   },
   {
     "http": 404,
     "code": "NotFound",
-    "when": "No such resource, **or** a resource in a team the caller cannot see (never reveals existence)",
+    "when": "No such resource, **or** a resource in a team the caller cannot see (never reveals existence), **or** an unknown path or `:verb` (error envelope, not a bare 404)",
     "dbOrigin": "RLS hides the row"
   },
   {
@@ -43,7 +43,7 @@
   {
     "http": 428,
     "code": "PreconditionRequired",
-    "when": "`If-Match` missing on `PATCH`, `PUT` or `DELETE` of an existing resource"
+    "when": "`If-Match` missing on `PATCH` or `DELETE` of an existing resource (optional on `PUT`)"
   },
   {
     "http": 429,

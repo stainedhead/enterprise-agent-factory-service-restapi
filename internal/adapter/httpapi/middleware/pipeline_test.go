@@ -128,10 +128,11 @@ func newEnv(t *testing.T) *env {
 		return nil
 	}
 	h, err := httpapi.New(httpapi.Config{
-		Auth:       &middleware.Authn{Auth: principals, Limiter: limiter},
-		Registrars: []httpapi.Registrar{register},
-		Outer:      []httpapi.Middleware{middleware.WithRequestMeta(0)},
-		PreAuth:    []httpapi.Middleware{middleware.PublicLimit(limiter, routeInfo, httpapi.WriteError)},
+		AllowUnbound: true,
+		Auth:         &middleware.Authn{Auth: principals, Limiter: limiter},
+		Registrars:   []httpapi.Registrar{register},
+		Outer:        []httpapi.Middleware{middleware.WithRequestMeta(0)},
+		PreAuth:      []httpapi.Middleware{middleware.PublicLimit(limiter, routeInfo, httpapi.WriteError)},
 		PostAuth: []httpapi.Middleware{
 			e.auditor.Stage(routeInfo, httpapi.PrincipalFrom),
 			middleware.RequireIfMatch(required, routeInfo, httpapi.WriteError),

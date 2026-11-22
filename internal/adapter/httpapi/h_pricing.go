@@ -9,10 +9,6 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/pricing"
 )
 
-const pricingAreaName = "pricing"
-
-func init() { Areas = append(Areas, Area{pricingAreaName, none}) }
-
 // PricingAPI serves ListModelPriceProposals, ApproveModelPriceProposal and RejectModelPriceProposal
 // (M4-D2, RA-7).
 type PricingAPI struct {
@@ -21,7 +17,7 @@ type PricingAPI struct {
 }
 
 // BindPricing binds the pricing handlers as the pricing area.
-func BindPricing(a *PricingAPI) { w2SetArea(pricingAreaName, a.Register) }
+func BindPricing(a *PricingAPI) Registrar { return a.Register }
 
 // Register binds the pricing operations.
 func (a *PricingAPI) Register(g *Registry) error {

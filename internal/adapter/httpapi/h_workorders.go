@@ -19,7 +19,7 @@ type WorkOrdersAPI struct {
 }
 
 // BindWorkOrders binds the work order handlers as the workorders area.
-func BindWorkOrders(a *WorkOrdersAPI) { w2SetArea("workorders", a.Register) }
+func BindWorkOrders(a *WorkOrdersAPI) Registrar { return a.Register }
 
 // Register binds the work order operations.
 func (a *WorkOrdersAPI) Register(g *Registry) error {

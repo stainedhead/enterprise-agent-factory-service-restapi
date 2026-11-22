@@ -37,23 +37,17 @@ func (g *Registry) Bound() []string {
 	return out
 }
 
+// Unbound lists the operations without a handler, sorted.
+func (g *Registry) Unbound() []string {
+	var out []string
+	for id := range g.ops {
+		if !g.bound[id] {
+			out = append(out, id)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // Registrar binds the handlers of one area.
 type Registrar func(*Registry) error
-
-// Area is one handler area of architecture.md §3; its stream owns its registrar.
-type Area struct {
-	Name     string
-	Register Registrar
-}
-
-func none(*Registry) error { return nil }
-
-// Areas lists the handler areas. Each stream replaces its area's registrar with one in its own
-// file (for example teams.go) when it binds its first operation.
-var Areas = []Area{
-	{"teams", none}, {"members", none}, {"apikeys", none}, {"me", none}, {"agents", none},
-	{"pools", none}, {"identity", none}, {"identityproviders", none}, {"secrets", none}, {"config", none}, {"extsys", none},
-	{"budgets", none}, {"reports", none}, {"delivery", none}, {"audit", none}, {"revisions", none},
-	{"workorders", none}, {"swarmtemplates", none}, {"admin", none}, {"adminmodels", none},
-	{"adminsettings", none}, {"exports", none},
-}

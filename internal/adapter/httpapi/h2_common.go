@@ -21,17 +21,6 @@ import (
 // Helpers shared by the handlers of M1-B, M1-C and M1-E (teams, members, API keys, service
 // administration I). Names carry the prefix w2 so they cannot collide with another stream's.
 
-// w2SetArea replaces the registrar of the named area in Areas.
-func w2SetArea(name string, r Registrar) {
-	for i := range Areas {
-		if Areas[i].Name == name {
-			Areas[i].Register = r
-			return
-		}
-	}
-	panic("httpapi: unknown area " + name)
-}
-
 // w2Caller builds the use case caller from the authenticated request. The source address is the client
 // address the request metadata middleware computed from AFS_TRUSTED_PROXY_HOPS, the same one the
 // denied-request auditor records (FR-R02). Without that middleware it is the connection peer; a client

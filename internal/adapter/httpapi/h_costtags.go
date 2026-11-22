@@ -7,10 +7,6 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/costtags"
 )
 
-const costTagsAreaName = "costtags"
-
-func init() { Areas = append(Areas, Area{costTagsAreaName, none}) }
-
 // CostTagsAPI serves ListCostTagStatus (M5-F2, RA-11).
 type CostTagsAPI struct {
 	Svc   *costtags.Service
@@ -18,7 +14,7 @@ type CostTagsAPI struct {
 }
 
 // BindCostTags binds the handler as the costtags area.
-func BindCostTags(a *CostTagsAPI) { w2SetArea(costTagsAreaName, a.Register) }
+func BindCostTags(a *CostTagsAPI) Registrar { return a.Register }
 
 // Register binds the operation.
 func (a *CostTagsAPI) Register(g *Registry) error {

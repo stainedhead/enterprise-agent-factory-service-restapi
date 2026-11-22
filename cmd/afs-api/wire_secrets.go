@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 
@@ -83,24 +82,7 @@ func wireSecrets(ctx context.Context, c *components, s settings, log *slog.Logge
 		orphans.Inc()
 		log.Error("secret left in Secrets Manager without a database row; the reconciler sweep will remove it")
 	}}
-	httpapi.BindSecrets(&httpapi.SecretsAPI{Svc: svc, Pages: httpapi.NewPageTokens(pageTokenKey(log), nil),
-		IdemKey: idempotencyHMACKey(log)})
+	c.bind(httpapi.BindSecrets(&httpapi.SecretsAPI{Svc: svc, Pages: httpapi.NewPageTokens(c.PageKey, nil),
+		IdemKey: s.IdempotencyHMACKey}))
 	return nil
-}
-
-// idempotencyHMACKey is AFS_IDEMPOTENCY_HMAC_KEY (at least 32 bytes, shared by every replica): the key
-// of the HMAC that fingerprints a secret value in the idempotency record (FR-R14). Without it a random
-// per-process key is drawn, so a retry that reaches another replica or follows a restart is answered 409
-// idempotency_mismatch instead of a replay; it never weakens the fingerprint.
-//
-// TODO(integrator): once stream D's settings.IdempotencyHMACKey (D-5) has merged, read the key from
-// settings and delete this environment lookup.
-func idempotencyHMACKey(log *slog.Logger) []byte {
-	if k, _ := os.LookupEnv("AFS_IDEMPOTENCY_HMAC_KEY"); len(k) >= 32 {
-		return []byte(k)
-	}
-	log.Warn("AFS_IDEMPOTENCY_HMAC_KEY is unset or shorter than 32 bytes; using a random per-process key")
-	k := make([]byte, 32)
-	_, _ = crand.Read(k)
-	return k
 }

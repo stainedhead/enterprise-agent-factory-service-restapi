@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Contract v1.1.0, draft for implementation (2026-11-21); revised after the `review-prd` pass (root PRD D23 to D57) |
+| **Status** | Contract v1.2.0, draft for implementation (2026-11-21); v1.2.0 records the decisions of `-restapi` milestone M0 (CD-1 to CD-10, see §9); v1.1.0 was revised after the `review-prd` pass (root PRD D23 to D57) |
 | **Provider** | [enterprise-agent-factory-service-restapi](https://github.com/stainedhead/enterprise-agent-factory-service-restapi) (`afs-api`) |
 | **Consumers** | [-cli](https://github.com/stainedhead/enterprise-agent-factory-service-cli) (`afs`), [-website](https://github.com/stainedhead/enterprise-agent-factory-service-website) (`@afs/sdk`, console) |
 | **Machine-readable form** | `-restapi/api/openapi.yaml` (OpenAPI 3.1). Built from this document; once an operation is in the YAML, the YAML wins and this document is updated to match in the same PR |
@@ -22,16 +22,18 @@ shapes, errors and events. A client never decides access; it reads `GET /v1/me` 
 | Names | Team `slug`, agent `name`, secret `name`: `^[a-z][a-z0-9-]{1,38}[a-z0-9]$`, immutable after create |
 | Timestamps | RFC 3339 UTC with `Z` (`2026-11-21T18:00:00Z`) |
 | Money | Decimal string with up to 6 fraction digits, USD only (`"1234.50"`). Never a JSON number |
-| Pagination | `?maxResults=1..100` (default 50) and `?nextToken=<token>` → `{"items": [...], "nextToken": "<token>"}`. `nextToken` absent on the last page. Tokens are opaque and expire after 24 h |
+| Pagination | `?maxResults=1..100` (default 50) and `?nextToken=<token>` → `{"items": [...], "nextToken": "<token>"}`. `nextToken` absent on the last page. Tokens are opaque, expire after 24 h and are bound to the operation and the caller that received them: a token replayed by another caller or on another list is refused with `ValidationError` |
 | Filtering | Query parameters named after fields (`?state=active&kind=ephemeral`). Unknown parameters → `ValidationError` |
-| Concurrency | Every mutable resource has `version` (integer) and is returned with `ETag: "<version>"`. `PATCH`, `PUT` and `DELETE` on an existing resource require `If-Match`; a mismatch → `412 PreconditionFailed` |
+| Concurrency | Every mutable resource has `version` (integer) and is returned with `ETag: "<version>"`. `PATCH` and `DELETE` on an existing resource require `If-Match` (absent → `428`); on `PUT` it is optional, because `PUT` is an upsert: with it, a mismatch → `412 PreconditionFailed`; without it, the write applies to the current version (CD-2) |
+| Deletes | `DELETE` of a resource that carries a reconcile `status` (`DeleteTeam`, `DeleteAgent`, `DeletePool`, `DeleteLogDestination`, `DeleteNotificationChannel`) answers `202` with the resource body (`status.phase` `Pending`, `state` `deleting` where the resource has one). Every other `DELETE` answers `204` with no body (CD-1) |
+| Body size and unknown routes | A request body over the limit is `400 ValidationError` (`details.fields[0].field = body`), not `413`. An unknown path or an unknown `:verb` is `404 NotFound` in the error envelope, never a bare `404` or a `405` page |
 | Idempotency | `POST` that creates (and `POST …:verb` actions) accepts `Idempotency-Key` (1–255 chars). Keys are scoped to the calling principal and kept for service setting `api.idempotency_key_ttl_seconds` (default 3600, so 1 hour). A repeat with the same key and the same operation and body returns the stored status and body with header `Idempotent-Replayed: true`; the same key with a different body or operation → `409 Conflict` (`details.reason = idempotency_mismatch`); a repeat while the first is still running → `409 Conflict` (`details.reason = idempotency_in_progress`, `Retry-After: 1`). Error responses of 5xx are not stored, so a retry runs again |
 | Actions | Non-CRUD verbs are `POST …/{id}:verb` (`:suspend`, `:restart`, `:approve`) |
 | Async | Mutations return the stored desired state at once with `status.phase` `Pending`. Clients poll `GET …` (or `…/status`) until `Ready`, `Degraded` or `Failed`. `status.observedGeneration` equals `generation` when applied |
 | Request id | Every response has `X-Request-Id`; a client may send its own (≤ 64 chars). It appears in errors and audit |
 | Versioning | Additive changes (new optional field, new operation, new enum value documented as open) are minor. Removing or renaming a field, changing a type or making a field required is a new major path (`/v2`). Clients ignore unknown fields |
 | Rate limits | 429 `Throttled` with `Retry-After` seconds. Default 20 req/s per principal, burst 40 |
-| CSV | Report and list endpoints marked *CSV* also answer `Accept: text/csv`. A CSV body has no `nextToken` field, so the next page's token travels in the response header `X-Afs-Next-Token` (absent on the last page). The CLI's `--output csv` is valid only on those operations (D39) |
+| CSV | Report and list endpoints marked *CSV* also answer `Accept: text/csv`. A cell that would be read as a formula (starts with `=`, `+`, `@`, tab or carriage return, or with `-` not followed by a number) is prefixed with `'`; negative amounts stay numeric. A CSV body has no `nextToken` field, so the next page's token travels in the response header `X-Afs-Next-Token` (absent on the last page). The CLI's `--output csv` is valid only on those operations (D39) |
 | Contract version | Every response carries `X-Afs-Contract-Version: <semver>` (this document's version). A client built against an older minor keeps working and may print a notice once per session; a newer major is refused by path (`/v2`) (D47) |
 | CORS | `afs-api` answers CORS preflight and sets `Access-Control-Allow-Origin` only for origins listed in service setting `api.cors_origins` (default empty: no browser origin allowed). Allowed headers: `Authorization`, `Content-Type`, `If-Match`, `Idempotency-Key`, `X-Request-Id`; exposed headers: `ETag`, `X-Request-Id`, `Idempotent-Replayed`, `Retry-After`, `X-Afs-Contract-Version`, `X-Afs-Next-Token`. No credentials mode (tokens go in `Authorization`) (D43) |
 
@@ -80,7 +82,16 @@ else returns `403`. Its actions are audited with the agent or pool id and, for p
 
 `401 Unauthenticated` for a missing, expired or unknown credential; `403 AccessDenied` for a valid
 caller without the permission. A caller bound to no role on a team gets `404 NotFound` on that team's
-resources (never revealing existence); a bound caller without the permission gets `403`.
+resources (never revealing existence); a bound caller without the permission gets `403`. A signed-in
+caller with no binding at all gets `403 AccessDenied` (with `details.requiredPermission`) on a route that
+is not scoped to one team and needs a permission, such as `ListTeams`: there is no team whose existence
+to hide (CD-10).
+
+**Identity providers: two client ids.** The contract and OpenAPI carry `consoleClientId` and
+`cliClientId` (D48). They map to `afs.identity_providers.client_id` (the console client) and
+`cli_client_id` (-db 000017, optional, the public client for the CLI device grant). When
+`cli_client_id` is empty, `ListSignInProviders` omits `cliClientId` and `afs sso login` exits 255 naming
+the provider (CD-9).
 
 ## 3. Permission catalog
 
@@ -136,7 +147,7 @@ for security operators `"securityOperator": true` with their column's permission
 
 Columns: **Op** = OpenAPI `operationId`; **Perm** = permission (team-scoped unless marked *svc*);
 **CLI** = `afs <service> <operation>`; **SDK** = `@afs/sdk` method; **Screen** = console screen in the
-root PRD §5.3. Every mutation writes the row, an audit record and an outbox event in one transaction.
+root PRD §5.3. Every mutation writes the row and an audit record in one transaction, and, when it has an event type in §7, an outbox event in the same transaction. Mutations with no §7 event type (members, API keys, settings, identities, config values and the like) write no outbox row (CD-7).
 P = priority from the root PRD. One row per operation; the CLI and SDK columns are the complete lists
 (the CLI adds only `configure`, `sso login`, `sso logout` and `completion`, which call no operation).
 
@@ -363,11 +374,11 @@ effect when each record happened (TAG-6); a record missing a currently required 
 | `GetNotificationChannel` | `GET /v1/teams/{teamId}/notification-channels/{id}` (with delivery status) | `notifications:read` | `teams describe-notification-channel` | `notificationChannels.get()` | T14 | P1 |
 | `UpdateNotificationChannel` | `PATCH /v1/teams/{teamId}/notification-channels/{id}` | `notifications:write` | `teams update-notification-channel` | `notificationChannels.update()` | T14 | P1 |
 | `DeleteNotificationChannel` | `DELETE /v1/teams/{teamId}/notification-channels/{id}` | `notifications:write` | `teams delete-notification-channel` | `notificationChannels.delete()` | T14 | P1 |
-| `TestNotificationChannel` | `POST /v1/teams/{teamId}/notification-channels/{id}:test` | `notifications:write` | `teams test-notification-channel` | `notificationChannels.test()` | T14 | P1 |
+| `TestNotificationChannel` | `POST /v1/teams/{teamId}/notification-channels/{id}:test` (`200 NotificationTestResult` with `delivered`, or `202` with `pending: true` while the reconciler has not reported within 10 s; emits `notification.test_requested`) | `notifications:write` | `teams test-notification-channel` | `notificationChannels.test()` | T14 | P1 |
 | `ListAuditEvents` | `GET /v1/teams/{teamId}/audit-events` *CSV* | `audit:read` | `audit list-audit-events` | `audit.list()` | T15 | P0 |
 | `ListRevisions` | `GET /v1/teams/{teamId}/revisions` | `revisions:read` | `teams list-revisions` | `revisions.list()` | T15 | P0 |
 | `GetRevision` | `GET /v1/teams/{teamId}/revisions/{rev}` | `revisions:read` | `teams describe-revision` | `revisions.get()` | T15 | P0 |
-| `RestoreRevision` | `POST /v1/teams/{teamId}/revisions/{rev}:restore` (`dryRun` supported) | `revisions:restore` | `teams restore-revision` | `revisions.restore()` | T15 | P1 |
+| `RestoreRevision` | `POST /v1/teams/{teamId}/revisions/{rev}:restore` (`dryRun` supported; answers `RestoreResult`) | `revisions:restore` | `teams restore-revision` | `revisions.restore()` | T15 | P1 |
 
 Service-level notification channels (for example the outside-contact email channel named in
 `work_orders.notification_channel_id`) are in §4.11.
@@ -487,7 +498,8 @@ Team:        {slug, displayName, description, kind: persistent|ephemeral, state�
               isolationTier: shared|dedicated, viewerKubectl, expiresAt?, teardownRule?: at_expiry|at_cap_or_expiry|at_work_complete,
               tornDownAt†?, teardownReason†?, identityProviderId?, allowedAwsAccounts[], mayManageAwsAccounts,
               mayAddExternalSystems}
-TeamTags:    {tags: [{key, value?, source†: system|service|team|service_default|missing}]}       # PUT sends team-owned keys only
+TeamTags:    {tags: [{key, value?, source†: system|service|team|service_default|missing}],
+              requestMetadataDroppedKeys†[]}       # PUT sends team-owned keys only; the read-only list names tag keys left out of the Bedrock requestMetadata because of its pair limit (D27)
 Member:      {role: team_admin|team_viewer, subjectType: user|group, userId?, email†?, groupName?}
 ApiKey:      {name, role, keyPrefix†, expiresAt (≤ 90 days), lastUsedAt†, secretKey† (create response only)}
 Agent:       {name, description, template, image, modelId, resources{cpu,memory}, iamIdentity, iamRoleArn†,
@@ -523,6 +535,16 @@ Export:      {status†: pending|running|succeeded|failed, schemaVersion†, sha
 TeamDirectoryEntry: {id, slug, displayName}
 PriceProposal: {modelId, effectiveFrom, inputUsdPerMtok, outputUsdPerMtok, cacheReadUsdPerMtok, cacheWriteUsdPerMtok,
               status†: pending|approved|rejected|superseded, fetchedAt†, decidedBy†, decidedAt†, note}
+NotificationTestResult: {testId, delivered?, pending?, error?: string|null}     # 200: delivered true|false (+ error); 202: pending true
+RestoreResult: {dryRun, revision, changes[RestoreChange], skipped?[RestoreChange]}         # skipped: bindings or references that no longer resolve
+RestoreChange: {resourceKind, resourceId, action: create|update|delete|skip, fields?[{field, ...}], reason?}
+Snapshot:    {id†, agentId†, reason†: scheduled|manual|pre_delete|pre_change, state†: requested|pending|completed|failed|deleted,
+              sizeGiB†?, requestedAt†, requestedBy†?, completedAt†?}
+StorageClass: {name, description?, volumeType: gp3|io2, enabled, version†, createdAt†, updatedAt†}
+AuditEvent:  {id (integer), occurredAt, actorType: user|api_key|system|agent|pool, actorId, action, outcome: allowed|denied|failed,
+              resourceKind?, resourceId?, teamId?, requestId?, sourceIp?, userAgent?, workerPod?, before?{}, after?{}}   # no secret values
+Revision:    {revision (integer), resourceKind, resourceId, operation: INSERT|UPDATE|DELETE, version?, changedBy, changedAt, snapshot?{}}
+CostRow:     {day, source: gateway|cur_bedrock|cur_eks|cur_other, agentId?, poolId?, modelId?, costUsd, calls?}
 Me:          {principal{id, type: user|api_key|workload, email?, name?}, serviceAdmin, securityOperator, teams[{teamId, slug, role, permissions[]}]}
 ```
 
@@ -533,14 +555,14 @@ change; clients branch on `code` only. No error contains a secret value, token o
 
 | HTTP | `code` | When | Database origin (see [database contract](database-contract.md) §6) |
 |---|---|---|---|
-| 400 | `ValidationError` | Malformed or out-of-range input; `details.fields[]` lists `{field, reason}` | `23514`, `23502`, `22xxx` |
+| 400 | `ValidationError` | Malformed or out-of-range input, a body over the size limit (`field: body`; there is no `413`), a page token issued to another caller or for another operation; `details.fields[]` lists `{field, reason}` | `23514`, `23502`, `22xxx` |
 | 401 | `Unauthenticated` | Missing, expired or unknown credential | — |
-| 403 | `AccessDenied` | Valid caller without the permission; `details.requiredPermission` | `42501` |
-| 404 | `NotFound` | No such resource, **or** a resource in a team the caller cannot see (never reveals existence) | RLS hides the row |
+| 403 | `AccessDenied` | Valid caller without the permission, including a signed-in caller with no team binding on a route not scoped to one team (CD-10); `details.requiredPermission` | `42501` |
+| 404 | `NotFound` | No such resource, **or** a resource in a team the caller cannot see (never reveals existence), **or** an unknown path or `:verb` (error envelope, not a bare 404) | RLS hides the row |
 | 402 | `BudgetExceeded` | Returned by `afs-gateway` to agents only, never by `afs-api`; not retryable (see [gateway contract](gateway-contract.md)) | `reserve_spend_held` returned NULL |
 | 409 | `Conflict` | Duplicate name, idempotency body mismatch or in progress, dependent objects exist, invalid state transition (for example a suspended team) | `23505`, `23503` (on delete), `55000` |
 | 412 | `PreconditionFailed` | `If-Match` does not match `version` | — |
-| 428 | `PreconditionRequired` | `If-Match` missing on `PATCH`, `PUT` or `DELETE` of an existing resource | — |
+| 428 | `PreconditionRequired` | `If-Match` missing on `PATCH` or `DELETE` of an existing resource (optional on `PUT`) | — |
 | 429 | `Throttled` | Rate limit; `Retry-After` | — |
 | 500 | `InternalError` | Anything else; logged with `requestId` | `40001` after retries, others |
 | 502 | `UpstreamError` | Returned by `afs-gateway` only, when Bedrock returns a server error; the reservation is released; retry with backoff | — |
@@ -552,7 +574,7 @@ CLI rendering: `An error occurred (<code>) when calling the <operationId> operat
 `isPreconditionRequired`, `isThrottled`, `isUnavailable` and `isInternalError` (`BudgetExceeded` and `UpstreamError` come only from the gateway, so the SDK has no helper for them).
 
 Client handling:
-- **428.** Clients never rely on it: the CLI and SDK send `If-Match` on every `PATCH`, `PUT` and `DELETE`
+- **428.** Clients never rely on it: the CLI and SDK send `If-Match` on every `PATCH`, `DELETE` and, when they hold the resource's version, `PUT`
   of an existing resource (`--if-match <version>` or a resource carrying `version` is the safe mode;
   otherwise the CLI reads first, then writes, and prints to stderr the version it applied to). A `428`
   is a client bug: CLI exit 254, SDK `isPreconditionRequired`, never retried (D40).
@@ -590,6 +612,9 @@ delivers events to each team's notification channels through one EventBridge rul
 | `cost_tags.not_seen` | billing | TAG-7 |
 | `export.completed`, `export.failed`, `import.applied` | reconciler, api | CFG-5 |
 | `notification.delivery_failed` | reconciler | A channel's EventBridge target failed (D46) |
+| `notification.test_requested` | api | `TestNotificationChannel`; `data` has `channelId` and `testId`. The reconciler tests the channel and reports the result on the channel's status (condition `DeliveryHealthy`, `lastTestId`), which the API returns (CD-3) |
+
+A mutation with no type in this table (member and API key changes, settings, identities, config values, role links and so on) emits no event; its audit record is its trace (CD-7). A future type is an additive change.
 
 ## 8. Change process
 
@@ -600,3 +625,8 @@ delivers events to each team's notification channels through one EventBridge rul
 3. After merge, `-website` regenerates `packages/sdk/src/generated/` and `-cli` regenerates its client,
    each in its own PR referencing the `-restapi` tag.
 4. A contract test in each consumer replays the OpenAPI examples; CI fails on drift.
+
+## 9. Changelog
+
+- **v1.2.0 (2026-11-21), `-restapi` M0 (CD-1 to CD-10):** delete status codes (`202` with body for resources that carry a status, `204` otherwise); `If-Match` optional on `PUT`; `NotificationTestResult` and event `notification.test_requested`; `RestoreResult`, `Snapshot`, `StorageClass`, `AuditEvent`, `Revision` and `CostRow` shapes; `TeamTags.requestMetadataDroppedKeys`; mutations without a §7 event type write no outbox row; identity provider client id mapping recorded as open; `403` for a signed-in caller with no binding on a route not scoped to one team; error notes: oversized body is `400`, unknown path or verb is `404` in the envelope, page tokens bound to operation and caller, CSV formula cells prefixed with `'`.
+- **v1.1.0:** revised after the `review-prd` pass (root PRD D23 to D57).

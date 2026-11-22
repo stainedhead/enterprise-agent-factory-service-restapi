@@ -37,12 +37,20 @@ type components struct {
 	// Auth authenticates bearer credentials (wireAuth).
 	Auth    *auth.Service
 	Handler http.Handler
+	// PageKey signs every area's page tokens (resolvePageKey).
+	PageKey []byte
+	// Registrars are the handler areas the wire functions bound (FR-R15), in order; wire hands them to
+	// httpapi.Config.
+	Registrars []httpapi.Registrar
 	// Metrics is the registry the operations server exposes; Checks are its readiness checks
 	// (database and schema version) on /readyz of AFS_METRICS_ADDR.
 	Metrics *observability.Metrics
 	Checks  []observability.Check
 	Close   func()
 }
+
+// bind records the registrar of one handler area.
+func (c *components) bind(r httpapi.Registrar) { c.Registrars = append(c.Registrars, r) }
 
 // minKeyBytes is the shortest accepted HMAC or page-token key.
 const minKeyBytes = 32
@@ -176,7 +184,7 @@ func settingsFrom(env func(string) string) (settings, error) {
 // pool and wires the database-backed components.
 func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error) {
 	c := &components{Close: func() {}, Metrics: observability.NewMetrics("afs-api", buildinfo.Version)}
-	setPageTokenKey(s.PageTokenKey, log)
+	c.PageKey = resolvePageKey(s.PageTokenKey, log)
 	if len(s.IdempotencyHMACKey) < minKeyBytes {
 		log.Warn("AFS_IDEMPOTENCY_HMAC_KEY is unset; using a random per-process key (single replica only)")
 		s.IdempotencyHMACKey = make([]byte, minKeyBytes)
@@ -285,11 +293,13 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 		wireSecOps(c, log)
 		wireWorkload(c, s)
 		wireWorkOrders(c, log)
-		// An explicit Registrars list replaces the default one, so the areas bound by the streams
-		// (wireM1W2 and later) are added next to the sign-in handlers wireAuth registered.
-		for _, a := range httpapi.Areas {
-			cfg.Registrars = append(cfg.Registrars, a.Register)
-		}
+		// The areas the wire functions bound are added next to the sign-in handlers wireAuth registered.
+		// With a database every operation must be bound: httpapi.New refuses an unbound one.
+		cfg.Registrars = append(cfg.Registrars, c.Registrars...)
+	} else {
+		// Development without a database serves health, readiness and the OpenAPI document; the rest
+		// answers 501.
+		cfg.AllowUnbound = true
 	}
 	if cfg.Hooks.CrossTeamNotFound == nil {
 		cfg.Hooks.CrossTeamNotFound = func(ctx context.Context, op string) {

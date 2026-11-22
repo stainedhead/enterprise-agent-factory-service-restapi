@@ -17,7 +17,7 @@ type ExtSystemsAPI struct {
 }
 
 // BindExtSystems binds the external system handlers as the extsys area.
-func BindExtSystems(a *ExtSystemsAPI) { w2SetArea("extsys", a.Register) }
+func BindExtSystems(a *ExtSystemsAPI) Registrar { return a.Register }
 
 // Register binds the external system operations.
 func (a *ExtSystemsAPI) Register(g *Registry) error {

@@ -35,17 +35,22 @@ type RevisionsAPI struct {
 }
 
 // BindAdmin1 binds settings, identity provider and service tag handlers.
-func BindAdmin1(a *Admin1API) {
-	w2SetArea("adminsettings", a.registerSettings)
-	w2SetArea("identityproviders", a.registerIdPs)
-	w2SetArea("admin", a.registerTags)
+func BindAdmin1(a *Admin1API) Registrar {
+	return func(g *Registry) error {
+		for _, register := range []Registrar{a.registerSettings, a.registerIdPs, a.registerTags} {
+			if err := register(g); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 }
 
 // BindAudit binds the audit handlers as the audit area.
-func BindAudit(a *AuditAPI) { w2SetArea("audit", a.Register) }
+func BindAudit(a *AuditAPI) Registrar { return a.Register }
 
 // BindRevisions binds the revision handlers as the revisions area.
-func BindRevisions(a *RevisionsAPI) { w2SetArea("revisions", a.Register) }
+func BindRevisions(a *RevisionsAPI) Registrar { return a.Register }
 
 func w2Bind(g *Registry, m map[string]http.HandlerFunc) error {
 	for id, h := range m {

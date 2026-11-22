@@ -31,7 +31,7 @@ func newImportRig(t *testing.T) *importRig {
 		"svc":     {ID: "usr_s", Type: authz.PrincipalUser, ServiceAdmin: true},
 		"unbound": {ID: "usr_u", Type: authz.PrincipalUser},
 	}
-	h, err := New(Config{Auth: auth, Registrars: []Registrar{api.Register}, Now: func() time.Time { return w2Now }})
+	h, err := New(Config{AllowUnbound: true, Auth: auth, Registrars: []Registrar{api.Register}, Now: func() time.Time { return w2Now }})
 	if err != nil {
 		t.Fatal(err)
 	}

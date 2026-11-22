@@ -22,10 +22,10 @@ type APIKeysAPI struct {
 }
 
 // BindMembers binds the member handlers as the members area.
-func BindMembers(a *MembersAPI) { w2SetArea("members", a.Register) }
+func BindMembers(a *MembersAPI) Registrar { return a.Register }
 
 // BindAPIKeys binds the API key handlers as the apikeys area.
-func BindAPIKeys(a *APIKeysAPI) { w2SetArea("apikeys", a.Register) }
+func BindAPIKeys(a *APIKeysAPI) Registrar { return a.Register }
 
 type memberBody struct {
 	ID                 string `json:"id"`
