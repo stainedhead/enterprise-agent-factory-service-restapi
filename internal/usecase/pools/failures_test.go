@@ -9,6 +9,8 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/pools"
 )
 
+const sharedID = "sec_01JD2Q3R4S5T6V7W8X9Y0Z0001"
+
 // fixture is a team with every kind of satellite already in place, so each operation reaches every
 // repository method it uses.
 type fixture struct {
@@ -37,7 +39,7 @@ func newFixture(t *testing.T) fixture {
 	}
 	f.link = l.Link
 	r.repo.Systems["ext_1"] = domain.ExternalSystemAccess{ExternalSystem: domain.ExternalSystem{ID: "ext_1", Slug: "github", Version: 1}}
-	r.repo.Secrets_["sec_01JD2Q3R4S5T6V7W8X9Y0Z0001"] = pools.SecretInfo{}
+	r.repo.Secrets_[sharedID] = pools.SecretInfo{}
 	r.repo.Namespace[team+"/REGION"] = true
 	r.repo.Allowed["444455556666"] = true
 	f.p = r.repo.Pools[f.p.ID]
@@ -54,7 +56,7 @@ func TestRepositoryFailuresAreReturnedAndWriteNothing(t *testing.T) {
 		write bool
 		run   func(f fixture) error
 	}
-	sec := domain.SecretBinding{SecretID: "sec_01JD2Q3R4S5T6V7W8X9Y0Z0001", Delivery: "env", Target: "TOKEN"}
+	bind := domain.SecretBinding{SecretID: sharedID, Delivery: "env", Target: "TOKEN"}
 	w := 5
 	desc := "d"
 	ops := []op{
@@ -93,7 +95,7 @@ func TestRepositoryFailuresAreReturnedAndWriteNothing(t *testing.T) {
 		}},
 		{"ListBindings", false, func(f fixture) error { _, err := f.svc.ListBindings(ctx, caller, team, f.p.ID); return err }},
 		{"PutBindings", true, func(f fixture) error {
-			_, err := f.svc.PutBindings(ctx, caller, team, f.p.ID, nil, []domain.SecretBinding{sec})
+			_, err := f.svc.PutBindings(ctx, caller, team, f.p.ID, nil, []domain.SecretBinding{bind})
 			return err
 		}},
 		{"ListConfig", false, func(f fixture) error { _, _, err := f.svc.ListConfig(ctx, caller, team, f.p.ID, page); return err }},

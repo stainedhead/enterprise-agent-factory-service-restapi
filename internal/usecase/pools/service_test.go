@@ -19,12 +19,11 @@ import (
 var now = time.Date(2026, 11, 22, 9, 0, 0, 0, time.UTC)
 
 const (
-	team      = "team_01JD2Q3R4S5T6V7W8X9Y0Z0001"
-	persist   = "team_01JD2Q3R4S5T6V7W8X9Y0Z0002"
-	digest    = "sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f"
-	image     = "registry.example.com/agents/coder@" + digest
-	account   = "111122223333"
-	secretOne = "sec_01JD2Q3R4S5T6V7W8X9Y0Z0004"
+	team    = "team_01JD2Q3R4S5T6V7W8X9Y0Z0001"
+	persist = "team_01JD2Q3R4S5T6V7W8X9Y0Z0002"
+	digest  = "sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f"
+	image   = "registry.example.com/agents/coder@" + digest
+	account = "111122223333"
 )
 
 type rig struct {
