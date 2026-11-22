@@ -5,11 +5,23 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/tags"
 )
+
+// teamRoleARN is the team role's ARN, or empty when its name cannot be built.
+func (c *Controller) teamRoleARN(t Desired) string {
+	a := c.cfg.AWS
+	name, err := TeamRoleName(t.ID)
+	if err != nil {
+		return ""
+	}
+	return RoleARN(a.Partition, a.AccountID, RolePath(t.Namespace), name)
+}
 
 // reconcileAWS makes the team's inference profiles and its two roles match the row, and returns the
 // team role's ARN (computable from the account, so the Kubernetes side never waits for IAM).
-func (c *Controller) reconcileAWS(ctx context.Context, t Desired) (teamRoleARN string, err error) {
+func (c *Controller) reconcileAWS(ctx context.Context, t Desired, want tags.Set) (teamRoleARN string, err error) {
 	a := c.cfg.AWS
 	path := RolePath(t.Namespace)
 	teamRole, err := TeamRoleName(t.ID)
@@ -21,9 +33,9 @@ func (c *Controller) reconcileAWS(ctx context.Context, t Desired) (teamRoleARN s
 		return "", err
 	}
 	teamRoleARN = RoleARN(a.Partition, a.AccountID, path, teamRole)
-	tags := map[string]string{TagTeamID: t.ID, TagTeamSlug: t.Slug}
+	applied := map[string]string(want.WithApplied())
 
-	grants, err := c.reconcileProfiles(ctx, t, tags)
+	grants, err := c.reconcileProfiles(ctx, t, applied)
 	if err != nil {
 		return teamRoleARN, err
 	}
@@ -38,7 +50,7 @@ func (c *Controller) reconcileAWS(ctx context.Context, t Desired) (teamRoleARN s
 	}
 	if _, err := c.cfg.IAM.EnsureRole(ctx, RoleSpec{
 		Name: teamRole, Path: path, Description: "AFS team " + t.Slug, TrustPolicy: trust,
-		PermissionsBoundaryARN: a.PermissionsBoundaryARN, Tags: tags, Policies: map[string]string{"team": policy},
+		PermissionsBoundaryARN: a.PermissionsBoundaryARN, Tags: applied, Policies: map[string]string{"team": policy},
 	}); err != nil {
 		return teamRoleARN, fmt.Errorf("team role: %w", err)
 	}
@@ -53,7 +65,7 @@ func (c *Controller) reconcileAWS(ctx context.Context, t Desired) (teamRoleARN s
 	}
 	if _, err := c.cfg.IAM.EnsureRole(ctx, RoleSpec{
 		Name: bedrockRole, Path: path, Description: "AFS gateway access to Bedrock for team " + t.Slug, TrustPolicy: bTrust,
-		PermissionsBoundaryARN: a.PermissionsBoundaryARN, Tags: tags, Policies: map[string]string{"bedrock": bPolicy},
+		PermissionsBoundaryARN: a.PermissionsBoundaryARN, Tags: applied, Policies: map[string]string{"bedrock": bPolicy},
 	}); err != nil {
 		return teamRoleARN, fmt.Errorf("bedrock role: %w", err)
 	}

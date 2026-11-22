@@ -70,4 +70,3 @@ func status(a types.Account) domain.OrgAccountStatus {
 	}
 	return domain.OrgAccountSuspended
 }
-

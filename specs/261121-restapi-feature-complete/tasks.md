@@ -614,7 +614,7 @@ Owns: `internal/usecase/reconcile/tags/`, `internal/usecase/gateway/metadata.go`
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M4-B1 | Effective tags on every managed AWS resource (roles, profiles, queues, snapshots, secrets, NodePools); changes within 10 minutes; `afs-team-id`/`afs-agent-id` always present; above 40 keys refused before any AWS call, resource `Degraded` with a condition naming the limit | RC-US-7.1, RC-US-7.2, RC-9 | — |
+| [x] | M4-B1 | Effective tags on every managed AWS resource (roles, profiles, queues, snapshots, secrets, NodePools); changes within 10 minutes; `afs-team-id`/`afs-agent-id` always present; above 40 keys refused before any AWS call, resource `Degraded` with a condition naming the limit | RC-US-7.1, RC-US-7.2, RC-9 | — |
 | [ ] | M4-B2 | Gateway `requestMetadata`: at most 16 pairs in the D27 order including `afs-team-id` and `afs-agent-id`, dropped keys recorded (and exposed by `GetTeamTags`); refresh on notification, ≤ 60 s [adapter with fake Bedrock] | GW-US-2.1, GW-5 | — |
 
 ### M4-C · CUR and reconciliation (BI-1, BI-2, BI-7)

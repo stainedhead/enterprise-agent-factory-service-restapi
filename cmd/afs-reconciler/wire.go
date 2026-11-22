@@ -28,6 +28,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/housekeeping"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/lifecycle"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/tags"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/team"
 )
 
@@ -210,7 +211,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	if nt.Controller != nil {
 		controllers = append(controllers, nt.Controller)
 	}
-	reg, err := routes(append(append(append(lg.Routes, eg.Routes...), nt.Routes...), lk.Routes...)...)
+	reg, err := routes(append(append(append(append(lg.Routes, eg.Routes...), nt.Routes...), lk.Routes...), tags.Routes()...)...)
 	if err != nil {
 		return fail(err)
 	}

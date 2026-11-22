@@ -9,6 +9,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/links"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/tags"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/team"
 )
 
@@ -92,11 +93,21 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 	var errs []error
 	var changed []string
 
+	// The tag set is checked before any AWS call. Above the cap nothing is applied, the agent keeps what
+	// it has and shows TagsApplied false with the limit named (RC-9, TAG-4).
+	want, tagErr := tags.Effective(tags.Subject{
+		TeamID: d.Team.ID, TeamSlug: d.Team.Slug, AgentID: d.ID, AgentName: d.Name,
+	}, d.Tags)
+	if tagErr != nil {
+		return engine.Outcome{Generation: d.Generation}, engine.WithCondition(tags.Condition, tagErr)
+	}
+	d.Tags = want
+
 	roleARN, iamErr := c.reconcileIdentity(ctx, d)
 	if iamErr != nil {
 		errs = append(errs, engine.WithCondition(domain.CondIamReady, iamErr))
 	} else {
-		conds = append(conds, ok(domain.CondIamReady, "Reconciled"))
+		conds = append(conds, ok(domain.CondIamReady, "Reconciled"), ok(tags.Condition, "Applied"))
 	}
 
 	env := Environment{
@@ -149,9 +160,8 @@ func (c *Controller) reconcileIdentity(ctx context.Context, d Desired) (string, 
 		return "", err
 	}
 	roleARN := team.RoleARN(a.Partition, a.AccountID, path, teamRole)
-	tags := cloneTags(d.Tags)
-	tags[team.TagTeamID] = d.Team.ID
-	tags[team.TagManagedBy] = team.ManagedByValue
+	podTags := tags.Set(d.Tags).WithApplied()
+	podTags[team.TagManagedBy] = team.ManagedByValue
 	if d.IAMIdentity == IdentityDedicated {
 		name, err := RoleName(d.ID)
 		if err != nil {
@@ -178,9 +188,7 @@ func (c *Controller) reconcileIdentity(ctx context.Context, d Desired) (string, 
 		if policy, err = links.WithAssumeStatements(policy, targets); err != nil {
 			return "", err
 		}
-		roleTags := cloneTags(tags)
-		roleTags[TagAgentID] = d.ID
-		roleTags[team.TagTeamSlug] = d.Team.Slug
+		roleTags := cloneTags(podTags)
 		if roleARN, err = c.cfg.IAM.EnsureRole(ctx, team.RoleSpec{
 			Name: name, Path: path, Description: "AFS agent " + d.Name + " of team " + d.Team.Slug,
 			TrustPolicy: trust, PermissionsBoundaryARN: a.PermissionsBoundaryARN, Tags: roleTags,
@@ -189,7 +197,7 @@ func (c *Controller) reconcileIdentity(ctx context.Context, d Desired) (string, 
 			return "", fmt.Errorf("agent role: %w", err)
 		}
 	}
-	if err := c.cfg.PodIdentity.Ensure(ctx, d.Team.Namespace, ServiceAccountName(d.Name), roleARN, tags); err != nil {
+	if err := c.cfg.PodIdentity.Ensure(ctx, d.Team.Namespace, ServiceAccountName(d.Name), roleARN, podTags); err != nil {
 		return roleARN, fmt.Errorf("pod identity association: %w", err)
 	}
 	return roleARN, nil
