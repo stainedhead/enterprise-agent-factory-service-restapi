@@ -8,6 +8,7 @@ import (
 	"crypto/sha1" //nolint:gosec // a fake access key id, not a security use
 	"encoding/hex"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -53,8 +54,9 @@ type Rig struct {
 
 // Observed collects what the observer saw.
 type Observed struct {
-	Calls   chan ObservedCall
-	Reserve chan string
+	mu       sync.Mutex
+	calls    []ObservedCall
+	reserves []string
 }
 
 // ObservedCall is one Observer.Done.
@@ -66,18 +68,30 @@ type ObservedCall struct {
 
 // Done implements gatewayhttp.Observer.
 func (o *Observed) Done(op string, status int, added time.Duration) {
-	select {
-	case o.Calls <- ObservedCall{op, status, added}:
-	default:
-	}
+	o.mu.Lock()
+	o.calls = append(o.calls, ObservedCall{op, status, added})
+	o.mu.Unlock()
 }
 
 // ReserveFailed implements gatewayhttp.Observer.
 func (o *Observed) ReserveFailed(reason string) {
-	select {
-	case o.Reserve <- reason:
-	default:
-	}
+	o.mu.Lock()
+	o.reserves = append(o.reserves, reason)
+	o.mu.Unlock()
+}
+
+// Calls returns every call observed so far.
+func (o *Observed) Calls() []ObservedCall {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return append([]ObservedCall(nil), o.calls...)
+}
+
+// ReserveFailures returns the reasons of the refusals for lack of a reservation.
+func (o *Observed) ReserveFailures() []string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return append([]string(nil), o.reserves...)
 }
 
 type creds struct{}
@@ -99,7 +113,7 @@ func New(t testing.TB, mutate ...func(*Rig)) *Rig {
 	t.Helper()
 	r := &Rig{Fake: fakebedrock.New(), Dir: gatewaytest.NewDirectory(), Tokens: &gatewaytest.Tokens{IDs: map[string]gateway.TokenIdentity{}},
 		Store: gatewaytest.NewStore(), Spend: gatewaytest.NewSpend(domain.MustMoney("10")), Thr: gatewaytest.NewThresholds(), Usage: &gatewaytest.Usage{},
-		Metrics: &Observed{Calls: make(chan ObservedCall, 4096), Reserve: make(chan string, 64)}}
+		Metrics: &Observed{}}
 	r.Fake.Record(true)
 	r.Dir.Put("127.0.0.1", gateway.PodInfo{Namespace: "afs-t-alpha", Name: "agent-bot-0", UID: "u1", ServiceAccount: "agent-bot", TeamID: TeamA, AgentID: "agt_01"})
 	r.Dir.Put("10.0.1.1", gateway.PodInfo{Namespace: "afs-t-beta", Name: "agent-x-0", UID: "u3", ServiceAccount: "agent-x", TeamID: TeamB, AgentID: "agt_02"})

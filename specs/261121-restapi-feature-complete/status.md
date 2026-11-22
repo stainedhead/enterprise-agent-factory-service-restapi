@@ -103,3 +103,5 @@
 - 2026-11-22: M3-A5 done (w4): Bedrock runtime adapter signing with the assumed team role through the team's profile; https only.
 - 2026-11-22: M3-B1..B7 done (w4): reservation math, spend adapter, fail-closed 2 s, batched usage writer (INSERT..unnest, not COPY: RLS refuses COPY), insert-once thresholds, upstream error mapping, cache invalidated by LISTEN plus TTL; AsyncSettle in production.
 - 2026-11-22: M3-C1..C3 done (w4): Bedrock event-stream and Anthropic SSE pumps, usage from the final events, abort and mid-stream error settle on tokens seen, JSON before the first event.
+- 2026-11-22: M3-D2 done (w4): test/conformance (tag conformance) with the AWS SDK Bedrock Runtime client and the Anthropic SDK on the contract §3 environment: every path, streams, §7 errors, reservation math, attribution.
+- 2026-11-22: M3-D3 done (w4): test/load/gateway (tag load): 200 agents, 500 req/s, 6 s, budget for a third: 1000 ok, 2000 refused all 402, overshoot 0, reservations all settled, added latency p50 73us p99 163us (in-memory spend).

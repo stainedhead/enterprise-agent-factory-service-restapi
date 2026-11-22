@@ -527,8 +527,8 @@ Owns: `internal/adapter/aws/bedrock/fakebedrock/`, `test/conformance/`, `test/lo
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
 | [x] | M3-D1 | Fake Bedrock: Converse, ConverseStream, InvokeModel, InvokeModelWithResponseStream with usage, throttle and 5xx modes | — | — |
-| [ ] | M3-D2 | Conformance suite (AWS SDK Bedrock Runtime client and the Anthropic SDK, only the gateway contract §3 environment): every path, streaming, every §7 error, reservation math; calls attributed to the agent, signature and key ignored [conformance suite] | GW-US-6.1, CT-GW-2 (part) | M3-A4, M3-C3 |
-| [ ] | M3-D3 | Load: 200 agents at 500 req/s against a nearly exhausted budget: overshoot at most one in-flight request per agent, every rejection `402`; added latency p99 < 25 ms [load] | GW-US-1.1, GW-US-1.3 | M3-B5, M3-D1 |
+| [x] | M3-D2 | Conformance suite (AWS SDK Bedrock Runtime client and the Anthropic SDK, only the gateway contract §3 environment): every path, streaming, every §7 error, reservation math; calls attributed to the agent, signature and key ignored [conformance suite] | GW-US-6.1, CT-GW-2 (part) | M3-A4, M3-C3 |
+| [x] | M3-D3 | Load: 200 agents at 500 req/s against a nearly exhausted budget: overshoot at most one in-flight request per agent, every rejection `402`; added latency p99 < 25 ms [load] | GW-US-1.1, GW-US-1.3 | M3-B5, M3-D1 |
 
 ### M3-E · Budgets API (RA-14)
 

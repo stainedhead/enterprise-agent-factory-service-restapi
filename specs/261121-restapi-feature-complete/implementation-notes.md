@@ -138,6 +138,22 @@ Merge order: w1 (A catalogs, D config, E external systems), w2 (C secrets, B age
 | 2026-11-21 | M0-X1 | X-DB-1..6 were not requested: `-db` delivered them unprompted (PR #12). X-DB-7 is requested instead. The root `contract` PR is not opened by the milestone agent; the delta list below is ready for it | Opening a PR in the root repository is outside this milestone's checkout; the orchestrator decides |
 | 2026-11-21 | M0-F | Local integration tests ran against PostgreSQL 16.15 (the sandbox server), not 17; CI uses `postgres:17` | Only PostgreSQL 16 is installed in the build sandbox |
 
+## M3 gateway decisions (worker w4: M3-A, B, C, D)
+
+| Date | Task | Decision or deviation | Why |
+|---|---|---|---|
+| 2026-11-22 | M3-B4 | Usage rows are written with one batched `INSERT ... SELECT FROM unnest(...)` per flush, not `COPY` | `COPY` into `usage_events` is refused under row-level security; the batch keeps the 1 s flush. A `-db` grant that allows COPY would restore the spec's wording |
+| 2026-11-22 | M3-B2 | A team with no budget fails closed: `402 BudgetExceeded` | GW-3: the gateway never forwards a call it cannot reserve for |
+| 2026-11-22 | M3-B2 | A `notify`-only budget never blocks; its calls settle with an empty hold id | Notify-only budgets raise thresholds, not caps |
+| 2026-11-22 | M3-B5 | `budget.exhausted` is deduplicated in `budget_threshold_events` with threshold marker 101 | The table's key is (budget, period, threshold); 101 cannot collide with a real percentage |
+| 2026-11-22 | M3-B3 | Everything before the call reaches Bedrock is bounded by 2 s (`FailClosedTimeout`); past it the call is `503` | GW-3 |
+| 2026-11-22 | M3-B2 | Settlement runs on `context.WithoutCancel` with retries, and in production asynchronously (`Config.AsyncSettle`): the answer is sent, then settle, usage row and thresholds | Keeps added latency off the DB round trip; `Service.Wait()` drains on shutdown |
+| 2026-11-22 | M3-A4 | `requestMetadata` is replaced only on Converse; Invoke bodies carry no gateway tags. Tag ordering is the basic system, service, team order | Invoke bodies are model specific; GW-5 tag ordering is M4-B2 |
+| 2026-11-22 | M3-A4 | A suspended-team call is recorded as outcome `error`; unauthenticated calls are not recorded | `usage_events` needs a team and a subject |
+| 2026-11-22 | M3-A | Gateway RBAC needed in the Helm chart (not done here): list/watch `pods` and `namespaces`, create `tokenreviews`, list/watch `ciliumendpoints` (cluster scope); the Cilium cross-check is on by default, `AFS_GATEWAY_CILIUM_CHECK=false` turns it off | The pod cache and TokenReview read them |
+| 2026-11-22 | M3-A | New files beyond the Owns globs: `gatewayhttp/{wire,eventstream,sse}.go`, `gatewayhttp/gwtest/`, `usecase/gateway/gatewaytest/`, `cmd/afs-gateway/{settings,wire,tls}.go`, `postgres/{gateway_store,usage_writer}.go`; `go.mod` gained bedrockruntime, anthropic-sdk-go, eventstream and sts | Supporting code of the owned streams |
+| 2026-11-22 | M3-D3 | Load run (in-memory spend, 6 s, 200 agents on distinct loopback addresses, 500 req/s, budget for a third): 1000 ok, 2000 refused all `402`, overshoot 0, nothing left reserved, added latency p50 73 us, p99 163 us | Database-side concurrency is proven by the postgres integration tests (60 concurrent callers on a small budget) |
+
 ## Contract deltas for the root repository
 
 Collected for the M0 exit task's root PR (labelled `contract`): see research.md §3.1.6 and OQ-S1, OQ-S2.
