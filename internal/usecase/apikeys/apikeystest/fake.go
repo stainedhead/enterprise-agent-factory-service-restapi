@@ -67,3 +67,21 @@ func (r *Repo) Delete(_ context.Context, _ port.Tx, teamID, id string) (domain.A
 }
 
 var _ apikeys.Repository = (*Repo)(nil)
+
+// ServiceRepo implements apikeys.ServiceRepository.
+type ServiceRepo struct{ *Repo }
+
+// NewService returns an empty ServiceRepo.
+func NewService() *ServiceRepo { return &ServiceRepo{New()} }
+
+// List implements apikeys.ServiceRepository.
+func (r *ServiceRepo) List(ctx context.Context, tx port.Tx, after string, limit int) ([]domain.APIKey, error) {
+	return r.Repo.List(ctx, tx, "", after, limit)
+}
+
+// Delete implements apikeys.ServiceRepository.
+func (r *ServiceRepo) Delete(ctx context.Context, tx port.Tx, id string) (domain.APIKey, error) {
+	return r.Repo.Delete(ctx, tx, "", id)
+}
+
+var _ apikeys.ServiceRepository = (*ServiceRepo)(nil)
