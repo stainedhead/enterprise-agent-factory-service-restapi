@@ -9,6 +9,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres/pgtest"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/links"
 )
 
 // M4-A: role links and identities under the database guards, and the account listings.
@@ -201,5 +202,81 @@ VALUES ($1, $2, $3, '666677778888', 'arn:aws:iam::666677778888:role/r', 'p', 'af
 	_ = admin.QueryRow(t.Context(), `SELECT count(*) FROM afs.org_aws_accounts WHERE id = '777788889999'`).Scan(&n)
 	if n != 0 {
 		t.Fatal("removed account still mirrored")
+	}
+}
+
+// M4-A4/A5: the links store reads the team's links with the filter verdict and writes status, audit and
+// the event in one transaction, never over a status that changed meanwhile.
+func TestLinksStore(t *testing.T) {
+	db := pgtest.Get(t)
+	runner, _ := reconcilerRunner(t, db)
+	audit := postgres.NewAuditWriter(runner)
+	store := postgres.NewLinksStore(runner, audit, postgres.NewOutboxWriter(), budgetIDs{})
+	admin := db.Admin(t)
+	tm := db.SeedTeam(t)
+	agent := seedAgent(t, db, tm.ID, "links")
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := admin.Exec(t.Context(), sql, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec(`UPDATE afs.agents SET iam_identity = 'dedicated' WHERE id = $1`, agent)
+	exec(`INSERT INTO afs.org_aws_accounts (id, name, status) VALUES ('111122223333', 'payments', 'active') ON CONFLICT (id) DO UPDATE SET status = 'active'`)
+	exec(`UPDATE afs.teams SET allowed_aws_accounts = ARRAY['111122223333'] WHERE id = $1`, tm.ID)
+	link := pgtest.NewID("arl")
+	exec(`INSERT INTO afs.agent_role_links (id, team_id, agent_id, account_id, role_arn, profile_name, external_id)
+VALUES ($1, $2, $3, '111122223333', 'arn:aws:iam::111122223333:role/r', 'p', 'afs-ffffffffffffffffffffffff')`, link, tm.ID, agent)
+
+	d, err := store.LoadLinks(t.Context(), tm.ID)
+	if err != nil || len(d.Links) != 1 || !d.Links[0].Allowed || !d.Links[0].AgentDedicated || !d.Links[0].AgentLive ||
+		d.Links[0].Status != domain.RoleLinkStatusPendingTrust || d.Links[0].Namespace == "" || d.State != "active" {
+		t.Fatalf("load: %+v %v", d, err)
+	}
+	if _, err := store.LoadLinks(t.Context(), "team_0ZZZZZZZZZZZZZZZZZZZZZZZZZ"); domain.KindOf(err) != domain.KindNotFound {
+		t.Fatalf("unknown team: %v", err)
+	}
+	at := time.Now().UTC()
+	ch := links.Change{TeamID: tm.ID, AgentID: agent, LinkID: link, From: domain.RoleLinkStatusPendingTrust, To: domain.RoleLinkStatusVerified,
+		VerifiedAt: &at, AccountID: "111122223333", RoleARN: "arn:aws:iam::111122223333:role/r", Event: domain.EventRoleLinkVerified}
+	if err := store.Record(t.Context(), ch); err != nil {
+		t.Fatal(err)
+	}
+	var status string
+	var verified *time.Time
+	var events, audits int
+	row := func() {
+		if err := admin.QueryRow(t.Context(), `SELECT status, last_verified_at FROM afs.agent_role_links WHERE id = $1`, link).Scan(&status, &verified); err != nil {
+			t.Fatal(err)
+		}
+		_ = admin.QueryRow(t.Context(), `SELECT count(*) FROM afs.outbox_events WHERE aggregate_id = $1 AND event_type LIKE 'role_link.%'`, link).Scan(&events)
+		_ = admin.QueryRow(t.Context(), `SELECT count(*) FROM afs.audit_log WHERE resource_id = $1 AND action = $2`, link, postgres.AuditLinkStatus).Scan(&audits)
+	}
+	row()
+	if status != "verified" || verified == nil || events != 1 || audits != 1 {
+		t.Fatalf("after verify: %s %v events=%d audits=%d", status, verified, events, audits)
+	}
+	// A stale pass (it saw pending_trust, the link is verified now) changes nothing.
+	stale := ch
+	stale.To, stale.Event, stale.Error, stale.VerifiedAt = domain.RoleLinkStatusFailed, domain.EventRoleLinkFailed, "AccessDenied", nil
+	if err := store.Record(t.Context(), stale); err != nil {
+		t.Fatal(err)
+	}
+	row()
+	if status != "verified" || events != 1 || audits != 1 {
+		t.Fatalf("stale write applied: %s events=%d audits=%d", status, events, audits)
+	}
+	// Narrowing the filter: the verdict flips and a disable is recorded without an event.
+	exec(`UPDATE afs.teams SET allowed_aws_accounts = ARRAY['999999999999'] WHERE id = $1`, tm.ID)
+	if d, _ = store.LoadLinks(t.Context(), tm.ID); d.Links[0].Allowed {
+		t.Fatal("narrowed filter must disallow the account")
+	}
+	off := links.Change{TeamID: tm.ID, AgentID: agent, LinkID: link, From: domain.RoleLinkStatusVerified, To: domain.RoleLinkStatusDisabled, Error: "AccountNotAllowed"}
+	if err := store.Record(t.Context(), off); err != nil {
+		t.Fatal(err)
+	}
+	var lastErr string
+	if err := admin.QueryRow(t.Context(), `SELECT status, coalesce(last_error, '') FROM afs.agent_role_links WHERE id = $1`, link).Scan(&status, &lastErr); err != nil || status != "disabled" || lastErr != "AccountNotAllowed" {
+		t.Fatalf("disabled: %s %q %v", status, lastErr, err)
 	}
 }

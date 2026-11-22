@@ -602,11 +602,11 @@ Owns: `internal/domain/identity.go`, `internal/usecase/{identity,accounts}/`, `i
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M4-A1 | Organizations account mirror hourly; a removed account shows in the next run [adapter with fake Organizations] | RC-US-18.3, TEAM-8 | — |
-| [ ] | M4-A2 | `ListOrgAccounts` (`admin:accounts`), `ListAllowedAccounts` (`identities:read`) | RA-1 (part) | M4-A1 |
-| [ ] | M4-A3 | Agent role links (list, create, get with `trustPolicy`, delete, verify) and agent identities (list, create, delete) | RA-1 (part), AGT-6, AGT-10 | — |
-| [ ] | M4-A4 | Links reconciler: `sts:AssumeRole` on the exact ARN, profile with `role_session_name` = agent id, status `pending_trust` → `verified` after an assume with external ID and session tags, or `failed` with the AWS error code; on create, daily and on demand; `role_link.verified`/`failed` [adapter with fake STS] | RC-US-4.1, RC-US-4.3, RC-3 | M4-A3 |
-| [ ] | M4-A5 | Narrowing the allowed-accounts filter disables links outside it on the next pass | RC-US-4.2 | M4-A4 |
+| [x] | M4-A1 | Organizations account mirror hourly; a removed account shows in the next run [adapter with fake Organizations] | RC-US-18.3, TEAM-8 | — |
+| [x] | M4-A2 | `ListOrgAccounts` (`admin:accounts`), `ListAllowedAccounts` (`identities:read`) | RA-1 (part) | M4-A1 |
+| [x] | M4-A3 | Agent role links (list, create, get with `trustPolicy`, delete, verify) and agent identities (list, create, delete) | RA-1 (part), AGT-6, AGT-10 | — |
+| [x] | M4-A4 | Links reconciler: `sts:AssumeRole` on the exact ARN, profile with `role_session_name` = agent id, status `pending_trust` → `verified` after an assume with external ID and session tags, or `failed` with the AWS error code; on create, daily and on demand; `role_link.verified`/`failed` [adapter with fake STS] | RC-US-4.1, RC-US-4.3, RC-3 | M4-A3 |
+| [x] | M4-A5 | Narrowing the allowed-accounts filter disables links outside it on the next pass | RC-US-4.2 | M4-A4 |
 
 ### M4-B · Tags (RC-9, GW-5)
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/links"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/team"
 )
 
@@ -33,6 +34,9 @@ type Config struct {
 	AWS         team.AWSConfig
 	Gateway     Gateway
 	Hooks       Hooks
+	// LinkVerifierARN is the reconciler's role, which the dedicated agent roles trust so that role links
+	// can be verified (M4-A4, links.TrustWithVerifier). Empty: links cannot be verified.
+	LinkVerifierARN string
 }
 
 // Controller reconciles agents (engine.KindAgent).
@@ -157,8 +161,21 @@ func (c *Controller) reconcileIdentity(ctx context.Context, d Desired) (string, 
 		if err != nil {
 			return "", err
 		}
+		if trust, err = links.TrustWithVerifier(trust, c.cfg.LinkVerifierARN); err != nil {
+			return "", err
+		}
 		policy, err := team.TeamRolePolicy(a.SecretsPrefix, d.Team.Namespace, d.Team.ID)
 		if err != nil {
+			return "", err
+		}
+		// sts:AssumeRole on the exact ARN of every link that is not disabled (RC-3, RC-US-4.1).
+		var targets []string
+		for _, l := range d.RoleLinks {
+			if l.Status != string(domain.RoleLinkStatusDisabled) {
+				targets = append(targets, l.RoleARN)
+			}
+		}
+		if policy, err = links.WithAssumeStatements(policy, targets); err != nil {
 			return "", err
 		}
 		roleTags := cloneTags(tags)

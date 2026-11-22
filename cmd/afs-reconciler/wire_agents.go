@@ -45,6 +45,8 @@ type agentStreamDeps struct {
 	AWSCfg  awssdk.Config
 	// NodeClassJSON is AFS_NODECLASS_JSON: the base EC2NodeClass spec of dedicated pools (Helm values).
 	NodeClassJSON string
+	// LinkVerifierARN is AFS_RECONCILER_ROLE_ARN (M4-A4).
+	LinkVerifierARN string
 }
 
 // buildAgentStream builds the agent controller, its delete steps and the snapshot manager.
@@ -68,7 +70,7 @@ func buildAgentStream(d agentStreamDeps, log *slog.Logger) (*agentStream, error)
 	ctl, err := agent.NewController(agent.Config{
 		Source: src, Cluster: cluster, IAM: d.IAM, PodIdentity: pods, Volumes: cluster,
 		Snapshots: snapshot.Latest{Store: store}, AWS: d.AWS, Gateway: d.Gateway,
-		Hooks: agent.Hooks{Deleting: lifecycle.AgentDeleting(fin)},
+		Hooks: agent.Hooks{Deleting: lifecycle.AgentDeleting(fin)}, LinkVerifierARN: d.LinkVerifierARN,
 	})
 	if err != nil {
 		return nil, err
