@@ -147,4 +147,3 @@ func hash(s string) uint64 {
 	}
 	return h
 }
-

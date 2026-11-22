@@ -253,5 +253,6 @@ func (c *AgentCluster) Restore(ctx context.Context, d agent.Desired, ebsSnapshot
 }
 
 // isNotFound reports a Kubernetes NotFound inside a coded error.
-func isNotFound(err error) bool { return apierrors.IsNotFound(errors.Unwrap(err)) || apierrors.IsNotFound(err) }
-
+func isNotFound(err error) bool {
+	return apierrors.IsNotFound(errors.Unwrap(err)) || apierrors.IsNotFound(err)
+}
