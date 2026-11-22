@@ -53,6 +53,9 @@ func (s *Source) LoadAgent(_ context.Context, id string) (agent.Desired, error) 
 func (s *Source) ListTeamAgents(_ context.Context, teamID string) ([]agent.Listed, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.Err != nil {
+		return nil, s.Err
+	}
 	var out []agent.Listed
 	for _, a := range s.Agents {
 		if a.Team.ID == teamID && a.State != agent.StateDeleted {

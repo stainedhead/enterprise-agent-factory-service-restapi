@@ -77,7 +77,7 @@ type Store interface {
 	Open(ctx context.Context) ([]Row, error)
 	// Completed lists the agent's completed rows, newest first.
 	Completed(ctx context.Context, agentID string) ([]Row, error)
-	// ForAgent returns the agent's rows of a reason that are not failed or deleted, newest first.
+	// ForAgent returns the agent's rows of a reason that are not deleted, newest first.
 	ForAgent(ctx context.Context, agentID, reason string) ([]Row, error)
 	// Create inserts a row in state requested and returns its id.
 	Create(ctx context.Context, teamID, agentID, reason string) (string, error)

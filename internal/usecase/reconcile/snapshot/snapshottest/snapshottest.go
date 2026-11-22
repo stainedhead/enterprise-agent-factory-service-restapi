@@ -83,7 +83,7 @@ func (s *Store) ForAgent(_ context.Context, agentID, reason string) ([]snapshot.
 	defer s.mu.Unlock()
 	var out []snapshot.Row
 	for _, r := range s.Rows {
-		if r.AgentID == agentID && r.Reason == reason && r.State != snapshot.StateFailed && r.State != snapshot.StateDeleted {
+		if r.AgentID == agentID && r.Reason == reason && r.State != snapshot.StateDeleted {
 			out = append(out, *r)
 		}
 	}
