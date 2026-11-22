@@ -17,7 +17,9 @@ import (
 
 type budgetIDs struct{}
 
-func (budgetIDs) NewID(p domain.IDPrefix) (domain.ID, error) { return domain.NewID(p, time.Now(), rand.Reader) }
+func (budgetIDs) NewID(p domain.IDPrefix) (domain.ID, error) {
+	return domain.NewID(p, time.Now(), rand.Reader)
+}
 
 type budgetRig struct {
 	t     *testing.T
@@ -36,6 +38,17 @@ func newBudgetRig(t *testing.T) *budgetRig {
 	runner, audit := reconcilerRunner(t, db)
 	g := &budgetRig{t: t, db: db, admin: db.Admin(t), calls: &budgettest.Calls{}, now: time.Now().UTC()}
 	g.iam = budgettest.NewIAM(g.calls)
+	// The tests write outbox rows; other tests in this package read the outbox in id order, so take
+	// them back out when done.
+	var from int64
+	if err := g.admin.QueryRow(t.Context(), `SELECT COALESCE(max(id), 0) FROM afs.outbox_events`).Scan(&from); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := g.admin.Exec(context.Background(), `DELETE FROM afs.outbox_events WHERE id > $1 AND event_type LIKE 'budget.%'`, from); err != nil {
+			t.Error(err)
+		}
+	})
 	jobs := postgres.NewBudgetJobs(runner, audit, postgres.NewOutboxWriter(), budgetIDs{})
 	g.r = &budget.Reconciler{Store: jobs, IAM: g.iam, Clock: func() time.Time { return g.now }, Released: func(n int64) { g.freed = append(g.freed, n) }}
 	return g
@@ -195,7 +208,7 @@ func TestBudgetJobsSweepReleasesExpiredReservations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close(context.Background())
+	defer func() { _ = conn.Close(context.Background()) }()
 	var holdID string
 	if err := conn.QueryRow(t.Context(), `SELECT afs.reserve_spend_held($1, $2, 12.5, 'gw-pod-killed')::text`, budID, start).Scan(&holdID); err != nil {
 		t.Fatal(err)

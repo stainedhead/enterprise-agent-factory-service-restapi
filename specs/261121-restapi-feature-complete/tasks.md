@@ -546,11 +546,11 @@ Owns: `internal/usecase/reconcile/budget/`, `internal/adapter/postgres/budget_jo
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M3-F1 | Period opening: `ensure_spend_counter` for every budget by the first second of the period; `budget.reset` once | RC-US-12.1, RC-14 | — |
-| [ ] | M3-F2 | Budget change carried into `limit_usd` within 60 s | RC-US-12.2 (part) | M3-F1 |
-| [ ] | M3-F3 | Sweeper every minute: `release_expired_reservations()`, one audit record per non-zero release, alert metric; a killed gateway's hold released within TTL + 2 min [adapter] | RC-US-12.4, GW-7 (part) | M3-F1 |
-| [ ] | M3-F4 | Ceiling override expiry: clear, lower a budget above the base ceiling, `budget.ceiling_override_expired` once | RC-US-12.5 | M3-F1 |
-| [ ] | M3-F5 | Backstop: explicit deny on the team's Bedrock role and `BudgetExhausted=True` within 60 s of exhaustion; both removed within 60 s of reset, increase or override [adapter with fake IAM] | RC-US-12.2, RC-US-12.3, RC-6 | M3-F2 |
+| [x] | M3-F1 | Period opening: `ensure_spend_counter` for every budget by the first second of the period; `budget.reset` once | RC-US-12.1, RC-14 | — |
+| [x] | M3-F2 | Budget change carried into `limit_usd` within 60 s | RC-US-12.2 (part) | M3-F1 |
+| [x] | M3-F3 | Sweeper every minute: `release_expired_reservations()`, one audit record per non-zero release, alert metric; a killed gateway's hold released within TTL + 2 min [adapter] | RC-US-12.4, GW-7 (part) | M3-F1 |
+| [x] | M3-F4 | Ceiling override expiry: clear, lower a budget above the base ceiling, `budget.ceiling_override_expired` once | RC-US-12.5 | M3-F1 |
+| [x] | M3-F5 | Backstop: explicit deny on the team's Bedrock role and `BudgetExhausted=True` within 60 s of exhaustion; both removed within 60 s of reset, increase or override [adapter with fake IAM] | RC-US-12.2, RC-US-12.3, RC-6 | M3-F2 |
 
 ### M3-G · Notifications (RC-15)
 

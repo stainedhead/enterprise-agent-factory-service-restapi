@@ -1,6 +1,7 @@
 package budgets_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -142,7 +143,8 @@ func TestPutNotify(t *testing.T) {
 				t.Errorf("%s: the use case wrote a denied audit record", tc.name)
 			}
 		}
-		if e, ok := err.(*domain.Error); tc.denied && (!ok || e.RequiredPermission != string(authz.TeamsSetGuardrails)) {
+		var de *domain.Error
+		if ok := errors.As(err, &de); tc.denied && (!ok || de.RequiredPermission != string(authz.TeamsSetGuardrails)) {
 			t.Errorf("%s: the denial names %v", tc.name, err)
 		}
 		if tc.denied && len(r.repo.Budgets) != 0 {

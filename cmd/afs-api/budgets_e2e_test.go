@@ -123,8 +123,8 @@ func TestBudgetsEndToEnd(t *testing.T) {
 	ephID := pgtest.NewID("team")
 	exec(`BEGIN;
 INSERT INTO afs.teams (id, slug, display_name, cost_center, owner_email, max_budget_usd, kind, expires_at, teardown_rule)
-VALUES ('`+ephID+`', 'eph`+strings.ToLower(ephID[len(ephID)-8:])+`', 'Eph', 'CC100', 'owner@example.com', 500, 'ephemeral', now() + interval '10 days', 'at_expiry');
-INSERT INTO afs.budgets (id, team_id, period, amount_usd) VALUES ('`+pgtest.NewID("bud")+`', '`+ephID+`', 'lifetime', 100);
+VALUES ('` + ephID + `', 'eph` + strings.ToLower(ephID[len(ephID)-8:]) + `', 'Eph', 'CC100', 'owner@example.com', 500, 'ephemeral', now() + interval '10 days', 'at_expiry');
+INSERT INTO afs.budgets (id, team_id, period, amount_usd) VALUES ('` + pgtest.NewID("bud") + `', '` + ephID + `', 'lifetime', 100);
 COMMIT;`)
 	st, b, _ = call(matrix.ServiceAdmin, http.MethodPut, "/v1/teams/"+ephID+"/budget", `{"period":"lifetime","amountUsd":"100","onExhaust":"notify"}`)
 	expect("notify on an ephemeral team", st, http.StatusBadRequest, b)

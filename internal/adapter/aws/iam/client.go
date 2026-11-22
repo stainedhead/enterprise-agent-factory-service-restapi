@@ -195,7 +195,7 @@ func (c *Client) syncPolicies(ctx context.Context, spec team.RoleSpec, keepBudge
 		}
 	}
 	for _, n := range have {
-		if _, ok := spec.Policies[n]; !ok && !(keepBudgetDeny && n == BudgetDenyPolicyName) {
+		if _, ok := spec.Policies[n]; !ok && (!keepBudgetDeny || n != BudgetDenyPolicyName) {
 			if _, err := c.api.DeleteRolePolicy(ctx, &awsiam.DeleteRolePolicyInput{RoleName: &spec.Name, PolicyName: &n}); err != nil {
 				return afsaws.WrapError(err)
 			}
