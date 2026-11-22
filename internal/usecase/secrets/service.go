@@ -154,11 +154,7 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in
 		if err != nil {
 			return err
 		}
-		tags := map[string]string{"afs-team-id": teamID}
-		if in.AgentID != "" {
-			tags["afs-agent-id"] = in.AgentID
-		}
-		cr, err := s.Writer.Create(ctx, path, in.Value, secretToken(c, idem, "CreateSecret", teamID, path), tags)
+		cr, err := s.Writer.Create(ctx, path, in.Value, secretToken(c, idem, "CreateSecret", teamID, path), scopeTags(teamID, in))
 		if errors.Is(err, ErrNameTaken) {
 			return domain.Conflict("duplicate", "Secrets Manager already holds a secret of that name", nil)
 		}

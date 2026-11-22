@@ -190,6 +190,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 		wireSchedules(c, log)
 		wireExports(c, log)
 		wireRestore(c)
+		wirePools(c, log)
 		// An explicit Registrars list replaces the default one, so the areas bound by the streams
 		// (wireM1W2 and later) are added next to the sign-in handlers wireAuth registered.
 		for _, a := range httpapi.Areas {
