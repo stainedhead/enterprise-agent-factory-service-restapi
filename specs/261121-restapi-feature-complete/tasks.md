@@ -455,10 +455,10 @@ Owns: `internal/usecase/reconcile/collector/traffic/`, `internal/usecase/reconci
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M2-H1 | Per-agent Cilium FQDN egress from `agent_external_access`; switching a system off at service, team or agent level removes its FQDNs within 60 s without restarting pods; `EgressPolicyReady` [envtest] | RC-US-5.1, EXT-5 | M2-F1 |
-| [ ] | M2-H2 | Hubble flows → `external_traffic` (connections, bytes; requests and errors empty per OQ-8) with `denied_reason`, team tag set, pool and worker pod; redaction applied before storage [adapter with recorded flows] | RC-US-5.2, RC-7 (part), TAG-6 (part) | M2-I2 |
-| [ ] | M2-H3 | `egress.denied_spike` once per agent per 5-minute window above `egress.denied_spike_threshold` [unit with fakes] | RC-US-5.3 | M2-H2 |
-| [ ] | M2-H4 | Connections to a system's sign-in endpoint written as sign-in events (agent or worker, system, time) to the team's log delivery only, never a table or event [adapter] | RC-US-16.5 | M2-H2, M2-I3 |
+| [x] | M2-H1 | Per-agent Cilium FQDN egress from `agent_external_access`; switching a system off at service, team or agent level removes its FQDNs within 60 s without restarting pods; `EgressPolicyReady` [envtest] | RC-US-5.1, EXT-5 | M2-F1 |
+| [x] | M2-H2 | Hubble flows → `external_traffic` (connections, bytes; requests and errors empty per OQ-8) with `denied_reason`, team tag set, pool and worker pod; redaction applied before storage [adapter with recorded flows] | RC-US-5.2, RC-7 (part), TAG-6 (part) | M2-I2 |
+| [x] | M2-H3 | `egress.denied_spike` once per agent per 5-minute window above `egress.denied_spike_threshold` [unit with fakes] | RC-US-5.3 | M2-H2 |
+| [x] | M2-H4 | Connections to a system's sign-in endpoint written as sign-in events (agent or worker, system, time) to the team's log delivery only, never a table or event [adapter] | RC-US-16.5 | M2-H2, M2-I3 |
 
 ### M2-I · Log destinations and delivery (RC-18)
 
@@ -467,9 +467,9 @@ Owns: `internal/domain/delivery_log.go`, `internal/usecase/logdest/`, `internal/
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M2-I1 | Log destinations API: list, create (CloudWatch, S3, OTLP, Splunk HEC, Datadog; credentials only as a secret reference, inline value → `400`), get, update, delete; viewer create → `403` + denied audit, viewer list and describe allowed | RA-US-17.1, RA-US-17.2 (part), RC-18 (part) | — |
-| [ ] | M2-I2 | Redaction library: passwords, bearer tokens, AWS keys, private keys, JWTs; bound secret values → `[redacted:<first 8 hex of HMAC-SHA-256 with a per-team key>]`, deterministic [unit] | RC-US-16.2, RC-US-16.1 (part), RC-18 (part) | — |
-| [ ] | M2-I3 | Per-team Fluent Bit aggregator: routing by namespace from the node DaemonSet, one output per destination, redaction filter before every output, credentials only through an ESO Secret only the aggregator reads; outputs change within 60 s of a destination change [envtest]; `[e2e]` cases | RC-US-16.4, RC-US-16.3 (part), RC-US-16.1 (part), RC-18 | M2-I1, M2-I2 |
+| [x] | M2-I1 | Log destinations API: list, create (CloudWatch, S3, OTLP, Splunk HEC, Datadog; credentials only as a secret reference, inline value → `400`), get, update, delete; viewer create → `403` + denied audit, viewer list and describe allowed | RA-US-17.1, RA-US-17.2 (part), RC-18 (part) | — |
+| [x] | M2-I2 | Redaction library: passwords, bearer tokens, AWS keys, private keys, JWTs; bound secret values → `[redacted:<first 8 hex of HMAC-SHA-256 with a per-team key>]`, deterministic [unit] | RC-US-16.2, RC-US-16.1 (part), RC-18 (part) | — |
+| [x] | M2-I3 | Per-team Fluent Bit aggregator: routing by namespace from the node DaemonSet, one output per destination, redaction filter before every output, credentials only through an ESO Secret only the aggregator reads; outputs change within 60 s of a destination change [envtest]; `[e2e]` cases | RC-US-16.4, RC-US-16.3 (part), RC-US-16.1 (part), RC-18 | M2-I1, M2-I2 |
 
 ### M2-X · Milestone exit
 

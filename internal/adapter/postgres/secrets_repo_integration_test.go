@@ -12,10 +12,6 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 )
 
-func teamSession(teamID string) port.Session {
-	return port.Session{Actor: user, ActorType: port.ActorUser, TeamIDs: []string{teamID}, RequestID: "req_test"}
-}
-
 // M2-C: secret rows hold ARNs and metadata; the database derives the path.
 func TestSecretRepo(t *testing.T) {
 	db := pgtest.Get(t)
