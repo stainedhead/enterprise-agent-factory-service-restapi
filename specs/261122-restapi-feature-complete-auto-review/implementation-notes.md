@@ -26,7 +26,27 @@ orchestrator to apply in Step 11, and follow-ups.
 
 ## Stream B: Gateway spend integrity
 
-(append here)
+### FR-R04 (B-1 to B-4)
+
+- Decision: the output limit is written by `parsed.upstreamBody` whenever the request sent none, an unusable
+  one, or more than the reserved cap (`a.MaxOutputTokens`, the same number the reservation was priced on).
+  A request below the cap keeps its own limit, which is also what `OutputCap` reserved. `setInt` now creates
+  missing or null parent objects (`inferenceConfig`) and keeps their other members.
+- Decision (Q3, Invoke family list): when the body has no known limit field, `limitPathOf` picks it from the
+  model id vendor segment (cross-region prefixes `us.`, `eu.`, `apac.` and foundation-model ARNs handled):
+  `anthropic` -> `max_tokens` (`claude-v2*`, `claude-instant*` -> `max_tokens_to_sample`),
+  `amazon.titan-text*` -> `textGenerationConfig.maxTokenCount`, `meta` -> `max_gen_len`, `mistral` and
+  `cohere` -> `max_tokens`. Any other family is refused at parse time with 400 `ValidationError` ("has no
+  output limit ...") before identification-dependent work, a reservation or a forward. Amazon Nova is not
+  in the list: use Converse.
+- Decision: Anthropic Messages keeps its existing 400 for an absent `max_tokens` (the Messages API requires
+  it, and an existing test pins it). It is never forwarded uncapped; a new test asserts nothing is reserved
+  or sent. FR-R04 AC3's "absent" case for that wire is therefore the refusal.
+- Tests: `server_cap_test.go` (table over Converse, ConverseStream, Invoke, InvokeStream, Anthropic, other
+  families; invariant reserved == `ReserveAmount(price, forwardedLimit, bodyBytes)`). Red first: 13 cases
+  failed with "no output limit reached Bedrock".
+- Design review: no secret or credential touched; no new route; no context or error-wrapping change; domain
+  error mapping unchanged (`domain.Validation`); doc comments added.
 
 ## Stream C: Observability
 

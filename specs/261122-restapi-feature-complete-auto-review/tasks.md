@@ -75,10 +75,10 @@ merges after C (its wiring commit needs C's metrics).
 **Depends on:** C's metric names (RD-3, fixed in advance) for B-8 only. B-1 to B-7 use interfaces and fakes and
 do not wait for C.
 
-- [ ] **B-1** FR-R04 AC1 `[unit]` Converse and ConverseStream without `inferenceConfig.maxTokens` reach Bedrock with it set to the reserved cap; an existing `inferenceConfig` keeps its other members. Red: `server_test.go` case with the limit absent.
-- [ ] **B-2** FR-R04 AC2 `[unit]` Invoke for a model family whose limit field the gateway knows gets that field set to the cap when absent. Invoke for any other family is refused with 400 `ValidationError` naming the missing limit and is not forwarded (Q3).
-- [ ] **B-3** FR-R04 AC3 `[unit]` Table tests for Converse, Invoke and Anthropic Messages: limit absent (set), limit below the cap (unchanged), limit above the cap (lowered).
-- [ ] **B-4** FR-R04 AC4 `[unit]` Invariant test: the reserved amount equals the forwarded limit in every B-1 to B-3 case. Depends on B-1 to B-3.
+- [x] **B-1** FR-R04 AC1 `[unit]` Converse and ConverseStream without `inferenceConfig.maxTokens` reach Bedrock with it set to the reserved cap; an existing `inferenceConfig` keeps its other members. Red: `server_test.go` case with the limit absent.
+- [x] **B-2** FR-R04 AC2 `[unit]` Invoke for a model family whose limit field the gateway knows gets that field set to the cap when absent. Invoke for any other family is refused with 400 `ValidationError` naming the missing limit and is not forwarded (Q3).
+- [x] **B-3** FR-R04 AC3 `[unit]` Table tests for Converse, Invoke and Anthropic Messages: limit absent (set), limit below the cap (unchanged), limit above the cap (lowered).
+- [x] **B-4** FR-R04 AC4 `[unit]` Invariant test: the reserved amount equals the forwarded limit in every B-1 to B-3 case. Depends on B-1 to B-3.
 - [ ] **B-5** FR-R05 AC1, AC2 `[unit]` Bounded retry queue in `usecase/gateway` for `(holdID, budgetID, period, actual)`: default 10,000 entries, exponential backoff, 10 minute window, retries only on an error and never after a success. Full queue or expired window counts and logs team, budget and amount. Red: fake `Spend` that fails N times then succeeds; the period's spent amount ends at the actual cost.
 - [ ] **B-6** FR-R05 AC3 `[unit]` A `SettleRecorder` port is called once for every settlement that falls back to the queue (and for queue-full and window-expired drops). Depends on B-5.
 - [ ] **B-7** FR-R05 AC4 `[unit]` On `Close`, pending settlements get one more attempt bounded by `SettleTimeout`; test proves it. A crash still falls back to hold expiry (Q2). Reliability: no added latency on the response path when `AsyncSettle` is on. Depends on B-5.
