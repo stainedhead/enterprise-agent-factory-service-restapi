@@ -3,7 +3,7 @@
 **PRD:** specs/261121-restapi-feature-complete/enterprise-agent-factory-service-restapi-PRD.md (root keeps a stub)
 **Spec:** specs/261121-restapi-feature-complete
 **Branch:** feat/restapi-feature-complete
-**Review PRD:** restapi-feature-complete-auto-review-PRD.md
+**Review PRD:** restapi-feature-complete-review-PRD.md
 **Process Start:** 2026-11-21T20:31:38Z
 **Process End:** —
 **Total Runtime:** —
@@ -16,8 +16,8 @@
 | 2  | Review Spec                     | ✅ Complete | 2026-11-21T20:47:12Z | 2026-11-21T20:55:16Z | 8 |
 | 3  | Implement Product               | ✅ Complete (M0 to M6; M6-F3, F4, F5, F6 and M2-F8 need the dev cluster and stay open in tasks.md) | 2026-11-21T20:57:16Z | 2026-11-22T07:49:27Z | 652 |
 | 4  | Documentation and User Docs     | ✅ Complete | 2026-11-22T07:49:27Z | 2026-11-22T07:52:03Z | 3 |
-| 5  | Code and Design Review          | ⬜ Pending | — | — | — |
-| 6  | Prepare Review PRD              | ⬜ Pending | — | — | — |
+| 5  | Code and Design Review          | ✅ Complete (1 P0, 6 P1, 10 P2) | 2026-11-22T07:52:13Z | 2026-11-22T08:05:43Z | 14 |
+| 6  | Prepare Review PRD              | 🔄 In Progress | 2026-11-22T08:05:43Z | — | — |
 | 7  | Archive Original Spec           | ⬜ Pending | — | — | — |
 | 8  | Spec Review Fixes               | ⬜ Pending | — | — | — |
 | 9  | Implement Review Fixes          | ⬜ Pending | — | — | — |
