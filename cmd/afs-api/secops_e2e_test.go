@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -116,8 +117,28 @@ func TestServiceAPIKeyEndToEnd(t *testing.T) {
 		!slices.Equal(me.ServicePermissions, []string{"teams:read-directory", "work-orders:read", "work-orders:write", "swarm-templates:read"}) {
 		t.Fatalf("GetMe for a service key: %+v", me)
 	}
-	if r = g.do(t, "GET", "/v1/team-directory", key, ""); r.code != 200 || !strings.Contains(r.body, g.w.TeamA.Slug) || !strings.Contains(r.body, g.w.TeamB.ID) {
-		t.Fatalf("directory as a service key: %d %s", r.code, r.body)
+	// The directory is paginated and the database may hold many teams (CI shares one), so follow nextToken.
+	var seenA, seenB bool
+	for path := "/v1/team-directory"; path != ""; {
+		r = g.do(t, "GET", path, key, "")
+		var page struct {
+			Items     []struct{ ID, Slug string }
+			NextToken string
+		}
+		if r.code != 200 || json.Unmarshal([]byte(r.body), &page) != nil {
+			t.Fatalf("directory as a service key: %d %s", r.code, r.body)
+		}
+		for _, it := range page.Items {
+			seenA = seenA || it.Slug == g.w.TeamA.Slug
+			seenB = seenB || it.ID == g.w.TeamB.ID
+		}
+		path = ""
+		if page.NextToken != "" && !(seenA && seenB) {
+			path = "/v1/team-directory?nextToken=" + url.QueryEscape(page.NextToken)
+		}
+	}
+	if !seenA || !seenB {
+		t.Fatalf("directory as a service key lacks team A (%v) or team B (%v)", seenA, seenB)
 	}
 	// Nothing it should not reach: the key list, a team route, a security operator binding.
 	for _, p := range []string{"/v1/admin/api-keys", "/v1/admin/security-operators", "/v1/teams/" + g.w.TeamA.ID, "/v1/teams/" + g.w.TeamA.ID + "/api-keys"} {
