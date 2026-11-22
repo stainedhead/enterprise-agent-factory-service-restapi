@@ -149,13 +149,13 @@ func policyDefs(s admission.Spec) []policyDef {
 			validation: []map[string]any{validation("false", "Ingress and Gateway API routes are not allowed in team namespaces")},
 		},
 		{
-			// A Service named paperclip, or one whose selector is empty or reaches the collaboration pod's
-			// labels, belongs to the reconciler (RD-9): otherwise a team could publish Paperclip's port itself.
+			// A Service named paperclip, or one whose selector reaches the collaboration pod's
+			// labels, belongs (a Service with no selector selects no pod) to the reconciler (RD-9): otherwise a team could publish Paperclip's port itself.
 			name:  AdmissionPolicyNames[6],
 			rules: []map[string]any{rule(all, []any{""}, []any{"*"}, []any{"services"})},
 			validation: []map[string]any{validation(
-				"request.userInfo.username in "+users+" || (object.metadata.name != '"+PaperclipServiceName+"' && has(object.spec.selector) && size(object.spec.selector) > 0 && "+
-					"!(['app.kubernetes.io/name', '"+LabelTeamID+"', '"+LabelAgentID+"'].exists(k, k in object.spec.selector)))",
+				"request.userInfo.username in "+users+" || (object.metadata.name != '"+PaperclipServiceName+"' && (!has(object.spec.selector) || size(object.spec.selector) == 0 || "+
+					"!(['app.kubernetes.io/name', '"+LabelTeamID+"', '"+LabelAgentID+"'].exists(k, k in object.spec.selector))))",
 				"a Service named paperclip, or one that selects the collaboration pod, is managed by the AFS reconciler only")},
 		},
 	}
