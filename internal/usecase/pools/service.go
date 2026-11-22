@@ -417,7 +417,9 @@ func (s *Service) Scale(ctx context.Context, c acting.Caller, teamID, id string,
 	}
 	return s.transition(ctx, c, teamID, id, verb{"ScalePool", domain.EventPoolScaled,
 		func(p domain.Pool) (domain.Pool, bool, error) { return p.Scale(workers, s.Now()) },
-		func(cur, next domain.Pool) map[string]any { return map[string]any{"from": cur.Workers, "workers": next.Workers} }}, idem)
+		func(cur, next domain.Pool) map[string]any {
+			return map[string]any{"from": cur.Workers, "workers": next.Workers}
+		}}, idem)
 }
 
 // Pause implements PausePool: the Deployment scales to zero, the identity and volumes stay. It raises
