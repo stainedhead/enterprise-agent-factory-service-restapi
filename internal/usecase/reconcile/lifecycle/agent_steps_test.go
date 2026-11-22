@@ -129,7 +129,7 @@ func TestAgentDeleteRules(t *testing.T) {
 			want: []string{"stop", "delete-volume", "delete-class", "complete"}, absent: []string{"retain-volume", "delete-role"}},
 		{name: "retain keeps and records the volume", onDelete: OnDeleteRetain, identity: agent.IdentityTeamShared,
 			prep: func(x *agentFixture) { x.vols.retained = RetainedVolume{Claim: "data-agent-scribe-0", Volume: "pvc-1"} },
-			want: []string{"stop", "retain-volume", "record", "delete-class", "complete"}, absent: []string{"delete-volume"}},
+			want: []string{"stop", "retain-volume", "record", "delete-volume", "delete-class", "complete"}},
 		{name: "dedicated role is deleted", onDelete: OnDeleteDelete, identity: agent.IdentityDedicated,
 			want: []string{"stop", "delete-volume", "delete-role", "delete-class", "complete"}},
 		{name: "snapshot then delete after a completed final snapshot", onDelete: OnDeleteSnapshotThenDelete, identity: agent.IdentityTeamShared,

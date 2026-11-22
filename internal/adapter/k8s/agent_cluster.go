@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -250,9 +249,4 @@ func (c *AgentCluster) Restore(ctx context.Context, d agent.Desired, ebsSnapshot
 		}
 	}
 	return nil
-}
-
-// isNotFound reports a Kubernetes NotFound inside a coded error.
-func isNotFound(err error) bool {
-	return apierrors.IsNotFound(errors.Unwrap(err)) || apierrors.IsNotFound(err)
 }

@@ -183,7 +183,11 @@ func deleteOrRetainVolume(ctx context.Context, d AgentDeps, a agent.Desired) err
 		if v == (RetainedVolume{}) {
 			return nil
 		}
-		return d.Recorder.RecordRetained(ctx, a, v)
+		// Recorded before the claim goes, so a failed record is retried while the claim still names the volume.
+		if err := d.Recorder.RecordRetained(ctx, a, v); err != nil {
+			return err
+		}
+		return d.Volumes.DeleteVolume(ctx, a)
 	case OnDeleteDelete, OnDeleteSnapshotThenDelete:
 		return d.Volumes.DeleteVolume(ctx, a)
 	}
