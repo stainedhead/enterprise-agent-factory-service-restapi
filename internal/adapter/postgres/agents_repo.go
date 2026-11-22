@@ -159,7 +159,7 @@ func (*AgentRepo) Get(ctx context.Context, tx port.Tx, teamID, id string, forUpd
 	return list[0], nil
 }
 
-func resourcesJSON(r domain.AgentResources) ([]byte, error) { return json.Marshal(r) }
+func agentResourcesJSON(r domain.AgentResources) ([]byte, error) { return json.Marshal(r) }
 
 func replaceBindings(ctx context.Context, pt pgx.Tx, a domain.Agent) error {
 	if _, err := pt.Exec(ctx, `DELETE FROM afs.agent_secret_bindings WHERE team_id=$1 AND agent_id=$2`, a.TeamID, a.ID); err != nil {
@@ -180,7 +180,7 @@ func (*AgentRepo) Insert(ctx context.Context, tx port.Tx, a domain.Agent, templa
 	if err != nil {
 		return err
 	}
-	res, err := resourcesJSON(a.Resources)
+	res, err := agentResourcesJSON(a.Resources)
 	if err != nil {
 		return err
 	}
@@ -203,7 +203,7 @@ func (*AgentRepo) Update(ctx context.Context, tx port.Tx, a domain.Agent, templa
 	if err != nil {
 		return err
 	}
-	res, err := resourcesJSON(a.Resources)
+	res, err := agentResourcesJSON(a.Resources)
 	if err != nil {
 		return err
 	}

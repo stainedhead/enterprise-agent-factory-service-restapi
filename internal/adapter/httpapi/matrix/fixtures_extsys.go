@@ -42,10 +42,10 @@ func init() {
 		Headers: map[string]string{"If-Match": ifMatch}, Prepare: teamSystem})
 
 	Register(Case{Op: "ListAgentExternalSystems", Path: "/v1/teams/{teamId}/agents/{agentId}/external-systems",
-		Prepare: func(t *testing.T, w *World) map[string]string { return map[string]string{"agentId": w.seedAgent(t)} }})
+		Prepare: func(t *testing.T, w *World) map[string]string { return map[string]string{"agentId": w.seedAgentID(t)} }})
 	Register(Case{Op: "SetAgentExternalSystemState", Path: "/v1/teams/{teamId}/agents/{agentId}/external-systems/{sid}/state", Body: `{"enabled":false}`, NoOutbox: cdOutbox,
 		Prepare: func(t *testing.T, w *World) map[string]string {
 			id, _ := w.seedCatalogSystem(t)
-			return map[string]string{"agentId": w.seedAgent(t), "sid": id}
+			return map[string]string{"agentId": w.seedAgentID(t), "sid": id}
 		}})
 }
