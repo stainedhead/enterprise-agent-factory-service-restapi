@@ -71,8 +71,31 @@ type Binding struct {
 	SystemOff bool
 }
 
-// Delivered reports whether the binding reaches the pod.
-func (b Binding) Delivered() bool { return b.ExternalSystemID == "" || !b.SystemOff }
+// CollabKeyTarget is the environment variable that carries a connected worker's Paperclip agent key.
+const CollabKeyTarget = "PAPERCLIP_AGENT_API_KEY"
+
+// Delivered reports whether the binding reaches the pod. A system that is switched off (EXT-7) and a
+// Paperclip agent key whose secret has no value yet (RC-22: the worker starts without it) are not delivered.
+func (b Binding) Delivered() bool {
+	if b.Target == CollabKeyTarget && b.VersionID == "" {
+		return false
+	}
+	return b.ExternalSystemID == "" || !b.SystemOff
+}
+
+// KeyMissing reports whether a connected worker has no usable Paperclip agent key: the link exists but no
+// delivered binding carries the key (RC-22, condition CollaborationKeyMissing).
+func (d Desired) KeyMissing() bool {
+	if d.Link == nil {
+		return false
+	}
+	for _, b := range d.Bindings {
+		if b.Target == CollabKeyTarget && b.Delivered() {
+			return false
+		}
+	}
+	return true
+}
 
 // ConfigValue is one resolved, non-secret configuration value.
 type ConfigValue struct {

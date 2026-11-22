@@ -82,7 +82,9 @@ func TestBindingDelivered(t *testing.T) {
 		{agent.Binding{}, true},
 		{agent.Binding{ExternalSystemID: "ext_1"}, true},
 		{agent.Binding{ExternalSystemID: "ext_1", SystemOff: true}, false},
-		{agent.Binding{SystemOff: true}, true}, // names no system, so nothing switches it off
+		{agent.Binding{SystemOff: true}, true},                // names no system, so nothing switches it off
+		{agent.Binding{Target: agent.CollabKeyTarget}, false}, // the Paperclip key without a value yet
+		{agent.Binding{Target: agent.CollabKeyTarget, VersionID: "v1"}, true},
 	}
 	for _, tt := range tests {
 		if tt.b.Delivered() != tt.want {

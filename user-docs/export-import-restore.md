@@ -8,6 +8,8 @@ These calls are for operators. Export and import need the service admin role. Re
 
 A bundle never holds a secret value, an API key hash or a client secret. Secrets appear as metadata only.
 
+Collaboration settings travel as choices only: a team's `collaboration` object (web UI, REST API, registration mode and the collaboration agent's name) and each worker's `connect` flag. The collaboration agent is made again from the template of the same name, which must exist in the target service. Nothing from Paperclip, no Paperclip agent id, link state or key, and none of the key secrets the service manages are exported or imported: after an import the reconciler registers the agents again.
+
 Operators: the reconciler builds bundles only when `AFS_EXPORT_BUCKET` is set, and it refuses to start if `AFS_EXPORT_KMS_KEY_ID` is missing (bundles are always SSE-KMS). Without a bucket, exports stay `pending`. The download link is signed with the reconciler's temporary credentials, so it stops working when they expire, which can be sooner than 7 days.
 
 ## Import

@@ -15,5 +15,6 @@
 - [x] C5.7 `TestStreamFailsPartWay` flake fixed (wire-level test)
 - [x] C5.8 Collaboration report kind (RA-21, COL-36)
 - [x] C5.9 Export/import of collaboration settings (CFG-5, COL-26)
-- [ ] C5.10 Review, archive, analysis, pr-body
-- [ ] Parked (real AWS only): see implementation-notes.md
+- [x] C5.10 Review (no P0/P1), archive, analysis, pr-body
+- [x] C5.11 `CollaborationKeyMissing` (RC-22, `TestConnectedAgentKeyMissing`)
+- [x] Parked (real AWS only): see implementation-notes.md

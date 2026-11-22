@@ -219,3 +219,12 @@ The billing role reads `service_settings` and `team_models`; no env fallback rem
   policy limited to its own `/paperclip/` path plus one exact board key name. Admission policy
   `afs-protect-paperclip-service` keeps teams from publishing that port themselves.
 
+- **Managed registration.** Jobs `collab-register` (1 min), `collab-probe` (1 min), `collab-guard` (10 min: roster guard and
+  agent-write scan) and `collab-members` (5 min, only when `AFS_NOTIFY_EMAIL_FROM` is set), `cmd/afs-reconciler/wire_collab_managed.go`.
+  The Paperclip client (`internal/adapter/paperclip`) calls the team's `paperclip.<namespace>.svc.cluster.local:3100` with the
+  board key as a bearer token: `GET /api/health`, `GET /api/agents`, `POST /api/agents`, `POST /api/agents/{id}/pause|resume|revoke`,
+  `GET /api/activity`, `GET|POST /api/invites`, `DELETE /api/invites/{id}`, `POST /api/members/deactivate`. The PRD does not
+  specify this surface, so it follows the fake in `papertest`; it needs a check against a live Paperclip. A new agent's key goes
+  straight to Secrets Manager (`<prefix>/<ns>/<agent>/paperclip-agent-api-key`) and `afs.record_collab_agent_key` records it;
+  keys, the board key and invite URLs are the redacting `collab.Key` type and never reach a log, an event or an error.
+  A connected worker whose key has no value starts without `PAPERCLIP_AGENT_API_KEY` and gets `CollaborationKeyMissing=True`.

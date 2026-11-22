@@ -128,4 +128,6 @@ Metrics: `afs_edge_requests_total{surface,code}`, `afs_edge_request_duration_sec
 * A `permission_required` refusal for a WebSocket is decided per frame, not at the handshake, so a viewer can watch.
 * Text WebSocket messages over 1 MiB close the connection with 1009; binary frames are not scanned.
 * The Paperclip image must honour `AFS_PAPERCLIP_BOOTSTRAP` (`manual` or `managed`); until it does, first-admin setup is
-  manual. Managed registration of agents in Paperclip is not built yet.
+  manual. In managed mode the reconciler registers connected workers in Paperclip (agent create, key to Secrets Manager,
+  pause, revoke), guards the roster, probes readiness (including open sign-up) and sends the first-admin invite by email.
+  The Paperclip API paths it calls are listed in `docs/technical-details.md`; live Paperclip has not been exercised.

@@ -221,6 +221,44 @@ func TestTemplateRetired(t *testing.T) {
 	}
 }
 
+// RC-22: a connected worker whose key secret has no value starts, with CollaborationKeyMissing=True; the
+// condition clears and the pod's configuration changes once the key has a value. An unconnected worker
+// carries no such condition.
+func TestConnectedAgentKeyMissing(t *testing.T) {
+	d := desired()
+	if _, found := cond(mustReconcile(t, newRig(t, d, agent.Hooks{})), "CollaborationKeyMissing"); found {
+		t.Error("an unconnected worker has the condition")
+	}
+	d.Link = &agent.CollabLink{PaperclipAgentID: "pcid-1"}
+	d.Bindings = append(d.Bindings, agent.Binding{SecretID: "sec_K", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x/paperclip-agent-api-key-AbCdEf", //nolint:gosec // an example ARN, not a credential
+		Delivery: agent.DeliveryEnv, Target: agent.CollabKeyTarget})
+	r := newRig(t, d, agent.Hooks{})
+	out := mustReconcile(t, r)
+	c, _ := cond(out, "CollaborationKeyMissing")
+	if c.Status != domain.ConditionTrue || out.Phase != domain.PhaseReady || r.cl.Last().Replicas != 1 {
+		t.Fatalf("missing key: %+v phase %s", c, out.Phase)
+	}
+	missingHash := r.cl.Last().Hash
+	d.Bindings[len(d.Bindings)-1].VersionID = "v1"
+	r.src.Put(d)
+	out = mustReconcile(t, r)
+	if c, _ := cond(out, "CollaborationKeyMissing"); c.Status != domain.ConditionFalse {
+		t.Errorf("after the key is created: %+v", c)
+	}
+	if r.cl.Last().Hash == missingHash {
+		t.Error("creating the key must roll the agent")
+	}
+}
+
+func mustReconcile(t *testing.T, r *rig) engine.Outcome {
+	t.Helper()
+	out, err := r.ctl.Reconcile(t.Context(), ref())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
 func TestGoneAndDeletedAgents(t *testing.T) {
 	r := newRig(t, desired(), agent.Hooks{})
 	out, err := r.ctl.Reconcile(t.Context(), engine.NewRef(engine.KindAgent, "agt_01JD0000000000000000000099", teamID))

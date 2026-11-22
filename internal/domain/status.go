@@ -52,9 +52,11 @@ const (
 	CondVolumeReady       = "VolumeReady"
 	CondEgressPolicyReady = "EgressPolicyReady"
 	CondTemplateRetired   = "TemplateRetired"
-	CondDriftCorrected    = "DriftCorrected"
-	CondBudgetExhausted   = "BudgetExhausted"
-	CondDeliveryHealthy   = "DeliveryHealthy"
+	// CondCollaborationKeyMissing is True on a connected worker that has no Paperclip agent key yet (RC-22).
+	CondCollaborationKeyMissing = "CollaborationKeyMissing"
+	CondDriftCorrected          = "DriftCorrected"
+	CondBudgetExhausted         = "BudgetExhausted"
+	CondDeliveryHealthy         = "DeliveryHealthy"
 )
 
 // Condition is one observed condition of a resource.

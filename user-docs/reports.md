@@ -10,7 +10,7 @@ reached on the network. Each is available at three levels.
 | Service | `GetServiceReport` | `GET /v1/reports/{kind}` | `admin:reports` (service administrators) |
 | Team usage | `GetUsage` | `GET /v1/teams/{teamId}/usage?from&to&groupBy=agent\|model\|day` | `usage:read` on the team |
 
-`kind` is `usage`, `costs`, `activity` or `traffic`. A viewer of team A gets `404` for team B and `403`
+`kind` is `usage`, `costs`, `activity`, `traffic` or `collaboration`. A viewer of team A gets `404` for team B and `403`
 for service reports. A service administrator can read the reports of a deleted team.
 
 ## Query parameters
@@ -47,6 +47,7 @@ Measures by kind:
 | `usage` | `calls`, `inputTokens`, `outputTokens`, `costUsd` (calls sent to the model: outcome ok or error) |
 | `costs` | `estimatedUsd` (gateway metering), `billedUsd` (AWS Cost and Usage Report, daily ranges, once reconciled) |
 | `activity` | `workingSeconds`, `idleSeconds`, `offSeconds` (paused, stopped), `impairedSeconds` (unhealthy, budget blocked), `modelCalls`, `utilizationPct` (working share of working and idle time) |
+| `collaboration` | `signIns`, `uniquePeople`, `requests`, `deniedRequests`, `secretDetections`. Usage only, never content, read at 5-minute granularity for every range. Group by `surface`, `reason` or `person` (a person row carries `principal` and `serviceAdminEntry`). Not an agent report, and not schedulable. |
 | `traffic` | `connections`, `deniedConnections`, `requests`, `errors`, `bytesOut`, `bytesIn`. Counts and bytes, never a cost. `requests` and `errors` are `null` where no egress proxy sees HTTP. |
 
 Ranges of two days or less read per-call and 5-minute data; longer ranges read daily rollups and cover

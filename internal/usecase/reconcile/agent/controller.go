@@ -147,6 +147,9 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 		}
 	}
 	conds = append(conds, templateCondition(d))
+	if d.Link != nil {
+		conds = append(conds, keyCondition(d))
+	}
 
 	out := engine.Outcome{Generation: d.Generation, Conditions: conds, Changed: changed, Phase: phase, Requeue: requeue}
 	if len(errs) > 0 {
@@ -271,6 +274,16 @@ func templateCondition(d Desired) domain.Condition {
 		return domain.Condition{Type: domain.CondTemplateRetired, Status: domain.ConditionTrue, Reason: "TemplateRetired", Message: d.TemplateReason}
 	}
 	return domain.Condition{Type: domain.CondTemplateRetired, Status: domain.ConditionFalse, Reason: "TemplateAllowed"}
+}
+
+// keyCondition reports CollaborationKeyMissing on a connected worker: True while no Paperclip agent key
+// has a value (the pod still starts, without PAPERCLIP_AGENT_API_KEY), False once it does (RC-22).
+func keyCondition(d Desired) domain.Condition {
+	if d.KeyMissing() {
+		return domain.Condition{Type: domain.CondCollaborationKeyMissing, Status: domain.ConditionTrue, Reason: "KeyMissing",
+			Message: "the agent's Paperclip key has no value yet; the agent starts without " + CollabKeyTarget}
+	}
+	return domain.Condition{Type: domain.CondCollaborationKeyMissing, Status: domain.ConditionFalse, Reason: "KeyPresent"}
 }
 
 func ok(typ, reason string) domain.Condition {
