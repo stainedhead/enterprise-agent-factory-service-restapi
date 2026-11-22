@@ -29,3 +29,6 @@ go.work.sum
 .idea/
 .vscode/
 .DS_Store
+
+# built binaries at the repository root
+/afs-*
