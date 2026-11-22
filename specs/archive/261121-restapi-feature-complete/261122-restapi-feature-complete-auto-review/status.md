@@ -6,7 +6,7 @@
 | **Created** | 2026-11-22 |
 | **Spec** | `specs/261122-restapi-feature-complete-auto-review/` |
 | **Branch** | `feat/restapi-feature-complete` |
-| **Dashboard** | [restapi-feature-complete-status.md](../archive/261121-restapi-feature-complete/restapi-feature-complete-status.md) |
+| **Dashboard** | [restapi-feature-complete-status.md](../restapi-feature-complete-status.md) |
 
 **MANDATORY:** update this file after every task and every phase. A stream updates only its own row.
 
