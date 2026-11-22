@@ -103,6 +103,11 @@ func TestAgentsEndToEnd(t *testing.T) {
 	if code, out, _ := agentCall(t, c.Handler, http.MethodPost, one+":restart", adm, ""); code != 202 {
 		t.Fatalf("restart: %d %s", code, out)
 	}
+	// The reconciler reads the restart nonce from this event (M2-F, M2-G3): one per RestartAgent, per agent.
+	var restarts int
+	if err := w.Admin.QueryRow(t.Context(), `SELECT count(*) FROM afs.outbox_events WHERE event_type = 'agent.restarted' AND aggregate_id = $1`, a.ID).Scan(&restarts); err != nil || restarts != 1 {
+		t.Fatalf("agent.restarted events = %d, %v", restarts, err)
+	}
 	if code, out, _ := agentCall(t, c.Handler, http.MethodPost, one+"/snapshots", adm, `{"description":"before delete"}`); code != 202 || !strings.Contains(out, `"state":"requested"`) {
 		t.Fatalf("snapshot: %d %s", code, out)
 	}
@@ -119,6 +124,11 @@ func TestAgentsEndToEnd(t *testing.T) {
 	code, out, _ = agentCall(t, c.Handler, http.MethodDelete, one, adm, "", "If-Match", hdr.Get("ETag"))
 	if code != 202 || !strings.Contains(out, `"phase":"Deleting"`) {
 		t.Fatalf("delete: %d %s", code, out)
+	}
+	// The API only marks: the reconciler's completer sets deleted and deleted_at (M2-G4).
+	var state, onDelete string
+	if err := w.Admin.QueryRow(t.Context(), `SELECT state, storage_on_delete FROM afs.agents WHERE id = $1`, a.ID).Scan(&state, &onDelete); err != nil || state != "deleting" || onDelete == "" {
+		t.Fatalf("after delete: state %q on-delete %q, %v", state, onDelete, err)
 	}
 	// Other teams do not see it.
 	if code, _, _ := agentCall(t, c.Handler, http.MethodGet, "/v1/teams/"+w.TeamB.ID+"/agents/"+a.ID, w.Tokens[matrix.ServiceAdmin], ""); code != 404 {

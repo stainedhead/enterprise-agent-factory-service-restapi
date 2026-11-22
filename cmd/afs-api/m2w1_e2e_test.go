@@ -99,7 +99,11 @@ func TestM2W1ModelsAndPrices(t *testing.T) {
 		t.Error("the replay is not marked")
 	}
 	m.expect(409, "POST", "/v1/admin/models", matrix.ServiceAdmin, body)
-	m.expect(400, "POST", "/v1/admin/models", matrix.ServiceAdmin, `{"id":"bad:id","provider":"x","displayName":"x","contextWindow":10,"maxOutputTokens":5}`)
+	m.expect(400, "POST", "/v1/admin/models", matrix.ServiceAdmin, `{"id":"bad id","provider":"x","displayName":"x","contextWindow":10,"maxOutputTokens":5}`)
+	// A Bedrock id ends in ":0": it can be created and then addressed (the router splits only real verbs).
+	cid := "e2e.anthropic-" + m.w.TeamA.Slug + "-v2:0"
+	m.expect(201, "POST", "/v1/admin/models", matrix.ServiceAdmin, `{"id":"`+cid+`","provider":"x","displayName":"x","contextWindow":10,"maxOutputTokens":5}`)
+	m.expect(200, "PATCH", "/v1/admin/models/"+cid, matrix.ServiceAdmin, `{"displayName":"Colon"}`, "If-Match", `"1"`)
 	m.expect(400, "POST", "/v1/admin/models", matrix.ServiceAdmin, `{"id":"e2e-over","provider":"x","displayName":"x","contextWindow":10,"maxOutputTokens":50}`)
 
 	m.expect(428, "PATCH", "/v1/admin/models/"+id, matrix.ServiceAdmin, `{"displayName":"New"}`)

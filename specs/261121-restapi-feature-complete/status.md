@@ -19,7 +19,7 @@
 | 2 | Research and data modeling | Complete | research.md, data-dictionary.md |
 | 3 | Architecture and planning | Complete | architecture.md, plan.md |
 | 4 | Task breakdown | Complete | tasks.md: 60 streams, 255 tasks |
-| 5 | Implementation (M0–M6) | In Progress | M0 complete 2026-11-21; M1 complete 2026-11-22 (step 3 started 2026-11-21T20:57:16Z); M2 next. Task progress in tasks.md |
+| 5 | Implementation (M0–M6) | In Progress | M0 complete 2026-11-21; M1 complete 2026-11-22 (step 3 started 2026-11-21T20:57:16Z); M2 complete 2026-11-22 (integrated); M3 next. Task progress in tasks.md |
 | 6 | Completion and archival | Not Started | |
 
 ## Phase 0 checklist
@@ -34,7 +34,7 @@
 |---|---|---|
 | M0 Contract and foundation | Complete | 41 / 41 |
 | M1 Teams and core | Complete | all M1 tasks (see tasks.md; e2e cases G1b, G1d, H1, RC-US-1a.4 and terraform/helm/tflint validation deferred to the cluster suite and CI) |
-| M2 Agents | Not Started | 0 |
+| M2 Agents | Complete | 44 of 45 tasks (M2-F8 `[e2e]` busybox case and the cluster parts of M2-F5, G1, G3, I3 wait for the cluster suite) |
 | M3 Gateway and budgets | Not Started | 0 |
 | M4 Accounts, tags, billing | Not Started | 0 |
 | M5 Swarms | Not Started | 0 |
@@ -94,3 +94,4 @@
 - 2026-11-22: M2-H4 done (`m2/w4`): connections to a system of category `identity` are handed to `hubble.SignInSink`, which sends one Fluent Forward record (agent or pool worker, system, time) to the aggregator in the team's own namespace and nowhere else; no table row of its own and no event; a team without log delivery has no aggregator and the record is dropped. The aggregator's Cilium policy admits the reconciler (its namespace and component) on the forward port.
 - 2026-11-22: M2-F1..F7 done (`m2/w3`): `usecase/reconcile/agent` controller (replicas from agent and team state, pod-template hash of referenced versions, IAM, Pod Identity, volume, TemplateRetired), `render/agent*.go` and `crd/agentictm` (Teammate with PVC retention Retain, restricted pod, ConfigMaps, ExternalSecrets, AWS config, tags, gateway env, dedicated-tier NodePool and EC2NodeClass), `k8s.AgentCluster`, `aws/eks` Pod Identity adapter, `postgres.AgentSource`. Engine gained `Target.Children` so a child-table change reconciles every agent of its team. Envtest proves convergence, rotation rolling only the referencing agent, the dedicated tier and TemplateRetired; the M2-F5 and M2-F8 `[e2e]` cases wait for the cluster suite (M2-F8 not started).
 - 2026-11-22: M2-G1..G6 done (`m2/w3`): online volume expansion, pause/resume/restart, restore of a missing claim from the latest ready snapshot (`Volumes.Restore`, imported VolumeSnapshotContent), snapshot manager (`usecase/reconcile/snapshot`: schedule, manual requests, retention pruning, stuck-request failure) on `k8s.SnapshotCluster` and `postgres.SnapshotStore`, agent delete steps (`lifecycle.AgentSteps`: stop, final snapshot, on-delete rule, Pod Identity, dedicated role, snapshot class) with `TeamAgentsStep` for the team finalizer, `postgres.AgentLifecycle`. Suspend/resume of agents needs no prior-state store: replicas derive from agent state and team state. `[e2e]` data-kept cases of G1 and G3 wait for the cluster suite. Wired in `cmd/afs-reconciler/wire_agents.go`.
+- 2026-11-22: M2-X1 done: m2/w1, w2, w4, w3 merged into feat/restapi-feature-complete (order w1, w2, w4, w3); one `mergeRoutes`, one `LabelAgentID`/`LabelPoolID`, one agent seeding helper; bugs fixed: router verb split (model ids with a colon), team status kind `team`, drift-watch own-write race (TestDriftWatcher flake, `-count=10` green), orphan secrets metric in `names.go`. `make gate` (with `AFS_TEST_DATABASE_URL`), `make test-db`, `make cover` (domain, usecase, authz at least 90%), `go test -tags envtest ./...` and lint with the envtest tag green; the authorization matrix covers every M2 route. Decisions in implementation-notes.md "M2 integration decisions".

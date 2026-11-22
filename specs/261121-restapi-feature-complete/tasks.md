@@ -475,7 +475,7 @@ Owns: `internal/domain/delivery_log.go`, `internal/usecase/logdest/`, `internal/
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M2-X1 | Merge, gate, `test-db`, `envtest`; matrix green; note in implementation-notes that pods carry gateway env before the gateway exists (plan §5); status.md | — | all M2 |
+| [x] | M2-X1 | Merge, gate, `test-db`, `envtest`; matrix green; note in implementation-notes that pods carry gateway env before the gateway exists (plan §5); status.md | — | all M2 |
 
 ---
 
