@@ -69,6 +69,9 @@ type Spec struct {
 	RedactionKey []byte
 	// Image is the Fluent Bit image.
 	Image string
+	// ReconcilerNamespace is the namespace of the reconciler, which may send sign-in records
+	// (M2-H4) to the aggregator's forward port.
+	ReconcilerNamespace string
 }
 
 // ApplyResult lists the objects an apply created or changed, by engine.ObjectName.
@@ -101,8 +104,13 @@ type Config struct {
 	MasterKey []byte
 	// Image is the Fluent Bit image (DefaultImage when empty).
 	Image string
-	Now   func() time.Time
+	// ReconcilerNamespace is where the reconciler runs (DefaultReconcilerNamespace when empty).
+	ReconcilerNamespace string
+	Now                 func() time.Time
 }
+
+// DefaultReconcilerNamespace is the reconciler's namespace when none is configured.
+const DefaultReconcilerNamespace = "afs-system"
 
 // DefaultImage is the Fluent Bit image used when none is configured (pinned; Helm overrides it).
 const DefaultImage = "cr.fluentbit.io/fluent/fluent-bit:3.2.2"
@@ -120,6 +128,9 @@ func NewController(cfg Config) (*Controller, error) {
 	}
 	if cfg.Image == "" {
 		cfg.Image = DefaultImage
+	}
+	if cfg.ReconcilerNamespace == "" {
+		cfg.ReconcilerNamespace = DefaultReconcilerNamespace
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
@@ -178,7 +189,7 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 		if err != nil {
 			return engine.Outcome{}, engine.Terminal(err)
 		}
-		res, err = c.cfg.Cluster.ApplyAggregator(ctx, Spec{Team: d, Outputs: outputs, RedactionKey: key, Image: c.cfg.Image})
+		res, err = c.cfg.Cluster.ApplyAggregator(ctx, Spec{Team: d, Outputs: outputs, RedactionKey: key, Image: c.cfg.Image, ReconcilerNamespace: c.cfg.ReconcilerNamespace})
 		if err != nil {
 			return engine.Outcome{Changed: res.Changed}, engine.WithCondition(CondAggregatorReady, err)
 		}

@@ -36,6 +36,8 @@ const (
 	OffService = "service"
 	OffTeam    = "team"
 	OffAgent   = "agent"
+	// OffPool is the level of a system a pool opted out of (pool_external_access).
+	OffPool = "pool"
 )
 
 // System is one external system as an agent sees it.

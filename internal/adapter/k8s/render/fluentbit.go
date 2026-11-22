@@ -442,15 +442,27 @@ func aggregatorPolicy(spec logs.Spec, ns string) *unstructured.Unstructured {
 			"toPorts": []any{map[string]any{"ports": []any{map[string]any{"port": "80", "protocol": "TCP"}}}},
 		})
 	}
+	forward := []any{map[string]any{"ports": []any{map[string]any{"port": strconv.Itoa(LogForwardPort), "protocol": "TCP"}}}}
+	ingress := []any{map[string]any{
+		"fromEndpoints": []any{map[string]any{"matchLabels": map[string]any{
+			podNamespaceLabel: DefaultLogRouteNamespace, LogNodeCollectorLabel: LogNodeCollectorValue,
+		}}},
+		"toPorts": forward,
+	}}
+	if spec.ReconcilerNamespace != "" {
+		// The reconciler sends the team's agent sign-in records here (M2-H4): they reach this team's
+		// destinations through the redaction filter and nowhere else.
+		ingress = append(ingress, map[string]any{
+			"fromEndpoints": []any{map[string]any{"matchLabels": map[string]any{
+				podNamespaceLabel: spec.ReconcilerNamespace, "app.kubernetes.io/component": "reconciler",
+			}}},
+			"toPorts": forward,
+		})
+	}
 	u.Object["spec"] = map[string]any{
 		"endpointSelector": map[string]any{"matchLabels": map[string]any{"app.kubernetes.io/name": LogAggregatorName}},
-		"ingress": []any{map[string]any{
-			"fromEndpoints": []any{map[string]any{"matchLabels": map[string]any{
-				podNamespaceLabel: DefaultLogRouteNamespace, LogNodeCollectorLabel: LogNodeCollectorValue,
-			}}},
-			"toPorts": []any{map[string]any{"ports": []any{map[string]any{"port": strconv.Itoa(LogForwardPort), "protocol": "TCP"}}}},
-		}},
-		"egress": egress,
+		"ingress":          ingress,
+		"egress":           egress,
 	}
 	return u
 }

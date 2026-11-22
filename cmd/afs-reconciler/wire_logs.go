@@ -39,7 +39,7 @@ func wireLogs(kc *k8s.Client, runner *postgres.TxRunner, status engine.StatusWri
 	}
 	ctl, err := logs.NewController(logs.Config{
 		Source: postgres.NewLogSource(runner), Cluster: k8s.NewLogCluster(kc, env(envLogRouteNamespace)),
-		DestinationStatus: status, MasterKey: []byte(key), Image: env(envLogImage), Now: now,
+		DestinationStatus: status, MasterKey: []byte(key), Image: env(envLogImage), ReconcilerNamespace: env("AFS_LEADER_LEASE_NAMESPACE"), Now: now,
 	})
 	if err != nil {
 		return logDelivery{}, err

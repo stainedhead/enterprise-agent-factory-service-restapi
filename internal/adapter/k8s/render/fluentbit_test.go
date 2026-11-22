@@ -299,3 +299,39 @@ func toJSON(t *testing.T, v any) string {
 	}
 	return string(b)
 }
+
+// M2-H4: the reconciler may send sign-in records to the forward port, from its own namespace and
+// component only; without a configured namespace only the node collector is admitted.
+func TestAggregatorAdmitsReconcilerForSignIns(t *testing.T) {
+	ingress := func(spec logs.Spec) []any {
+		agg, err := render.LogAggregatorFor(spec, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, o := range agg.Objects {
+			if o.GetKind() == "CiliumNetworkPolicy" {
+				rules, _, _ := unstructured.NestedSlice(o.Object, "spec", "ingress")
+				return rules
+			}
+		}
+		t.Fatal("no policy")
+		return nil
+	}
+	if rules := ingress(logSpec()); len(rules) != 1 {
+		t.Fatalf("without a reconciler namespace: %v", rules)
+	}
+	spec := logSpec()
+	spec.ReconcilerNamespace = "afs-system"
+	rules := ingress(spec)
+	if len(rules) != 2 {
+		t.Fatalf("rules = %v", rules)
+	}
+	from := rules[1].(map[string]any)["fromEndpoints"].([]any)[0].(map[string]any)["matchLabels"].(map[string]any)
+	if from["k8s:io.kubernetes.pod.namespace"] != "afs-system" || from["app.kubernetes.io/component"] != "reconciler" || len(from) != 2 {
+		t.Errorf("reconciler selector = %v", from)
+	}
+	ports := rules[1].(map[string]any)["toPorts"].([]any)[0].(map[string]any)["ports"].([]any)
+	if len(ports) != 1 || ports[0].(map[string]any)["port"] != "24224" {
+		t.Errorf("ports = %v", ports)
+	}
+}
