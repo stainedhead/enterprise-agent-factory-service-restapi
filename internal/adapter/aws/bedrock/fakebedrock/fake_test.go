@@ -147,7 +147,7 @@ func TestUnsupportedAndUnsignedRequests(t *testing.T) {
 		"unsigned":   {"/model/m/converse", "", http.StatusForbidden},
 		"unknown op": {"/model/m/count-tokens", "AWS4-HMAC-SHA256 Credential=A/x", http.StatusNotFound},
 	} {
-		req, _ := http.NewRequest(http.MethodPost, srv.URL+tc.path, strings.NewReader("{}"))
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL+tc.path, strings.NewReader("{}"))
 		if tc.auth != "" {
 			req.Header.Set("Authorization", tc.auth)
 		}

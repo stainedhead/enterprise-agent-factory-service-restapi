@@ -44,7 +44,7 @@ func (s *Server) stream(ctx context.Context, rw *respWriter, p *parsed, call bed
 	if err != nil {
 		return gateway.Result{}, err
 	}
-	defer st.Body.Close()
+	defer func() { _ = st.Body.Close() }()
 	dec := eventstream.NewDecoder()
 	first, err := dec.Decode(st.Body, nil)
 	if err != nil {
@@ -130,42 +130,6 @@ func (w *eventWriter) fail(err error, requestID string) error {
 	hs.Set(":exception-type", eventstream.StringValue(exceptionType(domain.KindOf(err))))
 	hs.Set(":content-type", eventstream.StringValue("application/json"))
 	return w.event(eventstream.Message{Headers: hs, Payload: b})
-}
-
-// sseWriter turns Bedrock's {"bytes": base64} chunks into the Anthropic server-sent events they carry.
-type sseWriter struct{ rw *respWriter }
-
-func (w *sseWriter) event(m eventstream.Message) error {
-	var c struct {
-		Bytes []byte `json:"bytes"`
-	}
-	if json.Unmarshal(m.Payload, &c) != nil || len(c.Bytes) == 0 {
-		return nil // not a chunk; nothing an Anthropic client reads
-	}
-	var t struct {
-		Type string `json:"type"`
-	}
-	_ = json.Unmarshal(c.Bytes, &t)
-	return w.send(t.Type, c.Bytes)
-}
-
-func (w *sseWriter) send(event string, data []byte) error {
-	var buf bytes.Buffer
-	buf.WriteString("event: " + event + "\ndata: ")
-	buf.Write(data)
-	buf.WriteString("\n\n")
-	if _, err := w.rw.Write(buf.Bytes()); err != nil {
-		return errClientWrite
-	}
-	w.rw.flush()
-	return nil
-}
-
-// fail ends the stream with an Anthropic error event carrying the contract code.
-func (w *sseWriter) fail(err error, requestID string) error {
-	_, p := toProblem(err, requestID, true)
-	b, _ := json.Marshal(p)
-	return w.send("error", b)
 }
 
 // observe feeds the meter from an event: Converse metadata, Anthropic message_start / message_delta and

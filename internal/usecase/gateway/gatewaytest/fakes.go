@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"strconv"
 	"sync"
 	"time"
 
@@ -288,7 +289,7 @@ func (t *Thresholds) Record(_ context.Context, c gateway.Crossing) (bool, error)
 	if t.Err != nil {
 		return false, t.Err
 	}
-	key := c.BudgetID + c.Period.String() + string(rune(c.Threshold))
+	key := c.BudgetID + c.Period.String() + strconv.Itoa(c.Threshold)
 	if t.seen[key] {
 		return false, nil
 	}
@@ -328,3 +329,10 @@ func (u *Usage) All() []gateway.Record {
 
 // ErrDB is a generic database failure for injection.
 var ErrDB = errors.New("connection refused")
+
+// Settled returns a copy of the settlements so far, safe to call while calls are in flight.
+func (s *Spend) Settled() []Settlement {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]Settlement(nil), s.Settlements...)
+}

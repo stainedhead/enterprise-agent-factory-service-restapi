@@ -490,11 +490,11 @@ Owns: `cmd/afs-gateway/`, `internal/usecase/gateway/{identity,route,model}*.go`,
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M3-A1 | `afs-gateway` binary: TLS listener, `/healthz`, `X-Afs-Gateway-Contract-Version: 1.0.0` on every response, error body of gateway contract §7, schema version check | CT-GW-1, CT-GW-10, CT-DB-1 (part) | — |
-| [ ] | M3-A2 | Pod cache: watch pods in team namespaces and Cilium endpoint identities; source IP → pod → namespace, ServiceAccount → team, agent or pool, worker pod; unknown IP → `401`; readiness waits for the initial cache sync, and a lost watch keeps serving the cache while it re-lists [unit with fake clientset] | GW-US-6.2 (part), GW-1 | — |
-| [ ] | M3-A3 | Optional `X-Afs-Gateway-Token`: TokenReview (audience `afs-gateway`), result cached ≤ 5 min, must name the source pod, else `401`; TokenReview unavailable while a token is sent → `503` (fail closed) [unit with fake clock] | GW-US-6.2 (part), GW-US-6.5 | M3-A2 |
-| [ ] | M3-A4 | Paths `converse`, `converse-stream`, `invoke`, `invoke-with-response-stream`, `/anthropic/v1/messages`; SigV4 `Authorization` and `x-api-key` ignored and never logged; agent `requestMetadata` replaced; unsupported → `404`; body > 20 MB → `413`; malformed → `400`; model not enabled → `403`; suspended team → `403 team_suspended`; deleted team's former IP → `401` | GW-US-2.3 (part), GW-US-6.3, RC-US-15.1 (part), CT-GW-2, CT-GW-3, CT-GW-7 | M3-A2 |
-| [ ] | M3-A5 | Bedrock runtime adapter: assume the team's Bedrock role (cached credentials), call through the team's inference profile, TLS to the VPC endpoint only; a pod of team A can never use team B's profile [unit] | GW-US-2.2, GW-3 (part) | M3-A4 |
+| [x] | M3-A1 | `afs-gateway` binary: TLS listener, `/healthz`, `X-Afs-Gateway-Contract-Version: 1.0.0` on every response, error body of gateway contract §7, schema version check | CT-GW-1, CT-GW-10, CT-DB-1 (part) | — |
+| [x] | M3-A2 | Pod cache: watch pods in team namespaces and Cilium endpoint identities; source IP → pod → namespace, ServiceAccount → team, agent or pool, worker pod; unknown IP → `401`; readiness waits for the initial cache sync, and a lost watch keeps serving the cache while it re-lists [unit with fake clientset] | GW-US-6.2 (part), GW-1 | — |
+| [x] | M3-A3 | Optional `X-Afs-Gateway-Token`: TokenReview (audience `afs-gateway`), result cached ≤ 5 min, must name the source pod, else `401`; TokenReview unavailable while a token is sent → `503` (fail closed) [unit with fake clock] | GW-US-6.2 (part), GW-US-6.5 | M3-A2 |
+| [x] | M3-A4 | Paths `converse`, `converse-stream`, `invoke`, `invoke-with-response-stream`, `/anthropic/v1/messages`; SigV4 `Authorization` and `x-api-key` ignored and never logged; agent `requestMetadata` replaced; unsupported → `404`; body > 20 MB → `413`; malformed → `400`; model not enabled → `403`; suspended team → `403 team_suspended`; deleted team's former IP → `401` | GW-US-2.3 (part), GW-US-6.3, RC-US-15.1 (part), CT-GW-2, CT-GW-3, CT-GW-7 | M3-A2 |
+| [x] | M3-A5 | Bedrock runtime adapter: assume the team's Bedrock role (cached credentials), call through the team's inference profile, TLS to the VPC endpoint only; a pod of team A can never use team B's profile [unit] | GW-US-2.2, GW-3 (part) | M3-A4 |
 
 ### M3-B · Reservation, settlement, usage, thresholds (GW-2, GW-3, GW-4, GW-7)
 
@@ -502,13 +502,13 @@ Owns: `internal/usecase/gateway/{service,reserve,settle,usage,threshold,cache}*.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M3-B1 | Reservation math: `maxTokens` else `max_output_tokens`, capped to it; input bytes ÷ 3; prices effective at call time [unit] | GW-US-1.4, CT-GW-4, GW-2 | — |
-| [ ] | M3-B2 | Spend adapter: `ensure_spend_counter` then `reserve_spend_held(holder = pod)`; NULL → `402 BudgetExceeded` with `budgetId`, `period`, `remainingUsd`; `settle_reservation(id, budget_id, period_start, actual)` always with the reserved budget and period; every reservation settled on success, error or abort | GW-US-6.4, RC-US-12.1 (part), CT-GW-9, GW-7 | M3-B1 |
-| [ ] | M3-B3 | Fail closed: database or reservation unavailable → `503` within 2 s, nothing sent to Bedrock [adapter] | GW-US-1.2, GW-3 | M3-B2, M3-A4 |
-| [ ] | M3-B4 | Usage writer: batched `COPY` within 1 s; `tag_set_id` current at the call (new set within 60 s of a tag change, old rows keep theirs), pool and worker pod, latency, outcomes `ok`, `error`, `rejected_budget`, `rejected_model`; no prompt or completion content stored or logged | GW-US-2.3 (part), GW-US-2.4, GW-US-2.5, GW-US-3.1, CT-GW-8 | M3-B2 |
-| [ ] | M3-B5 | Thresholds: insert-once `budget_threshold_events` → one `budget.threshold_crossed` per threshold per period; one `budget.exhausted` on the first refusal at 100% (200 concurrent callers) [adapter] | GW-US-4.1, GW-4 | M3-B2 |
-| [ ] | M3-B6 | Upstream errors: Bedrock throttling → `429` with `Retry-After`; Bedrock 5xx → `502 UpstreamError` and the reservation released; a failure to assume the team's Bedrock role after reserving → reservation released, `503` | CT-GW-5 | M3-B2, M3-A5 |
-| [ ] | M3-B7 | Caches (team state, models, prices, budgets, tags) invalidated by `LISTEN afs_desired_state` and a 60 s TTL | GW-US-3.1 (part), A-8 | M3-B2 |
+| [x] | M3-B1 | Reservation math: `maxTokens` else `max_output_tokens`, capped to it; input bytes ÷ 3; prices effective at call time [unit] | GW-US-1.4, CT-GW-4, GW-2 | — |
+| [x] | M3-B2 | Spend adapter: `ensure_spend_counter` then `reserve_spend_held(holder = pod)`; NULL → `402 BudgetExceeded` with `budgetId`, `period`, `remainingUsd`; `settle_reservation(id, budget_id, period_start, actual)` always with the reserved budget and period; every reservation settled on success, error or abort | GW-US-6.4, RC-US-12.1 (part), CT-GW-9, GW-7 | M3-B1 |
+| [x] | M3-B3 | Fail closed: database or reservation unavailable → `503` within 2 s, nothing sent to Bedrock [adapter] | GW-US-1.2, GW-3 | M3-B2, M3-A4 |
+| [x] | M3-B4 | Usage writer: batched `COPY` within 1 s; `tag_set_id` current at the call (new set within 60 s of a tag change, old rows keep theirs), pool and worker pod, latency, outcomes `ok`, `error`, `rejected_budget`, `rejected_model`; no prompt or completion content stored or logged | GW-US-2.3 (part), GW-US-2.4, GW-US-2.5, GW-US-3.1, CT-GW-8 | M3-B2 |
+| [x] | M3-B5 | Thresholds: insert-once `budget_threshold_events` → one `budget.threshold_crossed` per threshold per period; one `budget.exhausted` on the first refusal at 100% (200 concurrent callers) [adapter] | GW-US-4.1, GW-4 | M3-B2 |
+| [x] | M3-B6 | Upstream errors: Bedrock throttling → `429` with `Retry-After`; Bedrock 5xx → `502 UpstreamError` and the reservation released; a failure to assume the team's Bedrock role after reserving → reservation released, `503` | CT-GW-5 | M3-B2, M3-A5 |
+| [x] | M3-B7 | Caches (team state, models, prices, budgets, tags) invalidated by `LISTEN afs_desired_state` and a 60 s TTL | GW-US-3.1 (part), A-8 | M3-B2 |
 
 ### M3-C · Streaming (GW-6)
 
@@ -516,9 +516,9 @@ Owns: `internal/adapter/gatewayhttp/{eventstream,sse}.go`, `internal/usecase/gat
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M3-C1 | `ConverseStream` and `InvokeModelWithResponseStream`: forward events as they arrive, usage from the final metadata event, settle [adapter with fake Bedrock] | GW-US-5.1 (part), GW-6 | M3-A4, M3-B2, M3-D1 |
-| [ ] | M3-C2 | Anthropic Messages SSE with `message_delta.usage` | GW-US-5.1 (part) | M3-C1 |
-| [ ] | M3-C3 | Client abort or upstream error mid-stream settles on tokens seen and releases the rest; no usage reported → settles to the reservation; errors before the first event are JSON, after it an `exception` (Bedrock) or `error` (Anthropic) event with the same code | GW-US-5.2, GW-US-5.3, CT-GW-6 | M3-C1, M3-C2 |
+| [x] | M3-C1 | `ConverseStream` and `InvokeModelWithResponseStream`: forward events as they arrive, usage from the final metadata event, settle [adapter with fake Bedrock] | GW-US-5.1 (part), GW-6 | M3-A4, M3-B2, M3-D1 |
+| [x] | M3-C2 | Anthropic Messages SSE with `message_delta.usage` | GW-US-5.1 (part) | M3-C1 |
+| [x] | M3-C3 | Client abort or upstream error mid-stream settles on tokens seen and releases the rest; no usage reported → settles to the reservation; errors before the first event are JSON, after it an `exception` (Bedrock) or `error` (Anthropic) event with the same code | GW-US-5.2, GW-US-5.3, CT-GW-6 | M3-C1, M3-C2 |
 
 ### M3-D · Gateway conformance and load
 

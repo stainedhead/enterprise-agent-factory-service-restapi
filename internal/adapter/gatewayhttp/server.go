@@ -28,7 +28,7 @@ import (
 const VersionHeader = "X-Afs-Gateway-Contract-Version"
 
 // TokenHeader is the optional token a runtime may send (§3).
-const TokenHeader = "X-Afs-Gateway-Token"
+const TokenHeader = "X-Afs-Gateway-Token" //nolint:gosec // a header name, not a credential
 
 // Upstream forwards a call to Bedrock Runtime (aws/bedrock.Runtime).
 type Upstream interface {
@@ -142,10 +142,10 @@ var modelOps = map[string]struct {
 
 // parsePath routes by the escaped path; ok is false for anything the gateway does not serve.
 func parsePath(method, escaped string) (route, bool) {
-	switch {
-	case escaped == "/healthz":
+	switch escaped {
+	case "/healthz":
 		return route{health: true}, method == http.MethodGet || method == http.MethodHead
-	case escaped == "/anthropic/v1/messages":
+	case "/anthropic/v1/messages":
 		return route{anthropic: true}, method == http.MethodPost
 	}
 	rest, ok := strings.CutPrefix(escaped, "/model/")

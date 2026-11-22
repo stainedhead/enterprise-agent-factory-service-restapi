@@ -52,6 +52,9 @@ func parseDoc(body []byte) (map[string]json.RawMessage, error) {
 
 // pathInt reads a positive integer at a path of object keys.
 func pathInt(doc map[string]json.RawMessage, path ...string) (int, bool) {
+	if len(path) == 0 {
+		return 0, false
+	}
 	raw, ok := doc[path[0]]
 	if !ok {
 		return 0, false

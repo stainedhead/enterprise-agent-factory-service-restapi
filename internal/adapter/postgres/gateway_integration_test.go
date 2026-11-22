@@ -2,6 +2,7 @@ package postgres_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -69,7 +70,7 @@ func TestGatewayStoreReads(t *testing.T) {
 	if err != nil || tm.State != "active" || !strings.HasPrefix(tm.Namespace, "afs-t-g") {
 		t.Fatalf("team = %+v %v", tm, err)
 	}
-	if _, err := st.Team(ctx, pgtest.NewID("team")); err != gateway.ErrNotFound {
+	if _, err := st.Team(ctx, pgtest.NewID("team")); !errors.Is(err, gateway.ErrNotFound) {
 		t.Fatalf("missing team err = %v", err)
 	}
 	m, err := st.TeamModel(ctx, w.team, w.model)
@@ -77,7 +78,7 @@ func TestGatewayStoreReads(t *testing.T) {
 		t.Fatalf("model = %+v %v", m, err)
 	}
 	other := pgtest.NewID("team")
-	if _, err := st.TeamModel(ctx, other, w.model); err != gateway.ErrNotFound {
+	if _, err := st.TeamModel(ctx, other, w.model); !errors.Is(err, gateway.ErrNotFound) {
 		t.Fatalf("another team's model err = %v", err)
 	}
 	prices, err := st.Prices(ctx, w.model)
@@ -91,7 +92,7 @@ func TestGatewayStoreReads(t *testing.T) {
 	if err != nil || b.ID != w.budget || b.Period != "monthly" || b.OnExhaust != "block" || len(b.Thresholds) != 3 || b.Amount.String() != "10.00" {
 		t.Fatalf("budget = %+v %v", b, err)
 	}
-	if _, err := st.Budget(ctx, other); err != gateway.ErrNotFound {
+	if _, err := st.Budget(ctx, other); !errors.Is(err, gateway.ErrNotFound) {
 		t.Fatalf("no budget err = %v", err)
 	}
 	if _, err := w.db.Admin(t).Exec(ctx, `INSERT INTO afs.team_tags (team_id, key, value) VALUES ($1, 'project', 'apollo')`, w.team); err != nil {

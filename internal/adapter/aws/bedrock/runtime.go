@@ -213,14 +213,14 @@ func statusError(resp *http.Response) error {
 		Message string `json:"message"`
 	}
 	_ = json.Unmarshal(b, &body)
-	switch {
-	case resp.StatusCode == http.StatusTooManyRequests:
+	switch resp.StatusCode {
+	case http.StatusTooManyRequests:
 		after := 1
 		if n, err := strconv.Atoi(strings.TrimSpace(resp.Header.Get("Retry-After"))); err == nil && n > 0 {
 			after = n
 		}
 		return &domain.Error{Kind: domain.KindThrottled, Message: "the model provider is throttling requests", RetryAfterSeconds: after}
-	case resp.StatusCode == http.StatusBadRequest:
+	case http.StatusBadRequest:
 		msg := body.Message
 		if msg == "" {
 			msg = "the model provider refused the request"

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -37,7 +38,7 @@ func post(t *testing.T, r *gwtest.Rig, path, body string, hdr map[string]string)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { resp.Body.Close() })
+	t.Cleanup(func() { _ = resp.Body.Close() })
 	return resp
 }
 
@@ -79,7 +80,7 @@ func TestCompleteCalls(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			r := gwtest.New(t)
 			r.Fake.SetUsage(fakebedrock.Usage{Input: 11, Output: 7})
-			resp := post(t, r, c.path, c.body, map[string]string{
+			resp := post(t, r, c.path, c.body, map[string]string{ //nolint:bodyclose // closed by post's cleanup
 				"Authorization": "AWS4-HMAC-SHA256 Credential=AKIAIGNOREDIGNORED/20261122/us-east-1/bedrock/aws4_request, SignedHeaders=host, Signature=00",
 				"X-Api-Key":     "sk-ant-ignored",
 			})
@@ -177,7 +178,7 @@ func TestErrors(t *testing.T) {
 					c.setup(r)
 				}
 			})
-			resp := post(t, r, c.path, c.body, nil)
+			resp := post(t, r, c.path, c.body, nil) //nolint:bodyclose // closed by post's cleanup
 			if resp.StatusCode != c.status {
 				t.Fatalf("status %d, want %d: %s", resp.StatusCode, c.status, readAll(t, resp))
 			}
@@ -208,7 +209,7 @@ func TestErrors(t *testing.T) {
 
 func TestAnthropicErrorShape(t *testing.T) {
 	r := gwtest.New(t, func(r *gwtest.Rig) { r.Spend.Limit = domain.MustMoney("0.000001") })
-	resp := post(t, r, "/anthropic/v1/messages", strings.Replace(anthropicReq, "%s", "false", 1), nil)
+	resp := post(t, r, "/anthropic/v1/messages", strings.Replace(anthropicReq, "%s", "false", 1), nil) //nolint:bodyclose // closed by post's cleanup
 	if resp.StatusCode != 402 {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
@@ -223,7 +224,7 @@ func TestUnknownCallerIsUnauthenticatedAndNotMetered(t *testing.T) {
 	r := gwtest.New(t)
 	for name, addr := range map[string]string{"unknown ip": "10.9.9.9:4000", "garbage": "nonsense"} {
 		t.Run(name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, modelPath("converse"), strings.NewReader(converseBody))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, modelPath("converse"), strings.NewReader(converseBody))
 			req.RemoteAddr = addr
 			req.Header.Set("X-Forwarded-For", "127.0.0.1")
 			rec := httptest.NewRecorder()
@@ -240,15 +241,16 @@ func TestUnknownCallerIsUnauthenticatedAndNotMetered(t *testing.T) {
 
 func TestHealthz(t *testing.T) {
 	r := gwtest.New(t)
-	resp, err := http.Get(r.HTTP.URL + "/healthz")
+	greq, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, r.HTTP.URL+"/healthz", nil)
+	resp, err := http.DefaultClient.Do(greq)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 || resp.Header.Get(gatewayhttp.VersionHeader) != "1.0.0" {
 		t.Errorf("status %d, headers %v", resp.StatusCode, resp.Header)
 	}
-	if p := post(t, r, "/healthz", "", nil); p.StatusCode != 404 {
+	if p := post(t, r, "/healthz", "", nil); p.StatusCode != 404 { //nolint:bodyclose // closed by post's cleanup
 		t.Errorf("POST /healthz = %d", p.StatusCode)
 	}
 }
@@ -267,7 +269,7 @@ func readFrames(t *testing.T, body io.Reader) []frame {
 	for {
 		m, err := dec.Decode(body, nil)
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return out
 			}
 			t.Fatalf("decode: %v", err)
@@ -285,7 +287,7 @@ func readFrames(t *testing.T, body io.Reader) []frame {
 func TestConverseStream(t *testing.T) {
 	r := gwtest.New(t)
 	r.Fake.SetUsage(fakebedrock.Usage{Input: 20, Output: 9})
-	resp := post(t, r, modelPath("converse-stream"), converseBody, nil)
+	resp := post(t, r, modelPath("converse-stream"), converseBody, nil) //nolint:bodyclose // closed by post's cleanup
 	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "application/vnd.amazon.eventstream" {
 		t.Fatalf("status %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
@@ -324,7 +326,7 @@ func sse(t *testing.T, body io.Reader) (events []string, data []map[string]any) 
 func TestAnthropicStream(t *testing.T) {
 	r := gwtest.New(t)
 	r.Fake.SetUsage(fakebedrock.Usage{Input: 20, Output: 9})
-	resp := post(t, r, "/anthropic/v1/messages", strings.Replace(anthropicReq, "%s", "true", 1), nil)
+	resp := post(t, r, "/anthropic/v1/messages", strings.Replace(anthropicReq, "%s", "true", 1), nil) //nolint:bodyclose // closed by post's cleanup
 	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "text/event-stream" {
 		t.Fatalf("status %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
@@ -342,7 +344,7 @@ func TestAnthropicStream(t *testing.T) {
 func TestInvokeStreamPassesChunks(t *testing.T) {
 	r := gwtest.New(t)
 	r.Fake.SetUsage(fakebedrock.Usage{Input: 5, Output: 3})
-	resp := post(t, r, modelPath("invoke-with-response-stream"), invokeBody, nil)
+	resp := post(t, r, modelPath("invoke-with-response-stream"), invokeBody, nil) //nolint:bodyclose // closed by post's cleanup
 	fs := readFrames(t, resp.Body)
 	var first map[string]any
 	var c struct{ Bytes string }
@@ -366,7 +368,7 @@ func TestStreamWithoutUsageSettlesToTheReservation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			r := gwtest.New(t)
 			r.Fake.OmitStreamUsage(true)
-			resp := post(t, r, c.path, c.body, nil)
+			resp := post(t, r, c.path, c.body, nil) //nolint:bodyclose // closed by post's cleanup
 			_ = readFrames(t, resp.Body)
 			r.Svc.Wait()
 			if len(r.Spend.Settlements) != 1 || len(r.Spend.Reservs) != 1 || r.Spend.Settlements[0].Actual.String() != r.Spend.Reservs[0].String() {
@@ -380,7 +382,7 @@ func TestStreamFailureAfterTheFirstEvent(t *testing.T) {
 	t.Run("converse exception frame", func(t *testing.T) {
 		r := gwtest.New(t)
 		r.Fake.FailStreamAfter(3)
-		resp := post(t, r, modelPath("converse-stream"), converseBody, nil)
+		resp := post(t, r, modelPath("converse-stream"), converseBody, nil) //nolint:bodyclose // closed by post's cleanup
 		if resp.StatusCode != 200 {
 			t.Fatalf("status %d", resp.StatusCode)
 		}
@@ -400,7 +402,7 @@ func TestStreamFailureAfterTheFirstEvent(t *testing.T) {
 	t.Run("anthropic error event", func(t *testing.T) {
 		r := gwtest.New(t)
 		r.Fake.FailStreamAfter(3)
-		resp := post(t, r, "/anthropic/v1/messages", strings.Replace(anthropicReq, "%s", "true", 1), nil)
+		resp := post(t, r, "/anthropic/v1/messages", strings.Replace(anthropicReq, "%s", "true", 1), nil) //nolint:bodyclose // closed by post's cleanup
 		ev, data := sse(t, resp.Body)
 		last := len(ev) - 1
 		if ev[last] != "error" || data[last]["code"] != "UpstreamError" || data[last]["type"] != "error" {
@@ -412,7 +414,7 @@ func TestStreamFailureAfterTheFirstEvent(t *testing.T) {
 func TestStreamFailureBeforeTheFirstEventIsJSON(t *testing.T) {
 	r := gwtest.New(t)
 	r.Fake.FailStreamAfter(0)
-	resp := post(t, r, modelPath("converse-stream"), converseBody, nil)
+	resp := post(t, r, modelPath("converse-stream"), converseBody, nil) //nolint:bodyclose // closed by post's cleanup
 	if resp.StatusCode != 502 || !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
 		t.Fatalf("status %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
@@ -440,7 +442,7 @@ func TestClientAbortSettlesOnWhatWasSeen(t *testing.T) {
 		t.Fatal(err)
 	}
 	cancel()
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	deadline := time.Now().Add(5 * time.Second)
 	for r.Fake.StreamsEnded() == 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
@@ -449,22 +451,22 @@ func TestClientAbortSettlesOnWhatWasSeen(t *testing.T) {
 		t.Fatal("the upstream stream was not closed after the agent left")
 	}
 	close(gate)
-	for len(r.Spend.Settlements) == 0 && time.Now().Before(deadline) {
+	for len(r.Spend.Settled()) == 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
-		r.Svc.Wait()
 	}
-	if len(r.Spend.Settlements) != 1 || r.Spend.Held() != 0 {
-		t.Errorf("settlements %+v held %d", r.Spend.Settlements, r.Spend.Held())
+	r.Svc.Wait()
+	if got := r.Spend.Settled(); len(got) != 1 || r.Spend.Held() != 0 {
+		t.Errorf("settlements %+v held %d", got, r.Spend.Held())
 	}
 }
 
 func TestRequestIDIsEchoed(t *testing.T) {
 	r := gwtest.New(t)
-	resp := post(t, r, modelPath("converse"), `[`, map[string]string{"X-Request-Id": "req-abc.1"})
+	resp := post(t, r, modelPath("converse"), `[`, map[string]string{"X-Request-Id": "req-abc.1"}) //nolint:bodyclose // closed by post's cleanup
 	if errBody(t, resp)["requestId"] != "req-abc.1" {
 		t.Error("request id not echoed")
 	}
-	resp = post(t, r, modelPath("converse"), `[`, map[string]string{"X-Request-Id": "bad id with spaces"})
+	resp = post(t, r, modelPath("converse"), `[`, map[string]string{"X-Request-Id": "bad id with spaces"}) //nolint:bodyclose // closed by post's cleanup
 	if id, _ := errBody(t, resp)["requestId"].(string); !strings.HasPrefix(id, "gw-") {
 		t.Errorf("id %q", id)
 	}
