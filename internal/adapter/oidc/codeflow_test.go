@@ -221,21 +221,39 @@ func TestCodeFlowVerifyBearerAudience(t *testing.T) {
 	ctx := t.Context()
 	tok := func(aud any) string { return f.token(t, map[string]any{"aud": aud}) }
 	r := f.route
-	r.ProviderClientID = "cli-client"
+	r.ProviderClientID = "console-client"
+	r.ProviderCLIClientID = "cli-client"
 	for name, c := range map[string]struct {
 		route collab.Route
 		aud   any
 		ok    bool
 	}{
-		"CLI SSO token issued to the provider's client":  {r, "cli-client", true},
-		"provider client among several audiences":        {r, []string{"x", "cli-client"}, true},
-		"collab client audience still accepted":          {r, "cid", true},
-		"neither audience":                               {r, "someone-else", false},
-		"REST API only team: no collab client":           {func() collab.Route { x := r; x.ClientID = ""; return x }(), "cli-client", true},
-		"REST API only team, token for another client":   {func() collab.Route { x := r; x.ClientID = ""; return x }(), "someone-else", false},
-		"empty audience entry never matches an empty id": {func() collab.Route { x := r; x.ClientID = ""; x.ProviderClientID = ""; return x }(), "", false},
-		"no client ids at all":                           {func() collab.Route { x := r; x.ClientID = ""; x.ProviderClientID = ""; return x }(), "cli-client", false},
-		"provider client id unknown, collab client":      {func() collab.Route { x := r; x.ProviderClientID = ""; return x }(), "cid", true},
+		"CLI SSO token issued to the provider's CLI client": {r, "cli-client", true},
+		"console SSO token issued to the console client":    {r, "console-client", true},
+		"provider has no CLI client, its console client":    {func() collab.Route { x := r; x.ProviderCLIClientID = ""; return x }(), "console-client", true},
+		"provider has no CLI client, CLI audience denied":   {func() collab.Route { x := r; x.ProviderCLIClientID = ""; return x }(), "cli-client", false},
+		"wrong audience denied even with all three ids":     {r, "attacker-client", false},
+		"empty aud never matches an unset CLI client":       {func() collab.Route { x := r; x.ProviderCLIClientID = ""; return x }(), "", false},
+		"provider client among several audiences":           {r, []string{"x", "cli-client"}, true},
+		"collab client audience still accepted":             {r, "cid", true},
+		"neither audience":                                  {r, "someone-else", false},
+		"REST API only team: no collab client":              {func() collab.Route { x := r; x.ClientID = ""; return x }(), "cli-client", true},
+		"REST API only team, token for another client":      {func() collab.Route { x := r; x.ClientID = ""; return x }(), "someone-else", false},
+		"empty audience entry never matches an empty id": {func() collab.Route {
+			x := r
+			x.ClientID = ""
+			x.ProviderClientID = ""
+			x.ProviderCLIClientID = ""
+			return x
+		}(), "", false},
+		"no client ids at all": {func() collab.Route {
+			x := r
+			x.ClientID = ""
+			x.ProviderClientID = ""
+			x.ProviderCLIClientID = ""
+			return x
+		}(), "cli-client", false},
+		"provider client id unknown, collab client": {func() collab.Route { x := r; x.ProviderClientID = ""; return x }(), "cid", true},
 	} {
 		_, err := f.cf.VerifyBearer(ctx, c.route, tok(c.aud))
 		if (err == nil) != c.ok {

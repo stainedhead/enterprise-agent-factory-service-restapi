@@ -137,10 +137,10 @@ func (c *CodeFlow) Exchange(ctx context.Context, r collab.Route, redirectURI, co
 // VerifyBearer implements edge.Identity.
 //
 // A bearer token is checked with the rules afs-api uses (Verifier.Verify): the audience must contain the
-// provider's own client id. The collaboration client id is accepted as well when the provider has one, so a
-// token issued to it works too; the REST API surface itself needs no collaboration client (finding 6).
+// provider's own client id, the console client id or the CLI public client id. The collaboration client id is
+// accepted as well when the provider has one, so a token issued to it works too (empty ids never match); the REST API surface itself needs no collaboration client (finding 6).
 func (c *CodeFlow) VerifyBearer(ctx context.Context, r collab.Route, token string) (edge.Claims, error) {
-	return c.verify(ctx, r, token, []string{r.ProviderClientID, r.ClientID})
+	return c.verify(ctx, r, token, []string{r.ProviderClientID, r.ProviderCLIClientID, r.ClientID})
 }
 
 // verify checks signature, issuer, audience (one of aud, empty entries ignored) and times of a token.

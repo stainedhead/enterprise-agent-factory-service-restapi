@@ -56,8 +56,8 @@ func TestEdgeDB(t *testing.T) {
 
 	// routes
 	idp, agent := pgtest.NewID("idp"), pgtest.NewID("agt")
-	exec(`INSERT INTO afs.identity_providers (id, kind, name, issuer_url, client_id, collab_client_id, collab_client_secret_arn, is_default)
-VALUES ($1, 'okta', 'Okta', 'https://idp.example.com', 'cid', 'ccid', 'arn:aws:secretsmanager:eu-west-1:000000000000:secret:afs/x-abcdef', true)`, idp)
+	exec(`INSERT INTO afs.identity_providers (id, kind, name, issuer_url, client_id, cli_client_id, collab_client_id, collab_client_secret_arn, is_default)
+VALUES ($1, 'okta', 'Okta', 'https://idp.example.com', 'cid', 'cli-cid', 'ccid', 'arn:aws:secretsmanager:eu-west-1:000000000000:secret:afs/x-abcdef', true)`, idp)
 	tpl := "pc-" + strings.ToLower(pgtest.NewID("x")[2:8])
 	digest := "sha256:" + strings.Repeat("a", 64)
 	exec(`INSERT INTO afs.agent_templates (id, name, harness, allowed_image_digests, current_image_digest)
@@ -123,7 +123,7 @@ VALUES ($1, $2, 'pc', $3, (SELECT id FROM afs.agent_templates WHERE name = $3), 
 		}
 	}
 	if route == nil || route.Hostname != tm.Slug+".collab.example.com" || route.ServiceName != "paperclip" || route.Port != 3100 || route.Ready ||
-		route.NotReadyReason != "starting" || route.ClientID != "ccid" || route.IssuerURL != "https://idp.example.com" {
+		route.NotReadyReason != "starting" || route.ClientID != "ccid" || route.ProviderClientID != "cid" || route.ProviderCLIClientID != "cli-cid" || route.IssuerURL != "https://idp.example.com" {
 		t.Fatalf("route: %+v", route)
 	}
 

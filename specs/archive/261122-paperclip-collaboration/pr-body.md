@@ -10,7 +10,7 @@ Tests: race tests, lint, cover (domain 91.4, authz 99.2, usecase/edge 98.4, doma
 
 OpenAPI: `api/openapi.yaml` regenerated for the `collaboration` report kind (enum entries on GetTeamReport and GetServiceReport, `Report.kind`, the `GroupBy` pattern for `surface`, `reason`, `person`); no other change.
 
-Security review of `afs-edge`: 14 findings fixed with tests (details and decisions RD-24 to RD-27 in `implementation-notes.md`, "Security review fixes"): cross-origin check, 60 s stream re-authorization, WebSocket and body scan bypasses, upstream handshake validation, bearer audience, bounded caches, sign-in binding, redirect, cookie, method-override and Host hardening. Open: `-db` must return the provider client id from `collab_routes()` (RD-27); J should register `collab.base_domain` on the Public Suffix List or use a dedicated domain. Also: `PutSetting` key enum lists the `collab.*` settings.
+Security review of `afs-edge`: 14 findings fixed with tests (details and decisions RD-24 to RD-27 in `implementation-notes.md`, "Security review fixes"): cross-origin check, 60 s stream re-authorization, WebSocket and body scan bypasses, upstream handshake validation, bearer audience, bounded caches, sign-in binding, redirect, cookie, method-override and Host hardening. RD-27 is resolved by `-db` 000021 (`collab_routes()` returns the console and CLI client ids). Open: J should register `collab.base_domain` on the Public Suffix List or use a dedicated domain. Also: `PutSetting` key enum lists the `collab.*` settings.
 
 Root follow-ups: link software-factory-manager and agentic-teams in root docs.
 

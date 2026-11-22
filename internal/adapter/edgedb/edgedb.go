@@ -88,7 +88,8 @@ func applySetting(s *collab.Settings, key string, raw []byte) {
 func (d *DB) Routes(ctx context.Context) ([]collab.Route, error) {
 	rows, err := d.q.Query(ctx, `SELECT team_id, slug, namespace, hostname, team_state, agent_id, agent_state,
 		web_ui_enabled, rest_api_enabled, web_ui_effective, rest_api_effective, may_expose, ready, not_ready_reason,
-		service_name, port, provider_id, issuer_url, groups_claim, collab_client_id, collab_client_secret_arn
+		service_name, port, provider_id, issuer_url, groups_claim, collab_client_id, collab_client_secret_arn,
+		provider_client_id, provider_cli_client_id
 		FROM afs.collab_routes()`)
 	if err != nil {
 		return nil, mapErr(err, "collab routes")
@@ -97,10 +98,10 @@ func (d *DB) Routes(ctx context.Context) ([]collab.Route, error) {
 	var out []collab.Route
 	for rows.Next() {
 		var r collab.Route
-		var host, agentID, agentState, reason, prov, issuer, groups, client, arn *string
+		var host, agentID, agentState, reason, prov, issuer, groups, client, arn, console, cli *string
 		if err := rows.Scan(&r.TeamID, &r.Slug, &r.Namespace, &host, &r.TeamState, &agentID, &agentState,
 			&r.WebUIEnabled, &r.RESTAPIEnabled, &r.WebUIEffective, &r.RESTAPIEffective, &r.MayExpose, &r.Ready, &reason,
-			&r.ServiceName, &r.Port, &prov, &issuer, &groups, &client, &arn); err != nil {
+			&r.ServiceName, &r.Port, &prov, &issuer, &groups, &client, &arn, &console, &cli); err != nil {
 			return nil, mapErr(err, "collab routes")
 		}
 		if host == nil {
@@ -110,6 +111,7 @@ func (d *DB) Routes(ctx context.Context) ([]collab.Route, error) {
 		r.AgentID, r.AgentState, r.NotReadyReason = deref(agentID), deref(agentState), deref(reason)
 		r.ProviderID, r.IssuerURL, r.GroupsClaim = deref(prov), deref(issuer), deref(groups)
 		r.ClientID, r.ClientSecretARN = deref(client), deref(arn)
+		r.ProviderClientID, r.ProviderCLIClientID = deref(console), deref(cli)
 		out = append(out, r)
 	}
 	return out, mapErr(rows.Err(), "collab routes")

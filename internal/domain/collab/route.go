@@ -38,9 +38,9 @@ type Route struct {
 	Port                                         int
 	ProviderID, IssuerURL, GroupsClaim           string
 	ClientID, ClientSecretARN                    string
-	// ProviderClientID is the provider's own client id, the audience afs-api accepts. Empty until the
-	// database reports it (see implementation notes, RD-27).
-	ProviderClientID string
+	// ProviderClientID is the provider's console client id and ProviderCLIClientID its CLI public client id
+	// (empty when none): the audiences afs-api accepts, returned by collab_routes() since -db 000021 (RD-27).
+	ProviderClientID, ProviderCLIClientID string
 }
 
 // Upstream is the only address the edge forwards a team's traffic to.
