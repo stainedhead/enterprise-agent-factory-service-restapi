@@ -10,7 +10,9 @@ requirements in its initial PRD and architecture in its `docs/solution-design.md
 **Status:** feature complete for the scope of the restapi spec (milestones M0 to M6): all 182 operations of the
 API contract are implemented behind the permission matrix, with the reconciler, gateway and billing jobs.
 Checks that need a development cluster or an AWS account (end-to-end run, restore drill, full-scale load,
-`govulncheck` in this environment) run in CI and on the cluster, not here.
+`govulncheck` in this environment) run in CI and on the cluster, not here. `-db` is pinned to an untagged
+pseudo-version until it is released. The code review of the first pass (restore guardrails, key handling, metrics,
+startup checks for unbound operations) is closed; see `docs/architectural-decision-record.md` ADR-017 to ADR-022.
 
 ## Binaries
 

@@ -33,3 +33,9 @@ The metric names are fixed (`afs_api_requests_total`, `afs_api_request_duration_
 The Helm chart installs a `PrometheusRule` with one alert per service-level indicator and a Grafana
 dashboard (`ConfigMap` labelled `grafana_dashboard`). Thresholds are under `prometheusRule.thresholds` in
 the chart values; turn either off with `prometheusRule.enabled` and `dashboards.enabled`.
+
+Two gateway series report problems that would otherwise be silent. `afs_gateway_settle_failures_total` counts spend
+settlements that failed after the model call (alert `AFSGatewaySettleFailures`, warning, any increase over 15 minutes);
+`afs_gateway_usage_rows_dropped_total{reason}` counts usage rows dropped from the write queue. Both are on the dashboard
+panel "Gateway settle failures and dropped usage rows". Reconcile duration, errors, lag and drift, and notification
+failures, are recorded for every kind. Condition messages shown by the API have ARNs and account ids replaced.

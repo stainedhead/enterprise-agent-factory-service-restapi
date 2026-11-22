@@ -286,4 +286,5 @@ per stream; all rows kept). The helm golden did not conflict.
 
 ## Lessons learned
 
-(append at completion)
+- Step 11: the docs text left by streams A to E is applied (technical-details, user-docs, ADR-017 to ADR-022); nothing is left pending in this file.
+- The contract check must run against root main (`AFS_ROOT_DIR`); worktrees skipped it silently. Run `make contract` once after the root contract PR merges.

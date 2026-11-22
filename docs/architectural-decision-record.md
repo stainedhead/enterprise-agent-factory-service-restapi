@@ -132,3 +132,60 @@ Decisions local to this repository. Cross-repo decisions live in the root reposi
   `docs/` has the product summary and details, the technical details and this record; the README links all of them.
 - Consequences: a change of an environment variable or an operation updates `user-docs/configuration.md` or
   `usage-examples.md` in the same change.
+
+## ADR-017 Restore reuses the agents guardrails
+
+- Status: Accepted (spec 261122-restapi-feature-complete-auto-review, stream A)
+- Context: `RestoreRevision` wrote agent and binding state straight back, so a model disabled for the team, a retired
+  template digest or a foreign secret binding could return through a restore.
+- Decision: `agents.Guard` is the single validator, called by `agents.Service` and by `restore.Service` (required; a nil
+  source fails closed). A refused step is skipped whole and reported with the guard's name. Only fields a step changes are
+  checked, as `UpdateAgent` does.
+- Consequences: no duplicated SQL. A `-db` trigger for allowed digests and enabled models as defence in depth is a
+  recorded follow-up, not built.
+
+## ADR-018 Idempotency fingerprints use a server HMAC key
+
+- Status: Accepted (spec 261122-restapi-feature-complete-auto-review, streams D and E)
+- Context: a bare hash of a secret value in an idempotency record allows offline guessing.
+- Decision: fingerprints of secret values are HMAC-SHA-256 under `AFS_IDEMPOTENCY_HMAC_KEY`, resolved once in `wire`.
+  The page token key follows the same rule (`AFS_PAGE_TOKEN_KEY`, `components.PageKey`). Both come from a Secret by
+  `secretKeyRef`; above one replica a missing or short key stops startup.
+- Consequences: replicas must share both keys; a single replica draws random keys, so retries across replicas answer 409.
+
+## ADR-019 Metrics are bound by recorders defined in use cases
+
+- Status: Accepted (spec 261122-restapi-feature-complete-auto-review, streams B and C)
+- Context: engine, notify and gateway code must not import the metrics package, and charted metrics had no writer.
+- Decision: use cases define small recorder interfaces (`engine.Recorder`, `notify.FailureRecorder`,
+  `gateway.SettleRecorder`, `gateway.UsageDropRecorder`); `cmd/*` binds them to `observability.Metrics`. A dead-metric
+  test fails the build when a metric in the alert rules or dashboards has no writer.
+- Consequences: new alert `AFSGatewaySettleFailures` and a dashboard panel; a new charted metric needs a writer in the
+  same change.
+
+## ADR-020 Condition text is sanitised where it is stored
+
+- Status: Accepted (spec 261122-restapi-feature-complete-auto-review, stream C)
+- Context: condition messages carry upstream error text, which is untrusted and can hold ARNs, account ids or secrets.
+- Decision: `condmsg.Sanitize` runs at the point a condition is written (not at the API edge): scrubber first, then ARNs
+  and 12-digit ids, cut to 512 bytes. The full error goes to the log.
+- Consequences: every writer of a condition goes through `engine.writeFailure` or `condmsg`; controllers that build a
+  `domain.Condition` message directly were not audited and are a follow-up.
+
+## ADR-021 Handlers register through returned Registrars; unbound operations fail startup
+
+- Status: Accepted (spec 261122-restapi-feature-complete-auto-review, stream D)
+- Context: package-level `init()` appends and area names let two areas share a name and silently replace each other, and an
+  operation without a handler only showed up at request time.
+- Decision: `Bind*` returns a `Registrar`; `wire` passes the explicit list in `Config.Registrars`; `httpapi.New` refuses
+  to start while any operation is unbound unless `Config.AllowUnbound` (development without a database, and tests).
+- Consequences: adding an operation without a handler fails `TestNewRefusesUnboundOperations` and startup.
+
+## ADR-022 Contract extract is pinned to a root contract version
+
+- Status: Accepted (spec 261122-restapi-feature-complete-auto-review, integration)
+- Context: the extract was cut from contract 1.1.0 while root `main` was 1.2.0, so the CI contract check was failing,
+  and worktrees skipped the check silently because the root was absent.
+- Decision: `contractgen` pins the contract version (1.2.0) and skips database-only `unset` settings (CD-8). The check is
+  only meaningful with `AFS_ROOT_DIR` pointing at root `main`; run `make contract` after a root contract change.
+- Consequences: `-skip-missing` is for local convenience only; CI checks out the root `main`.

@@ -13,20 +13,36 @@ Go 1.27.4, golangci-lint v2.15.0, govulncheck v1.8.0, PostgreSQL 17.
 
 Environment variables, prefixed `AFS_`. `afs-api`: `AFS_API_ADDR` (default `:8080`), `AFS_DATABASE_URL`,
 `AFS_DATABASE_OWNER_URL`, `AFS_DB_IAM_AUTH` (RDS IAM tokens; needs `AFS_AWS_REGION`), `AFS_METRICS_ADDR`,
-`AFS_API_REPLICAS`, `AFS_TRUSTED_PROXY_HOPS`. `afs-reconciler` adds `AFS_EVENT_BUS_NAME`, `AFS_CLUSTER_NAME`
+`AFS_API_REPLICAS`, `AFS_TRUSTED_PROXY_HOPS`, `AFS_PAGE_TOKEN_KEY` and `AFS_IDEMPOTENCY_HMAC_KEY` (both at least 32 bytes
+and identical on every replica; with `AFS_API_REPLICAS` above 1 a missing or short key stops startup, with one replica a
+random key is drawn). `afs-reconciler` adds `AFS_EVENT_BUS_NAME`, `AFS_CLUSTER_NAME`
 and `AFS_RECONCILER_USERS`; see `user-docs/reconciler.md`.
 
 ## Request pipeline and idempotency
 
 Outer: metrics (RED). Then authentication, rate limit, CORS, If-Match, authorization and the suspended-team
 guard. Idempotency is not middleware: each mutating use case claims and completes its `Idempotency-Key` inside
-its own transaction (`acting.Idem`), so a crash cannot leave a mutation without its stored response.
+its own transaction (`acting.Idem`), so a crash cannot leave a mutation without its stored response. Idempotency
+fingerprints of secret values are HMAC-SHA-256 under `AFS_IDEMPOTENCY_HMAC_KEY`, never a bare hash. The per-route body
+limit is fixed in the contract; there is no `AFS_MAX_BODY_BYTES` (the chart no longer sets it). The public `/readyz`
+answers `unavailable` for any failing check and logs the cause with the request id; the operations port keeps the detail.
+The listener sets `ReadHeaderTimeout` 10 s, `ReadTimeout` 60 s and `IdleTimeout` 120 s and no `WriteTimeout`;
+`CreateImport` extends its own read deadline to 10 minutes. Settings are read once in `settingsFrom`; `os.Getenv` appears
+only there and in `main.go` (a test enforces it). Denied authorizations are audited with `context.WithoutCancel`, and the
+audit source IP comes from the metadata middleware, never from a client header.
 
 ## Reconciler
 
 Engine (queue, backoff, leader-only jobs) with team environment, admission, lifecycle finalizer
 (`team.Hooks.Deleting`) and housekeeping (outbox publisher, partitions, idempotency purge). Status goes to
 `resource_status` through `StatusWriter`; `ConditionStore` adapts it for the finalizer.
+
+Observability: reconcile duration, errors, lag and drift are recorded by the engine through `engine.Recorder`;
+notification failures through `notify.FailureRecorder`; gateway settle failures and dropped usage rows through
+`gateway.SettleRecorder` and `gateway.UsageDropRecorder`, bound to `observability.Metrics` in `cmd/*`
+(`afs_gateway_settle_failures_total`, `afs_gateway_usage_rows_dropped_total{reason}`). A test fails the build when a metric
+named in the alert rules or dashboards has no writer. Condition messages are sanitised by `condmsg` (ARNs become `<arn>`,
+12-digit ids `<account-id>`, scrubbers applied, 512 bytes) at the point they are stored; full errors go to the log.
 
 ## Database
 
@@ -113,7 +129,10 @@ The export bundle builder runs in the reconciler as a leader-only job and is reg
 is set; it then also requires `AFS_EXPORT_KMS_KEY_ID` (SSE-KMS) and uses the shared S3 adapter. `afs-api` never links
 S3. `CreateImport` (service admins, up to 100 MB, `400` over it) checks `schemaVersion` and the SHA-256 before any
 write, applies one transaction per team and reports each team; `RestoreRevision` locks the team row and applies the
-plan in one transaction.
+plan in one transaction. Restore reuses the agents guardrails: each agent and binding step passes `agents.Guard`
+(`template guard`, `template guard (digest)`, `model guard`, `storage class guard`, `binding guard`), and a refused step is
+skipped whole and listed in `skipped` as `refused by the <guard>: <reason>`. `restore.Service.Guards` is required (a nil
+source fails the run); guard reads are memoised per restore.
 
 Role links: the reconciler assumes the agent's own role (it trusts `AFS_RECONCILER_ROLE_ARN`) and that session assumes
 the linked role with the external id; the agent role's policy grants `sts:AssumeRole` on each non-disabled link's exact
@@ -174,8 +193,9 @@ The billing role reads `service_settings` and `team_models`; no env fallback rem
 - **Outbox payloads.** `housekeeping.Envelope` publishes the section 7 envelope `{id, occurredAt, teamId, poolId?, actor,
   data}` as stored (the API and -db 000019 write it) and wraps the flat payloads that `instantiate_work_order_team`
   wrote before 000019 (id `evt_` plus the outbox id zero-padded, stable across redelivery).
-- **Handler areas.** Each handler area has one registrar. The identity provider operations are the area
-  `identityproviders` (M2 `BindIdentity` owns `identity`; they once shared a name and the second replaced the first).
+- **Handler registration.** Every `httpapi.Bind*` returns a `Registrar` and mutates nothing; `cmd/afs-api` collects them
+  in `Config.Registrars`. `httpapi.New` returns an error naming any operation without a handler unless
+  `Config.AllowUnbound`, which is set only without a database (health, readiness and the OpenAPI document) and in tests.
 - **Not covered here.** Checks that need a cluster or an account (end-to-end run, restore drill, full-scale load,
   the ASVS checklist, `govulncheck` where the toolchain cannot be downloaded) run in CI and on the development
   cluster. `-db` is pinned to a pseudo-version until it is tagged.
