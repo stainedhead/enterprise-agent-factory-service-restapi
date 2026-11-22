@@ -23,7 +23,7 @@ func main() {
 		fmt.Println(buildinfo.String("afs-reconciler"))
 		return
 	}
-	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	log := observability.NewLogger(os.Stderr, observability.LogConfig{Level: os.Getenv("AFS_LOG_LEVEL"), Service: "afs-reconciler"})
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx, log, os.Getenv); err != nil {

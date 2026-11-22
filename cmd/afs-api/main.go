@@ -27,7 +27,8 @@ func main() {
 		return
 	}
 
-	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	// The redacting logger from the first line on: nothing wiring logs may carry a token or key.
+	log := observability.NewLogger(os.Stderr, observability.LogConfig{Level: os.Getenv("AFS_LOG_LEVEL"), Service: "afs-api", RequestID: httpapi.RequestIDFrom})
 	slog.SetDefault(log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

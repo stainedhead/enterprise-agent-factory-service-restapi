@@ -38,7 +38,7 @@ vet-tags:
 
 # Build golangci-lint with this module's toolchain (go.mod), so it can analyze Go 1.27 code.
 lint:
-	GOTOOLCHAIN=$(shell go env GOVERSION) go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run
+	GOTOOLCHAIN=$(shell go env GOVERSION) go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run --build-tags envtest
 
 fmt:
 	gofmt -w .
