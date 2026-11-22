@@ -23,7 +23,7 @@ type QueueAPI interface {
 
 // Queues implements pool.Queues: one standard queue per pool in the service account.
 type Queues struct {
-	api                         QueueAPI
+	api                        QueueAPI
 	partition, region, account string
 }
 
