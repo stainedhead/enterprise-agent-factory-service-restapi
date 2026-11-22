@@ -107,8 +107,10 @@ FROM afs.budgets WHERE team_id = $1`, teamID).Scan(&b.ID, &b.Period, &startsAt, 
 
 // Tags implements gateway.Store: the team's effective tags with a value.
 func (g *GatewayStore) Tags(ctx context.Context, teamID string) ([]gateway.Tag, error) {
-	rows, err := g.pool.Query(ctx, `SELECT key, value, source FROM afs.team_effective_tags
-WHERE team_id = $1 AND value IS NOT NULL`, teamID)
+	rows, err := g.pool.Query(ctx, `SELECT e.key, e.value, e.source,
+       EXISTS (SELECT 1 FROM afs.service_tags s WHERE s.key = e.key)
+  FROM afs.team_effective_tags e
+ WHERE e.team_id = $1 AND e.value IS NOT NULL ORDER BY e.key`, teamID)
 	if err != nil {
 		return nil, fmt.Errorf("read tags: %w", err)
 	}
@@ -116,7 +118,7 @@ WHERE team_id = $1 AND value IS NOT NULL`, teamID)
 	var out []gateway.Tag
 	for rows.Next() {
 		var t gateway.Tag
-		if err := rows.Scan(&t.Key, &t.Value, &t.Source); err != nil {
+		if err := rows.Scan(&t.Key, &t.Value, &t.Source, &t.Service); err != nil {
 			return nil, fmt.Errorf("read tags: %w", err)
 		}
 		out = append(out, t)

@@ -134,6 +134,9 @@ type BudgetRecord struct {
 // Tag is one effective tag of a team.
 type Tag struct {
 	Key, Value, Source string
+	// Service is true when the key is one of the service tags (fixed or required), whoever set the value:
+	// a required key the team filled in is still ordered with the service tags (D27).
+	Service bool
 }
 
 // Store reads the desired state the gateway needs (afs_gateway role; database contract §2).

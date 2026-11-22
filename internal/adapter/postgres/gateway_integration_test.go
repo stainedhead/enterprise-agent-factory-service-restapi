@@ -102,6 +102,10 @@ func TestGatewayStoreReads(t *testing.T) {
 	if _, err := w.db.Admin(t).Exec(ctx, `INSERT INTO afs.team_tags (team_id, key, value) VALUES ($1, 'project', 'apollo')`, w.team); err != nil {
 		t.Fatal(err)
 	}
+	svcKey := "sv-" + strings.ToLower(w.team[len(w.team)-8:])
+	if _, err := w.db.Admin(t).Exec(ctx, `INSERT INTO afs.service_tags (key, mode, default_value) VALUES ($1, 'required', 'dflt')`, svcKey); err != nil {
+		t.Fatal(err)
+	}
 	tags, err := st.Tags(ctx, w.team)
 	if err != nil {
 		t.Fatal(err)
@@ -109,6 +113,9 @@ func TestGatewayStoreReads(t *testing.T) {
 	got := map[string]string{}
 	for _, tg := range tags {
 		got[tg.Key] = tg.Value
+		if tg.Service != (tg.Key == svcKey) {
+			t.Errorf("tag %s: Service = %v", tg.Key, tg.Service)
+		}
 	}
 	if got["project"] != "apollo" || got["afs-team-id"] != w.team {
 		t.Fatalf("tags = %v", got)

@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"regexp"
-	"sort"
 	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
@@ -41,54 +40,6 @@ const (
 	TagAgentID = "afs-agent-id"
 	TagPoolID  = "afs-pool-id"
 )
-
-// BuildMetadata returns the requestMetadata of a call: system tags first (team, then agent or pool),
-// then service fixed and required tags, then team tags in key order, at most 16 pairs (D27). The keys
-// that did not fit are returned so the team's cost tags page can list them. Whatever the agent sent in
-// requestMetadata is not an input: it is replaced (CT-GW-7).
-func BuildMetadata(c Caller, tags []Tag) (meta map[string]string, dropped []string) {
-	meta = map[string]string{TagTeamID: c.TeamID}
-	order := []string{TagTeamID}
-	if c.AgentID != "" {
-		meta[TagAgentID] = c.AgentID
-		order = append(order, TagAgentID)
-	} else if c.PoolID != "" {
-		meta[TagPoolID] = c.PoolID
-		order = append(order, TagPoolID)
-	}
-	rank := func(source string) int {
-		switch source {
-		case "service", "service_default":
-			return 0
-		}
-		return 1
-	}
-	rest := make([]Tag, 0, len(tags))
-	for _, t := range tags {
-		if t.Source == "system" || t.Value == "" {
-			continue
-		}
-		rest = append(rest, t)
-	}
-	sort.SliceStable(rest, func(i, j int) bool {
-		if ri, rj := rank(rest[i].Source), rank(rest[j].Source); ri != rj {
-			return ri < rj
-		}
-		return rest[i].Key < rest[j].Key
-	})
-	for _, t := range rest {
-		if _, dup := meta[t.Key]; dup {
-			continue
-		}
-		if len(order) >= MaxRequestMetadata {
-			dropped = append(dropped, t.Key)
-			continue
-		}
-		meta[t.Key] = t.Value
-		order = append(order, t.Key)
-	}
-	return meta, dropped
-}
 
 // TeamRoleARN is the ARN of the team's Bedrock role, which only the gateway's role may assume. The
 // partition and account are the gateway's own (AFS_GATEWAY_ROLE_ARN).
