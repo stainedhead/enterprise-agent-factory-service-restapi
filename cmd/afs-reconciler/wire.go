@@ -247,6 +247,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	if err := wireTraffic(r.Engine, runner, outbox, ids, env, clock.Now, log); err != nil {
 		return fail(err)
 	}
+	wireTeardown(r.Engine, runner, audit, outbox, ids, clock.Now, log)
 	wireBudget(r.Engine, runner, audit, outbox, ids, iamClient, m, clock.Now, log)
 	if err := wireActivity(r.Engine, kc, runner, env, clock.Now, log); err != nil {
 		return fail(err)
