@@ -247,4 +247,3 @@ func (*RestoreRepo) BumpGeneration(ctx context.Context, tx port.Tx, teamID strin
 	err = t.QueryRow(ctx, `UPDATE afs.teams SET generation = generation + 1 WHERE id = $1 RETURNING generation`, teamID).Scan(&gen)
 	return gen, MapError(err, OpWrite, "team")
 }
-
