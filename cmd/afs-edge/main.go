@@ -84,7 +84,7 @@ func run(ctx context.Context, log *slog.Logger, env func(string) string) error {
 	if err != nil {
 		return err
 	}
-	srv := &http.Server{Handler: app.Handler, TLSConfig: certs.tlsConfig(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 120 * time.Second}
+	srv := &http.Server{Handler: app.Handler, TLSConfig: certs.tlsConfig(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 120 * time.Second, MaxHeaderBytes: 64 << 10}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ServeTLS(ln, "", "") }()
 	log.Info("afs-edge serving", "version", buildinfo.Version, "addr", ln.Addr().String())
