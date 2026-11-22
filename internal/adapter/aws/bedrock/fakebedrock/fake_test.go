@@ -161,4 +161,3 @@ func TestUnsupportedAndUnsignedRequests(t *testing.T) {
 		}
 	}
 }
-
