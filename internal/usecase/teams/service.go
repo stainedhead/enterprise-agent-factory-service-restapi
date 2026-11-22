@@ -187,22 +187,6 @@ func prefixFields(err error, prefix string) error {
 	return domain.Validation(fs...)
 }
 
-func (s *Service) checkBudget(t domain.Team, b *BudgetInput) error {
-	switch {
-	case t.Kind == domain.TeamKindEphemeral && b == nil:
-		return domain.Validation(domain.FieldError{Field: "budget", Reason: "an ephemeral team needs a lifetime budget"})
-	case t.Kind == domain.TeamKindPersistent && b != nil:
-		return domain.Validation(domain.FieldError{Field: "budget", Reason: "is only for an ephemeral team; set a persistent team's budget with PutBudget"})
-	case b == nil:
-		return nil
-	case b.Amount.Micros() <= 0:
-		return domain.Validation(domain.FieldError{Field: "budget.amountUsd", Reason: "must be above zero"})
-	case b.Amount.Cmp(t.MaxBudget) > 0:
-		return domain.Validation(domain.FieldError{Field: "budget.amountUsd", Reason: "is above maxBudgetUsd " + t.MaxBudget.String()})
-	}
-	return nil
-}
-
 func (s *Service) checkModels(ctx context.Context, tx port.Tx, ids []string) error {
 	if len(ids) == 0 {
 		return nil
