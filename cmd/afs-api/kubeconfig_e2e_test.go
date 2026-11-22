@@ -10,12 +10,12 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/authz"
 )
 
-// setClusterEnv gives afs-api the cluster GetTeamKubeconfig renders (OQ-S5): a dummy endpoint and CA.
-func setClusterEnv(t *testing.T) {
-	t.Helper()
-	t.Setenv("AFS_CLUSTER_NAME", "afs")
-	t.Setenv("AFS_CLUSTER_ENDPOINT", "https://EXAMPLE0123456789.gr7.us-east-1.eks.amazonaws.com")
-	t.Setenv("AFS_CLUSTER_CA_DATA", "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCkVYQU1QTEUKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=")
+// withCluster gives afs-api the cluster GetTeamKubeconfig renders (OQ-S5): a dummy endpoint and CA.
+func withCluster(s settings) settings {
+	s.ClusterName = "afs"
+	s.ClusterEndpoint = "https://EXAMPLE0123456789.gr7.us-east-1.eks.amazonaws.com"
+	s.ClusterCAData = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCkVYQU1QTEUKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo="
+	return s
 }
 
 // RA-US-12.1 through the real pipeline and database: with viewerKubectl off a viewer and a team-admin get
@@ -23,11 +23,10 @@ func setClusterEnv(t *testing.T) {
 // and holds no token. A cluster that is not configured is 503. The authorization matrix runs the on case
 // for every caller (fixtures_kubeconfig.go); this test is its off half.
 func TestKubeconfigFlagOffIsRefused(t *testing.T) {
-	setClusterEnv(t)
 	db := pgtest.Get(t)
 	w := matrix.NewWorld(t, db)
-	c, err := wire(t.Context(), quiet, settings{DatabaseURL: db.URLs["afs_app"], OwnerURL: db.URLs["afs_owner"], APIReplicas: 1,
-		OIDCHTTP: w.OIDCClient(), RatePerSecond: 1e6, RateBurst: 1e6, AWSRegion: "us-east-1"})
+	c, err := wire(t.Context(), quiet, withCluster(settings{DatabaseURL: db.URLs["afs_app"], OwnerURL: db.URLs["afs_owner"], APIReplicas: 1,
+		OIDCHTTP: w.OIDCClient(), RatePerSecond: 1e6, RateBurst: 1e6, AWSRegion: "us-east-1"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +78,6 @@ func TestKubeconfigFlagOffIsRefused(t *testing.T) {
 }
 
 func TestKubeconfigWithoutAClusterIsUnavailable(t *testing.T) {
-	t.Setenv("AFS_CLUSTER_ENDPOINT", "")
 	db := pgtest.Get(t)
 	w := matrix.NewWorld(t, db)
 	c, err := wire(t.Context(), quiet, settings{DatabaseURL: db.URLs["afs_app"], OwnerURL: db.URLs["afs_owner"], APIReplicas: 1,

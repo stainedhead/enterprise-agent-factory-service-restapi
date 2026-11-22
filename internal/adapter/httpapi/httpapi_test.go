@@ -484,7 +484,7 @@ func TestHealthReadinessAndOpenAPI(t *testing.T) {
 	r := do(t, h, "GET", "/readyz", "", "")
 	var hs healthStatus
 	_ = json.Unmarshal(r.Body.Bytes(), &hs)
-	if r.Code != 503 || hs.Status != "not ready" || hs.Checks["database"] != "ok" || !strings.Contains(hs.Checks["schema"], "000015") {
+	if r.Code != 503 || hs.Status != "not ready" || hs.Checks["database"] != "ok" || hs.Checks["schema"] != "unavailable" || strings.Contains(r.Body.String(), "000015") {
 		t.Fatalf("%d %s", r.Code, r.Body.String())
 	}
 	r = do(t, h, "GET", "/v1/openapi.yaml", "", "")

@@ -121,7 +121,8 @@ reconciler:
 	}
 	for name, env := range map[string]map[string]string{"api": api, "reconciler": rec} {
 		for k, v := range env {
-			if strings.Contains(strings.ToLower(k), "token") || strings.Contains(v, "BEGIN ") {
+			// A key that is injected by secretKeyRef has no inline value, which is what this guards.
+			if (v != "" && strings.Contains(strings.ToLower(k), "token")) || strings.Contains(v, "BEGIN ") {
 				t.Errorf("%s env %s looks like a credential", name, k)
 			}
 		}

@@ -19,7 +19,7 @@ import (
 )
 
 func main() {
-	addr := flag.String("addr", envOr("AFS_API_ADDR", ":8080"), "listen address")
+	addr := flag.String("addr", "", "listen address (default AFS_API_ADDR, then :8080)")
 	version := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 	if *version {
@@ -38,6 +38,9 @@ func main() {
 	if err != nil {
 		log.Error("afs-api configuration", "err", err)
 		os.Exit(2)
+	}
+	if *addr == "" {
+		*addr = s.Addr
 	}
 	c, err := wire(ctx, log, s)
 	if err != nil {
@@ -59,11 +62,7 @@ func main() {
 		_ = rt.Shutdown(sctx)
 	}()
 	log = rt.Log
-	srv := &http.Server{
-		Addr:              *addr,
-		Handler:           c.Handler,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	srv := newServer(*addr, c.Handler, s)
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -78,9 +77,14 @@ func main() {
 	}
 }
 
-func envOr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+// newServer is the public listener: header, whole-request and idle timeouts bound slow clients
+// (FR-R09). There is no WriteTimeout, so long exports and downloads are not cut.
+func newServer(addr string, h http.Handler, s settings) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           h,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       s.HTTPReadTimeout,
+		IdleTimeout:       s.HTTPIdleTimeout,
 	}
-	return def
 }

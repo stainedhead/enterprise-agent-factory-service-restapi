@@ -5,7 +5,7 @@ import (
 	crand "crypto/rand"
 	"io"
 	"log/slog"
-	"os"
+	"sync"
 	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/httpapi"
@@ -54,16 +54,31 @@ func (t m1w2Teams) TeamState(ctx context.Context, teamID string) (domain.TeamSta
 	return st, ok, err
 }
 
-// pageTokenKey is AFS_PAGE_TOKEN_KEY (at least 32 bytes, shared by every replica); without it a
-// random key is drawn, so nextToken values do not survive a restart or cross replicas.
-func pageTokenKey(log *slog.Logger) []byte {
-	if k := os.Getenv("AFS_PAGE_TOKEN_KEY"); len(k) >= 32 {
-		return []byte(k)
+var (
+	pageKeyMu sync.RWMutex
+	pageKey   []byte
+)
+
+// setPageTokenKey fixes the key every area's page tokens are signed with, once per wire call:
+// AFS_PAGE_TOKEN_KEY from settings, shared by every replica. Without one (a single replica, which
+// settingsFrom allows) a random per-process key is drawn, so nextToken values do not survive a restart.
+func setPageTokenKey(key []byte, log *slog.Logger) {
+	if len(key) < minKeyBytes {
+		log.Warn("AFS_PAGE_TOKEN_KEY is unset; using a random per-process key (single replica only)")
+		key = make([]byte, minKeyBytes)
+		_, _ = crand.Read(key)
 	}
-	log.Warn("AFS_PAGE_TOKEN_KEY is unset or shorter than 32 bytes; using a random per-process key")
-	k := make([]byte, 32)
-	_, _ = crand.Read(k)
-	return k
+	pageKeyMu.Lock()
+	pageKey = key
+	pageKeyMu.Unlock()
+}
+
+// pageTokenKey returns the key set by wire. The area wiring files call it instead of reading the
+// environment (D-8: settingsFrom is the only reader).
+func pageTokenKey(*slog.Logger) []byte {
+	pageKeyMu.RLock()
+	defer pageKeyMu.RUnlock()
+	return pageKey
 }
 
 // wireM1W2 builds the use cases of M1-B, M1-C and M1-E on the database components and binds their

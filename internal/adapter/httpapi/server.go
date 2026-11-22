@@ -4,8 +4,8 @@ package httpapi
 
 import (
 	"context"
-	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"time"
@@ -44,6 +44,9 @@ type Config struct {
 	// team guard, denied-request audit, If-Match, ETag and Idempotency-Key handling. The first element
 	// is the outermost.
 	PostAuth []Middleware
+	// IdempotencyHMACKey keys the HMAC-SHA-256 that fingerprints secret values in idempotency claims
+	// (at least 32 bytes, the same on every replica). The secrets handlers read it; it is never logged.
+	IdempotencyHMACKey []byte
 	// Now and Entropy feed request ids; defaults are time.Now and crypto/rand.
 	Now     func() time.Time
 	Entropy io.Reader
@@ -154,7 +157,9 @@ func readiness(checks map[string]ReadinessCheck) http.Handler {
 		code := http.StatusOK
 		for _, n := range names {
 			if err := checks[n](r); err != nil {
-				out.Checks[n] = fmt.Sprint(err)
+				// The cause (driver text can name the login role and host) goes to the log only.
+				slog.ErrorContext(r.Context(), "readiness check failed", "check", n, "request_id", RequestIDFrom(r.Context()), "err", err)
+				out.Checks[n] = "unavailable"
 				out.Status, code = "not ready", http.StatusServiceUnavailable
 				continue
 			}

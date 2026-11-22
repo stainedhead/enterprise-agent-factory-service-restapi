@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	crand "crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -9,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -42,6 +44,9 @@ type components struct {
 	Close   func()
 }
 
+// minKeyBytes is the shortest accepted HMAC or page-token key.
+const minKeyBytes = 32
+
 // settings are read from the environment (user-docs/configuration.md).
 type settings struct {
 	DatabaseURL      string // AFS_DATABASE_URL: the afs_app login
@@ -58,6 +63,28 @@ type settings struct {
 	// (AFS_DB_IAM_AUTH); AWSRegion (AFS_AWS_REGION, AWS_REGION as fallback) is then required.
 	DBIAMAuth bool
 	AWSRegion string
+	// PageTokenKey signs nextToken values (AFS_PAGE_TOKEN_KEY, at least 32 bytes). Every replica must
+	// hold the same key, so more than one replica refuses to start without it. Empty with one replica:
+	// wire draws a random per-process key.
+	PageTokenKey []byte
+	// IdempotencyHMACKey keys the HMAC of secret values in the idempotency fingerprint
+	// (AFS_IDEMPOTENCY_HMAC_KEY, at least 32 bytes, the same on every replica). Empty with one
+	// replica: wire draws a random per-process key.
+	IdempotencyHMACKey []byte
+	// Addr is the public listen address (AFS_API_ADDR, default :8080; the -addr flag wins).
+	Addr string
+	// AWSAccountID is the platform account (AFS_AWS_ACCOUNT_ID, 12 digits) that names dedicated agent
+	// roles. ClusterName, ClusterEndpoint and ClusterCAData (AFS_CLUSTER_NAME, AFS_CLUSTER_ENDPOINT,
+	// AFS_CLUSTER_CA_DATA) describe the EKS cluster for GetTeamKubeconfig; any of them empty answers 503.
+	AWSAccountID, ClusterName, ClusterEndpoint, ClusterCAData string
+	// AWSCredentials signs the RDS IAM tokens; nil loads the default AWS chain. Migrate applies the
+	// startup migrations; nil uses postgres.Migrate. Both are seams for tests.
+	AWSCredentials awssdk.CredentialsProvider
+	Migrate        func(ctx context.Context, ownerURL string, lockTimeout time.Duration, password func(context.Context) (string, error)) (int, error)
+	// HTTPReadTimeout bounds reading a whole request, body included (AFS_HTTP_READ_TIMEOUT, default
+	// 60s); HTTPIdleTimeout bounds an idle keep-alive connection (AFS_HTTP_IDLE_TIMEOUT, default 120s).
+	// CreateImport extends its own read deadline.
+	HTTPReadTimeout, HTTPIdleTimeout time.Duration
 	// OIDCHTTP fetches identity provider discovery documents and JWKS; nil uses a client with a 5 s
 	// timeout. Tests point it at a fake provider.
 	OIDCHTTP *http.Client
@@ -75,6 +102,19 @@ func settingsFrom(env func(string) string) (settings, error) {
 		}
 		s.MigrationTimeout = d
 	}
+	s.HTTPReadTimeout, s.HTTPIdleTimeout = 60*time.Second, 120*time.Second
+	for _, v := range []struct {
+		name string
+		dst  *time.Duration
+	}{{"AFS_HTTP_READ_TIMEOUT", &s.HTTPReadTimeout}, {"AFS_HTTP_IDLE_TIMEOUT", &s.HTTPIdleTimeout}} {
+		if raw := env(v.name); raw != "" {
+			d, err := time.ParseDuration(raw)
+			if err != nil || d <= 0 {
+				return s, fmt.Errorf("%s: %q is not a positive duration", v.name, raw)
+			}
+			*v.dst = d
+		}
+	}
 	s.APIReplicas = 1
 	for _, v := range []struct {
 		name string
@@ -88,6 +128,18 @@ func settingsFrom(env func(string) string) (settings, error) {
 			}
 			*v.dst = n
 		}
+	}
+	if k := env("AFS_PAGE_TOKEN_KEY"); len(k) >= minKeyBytes {
+		s.PageTokenKey = []byte(k)
+	}
+	if s.APIReplicas > 1 && s.PageTokenKey == nil {
+		return s, fmt.Errorf("AFS_API_REPLICAS=%d needs AFS_PAGE_TOKEN_KEY of at least %d bytes, the same on every replica", s.APIReplicas, minKeyBytes)
+	}
+	if k := env("AFS_IDEMPOTENCY_HMAC_KEY"); len(k) >= minKeyBytes {
+		s.IdempotencyHMACKey = []byte(k)
+	}
+	if s.APIReplicas > 1 && s.IdempotencyHMACKey == nil {
+		return s, fmt.Errorf("AFS_API_REPLICAS=%d needs AFS_IDEMPOTENCY_HMAC_KEY of at least %d bytes, the same on every replica", s.APIReplicas, minKeyBytes)
 	}
 	s.AWSRegion = env("AFS_AWS_REGION")
 	if s.AWSRegion == "" {
@@ -106,6 +158,13 @@ func settingsFrom(env func(string) string) (settings, error) {
 	if s.OwnerURL != "" && s.DatabaseURL == "" {
 		return s, fmt.Errorf("AFS_DATABASE_OWNER_URL is set without AFS_DATABASE_URL")
 	}
+	s.Addr = ":8080"
+	if v := env("AFS_API_ADDR"); v != "" {
+		s.Addr = v
+	}
+	if err := platformSettings(env, &s); err != nil {
+		return s, err
+	}
 	if err := workloadSettings(env, &s); err != nil {
 		return s, err
 	}
@@ -117,30 +176,54 @@ func settingsFrom(env func(string) string) (settings, error) {
 // pool and wires the database-backed components.
 func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error) {
 	c := &components{Close: func() {}, Metrics: observability.NewMetrics("afs-api", buildinfo.Version)}
+	setPageTokenKey(s.PageTokenKey, log)
+	if len(s.IdempotencyHMACKey) < minKeyBytes {
+		log.Warn("AFS_IDEMPOTENCY_HMAC_KEY is unset; using a random per-process key (single replica only)")
+		s.IdempotencyHMACKey = make([]byte, minKeyBytes)
+		_, _ = crand.Read(s.IdempotencyHMACKey)
+	}
 	cfg := httpapi.Config{
 		// RED metrics outermost, labelled by the operationId the router reports.
 		Outer:   []httpapi.Middleware{func(next http.Handler) http.Handler { return middleware.Metrics(c.Metrics, next) }},
 		OnRoute: middleware.SetRoute,
+		// Keyed fingerprint of secret values in idempotency claims (FR-R14).
+		IdempotencyHMACKey: s.IdempotencyHMACKey,
 	}
 	if s.DatabaseURL != "" {
+		dbCfg := postgres.Config{URL: s.DatabaseURL, Service: "afs-api", StatementTimeout: 30 * time.Second}
+		var ownerPassword func(context.Context) (string, error)
+		if s.DBIAMAuth {
+			// Plain SDK configuration, not adapter/aws: afs-api builds no AWS service client but
+			// Secrets Manager, and signs the RDS token locally. The same credentials sign the app
+			// login's token for the pool and the owner login's token for the migration (FR-R10).
+			creds := s.AWSCredentials
+			if creds == nil {
+				awsCfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(s.AWSRegion))
+				if err != nil {
+					return nil, fmt.Errorf("load AWS configuration: %w", err)
+				}
+				creds = awsCfg.Credentials
+			}
+			var err error
+			if dbCfg.Password, err = postgres.IAMPassword(s.DatabaseURL, s.AWSRegion, creds); err != nil {
+				return nil, err
+			}
+			if s.OwnerURL != "" {
+				if ownerPassword, err = postgres.IAMPassword(s.OwnerURL, s.AWSRegion, creds); err != nil {
+					return nil, err
+				}
+			}
+		}
 		if s.OwnerURL != "" {
-			n, err := postgres.Migrate(ctx, s.OwnerURL, s.MigrationTimeout, nil)
+			migrate := s.Migrate
+			if migrate == nil {
+				migrate = postgres.Migrate
+			}
+			n, err := migrate(ctx, s.OwnerURL, s.MigrationTimeout, ownerPassword)
 			if err != nil {
 				return nil, err
 			}
 			log.Info("migrations applied", "count", n)
-		}
-		dbCfg := postgres.Config{URL: s.DatabaseURL, Service: "afs-api", StatementTimeout: 30 * time.Second}
-		if s.DBIAMAuth {
-			// Plain SDK configuration, not adapter/aws: afs-api builds no AWS service client but
-			// Secrets Manager, and signs the RDS token locally.
-			awsCfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(s.AWSRegion))
-			if err != nil {
-				return nil, fmt.Errorf("load AWS configuration: %w", err)
-			}
-			if dbCfg.Password, err = postgres.IAMPassword(s.DatabaseURL, s.AWSRegion, awsCfg.Credentials); err != nil {
-				return nil, err
-			}
 		}
 		pool, err := postgres.OpenPool(ctx, dbCfg)
 		if err != nil {

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -8,6 +10,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
+
+	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres/pgtest"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/authz"
@@ -122,5 +127,132 @@ func TestSettingsDBIAMAuth(t *testing.T) {
 	s, err = settingsFrom(env(map[string]string{"AFS_DB_IAM_AUTH": "true", "AWS_REGION": "us-east-1", "AFS_AWS_REGION": "eu-west-1"}))
 	if err != nil || s.AWSRegion != "eu-west-1" {
 		t.Fatal("AFS_AWS_REGION must win", s, err)
+	}
+}
+
+// D-2 (FR-R07 AC2): the page-token key is a setting; more than one replica needs a shared key of at
+// least 32 bytes.
+func TestSettingsPageTokenKey(t *testing.T) {
+	key32 := strings.Repeat("k", 32)
+	cases := []struct {
+		name    string
+		env     map[string]string
+		wantErr bool
+		wantKey string
+	}{
+		{"one replica, no key", nil, false, ""},
+		{"one replica, key", map[string]string{"AFS_PAGE_TOKEN_KEY": key32}, false, key32},
+		{"one replica, short key is not used", map[string]string{"AFS_PAGE_TOKEN_KEY": "short"}, false, ""},
+		{"three replicas, no key", map[string]string{"AFS_API_REPLICAS": "3"}, true, ""},
+		{"three replicas, 31 bytes", map[string]string{"AFS_API_REPLICAS": "3", "AFS_PAGE_TOKEN_KEY": key32[:31]}, true, ""},
+		{"three replicas, 32 bytes", map[string]string{"AFS_API_REPLICAS": "3", "AFS_PAGE_TOKEN_KEY": key32, "AFS_IDEMPOTENCY_HMAC_KEY": key32}, false, key32},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s, err := settingsFrom(env(c.env))
+			if (err != nil) != c.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, c.wantErr)
+			}
+			if err == nil && string(s.PageTokenKey) != c.wantKey {
+				t.Fatalf("key = %q, want %q", s.PageTokenKey, c.wantKey)
+			}
+			if err != nil && strings.Contains(err.Error(), key32[:31]) {
+				t.Fatalf("error leaks the key: %v", err)
+			}
+		})
+	}
+}
+
+// D-5 (FR-R14, RD-2): the idempotency HMAC key is a setting; more than one replica needs a shared key of
+// at least 32 bytes, so a replay is recognised on any replica.
+func TestSettingsIdempotencyHMACKey(t *testing.T) {
+	key32 := strings.Repeat("h", 32)
+	pk := "0123456789abcdef0123456789abcdef"
+	cases := []struct {
+		name    string
+		env     map[string]string
+		wantErr bool
+		wantKey string
+	}{
+		{"one replica, no key", nil, false, ""},
+		{"one replica, key", map[string]string{"AFS_IDEMPOTENCY_HMAC_KEY": key32}, false, key32},
+		{"one replica, short key is not used", map[string]string{"AFS_IDEMPOTENCY_HMAC_KEY": "short"}, false, ""},
+		{"two replicas, no key", map[string]string{"AFS_API_REPLICAS": "2", "AFS_PAGE_TOKEN_KEY": pk}, true, ""},
+		{"two replicas, 31 bytes", map[string]string{"AFS_API_REPLICAS": "2", "AFS_PAGE_TOKEN_KEY": pk, "AFS_IDEMPOTENCY_HMAC_KEY": key32[:31]}, true, ""},
+		{"two replicas, 32 bytes", map[string]string{"AFS_API_REPLICAS": "2", "AFS_PAGE_TOKEN_KEY": pk, "AFS_IDEMPOTENCY_HMAC_KEY": key32}, false, key32},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s, err := settingsFrom(env(c.env))
+			if (err != nil) != c.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, c.wantErr)
+			}
+			if err == nil && string(s.IdempotencyHMACKey) != c.wantKey {
+				t.Fatalf("key = %q, want %q", s.IdempotencyHMACKey, c.wantKey)
+			}
+		})
+	}
+}
+
+// D-6 (FR-R09 AC1): the read and idle timeouts are settings with defaults of 60 s and 120 s.
+func TestSettingsHTTPTimeouts(t *testing.T) {
+	s, err := settingsFrom(env(nil))
+	if err != nil || s.HTTPReadTimeout != 60*time.Second || s.HTTPIdleTimeout != 120*time.Second {
+		t.Fatalf("defaults: %+v %v", s, err)
+	}
+	s, err = settingsFrom(env(map[string]string{"AFS_HTTP_READ_TIMEOUT": "5s", "AFS_HTTP_IDLE_TIMEOUT": "7s"}))
+	if err != nil || s.HTTPReadTimeout != 5*time.Second || s.HTTPIdleTimeout != 7*time.Second {
+		t.Fatalf("set: %+v %v", s, err)
+	}
+	for _, bad := range []map[string]string{
+		{"AFS_HTTP_READ_TIMEOUT": "soon"}, {"AFS_HTTP_READ_TIMEOUT": "0s"}, {"AFS_HTTP_READ_TIMEOUT": "-1s"},
+		{"AFS_HTTP_IDLE_TIMEOUT": "x"}, {"AFS_HTTP_IDLE_TIMEOUT": "0"},
+	} {
+		if _, err := settingsFrom(env(bad)); err == nil {
+			t.Errorf("%v accepted", bad)
+		}
+	}
+}
+
+// D-7 (FR-R10): under AFS_DB_IAM_AUTH the startup migration signs an RDS IAM token for the owner login,
+// like the pool does for the app login.
+func TestMigrateUsesIAMPasswordWhenIAMAuthIsOn(t *testing.T) {
+	creds := awssdk.CredentialsProviderFunc(func(context.Context) (awssdk.Credentials, error) {
+		return awssdk.Credentials{AccessKeyID: "test-key-id", SecretAccessKey: "test-secret", Source: "test"}, nil
+	})
+	errStop := errors.New("stop after migrate")
+	run := func(iam bool, ownerURL string) (called bool, pw string, pwErr error) {
+		mig := func(ctx context.Context, url string, _ time.Duration, password func(context.Context) (string, error)) (int, error) {
+			called = true
+			if url != ownerURL {
+				t.Errorf("migrated %q, want the owner URL", url)
+			}
+			if password != nil {
+				pw, pwErr = password(ctx)
+			}
+			return 0, errStop
+		}
+		_, err := wire(t.Context(), quiet, settings{
+			DatabaseURL: "postgres://afs_app@db.example.internal:5432/afs", OwnerURL: ownerURL,
+			DBIAMAuth: iam, AWSRegion: "us-east-1", AWSCredentials: creds, Migrate: mig,
+		})
+		if !errors.Is(err, errStop) {
+			t.Fatalf("wire err = %v", err)
+		}
+		return called, pw, pwErr
+	}
+
+	owner := "postgres://afs_owner@db.example.internal:5432/afs"
+	called, pw, err := run(true, owner)
+	if !called || err != nil {
+		t.Fatalf("migrate called=%v err=%v", called, err)
+	}
+	if !strings.Contains(pw, "X-Amz-Signature") || !strings.Contains(pw, "DBUser=afs_owner") {
+		t.Fatalf("migration password is not an IAM token for the owner login: %q", pw)
+	}
+	// Without IAM auth the owner URL's own credentials are used: no password function.
+	called, pw, _ = run(false, owner)
+	if !called || pw != "" {
+		t.Fatalf("IAM off: called=%v password=%q", called, pw)
 	}
 }

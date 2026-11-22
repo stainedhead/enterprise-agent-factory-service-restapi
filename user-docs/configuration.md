@@ -25,12 +25,30 @@ the database as service settings (last section), not in the environment.
 | `AFS_API_ADDR` (`--addr`) | `:8080` | Listen address. |
 | `AFS_DATABASE_OWNER_URL` | none | Owner login used only to run migrations at start. |
 | `AFS_MIGRATION_LOCK_TIMEOUT` | `10s` | How long to wait for the migration advisory lock. |
-| `AFS_API_REPLICAS` | `1` | Replica count; the per-principal rate limit is divided by it. |
+| `AFS_API_REPLICAS` | `1` | Replica count; the per-principal rate limit is divided by it. Above 1, `AFS_PAGE_TOKEN_KEY` and `AFS_IDEMPOTENCY_HMAC_KEY` are required and afs-api refuses to start without them. |
 | `AFS_TRUSTED_PROXY_HOPS` | `0` | Trusted proxies in front of the API, for client addresses in `X-Forwarded-For`. |
-| `AFS_PAGE_TOKEN_KEY` | random per process | At least 32 bytes, shared by every replica, so a page token from one replica works on another. Set it. |
-| `AFS_CLUSTER_NAME`, `AFS_CLUSTER_ENDPOINT`, `AFS_CLUSTER_CA_DATA` | none | Cluster identity for `GetTeamKubeconfig`; without endpoint and CA data it answers `503`. |
+| `AFS_PAGE_TOKEN_KEY` | random per process (one replica only) | At least 32 bytes, the same on every replica, so a page token from one replica works on another. Required when `AFS_API_REPLICAS` is above 1. The chart injects it from the Secret named by `api.keysSecret.name` (default `afs-api-keys`), key `pageTokenKey`, by `secretKeyRef`; it is never a chart value. |
+| `AFS_IDEMPOTENCY_HMAC_KEY` | random per process (one replica only) | At least 32 bytes, the same on every replica. Keys the HMAC that fingerprints secret values in idempotency claims. Required when `AFS_API_REPLICAS` is above 1. From the same Secret, key `idempotencyHmacKey`. |
+| `AFS_HTTP_READ_TIMEOUT` | `60s` | Time allowed to read a whole request, body included; a slower client is disconnected. `CreateImport` (bundles up to 100 MB) extends its own limit to 10 minutes. |
+| `AFS_HTTP_IDLE_TIMEOUT` | `120s` | How long an idle keep-alive connection stays open. |
+| `AFS_CLUSTER_NAME`, `AFS_CLUSTER_ENDPOINT`, `AFS_CLUSTER_CA_DATA` | none | Cluster identity for `GetTeamKubeconfig`; without endpoint and CA data it answers `503`. The endpoint must be an https URL and the CA data base64; a bad value stops startup. |
 | `AFS_CLUSTER_OIDC_ISSUER` | none | Issuer of projected ServiceAccount tokens (workload principal). Unset: workload tokens are refused. |
-| `AFS_AWS_ACCOUNT_ID` | none | Account used to derive role ARNs for identity bindings. |
+| `AFS_AWS_ACCOUNT_ID` | none | The platform account (12 digits) used to derive role ARNs for identity bindings. A malformed value stops startup. |
+
+Startup validates every variable above; a bad value stops afs-api with exit code 2 and the variable's name.
+The request body limit is fixed per route in the API contract (1 MiB, 100 MB for `CreateImport`); it is not a
+setting. `/readyz` on the public listener answers `{"status":"not ready","checks":{"database":"unavailable"}}`
+and logs the cause with the request id; the detailed checks are on the metrics address (`AFS_METRICS_ADDR`).
+
+### Database authentication combinations
+
+| `AFS_DB_IAM_AUTH` | `AFS_DATABASE_URL` login | `AFS_DATABASE_OWNER_URL` login | Result |
+|---|---|---|---|
+| `true` | `afs_app` (no password) | `afs_owner` (no password), or unset | The pool signs an RDS IAM token for `afs_app` on every new connection. The startup migration signs one for `afs_owner` with the same credentials. Both roles need `rds_iam` granted. With no owner URL, migrations run out of band with `afs-migrate`. |
+| `false` | any, password in the URL if the database wants one | any, password in the URL | Passwords come from the connection strings only, injected from a Secret in the deployment. Not for production RDS. |
+| `true` | any | owner URL with a password | The IAM token replaces the URL's password. |
+
+Needs `AFS_AWS_REGION` (or `AWS_REGION`) when `AFS_DB_IAM_AUTH` is `true`.
 
 ## afs-reconciler
 

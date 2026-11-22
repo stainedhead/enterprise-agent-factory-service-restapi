@@ -2934,7 +2934,7 @@
       '500':
         $ref: '#/components/responses/InternalError'
       '503':
-        description: A dependency is not ready
+        description: A dependency is not ready. Each failing check reports only the word unavailable; the cause is logged with the request id
         headers:
           X-Request-Id:
             $ref: '#/components/headers/XRequestId'
@@ -2947,7 +2947,7 @@
             example:
               status: not ready
               checks:
-                database: connection refused
+                database: unavailable
                 schema: ok
     security: []
     x-afs-permission: none
