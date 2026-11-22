@@ -1,0 +1,117 @@
+[
+  {
+    "key": "secrets.path_prefix",
+    "type": "string",
+    "default": "afs",
+    "pattern": "^[a-z][a-z0-9-]{0,30}$",
+    "allowed": "`^[a-z][a-z0-9-]{0,30}$`; applies to new secrets only",
+    "usedBy": "SEC-5",
+    "migration": "000003"
+  },
+  {
+    "key": "pricing.price_list_sync",
+    "type": "boolean",
+    "default": true,
+    "allowed": "boolean",
+    "usedBy": "BUD-9",
+    "migration": "000010"
+  },
+  {
+    "key": "billing.variance_alert_pct",
+    "type": "integer",
+    "default": 5,
+    "min": 0,
+    "max": 100,
+    "allowed": "0 to 100",
+    "usedBy": "BUD-6",
+    "migration": "000010"
+  },
+  {
+    "key": "api.idempotency_key_ttl_seconds",
+    "type": "integer",
+    "default": 3600,
+    "min": 60,
+    "max": 604800,
+    "allowed": "60 to 604800",
+    "usedBy": "IF-1",
+    "migration": "000011"
+  },
+  {
+    "key": "teams.ephemeral_max_days",
+    "type": "integer",
+    "default": 90,
+    "min": 1,
+    "max": 365,
+    "allowed": "1 to 365",
+    "usedBy": "TEAM-7",
+    "migration": "000012"
+  },
+  {
+    "key": "work_orders.sla_warning_hours",
+    "type": "integer",
+    "default": 48,
+    "min": 1,
+    "max": 720,
+    "allowed": "1 to 720",
+    "usedBy": "WO-4",
+    "migration": "000012"
+  },
+  {
+    "key": "billing.tag_activation_acknowledged",
+    "type": "boolean",
+    "default": false,
+    "allowed": "boolean; setting it to `true` is how S9's banner is acknowledged",
+    "usedBy": "TAG-7",
+    "migration": "000012"
+  },
+  {
+    "key": "work_orders.notification_channel_id",
+    "type": "string",
+    "default": null,
+    "nullable": true,
+    "pattern": "^nch_[0-9A-HJKMNP-TV-Z]{26}$",
+    "allowed": "null, or the id (`nch_\u003culid\u003e`) of a service-level email channel",
+    "usedBy": "WO-4",
+    "migration": "000012"
+  },
+  {
+    "key": "reports.idle_cpu_millicores",
+    "type": "integer",
+    "default": 50,
+    "min": 1,
+    "max": 4000,
+    "allowed": "1 to 4000",
+    "usedBy": "RPT-5",
+    "migration": "000013"
+  },
+  {
+    "key": "egress.denied_spike_threshold",
+    "type": "integer",
+    "default": 20,
+    "min": 1,
+    "max": 100000,
+    "allowed": "1 to 100000 denials per agent or pool in 5 minutes",
+    "usedBy": "RPT-6",
+    "migration": "000013"
+  },
+  {
+    "key": "gateway.reservation_ttl_seconds",
+    "type": "integer",
+    "default": 900,
+    "min": 60,
+    "max": 3600,
+    "allowed": "60 to 3600",
+    "usedBy": "BUD-2",
+    "migration": "000013"
+  },
+  {
+    "key": "api.cors_origins",
+    "type": "array",
+    "default": [],
+    "pattern": "^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$",
+    "allowed": "array of `https://host[:port]` origins",
+    "usedBy": "IF-1, IF-4",
+    "migration": "000013",
+    "items": "string"
+  }
+]

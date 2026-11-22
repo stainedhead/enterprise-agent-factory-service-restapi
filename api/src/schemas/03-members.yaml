@@ -1,0 +1,283 @@
+# OpenAPI fragment (API contract §4.3 and §5 shapes). Bundled into api/openapi.yaml by make openapi.
+Member:
+  type: object
+  required:
+  - id
+  - role
+  - subjectType
+  - version
+  properties:
+    id:
+      type: string
+      pattern: ^rb_[0-9A-HJKMNP-TV-Z]{26}$
+      example: rb_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    role:
+      type: string
+      enum:
+      - team_admin
+      - team_viewer
+    subjectType:
+      type: string
+      enum:
+      - user
+      - group
+    userId:
+      type: string
+      pattern: ^usr_[0-9A-HJKMNP-TV-Z]{26}$
+      example: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    email:
+      type: string
+      format: email
+      readOnly: true
+    groupName:
+      type: string
+    identityProviderId:
+      type: string
+      pattern: ^idp_[0-9A-HJKMNP-TV-Z]{26}$
+      example: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+MemberList:
+  type: object
+  description: A page of Member resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/Member'
+    nextToken:
+      type: string
+      description: Absent on the last page
+AddMemberRequest:
+  type: object
+  required:
+  - role
+  - subjectType
+  properties:
+    role:
+      type: string
+      enum:
+      - team_admin
+      - team_viewer
+    subjectType:
+      type: string
+      enum:
+      - user
+      - group
+    userId:
+      type: string
+      pattern: ^usr_[0-9A-HJKMNP-TV-Z]{26}$
+      example: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    email:
+      type: string
+      format: email
+    groupName:
+      type: string
+    identityProviderId:
+      type: string
+      pattern: ^idp_[0-9A-HJKMNP-TV-Z]{26}$
+      example: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+UpdateMemberRequest:
+  type: object
+  required:
+  - role
+  properties:
+    role:
+      type: string
+      enum:
+      - team_admin
+      - team_viewer
+ApiKey:
+  type: object
+  required:
+  - id
+  - name
+  - role
+  - keyPrefix
+  - expiresAt
+  - createdAt
+  properties:
+    id:
+      type: string
+      pattern: ^key_[0-9A-HJKMNP-TV-Z]{26}$
+      example: key_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    role:
+      type: string
+      enum:
+      - team_admin
+      - team_viewer
+      - security_operator
+    keyPrefix:
+      type: string
+      example: afsk_3f9a
+      readOnly: true
+    expiresAt:
+      $ref: '#/components/schemas/Timestamp'
+    lastUsedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    secretKey:
+      type: string
+      description: Create response only; shown once, never stored or returned again (D52)
+      readOnly: true
+ApiKeyList:
+  type: object
+  description: A page of ApiKey resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/ApiKey'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateApiKeyRequest:
+  type: object
+  required:
+  - name
+  - role
+  - expiresAt
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    role:
+      type: string
+      enum:
+      - team_admin
+      - team_viewer
+    expiresAt:
+      type: string
+      format: date-time
+      description: At most 90 days ahead
+CreateServiceApiKeyRequest:
+  type: object
+  required:
+  - name
+  - role
+  - expiresAt
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    role:
+      type: string
+      enum:
+      - security_operator
+    expiresAt:
+      type: string
+      format: date-time
+      description: At most 90 days ahead
+SecurityOperator:
+  type: object
+  required:
+  - id
+  - subjectType
+  - version
+  properties:
+    id:
+      type: string
+      pattern: ^rb_[0-9A-HJKMNP-TV-Z]{26}$
+      example: rb_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    subjectType:
+      type: string
+      enum:
+      - user
+      - group
+    userId:
+      type: string
+      pattern: ^usr_[0-9A-HJKMNP-TV-Z]{26}$
+      example: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    email:
+      type: string
+      format: email
+      readOnly: true
+    groupName:
+      type: string
+    identityProviderId:
+      type: string
+      pattern: ^idp_[0-9A-HJKMNP-TV-Z]{26}$
+      example: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+SecurityOperatorList:
+  type: object
+  description: A page of SecurityOperator resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/SecurityOperator'
+    nextToken:
+      type: string
+      description: Absent on the last page
+AddSecurityOperatorRequest:
+  type: object
+  required:
+  - subjectType
+  properties:
+    subjectType:
+      type: string
+      enum:
+      - user
+      - group
+    userId:
+      type: string
+      pattern: ^usr_[0-9A-HJKMNP-TV-Z]{26}$
+      example: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    email:
+      type: string
+      format: email
+    groupName:
+      type: string
+    identityProviderId:
+      type: string
+      pattern: ^idp_[0-9A-HJKMNP-TV-Z]{26}$
+      example: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001

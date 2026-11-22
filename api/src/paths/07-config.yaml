@@ -1,0 +1,382 @@
+# OpenAPI fragment (API contract §4.7). Bundled into api/openapi.yaml by make openapi.
+/v1/teams/{teamId}/config-values:
+  get:
+    operationId: ListNamespaceConfigValues
+    summary: List namespace config values
+    tags:
+    - config
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigValueList'
+            example:
+              items:
+              - name: LOG_LEVEL
+                value: info
+                source: literal
+                resolvedValue: info
+                usedBy:
+                - agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: config:read
+    x-afs-scope: team
+    x-afs-cli: teams list-config-values
+    x-afs-sdk: config.namespace.list()
+    x-afs-screen: T7
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/config-values/{name}:
+  put:
+    operationId: PutNamespaceConfigValue
+    summary: Put namespace config value
+    tags:
+    - config
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: name
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ConfigName'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutNamespaceConfigValueRequest'
+          example:
+            value: info
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigValue'
+            example:
+              name: LOG_LEVEL
+              value: info
+              source: literal
+              resolvedValue: info
+              usedBy:
+              - agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: config:write
+    x-afs-scope: team
+    x-afs-cli: teams put-config-value
+    x-afs-sdk: config.namespace.put()
+    x-afs-screen: T7
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  delete:
+    operationId: DeleteNamespaceConfigValue
+    summary: Delete namespace config value
+    tags:
+    - config
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: name
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ConfigName'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: config:write
+    x-afs-scope: team
+    x-afs-cli: teams delete-config-value
+    x-afs-sdk: config.namespace.delete()
+    x-afs-screen: T7
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/agents/{agentId}/config-values:
+  get:
+    operationId: ListAgentConfigValues
+    summary: List agent config values
+    tags:
+    - config
+    description: (resolved, with source)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigValueList'
+            example:
+              items:
+              - name: LOG_LEVEL
+                source: namespace
+                resolvedValue: info
+                usedBy:
+                - agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: config:read
+    x-afs-scope: team
+    x-afs-cli: agents list-config-values
+    x-afs-sdk: config.agent.list()
+    x-afs-screen: T7
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/agents/{agentId}/config-values/{name}:
+  put:
+    operationId: PutAgentConfigValue
+    summary: Put agent config value
+    tags:
+    - config
+    description: 'body {source: literal|namespace, value?}'
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: name
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ConfigName'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutConfigValueRequest'
+          example:
+            source: namespace
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigValue'
+            example:
+              name: LOG_LEVEL
+              source: namespace
+              resolvedValue: info
+              usedBy:
+              - agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              updatedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: config:write
+    x-afs-scope: team
+    x-afs-cli: agents put-config-value
+    x-afs-sdk: config.agent.put()
+    x-afs-screen: T7
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - agent.updated
+  delete:
+    operationId: DeleteAgentConfigValue
+    summary: Delete agent config value
+    tags:
+    - config
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: name
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ConfigName'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: config:write
+    x-afs-scope: team
+    x-afs-cli: agents delete-config-value
+    x-afs-sdk: config.agent.delete()
+    x-afs-screen: T7
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - agent.updated

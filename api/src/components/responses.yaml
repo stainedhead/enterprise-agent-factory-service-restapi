@@ -1,0 +1,173 @@
+# OpenAPI components (API contract §1, §2, §6). Bundled into api/openapi.yaml by make openapi.
+responses:
+  BadRequest:
+    description: Malformed or out-of-range input
+    headers:
+      X-Request-Id:
+        $ref: '#/components/headers/XRequestId'
+      X-Afs-Contract-Version:
+        $ref: '#/components/headers/XAfsContractVersion'
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+        example:
+          code: ValidationError
+          message: Malformed or out-of-range input
+          requestId: req_01JD2Q3R4S5T6V7W8X9Y0Z0001
+          details:
+            fields:
+            - field: slug
+              reason: must match ^[a-z][a-z0-9-]{1,38}[a-z0-9]$
+  Unauthenticated:
+    description: Missing, expired or unknown credential
+    headers:
+      X-Request-Id:
+        $ref: '#/components/headers/XRequestId'
+      X-Afs-Contract-Version:
+        $ref: '#/components/headers/XAfsContractVersion'
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+        example:
+          code: Unauthenticated
+          message: Missing, expired or unknown credential
+          requestId: req_01JD2Q3R4S5T6V7W8X9Y0Z0001
+          details: {}
+  AccessDenied:
+    description: The caller lacks the permission
+    headers:
+      X-Request-Id:
+        $ref: '#/components/headers/XRequestId'
+      X-Afs-Contract-Version:
+        $ref: '#/components/headers/XAfsContractVersion'
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+        example:
+          code: AccessDenied
+          message: The caller lacks the permission
+          requestId: req_01JD2Q3R4S5T6V7W8X9Y0Z0001
+          details:
+            requiredPermission: teams:write
+  NotFound:
+    description: No such resource, or one in a team the caller cannot see
+    headers:
+      X-Request-Id:
+        $ref: '#/components/headers/XRequestId'
+      X-Afs-Contract-Version:
+        $ref: '#/components/headers/XAfsContractVersion'
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+        example:
+          code: NotFound
+          message: No such resource, or one in a team the caller cannot see
+          requestId: req_01JD2Q3R4S5T6V7W8X9Y0Z0001
+          details: {}
+  Conflict:
+    description: Duplicate, dependents exist, invalid state, or an idempotency conflict
+    headers:
+      X-Request-Id:
+        $ref: '#/components/headers/XRequestId'
+      X-Afs-Contract-Version:
+        $ref: '#/components/headers/XAfsContractVersion'
+      Retry-After:
+        $ref: '#/components/headers/RetryAfter'
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+        example:
+          code: Conflict
+          message: Duplicate, dependents exist, invalid state, or an idempotency conflict
+          requestId: req_01JD2Q3R4S5T6V7W8X9Y0Z0001
+          details:
+            reason: team_suspended
+  PreconditionFailed:
+    description: If-Match does not match the current version
+    headers:
+      X-Request-Id:
+        $ref: '#/components/headers/XRequestId'
+      X-Afs-Contract-Version:
+        $ref: '#/components/headers/XAfsContractVersion'
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+        example:
+          code: PreconditionFailed
+          message: If-Match does not match the current version
+          requestId: req_01JD2Q3R4S5T6V7W8X9Y0Z0001
+          details: {}
+  PreconditionRequired:
+    description: If-Match is required
+    headers:
+      X-Request-Id:
+        $ref: '#/components/headers/XRequestId'
+      X-Afs-Contract-Version:
+        $ref: '#/components/headers/XAfsContractVersion'
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+        example:
+          code: PreconditionRequired
+          message: If-Match is required
+          requestId: req_01JD2Q3R4S5T6V7W8X9Y0Z0001
+          details: {}
+  Throttled:
+    description: Rate limit exceeded
+    headers:
+      X-Request-Id:
+        $ref: '#/components/headers/XRequestId'
+      X-Afs-Contract-Version:
+        $ref: '#/components/headers/XAfsContractVersion'
+      Retry-After:
+        $ref: '#/components/headers/RetryAfter'
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+        example:
+          code: Throttled
+          message: Rate limit exceeded
+          requestId: req_01JD2Q3R4S5T6V7W8X9Y0Z0001
+          details: {}
+  InternalError:
+    description: Unexpected error; logged with the request id
+    headers:
+      X-Request-Id:
+        $ref: '#/components/headers/XRequestId'
+      X-Afs-Contract-Version:
+        $ref: '#/components/headers/XAfsContractVersion'
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+        example:
+          code: InternalError
+          message: Unexpected error; logged with the request id
+          requestId: req_01JD2Q3R4S5T6V7W8X9Y0Z0001
+          details: {}
+  Unavailable:
+    description: A dependency is unavailable; retry with backoff
+    headers:
+      X-Request-Id:
+        $ref: '#/components/headers/XRequestId'
+      X-Afs-Contract-Version:
+        $ref: '#/components/headers/XAfsContractVersion'
+      Retry-After:
+        $ref: '#/components/headers/RetryAfter'
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+        example:
+          code: Unavailable
+          message: A dependency is unavailable; retry with backoff
+          requestId: req_01JD2Q3R4S5T6V7W8X9Y0Z0001
+          details: {}

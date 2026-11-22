@@ -1,0 +1,132 @@
+# OpenAPI components (API contract §1, §2, §6). Bundled into api/openapi.yaml by make openapi.
+parameters:
+  TeamId:
+    name: teamId
+    in: path
+    required: true
+    schema:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+      example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    description: Team id; taken from the path only
+  MaxResults:
+    name: maxResults
+    in: query
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 50
+  NextToken:
+    name: nextToken
+    in: query
+    schema:
+      type: string
+      maxLength: 2048
+    description: Opaque token from the previous page; expires after 24 hours
+  IdempotencyKey:
+    name: Idempotency-Key
+    in: header
+    schema:
+      type: string
+      minLength: 1
+      maxLength: 255
+      pattern: ^[\x21-\x7e]+$
+    description: Scoped to the caller; kept for api.idempotency_key_ttl_seconds. A repeat replays the stored response
+  IfMatch:
+    name: If-Match
+    in: header
+    required: true
+    schema:
+      type: string
+      example: '"3"'
+    description: The resource's ETag ("<version>"). Missing → 428; stale → 412
+  IfMatchPut:
+    name: If-Match
+    in: header
+    required: false
+    schema:
+      type: string
+      example: '"3"'
+    description: Required when the resource exists (428 otherwise); omit when the PUT creates it
+  XRequestId:
+    name: X-Request-Id
+    in: header
+    schema:
+      type: string
+      maxLength: 64
+    description: Client request id (1–64 printable characters); a longer or invalid one is replaced
+  From:
+    name: from
+    in: query
+    schema:
+      $ref: '#/components/schemas/Timestamp'
+  To:
+    name: to
+    in: query
+    schema:
+      $ref: '#/components/schemas/Timestamp'
+  Range:
+    name: range
+    in: query
+    schema:
+      type: string
+      enum:
+      - 24h
+      - 7d
+      - 30d
+      - 90d
+      - mtd
+    description: Instead of from and to
+  GroupBy:
+    name: groupBy
+    in: query
+    schema:
+      type: string
+      pattern: ^(team|agent|model|system|day|hour|pool|tag:[A-Za-z0-9_.:/=+@-]+)(,(team|agent|model|system|day|hour|pool|tag:[A-Za-z0-9_.:/=+@-]+))*$
+    description: 'Comma-separated: team, agent, model, system, day, hour, tag:<key>, and pool in ephemeral teams. Filters
+      tag.<key>=<value> are also accepted'
+  UsageGroupBy:
+    name: groupBy
+    in: query
+    schema:
+      type: string
+      enum:
+      - agent
+      - model
+      - day
+  TeamIdFilter:
+    name: teamId
+    in: query
+    schema:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+      example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    description: Filter (service reports only)
+  AgentIdFilter:
+    name: agentId
+    in: query
+    schema:
+      type: string
+      pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+      example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+  ModelIdFilter:
+    name: modelId
+    in: query
+    schema:
+      type: string
+  SystemIdFilter:
+    name: systemId
+    in: query
+    schema:
+      type: string
+      pattern: ^ext_[0-9A-HJKMNP-TV-Z]{26}$
+      example: ext_01JD2Q3R4S5T6V7W8X9Y0Z0001
+  PoolIdFilter:
+    name: poolId
+    in: query
+    schema:
+      type: string
+      pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+      example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    description: Ephemeral teams only

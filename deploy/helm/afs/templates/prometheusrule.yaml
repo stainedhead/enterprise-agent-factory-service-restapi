@@ -1,0 +1,121 @@
+{{- /* Alerts for the NFR SLIs. Metric names are the ones in internal/adapter/observability/names.go;
+       a test keeps the two in step. Go-template braces inside annotations are escaped. */}}
+{{- if .Values.prometheusRule.enabled }}
+{{- $t := .Values.prometheusRule.thresholds }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: afs-slis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "afs.labels" (dict "root" $ "name" "slis") | nindent 4 }}
+    {{- with .Values.prometheusRule.labels }}{{ toYaml . | nindent 4 }}{{ end }}
+spec:
+  groups:
+    - name: afs-api
+      rules:
+        - alert: AFSAPIReadLatencyHigh
+          expr: |
+            histogram_quantile(0.99, sum by (le) (rate(afs_api_request_duration_seconds_bucket{method="GET", route!~"{{ .Values.prometheusRule.reportRoutes }}"}[5m]))) > {{ $t.apiReadP99Seconds }}
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: afs-api read p99 above {{ $t.apiReadP99Seconds }} s
+            description: p99 of API reads (reports excluded) has been above target for 10 minutes.
+        - alert: AFSAPIReportLatencyHigh
+          expr: |
+            histogram_quantile(0.99, sum by (le) (rate(afs_api_request_duration_seconds_bucket{route=~"{{ .Values.prometheusRule.reportRoutes }}"}[5m]))) > {{ $t.apiReportP99Seconds }}
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: afs-api report p99 above {{ $t.apiReportP99Seconds }} s
+        - alert: AFSAPIErrorRatioHigh
+          expr: |
+            sum(rate(afs_api_requests_total{code=~"5.."}[5m])) / sum(rate(afs_api_requests_total[5m])) > {{ $t.apiErrorRatio }}
+          for: 10m
+          labels: {severity: critical}
+          annotations:
+            summary: afs-api 5xx ratio above the 99.9% availability budget
+    - name: afs-reconciler
+      rules:
+        - alert: AFSNoReconcilerLeader
+          expr: sum(afs_reconciler_is_leader) < 1 or absent(afs_reconciler_is_leader)
+          for: 1m
+          labels: {severity: critical}
+          annotations:
+            summary: no afs-reconciler replica holds the leader lease
+        - alert: AFSReconcileLagHigh
+          expr: |
+            histogram_quantile(0.95, sum by (le) (rate(afs_reconcile_lag_seconds_bucket[10m]))) > {{ $t.reconcileLagP95Seconds }}
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: reconcile lag p95 above {{ $t.reconcileLagP95Seconds }} s
+        - alert: AFSReconcileErrors
+          expr: sum by (kind) (rate(afs_reconcile_errors_total[10m])) > 0
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: {{ `reconciles of {{ $labels.kind }} keep failing` }}
+        - alert: AFSDriftHigh
+          expr: sum(increase(afs_drift_corrected_total[1h])) > {{ $t.driftPerHour }}
+          labels: {severity: warning}
+          annotations:
+            summary: more than {{ $t.driftPerHour }} drift corrections in an hour; something edits managed objects
+    - name: afs-gateway
+      rules:
+        - alert: AFSGatewayReservationFailures
+          expr: sum by (reason) (increase(afs_gateway_reservation_failures_total[5m])) > 0
+          labels: {severity: critical}
+          annotations:
+            summary: {{ `the gateway rejects calls because it cannot reserve spend ({{ $labels.reason }}); it fails closed` }}
+        - alert: AFSGatewayAddedLatencyHigh
+          expr: |
+            histogram_quantile(0.99, sum by (le) (rate(afs_gateway_added_latency_seconds_bucket[5m]))) > {{ $t.gatewayAddedLatencyP99Seconds }}
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: gateway added latency p99 above {{ $t.gatewayAddedLatencyP99Seconds }} s
+        - alert: AFSGatewayReservationsExpiring
+          expr: sum(increase(afs_gateway_reservations_expired_total[1h])) > 0
+          labels: {severity: warning}
+          annotations:
+            summary: spend reservations expire unsettled; a gateway replica is dying mid-request
+        - alert: AFSGatewaySettleFailures
+          expr: sum(increase(afs_gateway_settle_failures_total[15m])) > 0
+          labels: {severity: warning}
+          annotations:
+            summary: gateway settlements fell back to the retry queue or were dropped; spend is recorded late or only when holds expire
+    - name: afs-events-and-billing
+      rules:
+        - alert: AFSOutboxLagHigh
+          expr: max(afs_outbox_oldest_age_seconds) > {{ $t.outboxOldestAgeSeconds }}
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: the oldest unpublished event is older than {{ $t.outboxOldestAgeSeconds }} s
+        - alert: AFSOutboxPublishFailing
+          expr: sum(rate(afs_outbox_publish_failures_total[10m])) > 0
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: outbox events fail to reach EventBridge
+        - alert: AFSNotificationFailures
+          expr: sum by (channel_type) (increase(afs_notification_failures_total[1h])) > 0
+          labels: {severity: warning}
+          annotations:
+            summary: {{ `notifications to {{ $labels.channel_type }} channels fail` }}
+        # Fires only where the billing CronJob's metrics reach Prometheus (a push gateway); the job also logs
+        # metric=afs_cost_cur_variance_ratio, which a CloudWatch Logs metric filter can alarm on.
+        - alert: AFSCURVarianceHigh
+          expr: max(afs_cost_cur_variance_ratio) > {{ $t.curVarianceRatio }}
+          for: 1h
+          labels: {severity: warning}
+          annotations:
+            summary: gateway cost estimates differ from the CUR by more than {{ mulf $t.curVarianceRatio 100 }} percent
+        - alert: AFSBillingJobFailed
+          expr: sum by (job_name) (kube_job_status_failed{namespace="{{ .Release.Namespace }}", job_name=~"afs-billing-.+"}) > 0
+          labels: {severity: warning}
+          annotations:
+            summary: {{ `billing job {{ $labels.job_name }} failed` }}
+{{- end }}

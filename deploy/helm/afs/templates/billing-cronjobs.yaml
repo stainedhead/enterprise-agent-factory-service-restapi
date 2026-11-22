@@ -1,0 +1,50 @@
+{{- $name := "billing" }}
+{{- $c := include "afs.component" (dict "root" $ "name" $name) | fromYaml }}
+{{- if $c.enabled }}
+{{- range $cj, $spec := $c.cronjobs }}
+{{- $ctx := dict "root" $ "name" $name "c" $c }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ printf "afs-billing-%s" $cj }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "afs.labels" $ctx | nindent 4 }}
+    afs.io/billing-job: {{ $spec.job }}
+spec:
+  schedule: {{ $spec.schedule | quote }}
+  concurrencyPolicy: {{ $c.concurrencyPolicy }}
+  successfulJobsHistoryLimit: {{ $c.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ $c.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ $c.backoffLimit }}
+      activeDeadlineSeconds: {{ $c.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "afs.labels" $ctx | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ $c.serviceAccount.name }}
+          {{- with $.Values.global.image.pullSecrets }}
+          imagePullSecrets: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- include "afs.podSecurityContext" $ | nindent 12 }}
+          containers:
+            - name: afs-billing
+              image: {{ include "afs.image" $ctx | quote }}
+              imagePullPolicy: {{ $.Values.global.image.pullPolicy }}
+              args: ["--job", {{ $spec.job | quote }}]
+              ports:
+                - {name: metrics, containerPort: {{ $c.ports.metrics }}}
+              env:
+                {{- include "afs.env" $ctx | nindent 16 }}
+              resources:
+                {{- toYaml $c.resources | nindent 16 }}
+              securityContext:
+                {{- include "afs.containerSecurityContext" $ | nindent 16 }}
+{{- end }}
+{{- end }}

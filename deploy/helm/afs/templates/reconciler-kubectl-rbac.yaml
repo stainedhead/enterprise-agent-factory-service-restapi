@@ -1,0 +1,49 @@
+{{- /* Viewer kubectl (M5-E2, RC-13): the reconciler applies a read-only Role and a RoleBinding in each team
+       namespace. Kubernetes lets a subject create a Role only when it already holds every permission the Role
+       grants (and it is never given escalate or bind), so this ClusterRole is exactly two things: the rights
+       to manage roles and rolebindings, and the read-only rights the viewer Role contains that the main
+       ClusterRole does not already give (internal/adapter/k8s/render/kubectl.go). It grants no secrets, no
+       pods/exec, attach, port-forward or proxy and no write verb on workloads. Turn it off with
+       reconciler.viewerKubectl.enabled=false when AFS_VIEWER_KUBECTL_ROLES is not set. */}}
+{{- $name := "reconciler" }}
+{{- $c := include "afs.component" (dict "root" $ "name" $name) | fromYaml }}
+{{- if and $c.enabled (dig "viewerKubectl" "enabled" true $c) }}
+{{- $ctx := dict "root" $ "name" $name "c" $c }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: afs-reconciler-viewer-kubectl
+  labels:
+    {{- include "afs.labels" $ctx | nindent 4 }}
+rules:
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log", "events", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["events.k8s.io"]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: afs-reconciler-viewer-kubectl
+  labels:
+    {{- include "afs.labels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: afs-reconciler-viewer-kubectl
+subjects:
+  - kind: ServiceAccount
+    name: {{ $c.serviceAccount.name }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

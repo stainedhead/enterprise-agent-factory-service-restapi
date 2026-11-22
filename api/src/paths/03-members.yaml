@@ -1,0 +1,773 @@
+# OpenAPI fragment (API contract §4.3). Bundled into api/openapi.yaml by make openapi.
+/v1/teams/{teamId}/members:
+  get:
+    operationId: ListMembers
+    summary: List members
+    tags:
+    - members
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberList'
+            example:
+              items:
+              - id: rb_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                role: team_viewer
+                subjectType: user
+                userId: usr_01JD2Q3R4S5T6V7W8X9Y0Z0002
+                email: dev@example.com
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: members:read
+    x-afs-scope: team
+    x-afs-cli: members list-members
+    x-afs-sdk: members.list()
+    x-afs-screen: T6
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: AddMember
+    summary: Add member
+    tags:
+    - members
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AddMemberRequest'
+          example:
+            role: team_viewer
+            subjectType: user
+            email: dev@example.com
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Member'
+            example:
+              id: rb_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              role: team_viewer
+              subjectType: user
+              userId: usr_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              email: dev@example.com
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: members:write
+    x-afs-scope: team
+    x-afs-cli: members add-member
+    x-afs-sdk: members.add()
+    x-afs-screen: T6
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/members/{bindingId}:
+  patch:
+    operationId: UpdateMember
+    summary: Update member
+    tags:
+    - members
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: bindingId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^rb_[0-9A-HJKMNP-TV-Z]{26}$
+        example: rb_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateMemberRequest'
+          example:
+            role: team_admin
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Member'
+            example:
+              id: rb_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              role: team_admin
+              subjectType: user
+              userId: usr_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              email: dev@example.com
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: members:write
+    x-afs-scope: team
+    x-afs-cli: members update-member
+    x-afs-sdk: members.update()
+    x-afs-screen: T6
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  delete:
+    operationId: RemoveMember
+    summary: Remove member
+    tags:
+    - members
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: bindingId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^rb_[0-9A-HJKMNP-TV-Z]{26}$
+        example: rb_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: members:write
+    x-afs-scope: team
+    x-afs-cli: members remove-member
+    x-afs-sdk: members.remove()
+    x-afs-screen: T6
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/api-keys:
+  get:
+    operationId: ListApiKeys
+    summary: List API keys
+    tags:
+    - members
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiKeyList'
+            example:
+              items:
+              - id: key_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                name: ci-pipeline
+                role: team_admin
+                keyPrefix: afsk_3f9a
+                expiresAt: '2027-02-19T18:00:00Z'
+                lastUsedAt: null
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: api-keys:read
+    x-afs-scope: team
+    x-afs-cli: api-keys list-api-keys
+    x-afs-sdk: apiKeys.list()
+    x-afs-screen: T6
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateApiKey
+    summary: Create API key
+    tags:
+    - members
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateApiKeyRequest'
+          example:
+            name: ci-pipeline
+            role: team_admin
+            expiresAt: '2027-02-19T18:00:00Z'
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiKey'
+            example:
+              id: key_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              name: ci-pipeline
+              role: team_admin
+              keyPrefix: afsk_3f9a
+              expiresAt: '2027-02-19T18:00:00Z'
+              lastUsedAt: null
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              secretKey: afsk_3f9aEXAMPLEEXAMPLEEXAMPLEEXAMPLE0000
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: api-keys:write
+    x-afs-scope: team
+    x-afs-cli: api-keys create-api-key
+    x-afs-sdk: apiKeys.create()
+    x-afs-screen: T6
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/api-keys/{keyId}:
+  delete:
+    operationId: DeleteApiKey
+    summary: Delete API key
+    tags:
+    - members
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: keyId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^key_[0-9A-HJKMNP-TV-Z]{26}$
+        example: key_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: api-keys:write
+    x-afs-scope: team
+    x-afs-cli: api-keys delete-api-key
+    x-afs-sdk: apiKeys.delete()
+    x-afs-screen: T6
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/api-keys:
+  get:
+    operationId: ListServiceApiKeys
+    summary: List service API keys
+    tags:
+    - members
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiKeyList'
+            example:
+              items:
+              - id: key_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                name: scanner
+                role: security_operator
+                keyPrefix: afsk_3f9a
+                expiresAt: '2027-02-19T18:00:00Z'
+                lastUsedAt: null
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:settings
+    x-afs-scope: service
+    x-afs-cli: admin list-api-keys
+    x-afs-sdk: admin.apiKeys.list()
+    x-afs-screen: S10
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateServiceApiKey
+    summary: Create service API key
+    tags:
+    - members
+    description: (role security_operator only)
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateServiceApiKeyRequest'
+          example:
+            name: scanner
+            role: security_operator
+            expiresAt: '2027-02-19T18:00:00Z'
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiKey'
+            example:
+              id: key_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              name: scanner
+              role: security_operator
+              keyPrefix: afsk_3f9a
+              expiresAt: '2027-02-19T18:00:00Z'
+              lastUsedAt: null
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              secretKey: afsk_8c1dEXAMPLEEXAMPLEEXAMPLEEXAMPLE0000
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:settings
+    x-afs-scope: service
+    x-afs-cli: admin create-api-key
+    x-afs-sdk: admin.apiKeys.create()
+    x-afs-screen: S10
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/api-keys/{keyId}:
+  delete:
+    operationId: DeleteServiceApiKey
+    summary: Delete service API key
+    tags:
+    - members
+    parameters:
+    - name: keyId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^key_[0-9A-HJKMNP-TV-Z]{26}$
+        example: key_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:settings
+    x-afs-scope: service
+    x-afs-cli: admin delete-api-key
+    x-afs-sdk: admin.apiKeys.delete()
+    x-afs-screen: S10
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/security-operators:
+  get:
+    operationId: ListSecurityOperators
+    summary: List security operators
+    tags:
+    - members
+    description: (users or IdP groups)
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecurityOperatorList'
+            example:
+              items:
+              - id: rb_01JD2Q3R4S5T6V7W8X9Y0Z0003
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                subjectType: group
+                groupName: security-response
+                identityProviderId: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:settings
+    x-afs-scope: service
+    x-afs-cli: admin list-security-operators
+    x-afs-sdk: admin.securityOperators.list()
+    x-afs-screen: S10
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: AddSecurityOperator
+    summary: Add security operator
+    tags:
+    - members
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AddSecurityOperatorRequest'
+          example:
+            subjectType: group
+            groupName: security-response
+            identityProviderId: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecurityOperator'
+            example:
+              id: rb_01JD2Q3R4S5T6V7W8X9Y0Z0003
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              subjectType: group
+              groupName: security-response
+              identityProviderId: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:settings
+    x-afs-scope: service
+    x-afs-cli: admin add-security-operator
+    x-afs-sdk: admin.securityOperators.add()
+    x-afs-screen: S10
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/security-operators/{bindingId}:
+  delete:
+    operationId: RemoveSecurityOperator
+    summary: Remove security operator
+    tags:
+    - members
+    parameters:
+    - name: bindingId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^rb_[0-9A-HJKMNP-TV-Z]{26}$
+        example: rb_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:settings
+    x-afs-scope: service
+    x-afs-cli: admin remove-security-operator
+    x-afs-sdk: admin.securityOperators.remove()
+    x-afs-screen: S10
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []

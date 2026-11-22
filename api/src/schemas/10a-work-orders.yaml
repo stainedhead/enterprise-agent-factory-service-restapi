@@ -1,0 +1,539 @@
+# OpenAPI fragment (API contract §4.10a and §5 shapes). Bundled into api/openapi.yaml by make openapi.
+WorkOrderProgress:
+  type: object
+  required:
+  - repos
+  - prsOpen
+  - prsMerged
+  - notAffected
+  - failedOrSkipped
+  - remaining
+  properties:
+    repos:
+      type: integer
+    prsOpen:
+      type: integer
+    prsMerged:
+      type: integer
+    notAffected:
+      type: integer
+    failedOrSkipped:
+      type: integer
+    remaining:
+      type: integer
+WorkOrderNotification:
+  type: object
+  required:
+  - kind
+  - recipient
+  - sentAt
+  properties:
+    kind:
+      type: string
+    recipient:
+      type: string
+    sentAt:
+      $ref: '#/components/schemas/Timestamp'
+WorkOrderRepo:
+  type: object
+  required:
+  - host
+  - repo
+  - status
+  properties:
+    host:
+      type: string
+    repo:
+      type: string
+    owningTeamId:
+      type:
+      - string
+      - 'null'
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+      example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    owningContact:
+      type:
+      - string
+      - 'null'
+      format: email
+    ownerSource:
+      type: string
+      enum:
+      - explicit
+      - team_config
+      description: CreateWorkOrder response only; not stored
+      readOnly: true
+    status:
+      type: string
+      enum:
+      - pending
+      - in_progress
+      - pr_opened
+      - merged
+      - not_affected
+      - failed
+      - skipped
+    prUrl:
+      type:
+      - string
+      - 'null'
+      format: uri
+    prNumber:
+      type:
+      - integer
+      - 'null'
+    detail:
+      type:
+      - string
+      - 'null'
+    mergedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+    notifications:
+      type: array
+      items:
+        $ref: '#/components/schemas/WorkOrderNotification'
+      readOnly: true
+    version:
+      type: integer
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+WorkOrderRepoList:
+  type: object
+  description: A page of WorkOrderRepo resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/WorkOrderRepo'
+    nextToken:
+      type: string
+      description: Absent on the last page
+WorkOrder:
+  type: object
+  required:
+  - id
+  - kind
+  - severity
+  - title
+  - source
+  - templateId
+  - budgetUsd
+  - slaDueAt
+  - status
+  - slaState
+  - progress
+  - version
+  properties:
+    id:
+      type: string
+      pattern: ^wo_[0-9A-HJKMNP-TV-Z]{26}$
+      example: wo_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    kind:
+      type: string
+      enum:
+      - cve_remediation
+      - general
+    cveId:
+      type:
+      - string
+      - 'null'
+      pattern: ^CVE-[0-9]{4}-[0-9]{4,}$
+    severity:
+      type: string
+      enum:
+      - critical
+      - high
+      - medium
+      - low
+    title:
+      type: string
+      minLength: 1
+      maxLength: 200
+    source:
+      type: string
+      enum:
+      - api
+      - eventbridge
+      readOnly: true
+    templateId:
+      type: string
+      pattern: ^swt_[0-9A-HJKMNP-TV-Z]{26}$
+      example: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    budgetUsd:
+      $ref: '#/components/schemas/Money'
+    slaDueAt:
+      $ref: '#/components/schemas/Timestamp'
+    status:
+      type: string
+      enum:
+      - open
+      - assigned
+      - in_progress
+      - pr_opened
+      - done
+      - failed
+      - cancelled
+      readOnly: true
+    teamId:
+      type:
+      - string
+      - 'null'
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+      example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    assignedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+    completedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+    slaState:
+      type: string
+      enum:
+      - on_track
+      - due_soon
+      - breached
+      - met
+      - missed
+      readOnly: true
+    progress:
+      $ref: '#/components/schemas/WorkOrderProgress'
+      readOnly: true
+    repos:
+      type: array
+      items:
+        $ref: '#/components/schemas/WorkOrderRepo'
+      description: GetWorkOrder and CreateWorkOrder only
+      readOnly: true
+    cancelReason:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+WorkOrderList:
+  type: object
+  description: A page of WorkOrder resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/WorkOrder'
+    nextToken:
+      type: string
+      description: Absent on the last page
+WorkOrderRepoInput:
+  type: object
+  required:
+  - host
+  - repo
+  properties:
+    host:
+      type: string
+      example: github.com
+    repo:
+      type: string
+      pattern: ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$
+    owningTeamId:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+      example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    owningContact:
+      type: string
+      format: email
+CreateWorkOrderRequest:
+  type: object
+  required:
+  - severity
+  - title
+  - slaDueAt
+  - templateId
+  - repos
+  properties:
+    kind:
+      type: string
+      enum:
+      - cve_remediation
+      - general
+    cveId:
+      type: string
+      pattern: ^CVE-[0-9]{4}-[0-9]{4,}$
+    severity:
+      type: string
+      enum:
+      - critical
+      - high
+      - medium
+      - low
+    title:
+      type: string
+      minLength: 1
+      maxLength: 200
+    slaDueAt:
+      $ref: '#/components/schemas/Timestamp'
+    templateId:
+      type: string
+      pattern: ^swt_[0-9A-HJKMNP-TV-Z]{26}$
+      example: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    budgetUsd:
+      $ref: '#/components/schemas/Money'
+    repos:
+      type: array
+      items:
+        $ref: '#/components/schemas/WorkOrderRepoInput'
+      minItems: 1
+UpdateWorkOrderRequest:
+  type: object
+  properties:
+    title:
+      type: string
+      minLength: 1
+      maxLength: 200
+    slaDueAt:
+      $ref: '#/components/schemas/Timestamp'
+    budgetUsd:
+      $ref: '#/components/schemas/Money'
+    addRepos:
+      type: array
+      items:
+        $ref: '#/components/schemas/WorkOrderRepoInput'
+CancelWorkOrderRequest:
+  type: object
+  required:
+  - reason
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 500
+UpdateWorkOrderRepoRequest:
+  type: object
+  description: pr_opened needs prUrl
+  required:
+  - status
+  properties:
+    status:
+      type: string
+      enum:
+      - pending
+      - in_progress
+      - pr_opened
+      - merged
+      - not_affected
+      - failed
+      - skipped
+    prUrl:
+      type: string
+      format: uri
+    prNumber:
+      type: integer
+      minimum: 1
+    detail:
+      type: string
+      maxLength: 2000
+SwarmTemplateSpec:
+  type: object
+  required:
+  - stages
+  - pools
+  properties:
+    stages:
+      type: array
+      items:
+        type: object
+    pools:
+      type: array
+      items:
+        type: object
+    handoffs:
+      type: array
+      items:
+        type: object
+    secrets:
+      type: array
+      description: Secrets a remediation team gets, created empty (the team sets the value with PutSecretValue), each bound
+        to one of the template's pools. A template never holds a value.
+      maxItems: 100
+      items:
+        type: object
+        required:
+        - pool
+        - name
+        properties:
+          pool:
+            type: string
+            description: A pool the template defines.
+          name:
+            type: string
+            pattern: ^[a-z][a-z0-9-]{0,62}$
+            description: Unique within the template.
+          description:
+            type: string
+            maxLength: 1000
+          delivery:
+            type: string
+            enum:
+            - env
+            - file
+            default: env
+          target:
+            type: string
+            description: An env variable name (^[A-Z_][A-Z0-9_]{0,127}$, default the upper-case name with underscores)
+              or, for file delivery, an absolute path (^/[A-Za-z0-9._/-]{1,255}$). Unique within the pool.
+    configValues:
+      type: array
+      items:
+        type: object
+SwarmTemplate:
+  type: object
+  required:
+  - id
+  - name
+  - kind
+  - spec
+  - budgetUsd
+  - ttlHours
+  - teardownRule
+  - enabled
+  - version
+  properties:
+    id:
+      type: string
+      pattern: ^swt_[0-9A-HJKMNP-TV-Z]{26}$
+      example: swt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    name:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{1,62}$
+    description:
+      type: string
+    kind:
+      type: string
+      enum:
+      - cve_remediation
+      - general
+    spec:
+      $ref: '#/components/schemas/SwarmTemplateSpec'
+    budgetUsd:
+      $ref: '#/components/schemas/Money'
+    ttlHours:
+      type: integer
+      minimum: 1
+      maximum: 8760
+    teardownRule:
+      type: string
+      enum:
+      - at_expiry
+      - at_cap_or_expiry
+      - at_work_complete
+    enabled:
+      type: boolean
+SwarmTemplateList:
+  type: object
+  description: A page of SwarmTemplate resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/SwarmTemplate'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateSwarmTemplateRequest:
+  type: object
+  required:
+  - name
+  - kind
+  - spec
+  - budgetUsd
+  - ttlHours
+  - teardownRule
+  properties:
+    name:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{1,62}$
+    description:
+      type: string
+    kind:
+      type: string
+      enum:
+      - cve_remediation
+      - general
+    spec:
+      $ref: '#/components/schemas/SwarmTemplateSpec'
+    budgetUsd:
+      $ref: '#/components/schemas/Money'
+    ttlHours:
+      type: integer
+      minimum: 1
+      maximum: 8760
+    teardownRule:
+      type: string
+      enum:
+      - at_expiry
+      - at_cap_or_expiry
+      - at_work_complete
+    enabled:
+      type: boolean
+UpdateSwarmTemplateRequest:
+  type: object
+  properties:
+    description:
+      type: string
+    spec:
+      $ref: '#/components/schemas/SwarmTemplateSpec'
+    budgetUsd:
+      $ref: '#/components/schemas/Money'
+    ttlHours:
+      type: integer
+      minimum: 1
+      maximum: 8760
+    teardownRule:
+      type: string
+      enum:
+      - at_expiry
+      - at_cap_or_expiry
+      - at_work_complete

@@ -1,0 +1,69 @@
+# OpenAPI fragment (API contract §4.7 and §5 shapes). Bundled into api/openapi.yaml by make openapi.
+ConfigValue:
+  type: object
+  required:
+  - name
+  - source
+  properties:
+    name:
+      $ref: '#/components/schemas/ConfigName'
+    value:
+      type: string
+    source:
+      type: string
+      enum:
+      - literal
+      - namespace
+    resolvedValue:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+    usedBy:
+      type: array
+      items:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+ConfigValueList:
+  type: object
+  description: A page of ConfigValue resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/ConfigValue'
+    nextToken:
+      type: string
+      description: Absent on the last page
+PutNamespaceConfigValueRequest:
+  type: object
+  required:
+  - value
+  properties:
+    value:
+      type: string
+      maxLength: 32768
+PutConfigValueRequest:
+  type: object
+  required:
+  - source
+  properties:
+    source:
+      type: string
+      enum:
+      - literal
+      - namespace
+    value:
+      type: string
+      maxLength: 32768
+      description: Required when source is literal

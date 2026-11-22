@@ -1,0 +1,108 @@
+# OpenAPI fragment (API contract §4.1). Bundled into api/openapi.yaml by make openapi.
+/v1/me:
+  get:
+    operationId: GetMe
+    summary: Get me
+    tags:
+    - caller
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Me'
+            example:
+              principal:
+                id: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                type: user
+                email: dev@example.com
+                name: Dana Developer
+              serviceAdmin: false
+              securityOperator: false
+              servicePermissions: []
+              teams:
+              - teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                slug: payments
+                role: team_admin
+                permissions:
+                - teams:read
+                - teams:write
+                - agents:read
+                - agents:write
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    security:
+    - idpBearer: []
+    - apiKeyBearer: []
+    - workloadBearer: []
+    x-afs-permission: any signed-in
+    x-afs-scope: any
+    x-afs-cli: sso get-caller-identity
+    x-afs-sdk: me.get()
+    x-afs-screen: header, all
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/identity-providers:
+  get:
+    operationId: ListSignInProviders
+    summary: List sign in providers
+    tags:
+    - caller
+    description: '(per enabled provider: id, kind, name, issuerUrl, consoleClientId, cliClientId, isDefault; no secret)'
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignInProviderList'
+            example:
+              items:
+              - id: idp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                kind: okta
+                name: Corporate Okta
+                issuerUrl: https://example.okta.com/oauth2/default
+                consoleClientId: 0oa1console
+                cliClientId: 0oa1cli
+                isDefault: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+    security: []
+    x-afs-permission: none
+    x-afs-scope: public
+    x-afs-cli: sso list-providers
+    x-afs-sdk: auth.listProviders()
+    x-afs-screen: sign-in
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []

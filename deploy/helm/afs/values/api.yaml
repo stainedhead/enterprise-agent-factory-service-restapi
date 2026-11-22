@@ -1,0 +1,41 @@
+enabled: true
+replicas: 3
+image:
+  repository: afs-api
+dbUser: afs_app
+serviceAccount:
+  name: afs-api
+service:
+  port: 80
+  targetPort: 8080
+  type: ClusterIP
+ports:
+  http: 8080
+  metrics: 9090
+pdb:
+  minAvailable: 2
+resources:
+  requests: {cpu: 250m, memory: 256Mi}
+  limits: {memory: 512Mi}
+# Public base settings, see user-docs/configuration.md. Each key becomes an environment variable.
+env:
+  AFS_API_ADDR: ":8080"
+  AFS_METRICS_ADDR: ":9090"
+# The Secret holding the keys every replica must share (FR-R07, RD-2), created out of band (for example by
+# External Secrets). Keys: pageTokenKey (AFS_PAGE_TOKEN_KEY) and idempotencyHmacKey
+# (AFS_IDEMPOTENCY_HMAC_KEY), each at least 32 random bytes. With more than one replica afs-api refuses to
+# start without them.
+keysSecret:
+  name: afs-api-keys
+# GetTeamKubeconfig (RA-10) also reads AFS_CLUSTER_ENDPOINT (the EKS API server URL) and AFS_CLUSTER_CA_DATA
+# (the cluster CA, base64): set global.cluster.endpoint and global.cluster.caData. AFS_CLUSTER_NAME and the
+# region come from global. With either unset the operation answers 503, so a viewer is never handed a file
+# that cannot work.
+# Number of replicas the per-principal rate limit is divided by; defaults to replicas.
+rateLimitReplicas: null
+cors:
+  origins: []             # api.cors_origins is a service setting; this only seeds nothing
+# Migrations run in afs-api at startup under an advisory lock and need the owner login. Leave
+# ownerUser empty to run migrations out of band with afs-migrate.
+migrate:
+  ownerUser: ""

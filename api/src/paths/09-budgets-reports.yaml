@@ -1,0 +1,908 @@
+# OpenAPI fragment (API contract §4.9). Bundled into api/openapi.yaml by make openapi.
+/v1/teams/{teamId}/budget:
+  get:
+    operationId: GetBudget
+    summary: Get budget
+    tags:
+    - budgets-reports
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Budget'
+            example:
+              id: bud_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              period: monthly
+              amountUsd: '2000.00'
+              thresholds:
+              - 50
+              - 80
+              - 100
+              onExhaust: block
+              expiresAt: null
+              spentUsd: '812.40'
+              reservedUsd: '3.20'
+              percentUsed: 40.6
+              forecastUsd: '1950.00'
+              projectedCapAt: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: budgets:read
+    x-afs-scope: team
+    x-afs-cli: budgets get-budget
+    x-afs-sdk: budgets.get()
+    x-afs-screen: T5
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  put:
+    operationId: PutBudget
+    summary: Put budget
+    tags:
+    - budgets-reports
+    description: '(onExhaust: notify needs teams:set-guardrails and a persistent team, D33)'
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutBudgetRequest'
+          example:
+            period: monthly
+            amountUsd: '2000.00'
+            thresholds:
+            - 50
+            - 80
+            - 100
+            onExhaust: block
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Budget'
+            example:
+              id: bud_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              period: monthly
+              amountUsd: '2000.00'
+              thresholds:
+              - 50
+              - 80
+              - 100
+              onExhaust: block
+              expiresAt: null
+              spentUsd: '812.40'
+              reservedUsd: '3.20'
+              percentUsed: 40.6
+              forecastUsd: '1950.00'
+              projectedCapAt: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: budgets:write
+    x-afs-scope: team
+    x-afs-field-permissions:
+      onExhaust=notify: teams:set-guardrails
+    x-afs-cli: budgets put-budget
+    x-afs-sdk: budgets.put()
+    x-afs-screen: T5
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/usage:
+  get:
+    operationId: GetUsage
+    summary: Get usage
+    tags:
+    - budgets-reports
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/From'
+    - $ref: '#/components/parameters/To'
+    - $ref: '#/components/parameters/UsageGroupBy'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Usage'
+            example:
+              range:
+                from: '2026-11-01T00:00:00Z'
+                to: '2026-11-21T18:00:00Z'
+              groupBy:
+              - agent
+              rows:
+              - key:
+                  agent: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                calls: 1200
+                inputTokens: 5400000
+                outputTokens: 610000
+                costUsd: '25.35'
+              totals:
+                key: {}
+                calls: 1200
+                inputTokens: 5400000
+                outputTokens: 610000
+                costUsd: '25.35'
+          text/csv:
+            schema:
+              type: string
+            example: "agent,model,calls,costUsd\r\nagt_01JD2Q3R4S5T6V7W8X9Y0Z0001,anthropic.claude-sonnet-4-5,1200,25.35\r\
+              \n"
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: usage:read
+    x-afs-scope: team
+    x-afs-cli: budgets get-usage
+    x-afs-sdk: usage.get()
+    x-afs-screen: T5
+    x-afs-priority: P0
+    x-afs-csv: true
+    x-afs-events: []
+/v1/teams/{teamId}/costs:
+  get:
+    operationId: ListCosts
+    summary: List costs
+    tags:
+    - budgets-reports
+    description: (gateway and CUR by day)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/From'
+    - $ref: '#/components/parameters/To'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CostList'
+            example:
+              items:
+              - day: '2026-11-20'
+                source: gateway
+                agentId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                poolId: null
+                modelId: anthropic.claude-sonnet-4-5
+                costUsd: '25.35'
+                calls: 1200
+              - day: '2026-11-20'
+                source: cur_bedrock
+                agentId: null
+                poolId: null
+                modelId: null
+                costUsd: '25.41'
+                calls: 0
+          text/csv:
+            schema:
+              type: string
+            example: "day,source,agentId,poolId,modelId,costUsd,calls\r\n2026-11-20,gateway,agt_01JD2Q3R4S5T6V7W8X9Y0Z0001,,anthropic.claude-sonnet-4-5,25.35,1200\r\
+              \n"
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: usage:read
+    x-afs-scope: team
+    x-afs-cli: budgets list-costs
+    x-afs-sdk: usage.listCosts()
+    x-afs-screen: T5
+    x-afs-priority: P1
+    x-afs-csv: true
+    x-afs-events: []
+/v1/teams/{teamId}/reports/{kind}:
+  get:
+    operationId: GetTeamReport
+    summary: Get team report
+    tags:
+    - budgets-reports
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: kind
+      in: path
+      required: true
+      schema:
+        type: string
+        enum:
+        - usage
+        - costs
+        - activity
+        - traffic
+    - $ref: '#/components/parameters/From'
+    - $ref: '#/components/parameters/To'
+    - $ref: '#/components/parameters/Range'
+    - $ref: '#/components/parameters/GroupBy'
+    - $ref: '#/components/parameters/TeamIdFilter'
+    - $ref: '#/components/parameters/AgentIdFilter'
+    - $ref: '#/components/parameters/ModelIdFilter'
+    - $ref: '#/components/parameters/SystemIdFilter'
+    - $ref: '#/components/parameters/PoolIdFilter'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Report'
+            example:
+              kind: usage
+              range:
+                from: '2026-11-14T18:00:00Z'
+                to: '2026-11-21T18:00:00Z'
+              groupBy:
+              - agent
+              - model
+              rows:
+              - agent: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                model: anthropic.claude-sonnet-4-5
+                calls: 1200
+                costUsd: '25.35'
+              totals:
+                calls: 1200
+                costUsd: '25.35'
+              notes:
+              - Spend with providers other than Bedrock is not included
+          text/csv:
+            schema:
+              type: string
+            example: "agent,model,calls,costUsd\r\nagt_01JD2Q3R4S5T6V7W8X9Y0Z0001,anthropic.claude-sonnet-4-5,1200,25.35\r\
+              \n"
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: reports:read
+    x-afs-scope: team
+    x-afs-cli: reports get-team-report
+    x-afs-sdk: reports.team()
+    x-afs-screen: T11
+    x-afs-priority: P0
+    x-afs-csv: true
+    x-afs-events: []
+/v1/teams/{teamId}/agents/{agentId}/reports/{kind}:
+  get:
+    operationId: GetAgentReport
+    summary: Get agent report
+    tags:
+    - budgets-reports
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: kind
+      in: path
+      required: true
+      schema:
+        type: string
+        enum:
+        - usage
+        - costs
+        - activity
+        - traffic
+    - $ref: '#/components/parameters/From'
+    - $ref: '#/components/parameters/To'
+    - $ref: '#/components/parameters/Range'
+    - $ref: '#/components/parameters/GroupBy'
+    - $ref: '#/components/parameters/TeamIdFilter'
+    - $ref: '#/components/parameters/AgentIdFilter'
+    - $ref: '#/components/parameters/ModelIdFilter'
+    - $ref: '#/components/parameters/SystemIdFilter'
+    - $ref: '#/components/parameters/PoolIdFilter'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Report'
+            example:
+              kind: usage
+              range:
+                from: '2026-11-14T18:00:00Z'
+                to: '2026-11-21T18:00:00Z'
+              groupBy:
+              - model
+              rows:
+              - model: anthropic.claude-sonnet-4-5
+                calls: 1200
+                costUsd: '25.35'
+              totals:
+                calls: 1200
+                costUsd: '25.35'
+              notes:
+              - Spend with providers other than Bedrock is not included
+          text/csv:
+            schema:
+              type: string
+            example: "agent,model,calls,costUsd\r\nagt_01JD2Q3R4S5T6V7W8X9Y0Z0001,anthropic.claude-sonnet-4-5,1200,25.35\r\
+              \n"
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: reports:read
+    x-afs-scope: team
+    x-afs-cli: reports get-agent-report
+    x-afs-sdk: reports.agent()
+    x-afs-screen: T12
+    x-afs-priority: P0
+    x-afs-csv: true
+    x-afs-events: []
+/v1/reports/{kind}:
+  get:
+    operationId: GetServiceReport
+    summary: Get service report
+    tags:
+    - budgets-reports
+    parameters:
+    - name: kind
+      in: path
+      required: true
+      schema:
+        type: string
+        enum:
+        - usage
+        - costs
+        - activity
+        - traffic
+    - $ref: '#/components/parameters/From'
+    - $ref: '#/components/parameters/To'
+    - $ref: '#/components/parameters/Range'
+    - $ref: '#/components/parameters/GroupBy'
+    - $ref: '#/components/parameters/TeamIdFilter'
+    - $ref: '#/components/parameters/AgentIdFilter'
+    - $ref: '#/components/parameters/ModelIdFilter'
+    - $ref: '#/components/parameters/SystemIdFilter'
+    - $ref: '#/components/parameters/PoolIdFilter'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Report'
+            example:
+              kind: usage
+              range:
+                from: '2026-11-14T18:00:00Z'
+                to: '2026-11-21T18:00:00Z'
+              groupBy:
+              - team
+              rows:
+              - team: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                calls: 1200
+                costUsd: '25.35'
+              totals:
+                calls: 1200
+                costUsd: '25.35'
+              notes:
+              - Spend with providers other than Bedrock is not included
+          text/csv:
+            schema:
+              type: string
+            example: "agent,model,calls,costUsd\r\nagt_01JD2Q3R4S5T6V7W8X9Y0Z0001,anthropic.claude-sonnet-4-5,1200,25.35\r\
+              \n"
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:reports
+    x-afs-scope: service
+    x-afs-cli: reports get-service-report
+    x-afs-sdk: reports.service()
+    x-afs-screen: S8, S9
+    x-afs-priority: P0
+    x-afs-csv: true
+    x-afs-events: []
+/v1/teams/{teamId}/report-schedules:
+  get:
+    operationId: ListReportSchedules
+    summary: List report schedules
+    tags:
+    - budgets-reports
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportScheduleList'
+            example:
+              items:
+              - id: rsc_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                name: weekly-usage
+                report: usage
+                query:
+                  range: 7d
+                  groupBy:
+                  - agent
+                cadence: weekly
+                channelId: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                format: csv
+                enabled: true
+                nextRunAt: '2026-11-28T06:00:00Z'
+                lastRunAt: null
+                lastStatus: null
+                lastError: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: reports:read
+    x-afs-scope: team
+    x-afs-cli: reports list-report-schedules
+    x-afs-sdk: reports.schedules.list()
+    x-afs-screen: T11
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateReportSchedule
+    summary: Create report schedule
+    tags:
+    - budgets-reports
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateReportScheduleRequest'
+          example:
+            name: weekly-usage
+            report: usage
+            query:
+              range: 7d
+              groupBy:
+              - agent
+            cadence: weekly
+            channelId: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+            format: csv
+            enabled: true
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportSchedule'
+            example:
+              id: rsc_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              name: weekly-usage
+              report: usage
+              query:
+                range: 7d
+                groupBy:
+                - agent
+              cadence: weekly
+              channelId: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              format: csv
+              enabled: true
+              nextRunAt: '2026-11-28T06:00:00Z'
+              lastRunAt: null
+              lastStatus: null
+              lastError: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: reports:schedule
+    x-afs-scope: team
+    x-afs-cli: reports create-report-schedule
+    x-afs-sdk: reports.schedules.create()
+    x-afs-screen: T11
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/report-schedules/{scheduleId}:
+  patch:
+    operationId: UpdateReportSchedule
+    summary: Update report schedule
+    tags:
+    - budgets-reports
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: scheduleId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^rsc_[0-9A-HJKMNP-TV-Z]{26}$
+        example: rsc_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateReportScheduleRequest'
+          example:
+            enabled: false
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportSchedule'
+            example:
+              id: rsc_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              name: weekly-usage
+              report: usage
+              query:
+                range: 7d
+                groupBy:
+                - agent
+              cadence: weekly
+              channelId: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              format: csv
+              enabled: false
+              nextRunAt: '2026-11-28T06:00:00Z'
+              lastRunAt: null
+              lastStatus: null
+              lastError: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: reports:schedule
+    x-afs-scope: team
+    x-afs-cli: reports update-report-schedule
+    x-afs-sdk: reports.schedules.update()
+    x-afs-screen: T11
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  delete:
+    operationId: DeleteReportSchedule
+    summary: Delete report schedule
+    tags:
+    - budgets-reports
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: scheduleId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^rsc_[0-9A-HJKMNP-TV-Z]{26}$
+        example: rsc_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: reports:schedule
+    x-afs-scope: team
+    x-afs-cli: reports delete-report-schedule
+    x-afs-sdk: reports.schedules.delete()
+    x-afs-screen: T11
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/cost-tag-status:
+  get:
+    operationId: ListCostTagStatus
+    summary: List cost tag status
+    tags:
+    - budgets-reports
+    description: '(per key: seen in CUR, first and last seen, AWS activation status)'
+    parameters:
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CostTagStatusList'
+            example:
+              items:
+              - key: afs:team
+                seenInCur: true
+                firstSeenAt: '2026-10-02T00:00:00Z'
+                lastSeenAt: '2026-11-20T00:00:00Z'
+                awsStatus: active
+                checkedAt: '2026-11-21T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:cost-tag-status
+    x-afs-scope: service
+    x-afs-cli: admin list-cost-tag-status
+    x-afs-sdk: admin.costTagStatus.list()
+    x-afs-screen: S9
+    x-afs-priority: P2
+    x-afs-csv: false
+    x-afs-events: []

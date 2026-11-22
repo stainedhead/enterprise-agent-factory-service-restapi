@@ -1,0 +1,1 @@
+{"url":"https://api.github.com/repos/acme/api/pulls/7","id":1200000007,"number":7,"state":"closed","locked":false,"title":"Bump libfoo to 1.2.4 (CVE-2026-12345)","html_url":"https://github.com/acme/api/pull/7","merged":true,"merged_at":"2026-11-22T09:30:00Z","closed_at":"2026-11-22T09:30:00Z","draft":false,"base":{"ref":"main"},"head":{"ref":"afs/cve-2026-12345"}}

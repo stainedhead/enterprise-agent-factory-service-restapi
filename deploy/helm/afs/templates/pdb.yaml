@@ -1,0 +1,22 @@
+{{- range $name := list "api" "gateway" "reconciler" }}
+{{- $c := include "afs.component" (dict "root" $ "name" $name) | fromYaml }}
+{{- if $c.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "afs.name" $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "afs.labels" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  {{- if hasKey $c.pdb "minAvailable" }}
+  minAvailable: {{ $c.pdb.minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ $c.pdb.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "afs.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
+{{- end }}
+{{- end }}

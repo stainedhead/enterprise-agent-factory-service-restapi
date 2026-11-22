@@ -1,0 +1,44 @@
+# OpenAPI base: info, servers, default security, tags (contract §1, §2).
+openapi: 3.1.0
+info:
+  title: Enterprise Agent Factory Service API
+  version: 1.1.0
+  description: Control plane API of the Enterprise Agent Factory Service (afs-api). Machine-readable form of the root repository's
+    docs/contracts/api-contract.md v1.1.0; once an operation is here, this document wins. Role-based access is enforced on
+    every operation (x-afs-permission, x-afs-scope).
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://afs.example.com
+  description: Example; each installation has its own host
+security:
+- idpBearer: []
+- apiKeyBearer: []
+tags:
+- name: caller
+  description: API contract §4.1
+- name: teams
+  description: API contract §4.2
+- name: members
+  description: API contract §4.3
+- name: agents
+  description: API contract §4.4
+- name: pools
+  description: API contract §4.4a
+- name: identity
+  description: API contract §4.5
+- name: secrets
+  description: API contract §4.6
+- name: config
+  description: API contract §4.7
+- name: external-systems
+  description: API contract §4.8
+- name: budgets-reports
+  description: API contract §4.9
+- name: delivery-audit
+  description: API contract §4.10
+- name: work-orders
+  description: API contract §4.10a
+- name: admin
+  description: API contract §4.11

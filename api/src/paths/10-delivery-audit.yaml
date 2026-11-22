@@ -1,0 +1,1197 @@
+# OpenAPI fragment (API contract §4.10). Bundled into api/openapi.yaml by make openapi.
+/v1/teams/{teamId}/log-destinations:
+  get:
+    operationId: ListLogDestinations
+    summary: List log destinations
+    tags:
+    - delivery-audit
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogDestinationList'
+            example:
+              items:
+              - id: log_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                generation: 1
+                status:
+                  phase: Pending
+                  observedGeneration: 0
+                  conditions: []
+                  updatedAt: '2026-11-21T18:00:00Z'
+                name: team-cloudwatch
+                kind: cloudwatch
+                config:
+                  logGroup: /afs/payments
+                  region: us-east-1
+                secretId: null
+                enabled: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: logs:read
+    x-afs-scope: team
+    x-afs-cli: teams list-log-destinations
+    x-afs-sdk: logDestinations.list()
+    x-afs-screen: T14
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateLogDestination
+    summary: Create log destination
+    tags:
+    - delivery-audit
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateLogDestinationRequest'
+          example:
+            name: team-cloudwatch
+            kind: cloudwatch
+            config:
+              logGroup: /afs/payments
+              region: us-east-1
+            enabled: true
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogDestination'
+            example:
+              id: log_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: team-cloudwatch
+              kind: cloudwatch
+              config:
+                logGroup: /afs/payments
+                region: us-east-1
+              secretId: null
+              enabled: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: logs:write
+    x-afs-scope: team
+    x-afs-cli: teams create-log-destination
+    x-afs-sdk: logDestinations.create()
+    x-afs-screen: T14
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/log-destinations/{id}:
+  get:
+    operationId: GetLogDestination
+    summary: Get log destination
+    tags:
+    - delivery-audit
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^log_[0-9A-HJKMNP-TV-Z]{26}$
+        example: log_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogDestination'
+            example:
+              id: log_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Ready
+                observedGeneration: 1
+                conditions:
+                - type: NamespaceReady
+                  status: 'True'
+                  reason: Applied
+                  message: Namespace and policies applied
+                  lastTransitionTime: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:05:00Z'
+              name: team-cloudwatch
+              kind: cloudwatch
+              config:
+                logGroup: /afs/payments
+                region: us-east-1
+              secretId: null
+              enabled: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: logs:read
+    x-afs-scope: team
+    x-afs-cli: teams describe-log-destination
+    x-afs-sdk: logDestinations.get()
+    x-afs-screen: T14
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  patch:
+    operationId: UpdateLogDestination
+    summary: Update log destination
+    tags:
+    - delivery-audit
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^log_[0-9A-HJKMNP-TV-Z]{26}$
+        example: log_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateLogDestinationRequest'
+          example:
+            enabled: false
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogDestination'
+            example:
+              id: log_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 2
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: team-cloudwatch
+              kind: cloudwatch
+              config:
+                logGroup: /afs/payments
+                region: us-east-1
+              secretId: null
+              enabled: false
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: logs:write
+    x-afs-scope: team
+    x-afs-cli: teams update-log-destination
+    x-afs-sdk: logDestinations.update()
+    x-afs-screen: T14
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  delete:
+    operationId: DeleteLogDestination
+    summary: Delete log destination
+    tags:
+    - delivery-audit
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^log_[0-9A-HJKMNP-TV-Z]{26}$
+        example: log_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '202':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogDestination'
+            example:
+              id: log_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Deleting
+                observedGeneration: 1
+                conditions:
+                - type: NamespaceReady
+                  status: 'True'
+                  reason: Applied
+                  message: Namespace and policies applied
+                  lastTransitionTime: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:05:00Z'
+              name: team-cloudwatch
+              kind: cloudwatch
+              config:
+                logGroup: /afs/payments
+                region: us-east-1
+              secretId: null
+              enabled: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: logs:write
+    x-afs-scope: team
+    x-afs-cli: teams delete-log-destination
+    x-afs-sdk: logDestinations.delete()
+    x-afs-screen: T14
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/notification-channels:
+  get:
+    operationId: ListNotificationChannels
+    summary: List notification channels
+    tags:
+    - delivery-audit
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationChannelList'
+            example:
+              items:
+              - id: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                version: 1
+                createdAt: '2026-11-21T18:00:00Z'
+                createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                updatedAt: '2026-11-21T18:00:00Z'
+                generation: 1
+                status:
+                  phase: Pending
+                  observedGeneration: 0
+                  conditions: []
+                  updatedAt: '2026-11-21T18:00:00Z'
+                name: payments-slack
+                kind: slack
+                config:
+                  channel: '#payments-alerts'
+                secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0003
+                eventTypes:
+                - budget.*
+                - agent.status_changed
+                enabled: true
+                delivery:
+                  healthy: true
+                  lastDeliveredAt: '2026-11-21T18:00:00Z'
+                  lastFailureAt: null
+                  lastError: null
+                  lastTestId: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: notifications:read
+    x-afs-scope: team
+    x-afs-cli: teams list-notification-channels
+    x-afs-sdk: notificationChannels.list()
+    x-afs-screen: T14
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateNotificationChannel
+    summary: Create notification channel
+    tags:
+    - delivery-audit
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateNotificationChannelRequest'
+          example:
+            name: payments-slack
+            kind: slack
+            config:
+              channel: '#payments-alerts'
+            secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0003
+            eventTypes:
+            - budget.*
+            - agent.status_changed
+            enabled: true
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationChannel'
+            example:
+              id: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: payments-slack
+              kind: slack
+              config:
+                channel: '#payments-alerts'
+              secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0003
+              eventTypes:
+              - budget.*
+              - agent.status_changed
+              enabled: true
+              delivery:
+                healthy: true
+                lastDeliveredAt: '2026-11-21T18:00:00Z'
+                lastFailureAt: null
+                lastError: null
+                lastTestId: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: notifications:write
+    x-afs-scope: team
+    x-afs-cli: teams create-notification-channel
+    x-afs-sdk: notificationChannels.create()
+    x-afs-screen: T14
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/notification-channels/{id}:
+  get:
+    operationId: GetNotificationChannel
+    summary: Get notification channel
+    tags:
+    - delivery-audit
+    description: (with delivery status)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^nch_[0-9A-HJKMNP-TV-Z]{26}$
+        example: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationChannel'
+            example:
+              id: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 1
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Ready
+                observedGeneration: 1
+                conditions:
+                - type: NamespaceReady
+                  status: 'True'
+                  reason: Applied
+                  message: Namespace and policies applied
+                  lastTransitionTime: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:05:00Z'
+              name: payments-slack
+              kind: slack
+              config:
+                channel: '#payments-alerts'
+              secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0003
+              eventTypes:
+              - budget.*
+              - agent.status_changed
+              enabled: true
+              delivery:
+                healthy: true
+                lastDeliveredAt: '2026-11-21T18:00:00Z'
+                lastFailureAt: null
+                lastError: null
+                lastTestId: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: notifications:read
+    x-afs-scope: team
+    x-afs-cli: teams describe-notification-channel
+    x-afs-sdk: notificationChannels.get()
+    x-afs-screen: T14
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  patch:
+    operationId: UpdateNotificationChannel
+    summary: Update notification channel
+    tags:
+    - delivery-audit
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^nch_[0-9A-HJKMNP-TV-Z]{26}$
+        example: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateNotificationChannelRequest'
+          example:
+            eventTypes:
+            - budget.*
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationChannel'
+            example:
+              id: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 2
+              status:
+                phase: Pending
+                observedGeneration: 0
+                conditions: []
+                updatedAt: '2026-11-21T18:00:00Z'
+              name: payments-slack
+              kind: slack
+              config:
+                channel: '#payments-alerts'
+              secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0003
+              eventTypes:
+              - budget.*
+              enabled: true
+              delivery:
+                healthy: true
+                lastDeliveredAt: '2026-11-21T18:00:00Z'
+                lastFailureAt: null
+                lastError: null
+                lastTestId: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: notifications:write
+    x-afs-scope: team
+    x-afs-cli: teams update-notification-channel
+    x-afs-sdk: notificationChannels.update()
+    x-afs-screen: T14
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+  delete:
+    operationId: DeleteNotificationChannel
+    summary: Delete notification channel
+    tags:
+    - delivery-audit
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^nch_[0-9A-HJKMNP-TV-Z]{26}$
+        example: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '202':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationChannel'
+            example:
+              id: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              version: 2
+              createdAt: '2026-11-21T18:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-21T18:00:00Z'
+              generation: 1
+              status:
+                phase: Deleting
+                observedGeneration: 1
+                conditions:
+                - type: NamespaceReady
+                  status: 'True'
+                  reason: Applied
+                  message: Namespace and policies applied
+                  lastTransitionTime: '2026-11-21T18:00:00Z'
+                updatedAt: '2026-11-21T18:05:00Z'
+              name: payments-slack
+              kind: slack
+              config:
+                channel: '#payments-alerts'
+              secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0003
+              eventTypes:
+              - budget.*
+              - agent.status_changed
+              enabled: true
+              delivery:
+                healthy: true
+                lastDeliveredAt: '2026-11-21T18:00:00Z'
+                lastFailureAt: null
+                lastError: null
+                lastTestId: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: notifications:write
+    x-afs-scope: team
+    x-afs-cli: teams delete-notification-channel
+    x-afs-sdk: notificationChannels.delete()
+    x-afs-screen: T14
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/notification-channels/{id}:test:
+  post:
+    operationId: TestNotificationChannel
+    summary: Test notification channel
+    tags:
+    - delivery-audit
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^nch_[0-9A-HJKMNP-TV-Z]{26}$
+        example: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationTestResult'
+            example:
+              testId: ntest_01JD2Q3R4S5T
+              delivered: true
+              pending: false
+              error: null
+      '202':
+        description: No result from the reconciler within 10 s
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationTestResult'
+            example:
+              testId: ntest_01JD2Q3R4S5T
+              pending: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: notifications:write
+    x-afs-scope: team
+    x-afs-cli: teams test-notification-channel
+    x-afs-sdk: notificationChannels.test()
+    x-afs-screen: T14
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/audit-events:
+  get:
+    operationId: ListAuditEvents
+    summary: List audit events
+    tags:
+    - delivery-audit
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/From'
+    - $ref: '#/components/parameters/To'
+    - name: actorId
+      in: query
+      schema:
+        type: string
+    - name: action
+      in: query
+      schema:
+        type: string
+    - name: outcome
+      in: query
+      schema:
+        type: string
+        enum:
+        - allowed
+        - denied
+        - failed
+    - name: resourceKind
+      in: query
+      schema:
+        type: string
+    - name: resourceId
+      in: query
+      schema:
+        type: string
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditEventList'
+            example:
+              items:
+              - id: 4182
+                occurredAt: '2026-11-21T18:00:00Z'
+                actorType: user
+                actorId: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                action: UpdateAgent
+                outcome: allowed
+                resourceKind: agent
+                resourceId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                requestId: req_7f3a
+                sourceIp: 192.0.2.10
+                userAgent: afs-cli/1.0.0
+                workerPod: null
+                before:
+                  modelId: anthropic.claude-haiku-4-5
+                after:
+                  modelId: anthropic.claude-sonnet-4-5
+          text/csv:
+            schema:
+              type: string
+            example: "id,occurredAt,actorType,actorId,action,outcome,resourceKind,resourceId,teamId,requestId\r\n4182,2026-11-21T18:00:00Z,user,usr_01JD2Q3R4S5T6V7W8X9Y0Z0001,UpdateAgent,allowed,agent,agt_01JD2Q3R4S5T6V7W8X9Y0Z0001,team_01JD2Q3R4S5T6V7W8X9Y0Z0001,req_7f3a\r\
+              \n"
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: audit:read
+    x-afs-scope: team
+    x-afs-cli: audit list-audit-events
+    x-afs-sdk: audit.list()
+    x-afs-screen: T15
+    x-afs-priority: P0
+    x-afs-csv: true
+    x-afs-events: []
+/v1/teams/{teamId}/revisions:
+  get:
+    operationId: ListRevisions
+    summary: List revisions
+    tags:
+    - delivery-audit
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: resourceKind
+      in: query
+      schema:
+        type: string
+    - name: resourceId
+      in: query
+      schema:
+        type: string
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevisionList'
+            example:
+              items:
+              - revision: 41
+                resourceKind: agents
+                resourceId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                operation: UPDATE
+                version: 3
+                changedBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                changedAt: '2026-11-21T18:00:00Z'
+                snapshot:
+                  name: coder
+                  model_id: anthropic.claude-sonnet-4-5
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: revisions:read
+    x-afs-scope: team
+    x-afs-cli: teams list-revisions
+    x-afs-sdk: revisions.list()
+    x-afs-screen: T15
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/revisions/{rev}:
+  get:
+    operationId: GetRevision
+    summary: Get revision
+    tags:
+    - delivery-audit
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: rev
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+        example: 41
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Revision'
+            example:
+              revision: 41
+              resourceKind: agents
+              resourceId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              operation: UPDATE
+              version: 3
+              changedBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              changedAt: '2026-11-21T18:00:00Z'
+              snapshot:
+                name: coder
+                model_id: anthropic.claude-sonnet-4-5
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: revisions:read
+    x-afs-scope: team
+    x-afs-cli: teams describe-revision
+    x-afs-sdk: revisions.get()
+    x-afs-screen: T15
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/revisions/{rev}:restore:
+  post:
+    operationId: RestoreRevision
+    summary: Restore revision
+    tags:
+    - delivery-audit
+    description: (dryRun supported)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: rev
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+        example: 41
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RestoreRevisionRequest'
+          example:
+            dryRun: true
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreResult'
+            example:
+              dryRun: true
+              revision: 41
+              changes:
+              - resourceKind: agents
+                resourceId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                action: update
+                fields:
+                - field: modelId
+                  from: anthropic.claude-haiku-4-5
+                  to: anthropic.claude-sonnet-4-5
+                reason: null
+              skipped: []
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: revisions:restore
+    x-afs-scope: team
+    x-afs-cli: teams restore-revision
+    x-afs-sdk: revisions.restore()
+    x-afs-screen: T15
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []

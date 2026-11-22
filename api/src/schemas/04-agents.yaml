@@ -1,0 +1,358 @@
+# OpenAPI fragment (API contract §4.4 and §5 shapes). Bundled into api/openapi.yaml by make openapi.
+SecretBinding:
+  type: object
+  required:
+  - secretId
+  - delivery
+  - target
+  properties:
+    secretId:
+      type: string
+      pattern: ^sec_[0-9A-HJKMNP-TV-Z]{26}$
+      example: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    delivery:
+      type: string
+      enum:
+      - env
+      - file
+    target:
+      type: string
+      description: Environment variable name or file path
+AgentVolume:
+  type: object
+  properties:
+    sizeGiB:
+      type: integer
+      minimum: 1
+      maximum: 1000
+      description: Grow-only
+    storageClass:
+      type: string
+      description: Create-only
+    onDelete:
+      type: string
+      enum:
+      - snapshot_then_delete
+      - delete
+      - retain
+    snapshotSchedule:
+      type: string
+      enum:
+      - 'off'
+      - daily
+      - weekly
+    snapshotRetain:
+      type: integer
+      minimum: 1
+      maximum: 90
+Agent:
+  type: object
+  description: An agent. It has no replica count (RA-US-4.6)
+  required:
+  - id
+  - name
+  - template
+  - image
+  - modelId
+  - iamIdentity
+  - paused
+  - version
+  - generation
+  - status
+  properties:
+    id:
+      type: string
+      pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+      example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    generation:
+      type: integer
+      minimum: 1
+      readOnly: true
+    status:
+      $ref: '#/components/schemas/Status'
+      readOnly: true
+    name:
+      $ref: '#/components/schemas/Name'
+      readOnly: true
+    description:
+      type: string
+      maxLength: 1000
+    template:
+      type: string
+      description: Agent template name
+    image:
+      $ref: '#/components/schemas/ImageRef'
+    modelId:
+      type: string
+    resources:
+      $ref: '#/components/schemas/Resources'
+    iamIdentity:
+      type: string
+      enum:
+      - team_shared
+      - dedicated
+    volume:
+      $ref: '#/components/schemas/AgentVolume'
+    secretBindings:
+      type: array
+      items:
+        $ref: '#/components/schemas/SecretBinding'
+    iamRoleArn:
+      type: string
+      readOnly: true
+    paused:
+      type: boolean
+      readOnly: true
+AgentList:
+  type: object
+  description: A page of Agent resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/Agent'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateAgentRequest:
+  type: object
+  required:
+  - name
+  - template
+  - image
+  - modelId
+  properties:
+    name:
+      $ref: '#/components/schemas/Name'
+    description:
+      type: string
+      maxLength: 1000
+    template:
+      type: string
+      description: Agent template name
+    image:
+      $ref: '#/components/schemas/ImageRef'
+    modelId:
+      type: string
+    resources:
+      $ref: '#/components/schemas/Resources'
+    iamIdentity:
+      type: string
+      enum:
+      - team_shared
+      - dedicated
+    volume:
+      $ref: '#/components/schemas/AgentVolume'
+    secretBindings:
+      type: array
+      items:
+        $ref: '#/components/schemas/SecretBinding'
+UpdateAgentRequest:
+  type: object
+  properties:
+    description:
+      type: string
+      maxLength: 1000
+    template:
+      type: string
+      description: Agent template name
+    image:
+      $ref: '#/components/schemas/ImageRef'
+    modelId:
+      type: string
+    resources:
+      $ref: '#/components/schemas/Resources'
+    iamIdentity:
+      type: string
+      enum:
+      - team_shared
+      - dedicated
+    volume:
+      $ref: '#/components/schemas/AgentVolume'
+    secretBindings:
+      type: array
+      items:
+        $ref: '#/components/schemas/SecretBinding'
+Snapshot:
+  type: object
+  required:
+  - id
+  - agentId
+  - reason
+  - state
+  - requestedAt
+  properties:
+    id:
+      type: string
+      pattern: ^vsnap_[0-9A-HJKMNP-TV-Z]{26}$
+      example: vsnap_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    agentId:
+      type: string
+      pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+      example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    reason:
+      type: string
+      enum:
+      - scheduled
+      - manual
+      - pre_delete
+      - pre_change
+      readOnly: true
+    state:
+      type: string
+      enum:
+      - requested
+      - pending
+      - completed
+      - failed
+      - deleted
+      readOnly: true
+    sizeGiB:
+      type: integer
+      readOnly: true
+    requestedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    requestedBy:
+      type: string
+      readOnly: true
+    completedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+SnapshotList:
+  type: object
+  description: A page of Snapshot resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/Snapshot'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateSnapshotRequest:
+  type: object
+  properties:
+    description:
+      type: string
+      maxLength: 200
+StorageClass:
+  type: object
+  required:
+  - name
+  - volumeType
+  - enabled
+  properties:
+    name:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{0,62}$
+    description:
+      type: string
+    volumeType:
+      type: string
+      enum:
+      - gp3
+      - io2
+    enabled:
+      type: boolean
+    version:
+      type: integer
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+StorageClassList:
+  type: object
+  description: A page of StorageClass resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/StorageClass'
+    nextToken:
+      type: string
+      description: Absent on the last page
+AgentTemplate:
+  type: object
+  required:
+  - name
+  - harness
+  - allowedDigests
+  - currentDigest
+  - enabled
+  properties:
+    id:
+      type: string
+      pattern: ^tpl_[0-9A-HJKMNP-TV-Z]{26}$
+      example: tpl_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    name:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{1,62}$
+    description:
+      type: string
+    harness:
+      type: string
+      pattern: ^[a-z][a-z0-9-]*$
+    defaultResources:
+      $ref: '#/components/schemas/Resources'
+    allowedDigests:
+      type: array
+      items:
+        type: string
+        pattern: ^sha256:[0-9a-f]{64}$
+    currentDigest:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    enabled:
+      type: boolean
+    version:
+      type: integer
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+AgentTemplateList:
+  type: object
+  description: A page of AgentTemplate resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/AgentTemplate'
+    nextToken:
+      type: string
+      description: Absent on the last page

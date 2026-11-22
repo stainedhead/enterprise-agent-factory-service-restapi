@@ -1,0 +1,33 @@
+enabled: true
+# Two replicas: one leader and a standby that takes the Lease over in under 30 s.
+replicas: 2
+image:
+  repository: afs-reconciler
+dbUser: afs_reconciler
+serviceAccount:
+  name: afs-reconciler
+ports:
+  metrics: 9090
+pdb:
+  maxUnavailable: 1
+resources:
+  requests: {cpu: 250m, memory: 256Mi}
+  limits: {memory: 1Gi}
+env:
+  AFS_METRICS_ADDR: ":9090"
+# Required: AFS_EVENT_BUS_NAME, AFS_PERMISSIONS_BOUNDARY_ARN, AFS_GATEWAY_ROLE_ARN, AFS_OIDC_PROVIDER_ARN,
+# AFS_EXPORT_BUCKET, AFS_EXPORT_KMS_KEY_ID, AFS_WORK_ORDER_QUEUE_URL (from Terraform outputs), and
+# AFS_RECONCILER_ROLE_ARN (Terraform output reconciler_role_arn: the principal role links trust and the
+# agent role trusts to verify them). AFS_ORG_MIRROR=off disables the hourly organization account mirror.
+# AFS_EXPORT_BUCKET set without AFS_EXPORT_KMS_KEY_ID refuses to start: bundles are always SSE-KMS.
+leaderLease:
+  namespace: ""           # defaults to the release namespace (AFS_LEADER_LEASE_NAMESPACE)
+# Viewer kubectl (RC-13): AFS_VIEWER_KUBECTL_ROLES is a JSON object from an identity provider id (idp_...), or
+# "default" for the default provider, to the ARN of the IAM role that provider federates to for kubectl, for
+# example {"default":"arn:aws:iam::111122223333:role/afs-viewers"}. Unset: no access entry is ever created.
+# The EKS access entry takes the role ARN without an IAM path (an SSO permission set role needs its real ARN).
+viewerKubectl:
+  enabled: true           # the ClusterRole that lets the reconciler manage the viewer Role and RoleBinding
+  roles: {}               # rendered as AFS_VIEWER_KUBECTL_ROLES, e.g. {default: arn:aws:iam::111122223333:role/afs-viewers}
+# Storage class of the shared EFS volume of a pool (AFS_EFS_STORAGE_CLASS, RC-11).
+efsStorageClass: efs-sc

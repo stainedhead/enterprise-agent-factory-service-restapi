@@ -1,0 +1,39 @@
+{{- /* The gateway identifies a caller from its source IP (pod and Cilium endpoint caches, gateway contract
+       §2) and validates the optional X-Afs-Gateway-Token with a TokenReview. Cluster-wide read of pods and
+       namespaces and Cilium endpoints, and create on tokenreviews: nothing else, and no write. */}}
+{{- $name := "gateway" }}
+{{- $c := include "afs.component" (dict "root" $ "name" $name) | fromYaml }}
+{{- if $c.enabled }}
+{{- $ctx := dict "root" $ "name" $name "c" $c }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: afs-gateway
+  labels:
+    {{- include "afs.labels" $ctx | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["cilium.io"]
+    resources: ["ciliumendpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: afs-gateway
+  labels:
+    {{- include "afs.labels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: afs-gateway
+subjects:
+  - kind: ServiceAccount
+    name: {{ $c.serviceAccount.name }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

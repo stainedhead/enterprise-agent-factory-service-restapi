@@ -1,0 +1,483 @@
+# OpenAPI fragment (API contract §4.10 and §5 shapes). Bundled into api/openapi.yaml by make openapi.
+LogDestination:
+  type: object
+  required:
+  - id
+  - name
+  - kind
+  - config
+  - enabled
+  - version
+  - generation
+  - status
+  properties:
+    id:
+      type: string
+      pattern: ^log_[0-9A-HJKMNP-TV-Z]{26}$
+      example: log_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    generation:
+      type: integer
+      minimum: 1
+      readOnly: true
+    status:
+      $ref: '#/components/schemas/Status'
+      readOnly: true
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    kind:
+      type: string
+      enum:
+      - cloudwatch
+      - s3
+      - otlp
+      - splunk_hec
+      - datadog
+    config:
+      type: object
+      description: Kind-specific settings; never a credential (use secretId)
+    secretId:
+      type:
+      - string
+      - 'null'
+      pattern: ^sec_[0-9A-HJKMNP-TV-Z]{26}$
+      example: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    enabled:
+      type: boolean
+LogDestinationList:
+  type: object
+  description: A page of LogDestination resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/LogDestination'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateLogDestinationRequest:
+  type: object
+  required:
+  - name
+  - kind
+  - config
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    kind:
+      type: string
+      enum:
+      - cloudwatch
+      - s3
+      - otlp
+      - splunk_hec
+      - datadog
+    config:
+      type: object
+    secretId:
+      type: string
+      pattern: ^sec_[0-9A-HJKMNP-TV-Z]{26}$
+      example: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    enabled:
+      type: boolean
+UpdateLogDestinationRequest:
+  type: object
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    config:
+      type: object
+    secretId:
+      type:
+      - string
+      - 'null'
+      pattern: ^sec_[0-9A-HJKMNP-TV-Z]{26}$
+      example: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    enabled:
+      type: boolean
+DeliveryStatus:
+  type: object
+  description: From the channel's DeliveryHealthy condition
+  properties:
+    healthy:
+      type:
+      - boolean
+      - 'null'
+    lastDeliveredAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+    lastFailureAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+    lastError:
+      type:
+      - string
+      - 'null'
+    lastTestId:
+      type:
+      - string
+      - 'null'
+NotificationChannel:
+  type: object
+  required:
+  - id
+  - name
+  - kind
+  - config
+  - eventTypes
+  - enabled
+  - version
+  - generation
+  - status
+  properties:
+    id:
+      type: string
+      pattern: ^nch_[0-9A-HJKMNP-TV-Z]{26}$
+      example: nch_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    generation:
+      type: integer
+      minimum: 1
+      readOnly: true
+    status:
+      $ref: '#/components/schemas/Status'
+      readOnly: true
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    kind:
+      type: string
+      enum:
+      - slack
+      - email
+      - webhook
+      - jira
+      - eventbridge
+    config:
+      type: object
+      description: Kind-specific settings; never a credential (use secretId)
+    secretId:
+      type:
+      - string
+      - 'null'
+      pattern: ^sec_[0-9A-HJKMNP-TV-Z]{26}$
+      example: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    eventTypes:
+      type: array
+      items:
+        type: string
+      description: Event types or prefixes such as budget.*
+    enabled:
+      type: boolean
+    delivery:
+      $ref: '#/components/schemas/DeliveryStatus'
+      readOnly: true
+NotificationChannelList:
+  type: object
+  description: A page of NotificationChannel resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/NotificationChannel'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateNotificationChannelRequest:
+  type: object
+  required:
+  - name
+  - kind
+  - config
+  - eventTypes
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    kind:
+      type: string
+      enum:
+      - slack
+      - email
+      - webhook
+      - jira
+      - eventbridge
+    config:
+      type: object
+    secretId:
+      type: string
+      pattern: ^sec_[0-9A-HJKMNP-TV-Z]{26}$
+      example: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    eventTypes:
+      type: array
+      items:
+        type: string
+    enabled:
+      type: boolean
+UpdateNotificationChannelRequest:
+  type: object
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    config:
+      type: object
+    secretId:
+      type:
+      - string
+      - 'null'
+      pattern: ^sec_[0-9A-HJKMNP-TV-Z]{26}$
+      example: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    eventTypes:
+      type: array
+      items:
+        type: string
+    enabled:
+      type: boolean
+NotificationTestResult:
+  type: object
+  description: '200: delivered true or false with error; 202: pending true while the reconciler has not reported (OQ-S1)'
+  required:
+  - testId
+  properties:
+    testId:
+      type: string
+    delivered:
+      type: boolean
+    pending:
+      type: boolean
+    error:
+      type:
+      - string
+      - 'null'
+AuditEvent:
+  type: object
+  required:
+  - id
+  - occurredAt
+  - actorType
+  - actorId
+  - action
+  - outcome
+  properties:
+    id:
+      type: integer
+    occurredAt:
+      $ref: '#/components/schemas/Timestamp'
+    actorType:
+      type: string
+      enum:
+      - user
+      - api_key
+      - system
+      - agent
+      - pool
+    actorId:
+      type: string
+    action:
+      type: string
+      description: operationId or reconciler action
+    outcome:
+      type: string
+      enum:
+      - allowed
+      - denied
+      - failed
+    resourceKind:
+      type:
+      - string
+      - 'null'
+    resourceId:
+      type:
+      - string
+      - 'null'
+    teamId:
+      type:
+      - string
+      - 'null'
+    requestId:
+      type:
+      - string
+      - 'null'
+    sourceIp:
+      type:
+      - string
+      - 'null'
+    userAgent:
+      type:
+      - string
+      - 'null'
+    workerPod:
+      type:
+      - string
+      - 'null'
+    before:
+      type:
+      - object
+      - 'null'
+    after:
+      type:
+      - object
+      - 'null'
+AuditEventList:
+  type: object
+  description: A page of AuditEvent resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/AuditEvent'
+    nextToken:
+      type: string
+      description: Absent on the last page
+Revision:
+  type: object
+  required:
+  - revision
+  - resourceKind
+  - resourceId
+  - operation
+  - changedBy
+  - changedAt
+  properties:
+    revision:
+      type: integer
+      minimum: 1
+    resourceKind:
+      type: string
+    resourceId:
+      type: string
+    operation:
+      type: string
+      enum:
+      - INSERT
+      - UPDATE
+      - DELETE
+    version:
+      type:
+      - integer
+      - 'null'
+    changedBy:
+      type: string
+    changedAt:
+      $ref: '#/components/schemas/Timestamp'
+    snapshot:
+      type: object
+      description: The row after the change (secret values never stored)
+RevisionList:
+  type: object
+  description: A page of Revision resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/Revision'
+    nextToken:
+      type: string
+      description: Absent on the last page
+RestoreRevisionRequest:
+  type: object
+  properties:
+    dryRun:
+      type: boolean
+      default: false
+RestoreChange:
+  type: object
+  required:
+  - resourceKind
+  - resourceId
+  - action
+  properties:
+    resourceKind:
+      type: string
+    resourceId:
+      type: string
+    action:
+      type: string
+      enum:
+      - create
+      - update
+      - delete
+      - skip
+    fields:
+      type: array
+      items:
+        type: object
+        required:
+        - field
+        properties:
+          field:
+            type: string
+          from: {}
+          to: {}
+    reason:
+      type:
+      - string
+      - 'null'
+RestoreResult:
+  type: object
+  required:
+  - dryRun
+  - revision
+  - changes
+  properties:
+    dryRun:
+      type: boolean
+    revision:
+      type: integer
+    changes:
+      type: array
+      items:
+        $ref: '#/components/schemas/RestoreChange'
+    skipped:
+      type: array
+      items:
+        $ref: '#/components/schemas/RestoreChange'
+      description: Bindings or references that no longer resolve

@@ -1,0 +1,75 @@
+name: Deploy artifacts
+
+# Terraform and the Helm chart (deploy/). Separate from ci.yml so a change under deploy/ runs only
+# these jobs. The Go tests in deploy/*/tests are separate modules: they run without terraform or
+# helm installed (HCL parse and policy checks; the Helm library renders the chart).
+
+on:
+  pull_request:
+    paths: ["deploy/**", ".github/workflows/deploy.yml", "internal/adapter/observability/**"]
+  push:
+    branches: [main]
+    paths: ["deploy/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy/terraform
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: HCL and policy checks (no terraform needed)
+        run: go test -count=1 ./...
+        working-directory: deploy/terraform/tests
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - name: terraform fmt
+        run: terraform fmt -check -recursive
+      - name: terraform validate
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.54.0
+      - name: tflint
+        run: |
+          tflint --init
+          tflint --recursive --config "$PWD/.tflint.hcl"
+
+  helm:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy/helm/afs
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.3
+      - name: helm lint
+        run: helm lint . -f ci/default-values.yaml --strict
+      - name: helm template renders
+        run: helm template afs . -f ci/default-values.yaml --namespace afs-system > /dev/null
+      - name: render tests and golden (Helm library)
+        run: go test -count=1 ./...
+        working-directory: deploy/helm/afs/tests
+      - name: alerts and dashboards use declared metrics
+        run: go test -count=1 ./internal/adapter/observability/
+        working-directory: .
