@@ -773,7 +773,7 @@ Owns: `internal/domain/swarmtemplate.go`, `internal/usecase/swarmtemplates/`, ma
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M6-B1 | List and get (`swarm-templates:read`), create, update, enable, disable, delete (`admin:swarm-templates`; delete while an open work order uses it → `409`); a security operator creating or changing one → `403` | RA-US-11.1 (part), RA-9 | — |
+| [x] | M6-B1 | List and get (`swarm-templates:read`), create, update, enable, disable, delete (`admin:swarm-templates`; delete while an open work order uses it → `409`); a security operator creating or changing one → `403` | RA-US-11.1 (part), RA-9 | — |
 
 ### M6-C · Work orders API (RA-9, D38)
 
@@ -781,11 +781,11 @@ Owns: `internal/domain/workorder.go`, `internal/usecase/workorders/`, `internal/
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M6-C1 | `WorkOrder` aggregate: statuses, `pr_opened` needs a PR link, severity, SLA state [unit] | RA-US-11.9 (part) | — |
-| [ ] | M6-C2 | `CreateWorkOrder` owner resolution through `afs.resolve_repo_owners`: exact beats wildcard (`ownerSource: team_config`), two teams at the best match → `400 ambiguousRepos` with both ids, none → `400 unownedRepos`, explicit owner wins (`explicit`), deleted teams skipped, unknown explicit team → `400 fields`; nothing written on error | RA-US-11.2, RA-US-11.3, RA-US-11.4, RA-US-11.5 | M6-C1 |
-| [ ] | M6-C3 | Second open work order for a CVE → `409`; a disabled swarm template → `400`, its revisions readable and existing teams unchanged; `work_order.created` | RA-US-11.6, RA-US-11.7 | M6-C2, M6-B1 |
-| [ ] | M6-C4 | `ListWorkOrders` (filters, `teamId`, CSV; all for operators and service admins, assigned or own repos for teams), `GetWorkOrder`, `UpdateWorkOrder`, `CancelWorkOrder`, `ListWorkOrderRepos`, `ListTeamWorkOrders`; team-admins read only; an unrelated team → `404`; security operators can create, update, cancel, list and filter | RA-US-11.8, RA-US-11.1 (part) | M6-C2 |
-| [ ] | M6-C5 | `UpdateWorkOrderRepo` with `work-orders:report` on the assigned team or `work-orders:write`; `pr_opened` without a PR link → `400`; `work_order.repo_updated`, `work_order.pr_opened` | RA-US-11.9 | M6-C4 |
+| [x] | M6-C1 | `WorkOrder` aggregate: statuses, `pr_opened` needs a PR link, severity, SLA state [unit] | RA-US-11.9 (part) | — |
+| [x] | M6-C2 | `CreateWorkOrder` owner resolution through `afs.resolve_repo_owners`: exact beats wildcard (`ownerSource: team_config`), two teams at the best match → `400 ambiguousRepos` with both ids, none → `400 unownedRepos`, explicit owner wins (`explicit`), deleted teams skipped, unknown explicit team → `400 fields`; nothing written on error | RA-US-11.2, RA-US-11.3, RA-US-11.4, RA-US-11.5 | M6-C1 |
+| [x] | M6-C3 | Second open work order for a CVE → `409`; a disabled swarm template → `400`, its revisions readable and existing teams unchanged; `work_order.created` | RA-US-11.6, RA-US-11.7 | M6-C2, M6-B1 |
+| [x] | M6-C4 | `ListWorkOrders` (filters, `teamId`, CSV; all for operators and service admins, assigned or own repos for teams), `GetWorkOrder`, `UpdateWorkOrder`, `CancelWorkOrder`, `ListWorkOrderRepos`, `ListTeamWorkOrders`; team-admins read only; an unrelated team → `404`; security operators can create, update, cancel, list and filter | RA-US-11.8, RA-US-11.1 (part) | M6-C2 |
+| [x] | M6-C5 | `UpdateWorkOrderRepo` with `work-orders:report` on the assigned team or `work-orders:write`; `pr_opened` without a PR link → `400`; `work_order.repo_updated`, `work_order.pr_opened` | RA-US-11.9 | M6-C4 |
 
 ### M6-D · Workload principal (RA-2b)
 
