@@ -10,3 +10,4 @@ How to deploy, configure and call the Agent Factory API. Written as features shi
 | [reconciler.md](reconciler.md) | Running `afs-reconciler`: what it applies, configuration, probes |
 | [Reports and usage](reports.md) | Callers: report kinds, grouping, CSV, activity samples |
 | [Costs, reconciliation and prices](billing.md) | Callers and operators: cost reads, billing jobs, price proposals |
+| [Export, import and restore](export-import-restore.md) | Operators: bundles, dry-run imports with an account map, restoring a team revision |

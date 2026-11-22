@@ -655,11 +655,11 @@ Owns: `internal/domain/export.go`, `internal/usecase/{exports,imports}/`, `inter
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M4-F1 | Bundle model: `schemaVersion`, canonical JSON, SHA-256, contents of root CFG-5; never a secret value, key hash or client secret [unit] | RA-US-14.1 (part) | — |
-| [ ] | M4-F2 | `CreateExport` (`202`, `pending`), `GetExport`, `ListExports`; non-service-admin → `403` | RA-US-14.7 (part), RA-12 | M4-F1 |
-| [ ] | M4-F3 | Bundle builder: KMS-encrypted S3 object, `sha256`, `size_bytes`, `s3_uri`, 7-day pre-signed `download_url` and `download_expires_at`, `succeeded`; failure → `failed` with summary, no checksum; `export.completed`/`export.failed`; checksum matches content [adapter with fake S3] | RC-US-17.1, RC-US-17.2, RC-US-17.3, RA-US-14.1, RC-20 | M4-F2, M4-E4 |
-| [ ] | M4-F4 | `CreateImport` dry run (default): per-team create/update/skip, secrets needing values, nothing written; checksum mismatch or body over 100 MB → `400` | RA-US-14.2, RA-US-14.4 | M4-F1 |
-| [ ] | M4-F5 | `CreateImport` apply: one transaction per team, account map, one audit per resource, role links `pending_trust`, a failed team reported with nothing written (an account id missing from the account map fails that team); `import.applied`; no S3 call [unit] | RA-US-14.3, RA-US-14.5 | M4-F4 |
+| [x] | M4-F1 | Bundle model: `schemaVersion`, canonical JSON, SHA-256, contents of root CFG-5; never a secret value, key hash or client secret [unit] | RA-US-14.1 (part) | — |
+| [x] | M4-F2 | `CreateExport` (`202`, `pending`), `GetExport`, `ListExports`; non-service-admin → `403` | RA-US-14.7 (part), RA-12 | M4-F1 |
+| [x] | M4-F3 | Bundle builder: KMS-encrypted S3 object, `sha256`, `size_bytes`, `s3_uri`, 7-day pre-signed `download_url` and `download_expires_at`, `succeeded`; failure → `failed` with summary, no checksum; `export.completed`/`export.failed`; checksum matches content [adapter with fake S3] | RC-US-17.1, RC-US-17.2, RC-US-17.3, RA-US-14.1, RC-20 | M4-F2, M4-E4 |
+| [x] | M4-F4 | `CreateImport` dry run (default): per-team create/update/skip, secrets needing values, nothing written; checksum mismatch or body over 100 MB → `400` | RA-US-14.2, RA-US-14.4 | M4-F1 |
+| [x] | M4-F5 | `CreateImport` apply: one transaction per team, account map, one audit per resource, role links `pending_trust`, a failed team reported with nothing written (an account id missing from the account map fails that team); `import.applied`; no S3 call [unit] | RA-US-14.3, RA-US-14.5 | M4-F4 |
 
 ### M4-G · Restore (RA-13)
 
@@ -667,8 +667,8 @@ Owns: `internal/domain/revision.go`, `internal/usecase/restore/`, `internal/adap
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M4-G1 | `RestoreRevision` dry run: diff, nothing written | RA-US-14.6 (part) | — |
-| [ ] | M4-G2 | Apply in one transaction (team settings, agents, bindings, config values, external system switches, tags, budget); `generation` + 1; one audit naming the source revision; a binding to a missing secret skipped and reported; the team row is locked for the restore so concurrent mutations serialize, and an `If-Match` on the team, when sent, is checked (`412`); viewer → `403` | RA-US-14.6, RA-US-14.7 (part), RA-13 | M4-G1 |
+| [x] | M4-G1 | `RestoreRevision` dry run: diff, nothing written | RA-US-14.6 (part) | — |
+| [x] | M4-G2 | Apply in one transaction (team settings, agents, bindings, config values, external system switches, tags, budget); `generation` + 1; one audit naming the source revision; a binding to a missing secret skipped and reported; the team row is locked for the restore so concurrent mutations serialize, and an `If-Match` on the team, when sent, is checked (`412`); viewer → `403` | RA-US-14.6, RA-US-14.7 (part), RA-13 | M4-G1 |
 
 ### M4-X · Milestone exit
 
