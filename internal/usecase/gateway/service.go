@@ -18,6 +18,8 @@ type Deps struct {
 	Spend      Spend
 	Thresholds Thresholds
 	Usage      UsageSink
+	// SettleRecorder is optional: told of every settlement that falls back to the retry queue.
+	SettleRecorder SettleRecorder
 }
 
 // Config configures the Service.
@@ -33,9 +35,11 @@ type Config struct {
 	// AsyncSettle moves settlement, the usage row and the threshold check off the response path: the agent
 	// gets its answer first and the books are closed right behind it (GW-8 added latency). The books are
 	// the same either way; Wait drains them.
-	AsyncSettle bool
-	Now         func() time.Time
-	Log         *slog.Logger
+	AsyncSettle                                        bool
+	SettleQueueSize                                    int
+	SettleRetryWindow, SettleRetryBase, SettleRetryMax time.Duration
+	Now                                                func() time.Time
+	Log                                                *slog.Logger
 }
 
 // Service runs one model call from identification to settlement.
@@ -52,6 +56,7 @@ type Service struct {
 	droppedLog droppedNotes
 	ensured    sync.Map // budget|period -> time.Time
 	wg         sync.WaitGroup
+	queue      *settleQueue
 }
 
 // NewService returns a Service.
@@ -62,13 +67,27 @@ func NewService(d Deps, cfg Config) *Service {
 	if cfg.SettleTimeout <= 0 {
 		cfg.SettleTimeout = 10 * time.Second
 	}
+	if cfg.SettleQueueSize <= 0 {
+		cfg.SettleQueueSize = DefaultSettleQueueSize
+	}
+	if cfg.SettleRetryWindow <= 0 {
+		cfg.SettleRetryWindow = DefaultSettleRetryWindow
+	}
+	if cfg.SettleRetryBase <= 0 {
+		cfg.SettleRetryBase = DefaultSettleRetryBase
+	}
+	if cfg.SettleRetryMax <= 0 {
+		cfg.SettleRetryMax = DefaultSettleRetryMax
+	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
 	if cfg.Log == nil {
 		cfg.Log = slog.Default()
 	}
-	return &Service{Deps: d, cfg: cfg, pods: d.Pods, tokens: d.Tokens, store: d.Store, spend: d.Spend, thresholds: d.Thresholds, log: cfg.Log}
+	s := &Service{Deps: d, cfg: cfg, pods: d.Pods, tokens: d.Tokens, store: d.Store, spend: d.Spend, thresholds: d.Thresholds, log: cfg.Log}
+	s.queue = newSettleQueue(s)
+	return s
 }
 
 // Wait blocks until the background work of finished calls (threshold events) is done; shutdown and
@@ -254,7 +273,8 @@ func (s *Service) ensure(ctx context.Context, budgetID string, period time.Time)
 
 // settle settles with the budget and period the call reserved against (GW-US-6.4), on a context the
 // client cannot cancel, retrying briefly. It returns the counter after the settlement, nil on failure
-// (the hold then expires and the reconciler's sweeper releases it).
+// (the settlement then goes to the bounded retry queue; only when that gives up does the hold expire and
+// the reconciler's sweeper release it without the cost).
 func (s *Service) settle(ctx context.Context, c Caller, b BudgetRecord, period time.Time, h Hold, actual domain.Money) *Counter {
 	if b.ID == "" {
 		return nil
@@ -274,6 +294,6 @@ func (s *Service) settle(ctx context.Context, c Caller, b BudgetRecord, period t
 		case <-time.After(time.Duration(attempt+1) * 100 * time.Millisecond):
 		}
 	}
-	s.log.Error("settle reservation failed; the hold will expire", "teamId", c.TeamID, "budgetId", b.ID, "err", lastErr)
+	s.fallBack(&pendingSettle{ctx: context.WithoutCancel(sctx), teamID: c.TeamID, holdID: h.ID, budgetID: b.ID, period: period, actual: actual}, lastErr)
 	return nil
 }

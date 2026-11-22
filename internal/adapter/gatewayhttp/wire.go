@@ -31,7 +31,8 @@ type parsed struct {
 	rtOp    bedrock.Operation
 	modelID string
 	stream  bool
-	// maxTokens is the request's own output limit, zero when it sent none; capPath says where it lives.
+	// maxTokens is the request's own output limit, zero when it sent none (or an unusable one); capPath says
+	// where the limit lives or, when absent, where the gateway writes it.
 	maxTokens int
 	capPath   []string
 	doc       map[string]json.RawMessage
@@ -73,15 +74,21 @@ func pathInt(doc map[string]json.RawMessage, path ...string) (int, bool) {
 	return int(n), true
 }
 
-// setInt writes an integer at a path of object keys.
+// setInt writes an integer at a path of object keys, creating the objects on the way when they are
+// absent or null; anything else on the way is an error.
 func setInt(doc map[string]json.RawMessage, v int, path ...string) error {
 	if len(path) == 1 {
 		doc[path[0]] = json.RawMessage(fmt.Sprint(v))
 		return nil
 	}
 	var sub map[string]json.RawMessage
-	if err := json.Unmarshal(doc[path[0]], &sub); err != nil {
-		return err
+	if raw, ok := doc[path[0]]; ok {
+		if err := json.Unmarshal(raw, &sub); err != nil {
+			return err
+		}
+	}
+	if sub == nil {
+		sub = map[string]json.RawMessage{}
 	}
 	if err := setInt(sub, v, path[1:]...); err != nil {
 		return err
@@ -99,6 +106,33 @@ var invokeLimits = [][]string{
 	{"max_tokens"}, {"max_tokens_to_sample"}, {"max_gen_len"}, {"textGenerationConfig", "maxTokenCount"},
 }
 
+// limitPathOf returns the output limit field of the Bedrock model family of a model id, nil when the
+// gateway does not know the family (FR-R04, Q3). The id may carry a cross-region prefix (us., eu.,
+// apac., global.) or be a foundation model ARN.
+func limitPathOf(modelID string) []string {
+	id := strings.ToLower(modelID[strings.LastIndex(modelID, "/")+1:])
+	parts := strings.Split(id, ".")
+	for i, vendor := range parts {
+		rest := strings.Join(parts[i+1:], ".")
+		switch vendor {
+		case "anthropic":
+			if strings.HasPrefix(rest, "claude-v2") || strings.HasPrefix(rest, "claude-instant") {
+				return []string{"max_tokens_to_sample"}
+			}
+			return []string{"max_tokens"}
+		case "amazon":
+			if strings.HasPrefix(rest, "titan-text") {
+				return []string{"textGenerationConfig", "maxTokenCount"}
+			}
+		case "meta":
+			return []string{"max_gen_len"}
+		case "mistral", "cohere":
+			return []string{"max_tokens"}
+		}
+	}
+	return nil
+}
+
 func parseConverse(rtOp bedrock.Operation, op gateway.Operation, modelID string, body []byte) (*parsed, error) {
 	if !gateway.ValidModelID(modelID) {
 		return nil, badRequest("modelId", "is not a valid model id")
@@ -108,9 +142,8 @@ func parseConverse(rtOp bedrock.Operation, op gateway.Operation, modelID string,
 		return nil, err
 	}
 	p := &parsed{wire: wireConverse, op: op, rtOp: rtOp, modelID: modelID, stream: op.Streams(), doc: doc}
-	if n, ok := pathInt(doc, "inferenceConfig", "maxTokens"); ok {
-		p.maxTokens, p.capPath = n, []string{"inferenceConfig", "maxTokens"}
-	}
+	p.capPath = []string{"inferenceConfig", "maxTokens"}
+	p.maxTokens, _ = pathInt(doc, p.capPath...)
 	return p, nil
 }
 
@@ -127,6 +160,13 @@ func parseInvoke(rtOp bedrock.Operation, op gateway.Operation, modelID string, b
 		if n, ok := pathInt(doc, path...); ok {
 			p.maxTokens, p.capPath = n, path
 			break
+		}
+	}
+	if p.capPath == nil {
+		// The body names no limit: set the family's field to the cap, or refuse when it is not known.
+		if p.capPath = limitPathOf(modelID); p.capPath == nil {
+			return nil, badRequest("body", "has no output limit and the gateway cannot set one for this model family; "+
+				"send the model's own output limit (max_tokens, max_gen_len or textGenerationConfig.maxTokenCount)")
 		}
 	}
 	return p, nil
@@ -147,6 +187,7 @@ func parseAnthropic(body []byte, h http.Header) (*parsed, error) {
 	if raw, ok := doc["stream"]; ok && json.Unmarshal(raw, &stream) != nil {
 		return nil, badRequest("stream", "must be a boolean")
 	}
+	// The Messages API requires max_tokens; a request without one is refused here, never forwarded uncapped.
 	n, ok := pathInt(doc, "max_tokens")
 	if !ok {
 		return nil, badRequest("max_tokens", "is required and must be a positive integer")
@@ -167,7 +208,9 @@ func (p *parsed) upstreamBody(a gateway.Authorized) ([]byte, error) {
 	for k, v := range p.doc {
 		doc[k] = v
 	}
-	if p.maxTokens > a.MaxOutputTokens && a.MaxOutputTokens > 0 {
+	// The limit sent is the reserved cap whenever the request sent none or more (FR-R04): the amount held
+	// and the tokens Bedrock may produce are the same number.
+	if a.MaxOutputTokens > 0 && (p.maxTokens == 0 || p.maxTokens > a.MaxOutputTokens) {
 		if err := setInt(doc, a.MaxOutputTokens, p.capPath...); err != nil {
 			return nil, badRequest(strings.Join(p.capPath, "."), "is not an object path")
 		}

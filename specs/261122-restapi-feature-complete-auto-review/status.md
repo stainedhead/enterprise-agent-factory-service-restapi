@@ -28,7 +28,7 @@
 |---|---|---|---|---|---|
 | A | FR-R01, R02, R12 | A-1 to A-10 | 10 of 10 | `/home/user/wt/restapi-rf-a`, `rf/a` | Complete (gate and cover green) |
 | C | FR-R06, R13 (+ counters) | C-1 to C-9 | 9 of 9 | `../wt/restapi-rf-c`, `rf/c` | Complete (not merged) |
-| B | FR-R04, R05, R08 | B-1 to B-11 | 0 of 11 | `../restapi-fix-b`, `fix/review-b` | Not Started |
+| B | FR-R04, R05, R08 | B-1 to B-11 | 11 of 11 | `../wt/restapi-rf-b`, `rf/b` | Complete (B-10 stub binding, integrator swap after C) |
 | D | FR-R03, R07, R09, R10, R11, R15 | D-1 to D-11 | 0 of 11 | `../restapi-fix-d`, `fix/review-d` | Not Started |
 | E | FR-R14, R17, R16 | E-1 to E-7 | 0 of 7 | `../restapi-fix-e`, `fix/review-e` | Not Started |
 

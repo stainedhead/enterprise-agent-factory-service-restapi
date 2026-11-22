@@ -98,7 +98,7 @@ func TestGatewayUsageRowsFeedReportsAndTheActivityCollector(t *testing.T) {
 		t.Fatal(err)
 	}
 	uw := postgres.NewUsageWriter(w.pool, nil, postgres.UsageWriterConfig{FlushEvery: 50 * time.Millisecond})
-	uw.Run()
+	uw.Run(t.Context())
 	at := time.Now().UTC().Truncate(5 * time.Minute).Add(time.Minute)
 	agent, pool := pgtest.NewID("agt"), pgtest.NewID("pool")
 	rec := func(req string, o gateway.Outcome, a, p, pod string) {
