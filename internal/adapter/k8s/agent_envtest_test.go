@@ -48,9 +48,9 @@ func agentDesired(ns, slug, id, name string) agent.Desired {
 		Team:   agent.Team{ID: agentTeam, Slug: slug, Namespace: ns, State: "active", IsolationTier: agent.TierShared},
 		Tags:   map[string]string{"afs-team-id": agentTeam, "afs-agent-id": id},
 		Bindings: []agent.Binding{
-			{SecretID: "sec_A", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x/gh-AbCdEf", VersionID: "v1", Delivery: agent.DeliveryEnv, Target: "GH_TOKEN"},
-			{SecretID: "sec_B", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x/key-AbCdEf", VersionID: "v1", Delivery: agent.DeliveryFile, Target: "/etc/keys/deploy.pem"},
-			{SecretID: "sec_C", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x/okta-AbCdEf", VersionID: "v1", Delivery: agent.DeliveryEnv, Target: "OKTA_TOKEN", ExternalSystemID: "ext_1", SystemOff: true},
+			{SecretID: "sec_A", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x/gh-AbCdEf", VersionID: "v1", Delivery: agent.DeliveryEnv, Target: "GH_TOKEN"},                                                 //nolint:gosec // an example ARN, not a credential
+			{SecretID: "sec_B", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x/key-AbCdEf", VersionID: "v1", Delivery: agent.DeliveryFile, Target: "/etc/keys/deploy.pem"},                                   //nolint:gosec // an example ARN, not a credential
+			{SecretID: "sec_C", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x/okta-AbCdEf", VersionID: "v1", Delivery: agent.DeliveryEnv, Target: "OKTA_TOKEN", ExternalSystemID: "ext_1", SystemOff: true}, //nolint:gosec // an example ARN, not a credential
 		},
 		Config: []agent.ConfigValue{{Name: "LOG_LEVEL", Value: "info"}},
 	}

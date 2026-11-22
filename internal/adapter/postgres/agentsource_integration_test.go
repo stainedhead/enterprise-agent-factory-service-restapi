@@ -1,6 +1,7 @@
 package postgres_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -163,6 +164,12 @@ func TestAgentSourceRestartNonceAndWorkOrder(t *testing.T) {
 	other := seedAgent(t, db)
 	admin := db.Admin(t)
 	src := postgres.NewAgentSource(reconcilerPool(t, db))
+	// The outbox is shared by the package's tests; leave it as found.
+	t.Cleanup(func() {
+		if _, err := admin.Exec(context.Background(), `DELETE FROM afs.outbox_events WHERE event_type = 'agent.restarted'`); err != nil {
+			t.Error(err)
+		}
+	})
 	restart := func(a seededAgent) {
 		t.Helper()
 		if _, err := admin.Exec(t.Context(), `INSERT INTO afs.outbox_events (event_type, aggregate_kind, aggregate_id, team_id, payload) VALUES ('agent.restarted', 'agent', $1, $2, '{}')`, a.agentID, a.team.ID); err != nil {

@@ -174,3 +174,38 @@ func TestAgentLifecyclePorts(t *testing.T) {
 		t.Error("class still present")
 	}
 }
+
+// M2-G6: a suspended team's agents run at zero replicas and come back to their own prior state: the agent
+// that was enabled returns to one, the one paused before stays paused.
+func TestTeamSuspendResumeAgents(t *testing.T) {
+	ac, c := newAgentCluster(t)
+	ctx := t.Context()
+	ns := "g-suspend"
+	envtesting.EnsureNamespace(t, env.Config, ns, nil)
+	running := agentDesired(ns, "suspend", agentA, "runner")
+	paused := agentDesired(ns, "suspend", agentB, "sleeper")
+	paused.State = agent.StatePaused
+	replicas := func(name string) int32 { return teammateSpec(t, c, ns, name).Replicas }
+	apply := func(teamState string) {
+		t.Helper()
+		for _, d := range []agent.Desired{running, paused} {
+			d.Team.State = teamState
+			if _, err := ac.ApplyAgent(ctx, agentEnv(d)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	apply("active")
+	if replicas("agent-runner") != 1 || replicas("agent-sleeper") != 0 {
+		t.Fatalf("active: runner %d sleeper %d", replicas("agent-runner"), replicas("agent-sleeper"))
+	}
+	apply("suspended")
+	if replicas("agent-runner") != 0 || replicas("agent-sleeper") != 0 {
+		t.Fatalf("suspended: runner %d sleeper %d", replicas("agent-runner"), replicas("agent-sleeper"))
+	}
+	apply("active")
+	if replicas("agent-runner") != 1 || replicas("agent-sleeper") != 0 {
+		t.Fatalf("resumed: runner %d sleeper %d", replicas("agent-runner"), replicas("agent-sleeper"))
+	}
+}

@@ -9,7 +9,7 @@ import (
 func withBinding() agent.Desired {
 	d := desired()
 	d.Bindings = []agent.Binding{
-		{SecretID: "sec_A", SecretName: "gh", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/afs-t-alpha/gh-AbCdEf", VersionID: "v1", Delivery: agent.DeliveryEnv, Target: "GH_TOKEN"},
+		{SecretID: "sec_A", SecretName: "gh", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/afs-t-alpha/gh-AbCdEf", VersionID: "v1", Delivery: agent.DeliveryEnv, Target: "GH_TOKEN"}, //nolint:gosec // an example ARN, not a credential
 	}
 	d.Config = []agent.ConfigValue{{Name: "LOG_LEVEL", Value: "info"}, {Name: "REGION", Value: "eu"}}
 	return d

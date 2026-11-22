@@ -26,9 +26,9 @@ func agentDesired() agent.Desired {
 		Team:      agent.Team{ID: tID, Slug: "alpha", Namespace: "afs-t-alpha", State: "active", IsolationTier: agent.TierShared},
 		Tags:      map[string]string{"afs-team-id": tID, "afs-agent-id": aID, "cost-center": "1234"},
 		Bindings: []agent.Binding{
-			{SecretID: "sec_A", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/afs-t-alpha/gh-AbCdEf", VersionID: "v1", Delivery: agent.DeliveryEnv, Target: "GH_TOKEN"},
-			{SecretID: "sec_B", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/afs-t-alpha/key-AbCdEf", VersionID: "v7", Delivery: agent.DeliveryFile, Target: "/etc/keys/deploy.pem"},
-			{SecretID: "sec_C", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/afs-t-alpha/okta-AbCdEf", VersionID: "v1", Delivery: agent.DeliveryEnv, Target: "OKTA_TOKEN", ExternalSystemID: "ext_1", SystemOff: true},
+			{SecretID: "sec_A", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/afs-t-alpha/gh-AbCdEf", VersionID: "v1", Delivery: agent.DeliveryEnv, Target: "GH_TOKEN"},                                                 //nolint:gosec // an example ARN, not a credential
+			{SecretID: "sec_B", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/afs-t-alpha/key-AbCdEf", VersionID: "v7", Delivery: agent.DeliveryFile, Target: "/etc/keys/deploy.pem"},                                   //nolint:gosec // an example ARN, not a credential
+			{SecretID: "sec_C", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/afs-t-alpha/okta-AbCdEf", VersionID: "v1", Delivery: agent.DeliveryEnv, Target: "OKTA_TOKEN", ExternalSystemID: "ext_1", SystemOff: true}, //nolint:gosec // an example ARN, not a credential
 		},
 		Config: []agent.ConfigValue{{Name: "LOG_LEVEL", Value: "info"}},
 	}
@@ -62,7 +62,7 @@ func TestPodGatewayDelivery(t *testing.T) {
 	pod := render.PodTemplate(environment(agentDesired()))
 	env := envOf(pod)
 	url := "https://afs-gateway.afs-system.svc:8443"
-	want := map[string]string{
+	want := map[string]string{ //nolint:gosec // gateway placeholder key, not a credential
 		"AFS_GATEWAY_URL": url, "AWS_ENDPOINT_URL_BEDROCK_RUNTIME": url, "ANTHROPIC_BASE_URL": url + "/anthropic", "ANTHROPIC_API_KEY": "afs-gateway",
 		"AFS_GATEWAY_TOKEN_FILE": "/var/run/secrets/afs/gateway/token",
 		"AWS_CA_BUNDLE":          "/var/run/secrets/afs/gateway/ca.crt", "SSL_CERT_FILE": "/var/run/secrets/afs/gateway/ca.crt",

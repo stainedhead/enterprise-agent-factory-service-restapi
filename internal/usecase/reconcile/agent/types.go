@@ -72,7 +72,7 @@ type Binding struct {
 }
 
 // Delivered reports whether the binding reaches the pod.
-func (b Binding) Delivered() bool { return !(b.ExternalSystemID != "" && b.SystemOff) }
+func (b Binding) Delivered() bool { return b.ExternalSystemID == "" || !b.SystemOff }
 
 // ConfigValue is one resolved, non-secret configuration value.
 type ConfigValue struct {

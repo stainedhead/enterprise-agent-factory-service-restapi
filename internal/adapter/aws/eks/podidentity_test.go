@@ -3,6 +3,7 @@ package eks
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -27,7 +28,7 @@ func newFakePI() *fakePI { return &fakePI{assoc: map[string]*fakeAssoc{}} }
 func (f *fakePI) CreatePodIdentityAssociation(_ context.Context, in *awseks.CreatePodIdentityAssociationInput, _ ...func(*awseks.Options)) (*awseks.CreatePodIdentityAssociationOutput, error) {
 	f.calls = append(f.calls, "create")
 	f.next++
-	id := "a-" + string(rune('0'+f.next))
+	id := "a-" + strconv.Itoa(f.next)
 	f.assoc[id] = &fakeAssoc{id: id, ns: *in.Namespace, sa: *in.ServiceAccount, role: *in.RoleArn, tags: in.Tags}
 	if in.ClientRequestToken == nil || *in.ClientRequestToken == "" {
 		return nil, errors.New("no client request token")
@@ -138,7 +139,8 @@ func TestPodIdentityErrors(t *testing.T) {
 	if err := NewPodIdentityWithAPI(f, "").Delete(context.Background(), "ns", "sa"); err == nil {
 		t.Error("missing cluster accepted by Delete")
 	}
-	if requestToken("c", "n", "s", "r") != requestToken("c", "n", "s", "r") || requestToken("c", "n", "s", "r") == requestToken("c", "n", "s", "r2") {
+	first, again, other := requestToken("c", "n", "s", "r"), requestToken("c", "n", "s", "r"), requestToken("c", "n", "s", "r2")
+	if first != again || first == other {
 		t.Error("request token is not a stable function of its inputs")
 	}
 	f.listErr = &types.ResourceNotFoundException{}

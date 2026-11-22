@@ -427,13 +427,13 @@ Owns: `internal/usecase/reconcile/agent/`, `internal/adapter/k8s/render/{agent,a
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M2-F1 | Agentic Teammates custom resource (pinned version, OQ-7) rendering a StatefulSet (replicas 1, or 0 when paused; restart nonce annotation as inputs from M2-G3), ServiceAccount, Pod Identity association, volume claim template with PVC retention `Retain` for scale-down and delete; pod-template hash of referenced versions [envtest] | RC-2 (part), AGT-3 | M1-G1d |
-| [ ] | M2-F2 | ConfigMap (`envFrom` + `/etc/afs/config/<NAME>`); ExternalSecrets for env and file bindings at exact targets; a secret naming an external system that is off for the agent is not delivered, and is again within 60 s of switching on [envtest] | RC-US-2.1 (part), RC-US-2.3 | M2-F1 |
-| [ ] | M2-F3 | `/etc/afs/aws/config` (each profile `role_session_name` = agent id), `/etc/afs/tags.json` and `AFS_TAGS`; gateway environment and CA bundle per gateway contract §3; optional gateway token projection; `afs-api` token projection only in teams with an assigned work order; no AWS keys [envtest] | RC-US-2.1, RC-US-2.4, RC-US-4.3 (part) | M2-F1 |
-| [ ] | M2-F4 | Rotating a secret or changing a config value changes the pod-template hash of the referencing agents only [envtest] | RC-US-2.2 | M2-F2 |
-| [ ] | M2-F5 | Dedicated tier: Karpenter NodePool per team (taints, labels, tags) and matching tolerations and selectors on the team's pods [envtest]; `[e2e]` case | RC-US-2.6 (part), TEAM-6 | M2-F1 |
-| [ ] | M2-F6 | `TemplateRetired=True` within 60 s when the template is disabled or the digest is removed, agent keeps running; cleared on re-enable [envtest] | RC-US-1.3, RA-US-4.5 (part), RC-5 (part) | M2-F1 |
-| [ ] | M2-F7 | Dedicated agent IAM role (`iamIdentity = dedicated`) with tags `afs-team-id`, `afs-agent-id`; team-shared agents use the team role [adapter with fake AWS] | RC-2 (part), AGT-6 (part) | M2-F1 |
+| [x] | M2-F1 | Agentic Teammates custom resource (pinned version, OQ-7) rendering a StatefulSet (replicas 1, or 0 when paused; restart nonce annotation as inputs from M2-G3), ServiceAccount, Pod Identity association, volume claim template with PVC retention `Retain` for scale-down and delete; pod-template hash of referenced versions [envtest] | RC-2 (part), AGT-3 | M1-G1d |
+| [x] | M2-F2 | ConfigMap (`envFrom` + `/etc/afs/config/<NAME>`); ExternalSecrets for env and file bindings at exact targets; a secret naming an external system that is off for the agent is not delivered, and is again within 60 s of switching on [envtest] | RC-US-2.1 (part), RC-US-2.3 | M2-F1 |
+| [x] | M2-F3 | `/etc/afs/aws/config` (each profile `role_session_name` = agent id), `/etc/afs/tags.json` and `AFS_TAGS`; gateway environment and CA bundle per gateway contract §3; optional gateway token projection; `afs-api` token projection only in teams with an assigned work order; no AWS keys [envtest] | RC-US-2.1, RC-US-2.4, RC-US-4.3 (part) | M2-F1 |
+| [x] | M2-F4 | Rotating a secret or changing a config value changes the pod-template hash of the referencing agents only [envtest] | RC-US-2.2 | M2-F2 |
+| [x] | M2-F5 | Dedicated tier: Karpenter NodePool per team (taints, labels, tags) and matching tolerations and selectors on the team's pods [envtest]; `[e2e]` case | RC-US-2.6 (part), TEAM-6 | M2-F1 |
+| [x] | M2-F6 | `TemplateRetired=True` within 60 s when the template is disabled or the digest is removed, agent keeps running; cleared on re-enable [envtest] | RC-US-1.3, RA-US-4.5 (part), RC-5 (part) | M2-F1 |
+| [x] | M2-F7 | Dedicated agent IAM role (`iamIdentity = dedicated`) with tags `afs-team-id`, `afs-agent-id`; team-shared agents use the team role [adapter with fake AWS] | RC-2 (part), AGT-6 (part) | M2-F1 |
 | [ ] | M2-F8 | `[e2e]` case: an image with no AFS code (`busybox env`, `cat`) receives every variable and file | RC-US-2.5 | M2-F3 |
 
 ### M2-G · Volumes, snapshots, agent lifecycle (RC-16, RC-17 agent part)
@@ -442,12 +442,12 @@ Owns: `internal/usecase/reconcile/snapshot/`, `internal/usecase/reconcile/lifecy
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M2-G1 | Growing `sizeGiB` patches the existing PVC (online expansion; retention is set by M2-F1) [envtest]; `[e2e]` data kept | RC-US-14.5 (part), RC-16 | M2-F1 |
-| [ ] | M2-G2 | Snapshots via `VolumeSnapshot` on the daily or weekly schedule and on manual requests, pruned to `snapshotRetain`, recorded in `agent_volume_snapshots`, tagged [envtest with fake clock] | RC-US-14.3, RC-US-14.4 | M2-F1 |
-| [ ] | M2-G3 | Pause (replicas 0, PVC kept), resume (same volume), restart (pod-template annotation) [envtest]; `[e2e]` files survive | RC-US-14.1 | M2-F1 |
-| [ ] | M2-G4 | Agent delete steps in the finalizer: `snapshot_then_delete` waits for a ready snapshot then deletes, `retain` keeps and records, `delete` deletes without snapshot; Pod Identity association and dedicated role revoked [envtest] | RC-US-14.2, RC-US-15.2 (part) | M2-G2, M1-I1 |
-| [ ] | M2-G5 | A missing PVC is re-created from the latest ready snapshot [envtest] | RC-US-3.2 (part), RC-16 | M2-G2 |
-| [ ] | M2-G6 | Team suspend and resume for agents: all to 0 within 60 s, each back to its prior state; an agent paused before stays paused [envtest] | RC-US-15.1 (part) | M2-G3, M1-I2 |
+| [x] | M2-G1 | Growing `sizeGiB` patches the existing PVC (online expansion; retention is set by M2-F1) [envtest]; `[e2e]` data kept | RC-US-14.5 (part), RC-16 | M2-F1 |
+| [x] | M2-G2 | Snapshots via `VolumeSnapshot` on the daily or weekly schedule and on manual requests, pruned to `snapshotRetain`, recorded in `agent_volume_snapshots`, tagged [envtest with fake clock] | RC-US-14.3, RC-US-14.4 | M2-F1 |
+| [x] | M2-G3 | Pause (replicas 0, PVC kept), resume (same volume), restart (pod-template annotation) [envtest]; `[e2e]` files survive | RC-US-14.1 | M2-F1 |
+| [x] | M2-G4 | Agent delete steps in the finalizer: `snapshot_then_delete` waits for a ready snapshot then deletes, `retain` keeps and records, `delete` deletes without snapshot; Pod Identity association and dedicated role revoked [envtest] | RC-US-14.2, RC-US-15.2 (part) | M2-G2, M1-I1 |
+| [x] | M2-G5 | A missing PVC is re-created from the latest ready snapshot [envtest] | RC-US-3.2 (part), RC-16 | M2-G2 |
+| [x] | M2-G6 | Team suspend and resume for agents: all to 0 within 60 s, each back to its prior state; an agent paused before stays paused [envtest] | RC-US-15.1 (part) | M2-G3, M1-I2 |
 
 ### M2-H · Egress and traffic (RC-7 traffic)
 
