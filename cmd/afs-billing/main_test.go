@@ -6,14 +6,18 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/observability"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
+	"gopkg.in/yaml.v3"
+
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/billing/cur"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/billing/cur/curtest"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/billing/reconcile"
 )
 
 func noEnv(string) string { return "" }
@@ -155,5 +159,69 @@ func TestCURIngestNeedsItsSettings(t *testing.T) {
 	a := testApp(io.Discard)
 	if err := curIngest(t.Context(), a, jobInput{}); err == nil || !strings.Contains(err.Error(), "AFS_CUR_DATABASE") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// Every CronJob in the Helm values names a registered job, with the schedules the reports need:
+// report-schedules every few minutes, showback daily.
+func TestEveryHelmCronJobIsRegisteredWithItsSchedule(t *testing.T) {
+	raw, err := os.ReadFile("../../deploy/helm/afs/values/billing.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v struct {
+		Cronjobs map[string]struct{ Schedule, Job string } `yaml:"cronjobs"`
+	}
+	if err := yaml.Unmarshal(raw, &v); err != nil {
+		t.Fatal(err)
+	}
+	for name, cj := range v.Cronjobs {
+		if _, ok := jobs[cj.Job]; !ok {
+			t.Errorf("cronjob %s runs job %q, which is not registered", name, cj.Job)
+		}
+	}
+	for job, schedule := range map[string]string{"report-schedules": "*/15 * * * *", "showback": "0 6 * * *"} {
+		if _, ok := jobs[job]; !ok {
+			t.Errorf("job %s is not registered", job)
+		}
+		got := ""
+		for _, cj := range v.Cronjobs {
+			if cj.Job == job {
+				got = cj.Schedule
+			}
+		}
+		if got != schedule {
+			t.Errorf("job %s schedule = %q, want %q", job, got, schedule)
+		}
+	}
+}
+
+func TestReportJobsNeedTheReportsBucket(t *testing.T) {
+	for _, name := range []string{"report-schedules", "showback"} {
+		a := &app{env: noEnv, log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+		err := jobs[name](t.Context(), a, jobInput{})
+		if err == nil || !strings.Contains(err.Error(), "AFS_REPORTS_BUCKET") {
+			t.Errorf("%s: err = %v, want the missing bucket", name, err)
+		}
+	}
+}
+
+func TestLogVarianceIsStructuredAndWarnsOverThreshold(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&buf, nil))
+	day := time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)
+	logVariance(log, reconcile.DayResult{Day: day, Teams: 3, OverThreshold: 1, Events: 1, MaxVarianceRatio: 0.12})
+	logVariance(log, reconcile.DayResult{Day: day, Teams: 3})
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("lines = %v", lines)
+	}
+	for _, want := range []string{`"level":"WARN"`, `"metric":"afs_cost_cur_variance_ratio"`, `"maxVarianceRatio":0.12`, `"overThreshold":1`, `"day":"2026-11-20"`} {
+		if !strings.Contains(lines[0], want) {
+			t.Errorf("over-threshold line lacks %s: %s", want, lines[0])
+		}
+	}
+	if !strings.Contains(lines[1], `"level":"INFO"`) {
+		t.Errorf("a quiet day must be INFO: %s", lines[1])
 	}
 }

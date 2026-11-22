@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/aws/awstest"
@@ -148,5 +149,32 @@ func TestEnsureRoleKeepsTheBudgetDenyAndDeleteRemovesIt(t *testing.T) {
 	}
 	if srv2.Count("DeleteRolePolicy") != 2 {
 		t.Errorf("DeleteRole left a policy: %v", srv2.Actions())
+	}
+}
+
+// M4 integration: one pass that removes a stale AFS tag (tags.Stale) and a leftover policy must keep the
+// budget backstop's deny and a foreign tag.
+func TestEnsureRoleStaleTagAndBudgetDenyTogether(t *testing.T) {
+	c, srv := newClient(t)
+	tags := ownedTags()
+	tags["afs-agent-name"] = "stale"
+	tags["cost-center"] = "keep-me"
+	srv.OnAction("GetRole", awstest.QueryOK("GetRole", roleXML(rolePath, trustDoc, boundary, tags)))
+	srv.OnAction("ListRolePolicies", awstest.QueryOK("ListRolePolicies", policyNames("team", "leftover", BudgetDenyPolicyName)))
+	srv.OnAction("GetRolePolicy", awstest.QueryOK("GetRolePolicy", policyOut("team", polDoc)))
+	for _, a := range []string{"UntagRole", "DeleteRolePolicy"} {
+		srv.OnAction(a, awstest.QueryEmptyOK(a))
+	}
+	if _, err := c.EnsureRole(t.Context(), spec()); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(writes(srv), ","); got != "UntagRole,DeleteRolePolicy" {
+		t.Fatalf("writes = %s", got)
+	}
+	if u, _ := srv.Find("UntagRole"); u.Form.Get("TagKeys.member.1") != "afs-agent-name" || u.Form.Get("TagKeys.member.2") != "" {
+		t.Errorf("UntagRole = %v", u.Form)
+	}
+	if d, _ := srv.Find("DeleteRolePolicy"); d.Form.Get("PolicyName") != "leftover" {
+		t.Errorf("DeleteRolePolicy = %v", d.Form)
 	}
 }

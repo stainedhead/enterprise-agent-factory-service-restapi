@@ -21,6 +21,9 @@ reconciler:
     AFS_EVENT_BUS_NAME: afs-events
     AFS_PERMISSIONS_BOUNDARY_ARN: arn:aws:iam::111122223333:policy/afs-agent-boundary
     AFS_GATEWAY_ROLE_ARN: arn:aws:iam::111122223333:role/afs-gateway
+    AFS_RECONCILER_ROLE_ARN: arn:aws:iam::111122223333:role/afs-reconciler
+    AFS_EXPORT_BUCKET: afs-export-111122223333
+    AFS_EXPORT_KMS_KEY_ID: 00000000-0000-0000-0000-000000000000
     AFS_OIDC_PROVIDER_ARN: arn:aws:iam::111122223333:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE
 billing:
   env:
@@ -29,3 +32,4 @@ billing:
     AFS_ATHENA_WORKGROUP: afs
     AFS_ATHENA_OUTPUT: s3://afs-athena-results-111122223333/
     AFS_REPORTS_BUCKET: afs-reports-111122223333
+    AFS_REPORTS_KMS_KEY_ID: 00000000-0000-0000-0000-000000000000

@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/aws/athena"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/observability"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/billing/cur"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/billing/reconcile"
@@ -60,8 +62,22 @@ func reconcileJob(ctx context.Context, a *app, in jobInput) error {
 	}
 	results, err := r.Run(ctx, a.days(in))
 	for _, d := range results {
-		a.log.Info("reconciled day", "day", d.Day.Format(time.DateOnly), "skipped", d.Skipped, "teams", d.Teams,
-			"overThreshold", d.OverThreshold, "events", d.Events, "maxVarianceRatio", d.MaxVarianceRatio)
+		logVariance(a.log, d)
 	}
 	return err
+}
+
+// logVariance writes the variance of one reconciled day as one structured line. The reconcile job is a
+// CronJob that exits before Prometheus scrapes it, so the gauge never reaches a dashboard; the line is the
+// working path: CloudWatch Logs metric filters match metric="afs_cost_cur_variance_ratio" and alarm on
+// maxVarianceRatio or overThreshold. It is WARN when a team-day is over the threshold. The
+// cost.variance_detected outbox event (one per team-day transition) is the alert path for subscribers.
+func logVariance(log *slog.Logger, d reconcile.DayResult) {
+	level := slog.LevelInfo
+	if d.OverThreshold > 0 {
+		level = slog.LevelWarn
+	}
+	log.Log(context.Background(), level, "reconciled day", "metric", observability.MetricCURVariance,
+		"day", d.Day.Format(time.DateOnly), "skipped", d.Skipped, "teams", d.Teams,
+		"overThreshold", d.OverThreshold, "events", d.Events, "maxVarianceRatio", d.MaxVarianceRatio)
 }

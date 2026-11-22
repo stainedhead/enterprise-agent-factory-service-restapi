@@ -1,8 +1,12 @@
 package cur_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -230,5 +234,65 @@ func TestDays(t *testing.T) {
 	}
 	if len(cur.Days(now, 0)) != 1 {
 		t.Fatal("lookback below 1 means yesterday")
+	}
+}
+
+type dirErrStore struct{ *curtest.Store }
+
+func (dirErrStore) Directory(context.Context) (cur.Directory, error) {
+	return cur.Directory{}, errors.New("directory down")
+}
+
+func TestDirectoryFailureIsReported(t *testing.T) {
+	f := &curtest.Fetcher{Lines: map[string][]cur.Line{"2026-11-16": {{Kind: cur.KindBedrock, Resource: arnA, Cost: usd("1")}}}}
+	in := &cur.Ingestor{Fetch: f, Store: dirErrStore{&curtest.Store{}}}
+	if res := in.Run(t.Context(), []time.Time{monday}); res.Failed != 1 || res.Err() == nil || !strings.Contains(res.Err().Error(), "directory") {
+		t.Fatalf("result = %+v", res)
+	}
+}
+
+// The default sleep waits for the backoff, and a canceled context ends the retries at once.
+func TestDefaultSleepAndCancel(t *testing.T) {
+	boom := errors.New("athena: throttled")
+	f := &curtest.Fetcher{
+		Lines: map[string][]cur.Line{"2026-11-16": {{Kind: cur.KindBedrock, Resource: arnA, Cost: usd("1")}}},
+		Errs:  map[string][]error{"2026-11-16": {boom}},
+	}
+	in := &cur.Ingestor{Fetch: f, Store: &curtest.Store{Dir: directory()}, Retry: cur.Backoff{Attempts: 3, Base: time.Millisecond, Max: time.Millisecond},
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	if res := in.Run(t.Context(), []time.Time{monday}); res.Err() != nil || f.Calls["2026-11-16"] != 2 {
+		t.Fatalf("err=%v calls=%d", res.Err(), f.Calls["2026-11-16"])
+	}
+
+	f2 := &curtest.Fetcher{Errs: map[string][]error{"2026-11-16": {boom, boom, boom}}}
+	in2 := &cur.Ingestor{Fetch: f2, Store: &curtest.Store{Dir: directory()}, Retry: cur.Backoff{Attempts: 3, Base: time.Hour, Max: time.Hour}}
+	ctx, cancel := context.WithCancel(t.Context())
+	go func() { time.Sleep(20 * time.Millisecond); cancel() }()
+	if res := in2.Run(ctx, []time.Time{monday}); res.Failed != 1 || !errors.Is(res.Err(), context.Canceled) {
+		t.Fatalf("result = %+v", res)
+	}
+}
+
+// A sleep that fails (the run was stopped) ends the retries with its error.
+func TestSleepErrorEndsRetries(t *testing.T) {
+	boom := errors.New("athena: throttled")
+	f := &curtest.Fetcher{Errs: map[string][]error{"2026-11-16": {boom, boom}}}
+	in := &cur.Ingestor{Fetch: f, Store: &curtest.Store{Dir: directory()}, Retry: cur.Backoff{Attempts: 3, Base: time.Second},
+		Sleep: func(context.Context, time.Duration) error { return errors.New("stopped") }, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	if res := in.Run(t.Context(), []time.Time{monday}); res.Failed != 1 || f.Calls["2026-11-16"] != 1 {
+		t.Fatalf("result = %+v calls=%d", res, f.Calls["2026-11-16"])
+	}
+}
+
+// Lines for no known team and an unreadable profile list are warned about, not failed.
+func TestUnattributedAndProfilesUnavailableWarn(t *testing.T) {
+	f := &curtest.Fetcher{Lines: map[string][]cur.Line{"2026-11-16": {{Kind: cur.KindBedrock, Resource: "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/unknown", Cost: usd("2")}}}}
+	dir := directory()
+	dir.ProfilesUnavailable = true
+	var buf bytes.Buffer
+	in := &cur.Ingestor{Fetch: f, Store: &curtest.Store{Dir: dir}, Log: slog.New(slog.NewTextHandler(&buf, nil))}
+	res := in.Run(t.Context(), []time.Time{monday})
+	if res.Err() != nil || !strings.Contains(buf.String(), "not readable") || !strings.Contains(buf.String(), "not attributed") {
+		t.Fatalf("err=%v log=%s", res.Err(), buf.String())
 	}
 }

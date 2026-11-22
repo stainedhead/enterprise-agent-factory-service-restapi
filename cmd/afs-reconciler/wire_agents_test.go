@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/links"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/tags"
 )
 
 func TestRoutesRouteAgentTables(t *testing.T) {
@@ -64,5 +66,38 @@ func TestRoutesMergeEveryRouteList(t *testing.T) {
 	got, _ := reg.Resolve(t.Context(), engine.Change{Table: "agents", TeamID: "team_A", ID: "agt_1"}, func(context.Context, []engine.Kind) ([]engine.Ref, error) { return nil, nil })
 	if !slices.Contains(got, engine.NewRef(engine.KindAgent, "agt_1", "team_A")) {
 		t.Errorf("agent target lost: %v", got)
+	}
+}
+
+// M4 integration: the tags routes (team_tags to the team, service_tags fanned out to teams) and the agent
+// routes (the same tables to agents) must both survive the single mergeRoutes.
+func TestRoutesCombineTagsAndAgentRoutes(t *testing.T) {
+	reg, err := routes(append(links.Routes(), tags.Routes()...)...)
+	if err != nil {
+		t.Fatalf("routes: %v", err)
+	}
+	team := engine.NewRef(engine.KindTeam, "team_A", "team_A")
+	a1 := engine.NewRef(engine.KindAgent, "agt_1", "team_A")
+	fan := func(_ context.Context, kinds []engine.Kind) ([]engine.Ref, error) {
+		var out []engine.Ref
+		if slices.Contains(kinds, engine.KindTeam) {
+			out = append(out, team)
+		}
+		if slices.Contains(kinds, engine.KindAgent) {
+			out = append(out, a1)
+		}
+		return out, nil
+	}
+	for _, ch := range []engine.Change{
+		{Table: "team_tags", TeamID: "team_A"},
+		{Table: "service_tags"},
+	} {
+		got, err := reg.Resolve(t.Context(), ch, fan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Contains(got, team) || !slices.Contains(got, a1) {
+			t.Errorf("%s: want team and agent targets, got %v", ch.Table, got)
+		}
 	}
 }

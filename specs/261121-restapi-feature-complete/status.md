@@ -19,7 +19,7 @@
 | 2 | Research and data modeling | Complete | research.md, data-dictionary.md |
 | 3 | Architecture and planning | Complete | architecture.md, plan.md |
 | 4 | Task breakdown | Complete | tasks.md: 60 streams, 255 tasks |
-| 5 | Implementation (M0–M6) | In Progress | M0 complete 2026-11-21; M1 complete 2026-11-22 (step 3 started 2026-11-21T20:57:16Z); M2 complete 2026-11-22 (integrated); M3 complete 2026-11-22 (integrated); M4 next. Task progress in tasks.md |
+| 5 | Implementation (M0–M6) | In Progress | M0 complete 2026-11-21; M1 complete 2026-11-22 (step 3 started 2026-11-21T20:57:16Z); M2 complete 2026-11-22 (integrated); M3 complete 2026-11-22 (integrated); M4 complete 2026-11-22 (integrated); M5 next. Task progress in tasks.md |
 | 6 | Completion and archival | Not Started | |
 
 ## Phase 0 checklist
@@ -36,7 +36,7 @@
 | M1 Teams and core | Complete | all M1 tasks (see tasks.md; e2e cases G1b, G1d, H1, RC-US-1a.4 and terraform/helm/tflint validation deferred to the cluster suite and CI) |
 | M2 Agents | Complete | 44 of 45 tasks (M2-F8 `[e2e]` busybox case and the cluster parts of M2-F5, G1, G3, I3 wait for the cluster suite) |
 | M3 Gateway and budgets | Complete | all 36 tasks (gateway, budgets, notifications, reports, activity; cluster-only checks wait for the cluster suite and CI: real Bedrock, `helm lint`, `govulncheck`) |
-| M4 Accounts, tags, billing | Not Started | 0 |
+| M4 Accounts, tags, billing | Complete | all 26 tasks (identities, links, accounts, tags, CUR, pricing, showback, schedules, export, import, restore; cluster-only checks wait for the cluster suite and CI: real AWS, `helm lint`, `tflint`, `govulncheck`) |
 | M5 Swarms | Not Started | 0 |
 | M6 CVE remediation and completion | Not Started | 0 |
 
@@ -139,3 +139,4 @@
 - 2026-11-22: M4-F5 done (m4/w4): CreateImport apply, one transaction per team, account map, one audit per team, a failed team reported with nothing written; export/import round trip integration test.
 - 2026-11-22: M4-G1 done (m4/w4): RestoreRevision dry run runs the same steps and rolls back, reporting changes and guard skips.
 - 2026-11-22: M4-G2 done (m4/w4): RestoreRevision apply under the team row lock, generation + 1, one audit naming the revision, If-Match 412, viewer 403; integration test.
+- 2026-11-22: M4-X1 done (integration of `m4/w1`..`m4/w4` on `feat/restapi-feature-complete`, merge order w1, w2, w3, w4, all `--no-ff`; no object over 10 MB). Results: `make gate` green; `make test-db` green; `make cover` every domain, usecase and authz package at least 90% (error-path tests added for `billing/cur`, `billing/prices`, `billing/reconcile`, `imports`, `restore`); `make conformance` green; `make lint` (with `--build-tags envtest`) 0 issues; envtest (`internal/adapter/k8s/...`) green; authorization matrix green for every M4 route; `make openapi-check` and `make contract-check` pass. Decisions in implementation-notes.md (M4 integration decisions).

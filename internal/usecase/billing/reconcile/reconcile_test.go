@@ -1,7 +1,11 @@
 package reconcile_test
 
 import (
+	"bytes"
+	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -146,5 +150,47 @@ func TestVarianceMetric(t *testing.T) {
 	}
 	if len(seen) != 1 || seen[0] < 0.0999 || seen[0] > 0.1001 {
 		t.Fatalf("variance = %v", seen)
+	}
+}
+
+type failIDs struct{}
+
+func (failIDs) NewID(domain.IDPrefix) (domain.ID, error) { return "", errors.New("no ids") }
+
+type failOutbox struct{}
+
+func (failOutbox) Publish(context.Context, port.Tx, domain.Event) error {
+	return errors.New("outbox down")
+}
+
+// A failing event publish or id generator fails the day and writes nothing.
+func TestPublishFailuresFailTheDay(t *testing.T) {
+	for name, mut := range map[string]func(*reconcile.Reconciler){
+		"ids":    func(r *reconcile.Reconciler) { r.IDs = failIDs{} },
+		"outbox": func(r *reconcile.Reconciler) { r.Outbox = failOutbox{} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, repo, _ := setup()
+			mut(r)
+			repo.Set(day, teamA, "100", "50")
+			if _, err := r.RunDay(t.Context(), dayT); err == nil {
+				t.Fatal("want an error")
+			}
+		})
+	}
+}
+
+// Run logs a failed day and stops when the context is canceled.
+func TestRunLogsAndStopsOnCancel(t *testing.T) {
+	r, repo, _ := setup()
+	var buf bytes.Buffer
+	r.Log = slog.New(slog.NewTextHandler(&buf, nil))
+	repo.Set(day, teamA, "1", "1")
+	repo.FailOn["Totals"] = errors.New("boom")
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	got, err := r.Run(ctx, []time.Time{dayT, dayT.AddDate(0, 0, 1)})
+	if err == nil || len(got) != 1 || !strings.Contains(buf.String(), "reconciliation failed") {
+		t.Fatalf("got=%d err=%v log=%q", len(got), err, buf.String())
 	}
 }

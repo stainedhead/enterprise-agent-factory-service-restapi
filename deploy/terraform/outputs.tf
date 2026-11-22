@@ -33,6 +33,11 @@ output "gateway_role_arn" {
   value       = module.pod_identity.role_arns["gateway"]
 }
 
+output "reconciler_role_arn" {
+  description = "AFS_RECONCILER_ROLE_ARN: the role agent roles trust so the reconciler can verify role links."
+  value       = module.pod_identity.role_arns["reconciler"]
+}
+
 output "role_arns" {
   description = "Pod Identity role of each binary."
   value       = module.pod_identity.role_arns

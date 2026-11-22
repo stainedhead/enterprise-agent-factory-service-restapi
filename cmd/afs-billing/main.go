@@ -97,7 +97,7 @@ func open(ctx context.Context, env func(string) string) (*app, func(), error) {
 		return nil, nil, err
 	}
 	m := observability.NewMetrics("afs-billing", buildinfo.Version)
-	a := &app{settings: s, metrics: m, now: func() time.Time { return time.Now().UTC() }}
+	a := &app{settings: s, env: env, metrics: m, now: func() time.Time { return time.Now().UTC() }}
 	a.awsConfig = func(ctx context.Context) (awssdk.Config, error) {
 		as, err := aws.SettingsFrom(env)
 		if err != nil {

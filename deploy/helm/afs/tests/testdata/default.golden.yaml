@@ -68,6 +68,191 @@ rules:
         - create
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+    labels:
+        app.kubernetes.io/component: reconciler
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-reconciler
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-reconciler
+rules:
+    - apiGroups:
+        - ""
+      resources:
+        - namespaces
+        - resourcequotas
+        - limitranges
+        - configmaps
+        - serviceaccounts
+        - services
+        - persistentvolumeclaims
+        - secrets
+      verbs:
+        - get
+        - list
+        - watch
+        - create
+        - update
+        - patch
+        - delete
+    - apiGroups:
+        - ""
+      resources:
+        - pods
+      verbs:
+        - get
+        - list
+        - watch
+        - delete
+    - apiGroups:
+        - ""
+      resources:
+        - persistentvolumes
+      verbs:
+        - get
+        - list
+        - watch
+        - create
+        - update
+        - patch
+        - delete
+    - apiGroups:
+        - apps
+      resources:
+        - deployments
+        - statefulsets
+      verbs:
+        - get
+        - list
+        - watch
+        - create
+        - update
+        - patch
+        - delete
+    - apiGroups:
+        - networking.k8s.io
+      resources:
+        - networkpolicies
+      verbs:
+        - get
+        - list
+        - watch
+        - create
+        - update
+        - patch
+        - delete
+    - apiGroups:
+        - cilium.io
+      resources:
+        - ciliumnetworkpolicies
+      verbs:
+        - get
+        - list
+        - watch
+        - create
+        - update
+        - patch
+        - delete
+    - apiGroups:
+        - cilium.io
+      resources:
+        - ciliumendpoints
+      verbs:
+        - get
+        - list
+        - watch
+    - apiGroups:
+        - external-secrets.io
+      resources:
+        - externalsecrets
+        - secretstores
+      verbs:
+        - get
+        - list
+        - watch
+        - create
+        - update
+        - patch
+        - delete
+    - apiGroups:
+        - snapshot.storage.k8s.io
+      resources:
+        - volumesnapshots
+        - volumesnapshotcontents
+        - volumesnapshotclasses
+      verbs:
+        - get
+        - list
+        - watch
+        - create
+        - update
+        - patch
+        - delete
+    - apiGroups:
+        - karpenter.sh
+      resources:
+        - nodepools
+      verbs:
+        - get
+        - list
+        - watch
+        - create
+        - update
+        - patch
+        - delete
+    - apiGroups:
+        - karpenter.k8s.aws
+      resources:
+        - ec2nodeclasses
+      verbs:
+        - get
+        - list
+        - watch
+    - apiGroups:
+        - admissionregistration.k8s.io
+      resources:
+        - validatingadmissionpolicies
+        - validatingadmissionpolicybindings
+      verbs:
+        - get
+        - list
+        - watch
+        - create
+        - update
+        - patch
+        - delete
+    - apiGroups:
+        - agenticteammates.stainedhead.io
+      resources:
+        - '*'
+      verbs:
+        - get
+        - list
+        - watch
+        - create
+        - update
+        - patch
+        - delete
+    - apiGroups:
+        - metrics.k8s.io
+      resources:
+        - pods
+      verbs:
+        - get
+        - list
+    - apiGroups:
+        - storage.k8s.io
+      resources:
+        - storageclasses
+      verbs:
+        - get
+        - list
+        - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
     labels:
@@ -85,6 +270,26 @@ roleRef:
 subjects:
     - kind: ServiceAccount
       name: afs-gateway
+      namespace: afs-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+    labels:
+        app.kubernetes.io/component: reconciler
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-reconciler
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-reconciler
+roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: afs-reconciler
+subjects:
+    - kind: ServiceAccount
+      name: afs-reconciler
       namespace: afs-system
 ---
 apiVersion: v1
@@ -567,6 +772,8 @@ spec:
                               value: :9090
                             - name: AFS_REPORTS_BUCKET
                               value: afs-reports-111122223333
+                            - name: AFS_REPORTS_KMS_KEY_ID
+                              value: 00000000-0000-0000-0000-000000000000
                           image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
                           imagePullPolicy: IfNotPresent
                           name: afs-billing
@@ -653,6 +860,8 @@ spec:
                               value: :9090
                             - name: AFS_REPORTS_BUCKET
                               value: afs-reports-111122223333
+                            - name: AFS_REPORTS_KMS_KEY_ID
+                              value: 00000000-0000-0000-0000-000000000000
                           image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
                           imagePullPolicy: IfNotPresent
                           name: afs-billing
@@ -739,6 +948,8 @@ spec:
                               value: :9090
                             - name: AFS_REPORTS_BUCKET
                               value: afs-reports-111122223333
+                            - name: AFS_REPORTS_KMS_KEY_ID
+                              value: 00000000-0000-0000-0000-000000000000
                           image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
                           imagePullPolicy: IfNotPresent
                           name: afs-billing
@@ -825,6 +1036,8 @@ spec:
                               value: :9090
                             - name: AFS_REPORTS_BUCKET
                               value: afs-reports-111122223333
+                            - name: AFS_REPORTS_KMS_KEY_ID
+                              value: 00000000-0000-0000-0000-000000000000
                           image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
                           imagePullPolicy: IfNotPresent
                           name: afs-billing
@@ -911,6 +1124,8 @@ spec:
                               value: :9090
                             - name: AFS_REPORTS_BUCKET
                               value: afs-reports-111122223333
+                            - name: AFS_REPORTS_KMS_KEY_ID
+                              value: 00000000-0000-0000-0000-000000000000
                           image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
                           imagePullPolicy: IfNotPresent
                           name: afs-billing
@@ -935,7 +1150,7 @@ spec:
                         seccompProfile:
                             type: RuntimeDefault
                     serviceAccountName: afs-billing
-    schedule: 0 6 1 * *
+    schedule: 0 6 * * *
     successfulJobsHistoryLimit: 3
 ---
 apiVersion: apps/v1
@@ -1233,6 +1448,10 @@ spec:
                       value: http://otel-collector.observability:4318
                     - name: AFS_EVENT_BUS_NAME
                       value: afs-events
+                    - name: AFS_EXPORT_BUCKET
+                      value: afs-export-111122223333
+                    - name: AFS_EXPORT_KMS_KEY_ID
+                      value: 00000000-0000-0000-0000-000000000000
                     - name: AFS_GATEWAY_ROLE_ARN
                       value: arn:aws:iam::111122223333:role/afs-gateway
                     - name: AFS_METRICS_ADDR
@@ -1241,6 +1460,8 @@ spec:
                       value: arn:aws:iam::111122223333:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE
                     - name: AFS_PERMISSIONS_BOUNDARY_ARN
                       value: arn:aws:iam::111122223333:policy/afs-agent-boundary
+                    - name: AFS_RECONCILER_ROLE_ARN
+                      value: arn:aws:iam::111122223333:role/afs-reconciler
                     - name: AFS_LEADER_LEASE_NAMESPACE
                       value: afs-system
                   image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-reconciler:v0.1.0
@@ -1485,6 +1706,51 @@ spec:
               expr: sum by (job_name) (kube_job_status_failed{namespace="afs-system", job_name=~"afs-billing-.+"}) > 0
               labels:
                 severity: warning
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+    labels:
+        app.kubernetes.io/component: reconciler
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-reconciler
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-reconciler-leader
+    namespace: afs-system
+rules:
+    - apiGroups:
+        - coordination.k8s.io
+      resources:
+        - leases
+      verbs:
+        - get
+        - list
+        - watch
+        - create
+        - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+    labels:
+        app.kubernetes.io/component: reconciler
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-reconciler
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-reconciler-leader
+    namespace: afs-system
+roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: afs-reconciler-leader
+subjects:
+    - kind: ServiceAccount
+      name: afs-reconciler
+      namespace: afs-system
 ---
 apiVersion: v1
 kind: Service

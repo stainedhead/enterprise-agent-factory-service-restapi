@@ -325,8 +325,18 @@ func TestIAMLeastPrivilege(t *testing.T) {
 	if len(g.actions) != 2 || g.actions[0] != "sts:AssumeRole" {
 		t.Errorf("gateway actions = %v", g.actions)
 	}
+	// M4: the reconciler mirrors organization accounts and verifies role links, the latter only on /afs/ roles.
+	if s := byID["OrganizationAccountMirror"]; len(s.actions) != 2 || s.actions[0] != "organizations:ListAccounts" {
+		t.Errorf("organization mirror actions = %v", s.actions)
+	}
+	if s := byID["VerifyAgentRoleLinks"]; len(s.actions) != 2 || s.actions[0] != "sts:AssumeRole" || s.effect != "Allow" {
+		t.Errorf("role link verification = %+v", s)
+	}
 	// trust is Pod Identity only
 	src := sources(t)[f]
+	if !strings.Contains(string(src), `role/afs/*"]`) {
+		t.Error("role link verification is not limited to roles under /afs/")
+	}
 	if !strings.Contains(string(src), `identifiers = ["pods.eks.amazonaws.com"]`) {
 		t.Error("roles are not trusted by Pod Identity")
 	}
@@ -370,7 +380,7 @@ func TestRootWiresTheModules(t *testing.T) {
 	for _, o := range blocks(files["outputs.tf"], "output") {
 		outs[o.Labels[0]] = true
 	}
-	for _, want := range []string{"database_endpoint", "export_bucket", "reports_bucket", "permissions_boundary_arn", "gateway_role_arn", "buckets_kms_key_id"} {
+	for _, want := range []string{"database_endpoint", "export_bucket", "reports_bucket", "permissions_boundary_arn", "gateway_role_arn", "reconciler_role_arn", "buckets_kms_key_id"} {
 		if !outs[want] {
 			t.Errorf("output %s missing (the Helm chart and reconciler need it)", want)
 		}

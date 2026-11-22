@@ -417,3 +417,63 @@ func TestGatewayRBACIsReadOnlyPlusTokenReview(t *testing.T) {
 		t.Error("the gateway has no AFS_GATEWAY_ROLE_ARN")
 	}
 }
+
+// M4: the reconciler has a ClusterRole for the kinds it renders, bound to its own ServiceAccount, with a
+// leader-lease Role; nothing grants it RBAC or node access, and the role-link and export settings are set.
+func TestReconcilerRBAC(t *testing.T) {
+	docs := render(t, "")
+	role := find(t, docs, "ClusterRole", "afs-reconciler")
+	rules, _ := role["rules"].([]any)
+	if len(rules) == 0 {
+		t.Fatal("no rules")
+	}
+	seen := map[string]bool{}
+	for _, r := range rules {
+		m, _ := r.(obj)
+		groups, _ := m["apiGroups"].([]any)
+		resources, _ := m["resources"].([]any)
+		for _, g := range groups {
+			if g.(string) == "rbac.authorization.k8s.io" {
+				t.Errorf("the reconciler must not manage RBAC: %v", m)
+			}
+		}
+		for _, res := range resources {
+			seen[res.(string)] = true
+		}
+	}
+	for _, want := range []string{"namespaces", "statefulsets", "networkpolicies", "ciliumnetworkpolicies", "nodepools", "volumesnapshots", "validatingadmissionpolicies"} {
+		if !seen[want] {
+			t.Errorf("the reconciler cannot reach %s", want)
+		}
+	}
+	for _, bad := range []string{"nodes", "clusterroles", "clusterrolebindings", "pods/exec", "tokenreviews"} {
+		if seen[bad] {
+			t.Errorf("the reconciler must not reach %s", bad)
+		}
+	}
+	for _, kind := range []string{"ClusterRoleBinding", "RoleBinding"} {
+		b := find(t, docs, kind, map[string]string{"ClusterRoleBinding": "afs-reconciler", "RoleBinding": "afs-reconciler-leader"}[kind])
+		subs, _ := b["subjects"].([]any)
+		if s, _ := subs[0].(obj); str(s, "name") != "afs-reconciler" || str(s, "namespace") != "afs-system" {
+			t.Errorf("%s subject = %v", kind, s)
+		}
+	}
+	env := envOf(podSpec(find(t, docs, "Deployment", "afs-reconciler"))["containers"].([]any)[0].(obj))
+	for _, k := range []string{"AFS_RECONCILER_ROLE_ARN", "AFS_EXPORT_BUCKET", "AFS_EXPORT_KMS_KEY_ID"} {
+		if env[k] == "" {
+			t.Errorf("the reconciler has no %s", k)
+		}
+	}
+}
+
+// M4: the billing CronJobs carry the report and showback jobs on their schedules and the reports bucket.
+func TestBillingReportJobs(t *testing.T) {
+	docs := render(t, "")
+	want := map[string]string{"afs-billing-report-schedules": "*/15 * * * *", "afs-billing-showback": "0 6 * * *"}
+	for name, schedule := range want {
+		cj := find(t, docs, "CronJob", name)
+		if got := str(path(cj, "spec"), "schedule"); got != schedule {
+			t.Errorf("%s schedule = %q, want %q", name, got, schedule)
+		}
+	}
+}

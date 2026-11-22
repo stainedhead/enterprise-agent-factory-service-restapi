@@ -12,14 +12,17 @@ resources:
 env:
   AFS_METRICS_ADDR: ":9090"
 # Required: AFS_CUR_DATABASE, AFS_CUR_TABLE, AFS_ATHENA_WORKGROUP, AFS_ATHENA_OUTPUT,
-# AFS_REPORTS_BUCKET, AFS_REPORTS_KMS_KEY_ID (from Terraform outputs).
+# AFS_REPORTS_BUCKET, AFS_REPORTS_KMS_KEY_ID (from Terraform outputs reports_bucket, buckets_kms_key_id).
+# Optional: AFS_SHOWBACK_TAG_KEY (second showback dimension), AFS_PRICING_PRICE_LIST_SYNC (until -db X-DB-10).
+# The reconcile job logs each day with metric=afs_cost_cur_variance_ratio (WARN over the threshold):
+# match it with a CloudWatch Logs metric filter; the CronJob pod exits before Prometheus can scrape it.
 # One CronJob per entry; `job` is passed as `afs-billing --job <job>` (M4-C1).
 cronjobs:
   cur-ingest:      {schedule: "0 3 * * *",    job: cur-ingest}
   reconcile:       {schedule: "0 4 * * *",    job: reconcile}
   price-sync:      {schedule: "0 5 * * 1",    job: price-sync}
   report-schedules: {schedule: "*/15 * * * *", job: report-schedules}
-  showback:        {schedule: "0 6 1 * *",    job: showback}
+  showback:        {schedule: "0 6 * * *",    job: showback}
 concurrencyPolicy: Forbid
 backoffLimit: 2
 activeDeadlineSeconds: 3600

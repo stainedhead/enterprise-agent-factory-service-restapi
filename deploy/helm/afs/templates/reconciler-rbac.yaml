@@ -1,0 +1,104 @@
+{{- /* The reconciler applies each team's namespace and each agent's workload, so it needs cluster-wide
+       access to the kinds it renders (internal/adapter/k8s/render) and to nothing else: no
+       clusterroles, no rolebindings, no nodes, no pods/exec. Read-only kinds are listed apart from the
+       ones it writes. The leader Lease lives in one namespace (AFS_LEADER_LEASE_NAMESPACE): a Role. */}}
+{{- $name := "reconciler" }}
+{{- $c := include "afs.component" (dict "root" $ "name" $name) | fromYaml }}
+{{- if $c.enabled }}
+{{- $ctx := dict "root" $ "name" $name "c" $c }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: afs-reconciler
+  labels:
+    {{- include "afs.labels" $ctx | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "resourcequotas", "limitranges", "configmaps", "serviceaccounts", "services", "persistentvolumeclaims", "secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["cilium.io"]
+    resources: ["ciliumnetworkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["cilium.io"]
+    resources: ["ciliumendpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["external-secrets.io"]
+    resources: ["externalsecrets", "secretstores"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots", "volumesnapshotcontents", "volumesnapshotclasses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["karpenter.sh"]
+    resources: ["nodepools"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["karpenter.k8s.aws"]
+    resources: ["ec2nodeclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["agenticteammates.stainedhead.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: afs-reconciler
+  labels:
+    {{- include "afs.labels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: afs-reconciler
+subjects:
+  - kind: ServiceAccount
+    name: {{ $c.serviceAccount.name }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: afs-reconciler-leader
+  namespace: {{ default .Release.Namespace $c.leaderLease.namespace }}
+  labels:
+    {{- include "afs.labels" $ctx | nindent 4 }}
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: afs-reconciler-leader
+  namespace: {{ default .Release.Namespace $c.leaderLease.namespace }}
+  labels:
+    {{- include "afs.labels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: afs-reconciler-leader
+subjects:
+  - kind: ServiceAccount
+    name: {{ $c.serviceAccount.name }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

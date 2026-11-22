@@ -292,7 +292,7 @@ ReportSchedule:
     version:
       type: integer
       minimum: 1
-      description: Optimistic-concurrency version; ETag is "<version>"
+      description: Optimistic-concurrency version; ETag is "<version>". The scheduled-report runner updates the row each time a schedule runs, which raises the version, so an ETag read before a run is stale after it (412 PreconditionFailed). Read the schedule again from ListReportSchedules and retry the update or delete.
       readOnly: true
     createdAt:
       $ref: '#/components/schemas/Timestamp'

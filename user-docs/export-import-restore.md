@@ -8,6 +8,8 @@ These calls are for operators. Export and import need the service admin role. Re
 
 A bundle never holds a secret value, an API key hash or a client secret. Secrets appear as metadata only.
 
+Operators: the reconciler builds bundles only when `AFS_EXPORT_BUCKET` is set, and it refuses to start if `AFS_EXPORT_KMS_KEY_ID` is missing (bundles are always SSE-KMS). Without a bucket, exports stay `pending`. The download link is signed with the reconciler's temporary credentials, so it stops working when they expire, which can be sooner than 7 days.
+
 ## Import
 
 `POST /v1/imports` takes `{"bundle": {...}, "accountMap": {"111122223333": "444455556666"}}`. By default it is a dry run (`dryRun=true`) and writes nothing; the report lists each team as created, updated or skipped, and the secrets that still need a value. Add `?dryRun=false` to apply. Each team is written in its own transaction, so a team that fails is reported and leaves nothing behind while the other teams apply. A bundle whose checksum does not match, or that is larger than 100 MB, is refused with `400`. Role links come in as `pending_trust`.

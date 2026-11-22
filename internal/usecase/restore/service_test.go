@@ -1,7 +1,9 @@
 package restore_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -134,5 +136,71 @@ func TestIdempotentReplay(t *testing.T) {
 	res, err := r.svc.Run(t.Context(), caller(authz.RoleTeamAdmin), team, 41, false, nil, idem())
 	if err != nil || res.Replay == nil || r.repo.Gen != 6 {
 		t.Fatalf("%+v %v gen %d", res, err, r.repo.Gen)
+	}
+}
+
+// errRepo fails the named repository method.
+type errRepo struct {
+	*restoretest.Repo
+	fail string
+}
+
+var errDB = errors.New("db down")
+
+func (e errRepo) LockTeam(ctx context.Context, tx port.Tx, id string) (restore.TeamLock, bool, error) {
+	if e.fail == "LockTeam" {
+		return restore.TeamLock{}, false, errDB
+	}
+	return e.Repo.LockTeam(ctx, tx, id)
+}
+
+func (e errRepo) HasRevision(ctx context.Context, tx port.Tx, t string, rev int64) (bool, error) {
+	if e.fail == "HasRevision" {
+		return false, errDB
+	}
+	return e.Repo.HasRevision(ctx, tx, t, rev)
+}
+
+func (e errRepo) Target(ctx context.Context, tx port.Tx, t string, rev int64) (domain.RestoreState, error) {
+	if e.fail == "Target" {
+		return nil, errDB
+	}
+	return e.Repo.Target(ctx, tx, t, rev)
+}
+
+func (e errRepo) Current(ctx context.Context, tx port.Tx, t string) (domain.RestoreState, error) {
+	if e.fail == "Current" {
+		return nil, errDB
+	}
+	return e.Repo.Current(ctx, tx, t)
+}
+
+func (e errRepo) Apply(ctx context.Context, tx port.Tx, t string, s domain.RestoreStep) (string, error) {
+	if e.fail == "Apply" {
+		return "", errDB
+	}
+	return e.Repo.Apply(ctx, tx, t, s)
+}
+
+func (e errRepo) BumpGeneration(ctx context.Context, tx port.Tx, t string) (int64, error) {
+	if e.fail == "BumpGeneration" {
+		return 0, errDB
+	}
+	return e.Repo.BumpGeneration(ctx, tx, t)
+}
+
+// Every repository failure aborts the restore with its error and keeps no audit or event.
+func TestRepositoryFailuresAbortTheRestore(t *testing.T) {
+	for _, m := range []string{"LockTeam", "HasRevision", "Target", "Current", "Apply", "BumpGeneration"} {
+		t.Run(m, func(t *testing.T) {
+			r := newRig()
+			r.svc.Repo = errRepo{Repo: r.repo, fail: m}
+			if _, err := r.svc.Run(t.Context(), caller(authz.RoleTeamAdmin), team, 41, false, nil, nil); !errors.Is(err, errDB) {
+				t.Fatalf("err = %v", err)
+			}
+			if len(r.outbox.Events) != 0 {
+				t.Errorf("events after a failed restore: %v", r.outbox.Events)
+			}
+		})
 	}
 }

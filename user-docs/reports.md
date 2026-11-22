@@ -97,7 +97,7 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/
 - Update with `PATCH` and `If-Match`; delete with `DELETE` and `If-Match` (`204`). A channel that a schedule
   uses cannot be deleted until the schedule is.
 - `nextRunAt`, `lastRunAt`, `lastStatus` (`succeeded` or `failed`) and `lastError` are read-only. The
-  version (ETag) changes each time a schedule runs, so read it again before an update.
+  version (ETag) changes each time a schedule runs (the runner writes `lastRunAt` and `lastStatus` on the same row), so an update or delete with an ETag read before a run answers `412 PreconditionFailed`: list the schedules again and retry with the new ETag.
 
 When a schedule is due, the billing job computes the same report you get from the API with
 `Accept: text/csv`, stores the CSV in the reports bucket under `reports/<team>/<schedule>/`, and publishes

@@ -420,6 +420,7 @@ PriceProposal:
   properties:
     id:
       type: string
+      pattern: ^mpp_[0-9A-HJKMNP-TV-Z]{26}$
       readOnly: true
     modelId:
       type: string
@@ -458,9 +459,13 @@ PriceProposal:
       type:
       - string
       - 'null'
+      maxLength: 500
     version:
       type: integer
       readOnly: true
+      description: Derived from the status, not a row counter. 1 while the proposal is pending, 2 once it is
+        approved, rejected or superseded. A proposal changes only once, so clients never need to send it
+        (the approve and reject operations take no If-Match).
 PriceProposalList:
   type: object
   description: A page of PriceProposal resources
@@ -479,7 +484,7 @@ DecidePriceProposalRequest:
   properties:
     note:
       type: string
-      maxLength: 1000
+      maxLength: 500
 CostReconciliation:
   type: object
   required:

@@ -25,6 +25,8 @@ import (
 //	cur-ingest        M4-C  CUR through Athena into cost_daily
 //	reconcile         M4-C  gateway estimate against CUR, variance events
 //	price-sync        M4-D  AWS Price List into price proposals
+//	report-schedules  M4-E  due scheduled reports to the reports bucket and SES/SNS (job_reports.go)
+//	showback          M4-E  monthly showback files (job_reports.go)
 type jobFunc func(ctx context.Context, a *app, in jobInput) error
 
 var jobs = map[string]jobFunc{}
@@ -57,6 +59,7 @@ type app struct {
 	log      *slog.Logger
 	metrics  *observability.Metrics
 	settings settings
+	env      func(string) string
 	now      func() time.Time
 
 	pool   *pgxpool.Pool

@@ -97,3 +97,30 @@ failure publishes `report.failed`, records the error and leaves `next_run_at`. E
 real lifetime is the shorter of 7 days and the job's credential lifetime. The monthly showback
 (`usecase/billing/showback`) reads `cost_daily` joined to the stamped tag set and refuses to write a CSV whose
 dimension does not add up to the month's total.
+
+## Billing jobs, export, links and tags (M4 integration)
+
+`afs-billing --job <name>` runs one job per CronJob; jobs register themselves with `register(name, fn)` in
+`cmd/afs-billing`: `cur-ingest` (03:00), `reconcile` (04:00), `price-sync` (Mondays 05:00), `report-schedules` (every 15
+minutes) and `showback` (daily 06:00 UTC). The reconcile job logs each day as one structured line with
+`metric="afs_cost_cur_variance_ratio"` (WARN when a team-day is over `billing.variance_alert_pct`) for a CloudWatch
+Logs metric filter, and publishes `cost.variance_detected` once per team-day transition; the Prometheus gauge is not
+scraped from a CronJob. `afs_billing` cannot read `service_settings` or `team_models` yet (-db X-DB-10): price sync
+falls back to `AFS_PRICING_PRICE_LIST_SYNC`. A scheduled report's `version` rises each time it runs (the run state is
+on the same row); clients re-read before an update.
+
+The export bundle builder runs in the reconciler as a leader-only job and is registered only when `AFS_EXPORT_BUCKET`
+is set; it then also requires `AFS_EXPORT_KMS_KEY_ID` (SSE-KMS) and uses the shared S3 adapter. `afs-api` never links
+S3. `CreateImport` (service admins, up to 100 MB, `400` over it) checks `schemaVersion` and the SHA-256 before any
+write, applies one transaction per team and reports each team; `RestoreRevision` locks the team row and applies the
+plan in one transaction.
+
+Role links: the reconciler assumes the agent's own role (it trusts `AFS_RECONCILER_ROLE_ARN`) and that session assumes
+the linked role with the external id; the agent role's policy grants `sts:AssumeRole` on each non-disabled link's exact
+ARN. The reconciler's own role holds `sts:AssumeRole` and `sts:TagSession` on `role/afs/*` and
+`organizations:ListAccounts` for the hourly account mirror (`AFS_ORG_MIRROR=off` disables it). The chart gives the
+reconciler a ClusterRole for the kinds it renders and a Role for its leader Lease.
+
+Tags: the effective set (system tags, service tags, team tags; cap 40) is applied to roles, Pod Identity associations,
+inference profiles, snapshots and NodePools, and the keys AFS applied are recorded in `afs-tag-keys` so a removed tag
+is removed and foreign tags are kept. Secrets and work-order queues are tagged at creation only (M6 task).

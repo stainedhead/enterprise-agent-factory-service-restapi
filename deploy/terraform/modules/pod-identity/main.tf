@@ -247,6 +247,15 @@ data "aws_iam_policy_document" "reconciler" {
     actions   = ["organizations:ListAccounts", "organizations:DescribeAccount"]
     resources = ["*"]
   }
+
+  # Verifying an agent role link: the reconciler assumes the agent's own role (which trusts it), and that
+  # session assumes the linked role in the other account. Only the first hop is here, and only on roles
+  # under /afs/.
+  statement {
+    sid       = "VerifyAgentRoleLinks"
+    actions   = ["sts:AssumeRole", "sts:TagSession"]
+    resources = ["arn:${var.partition}:iam::${var.account_id}:role/afs/*"]
+  }
 }
 
 data "aws_iam_policy_document" "reconciler_queue" {

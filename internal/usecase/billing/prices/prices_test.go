@@ -1,6 +1,8 @@
 package prices_test
 
 import (
+	"context"
+	crand "crypto/rand"
 	"errors"
 	"testing"
 	"time"
@@ -153,6 +155,39 @@ func TestSyncFailures(t *testing.T) {
 			}
 			if len(ob.Events) != 0 && tc.name != "insert fails" {
 				t.Fatalf("events = %d", len(ob.Events))
+			}
+		})
+	}
+}
+
+type failIDs struct{ after int }
+
+func (f *failIDs) NewID(p domain.IDPrefix) (domain.ID, error) {
+	if f.after--; f.after < 0 {
+		return "", errors.New("no ids")
+	}
+	return domain.NewID(p, time.Now(), crand.Reader)
+}
+
+type failOutbox struct{}
+
+func (failOutbox) Publish(context.Context, port.Tx, domain.Event) error {
+	return errors.New("outbox down")
+}
+
+// A proposal that cannot get an id, an event id or an outbox row fails the run.
+func TestSyncProposeFailures(t *testing.T) {
+	for name, mut := range map[string]func(*prices.Syncer){
+		"proposal id": func(s *prices.Syncer) { s.IDs = &failIDs{after: 0} },
+		"event id":    func(s *prices.Syncer) { s.IDs = &failIDs{after: 1} },
+		"outbox":      func(s *prices.Syncer) { s.Outbox = failOutbox{} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			st := &pricestest.Store{Enabled: true, Models_: []prices.ModelState{{ID: sonnet, Current: cur("3.00", "15.00", "0", "0")}}}
+			s, _ := setup(st, &pricestest.List{Prices: sonnetList("3.30", "16.50")})
+			mut(s)
+			if _, err := s.Run(t.Context()); err == nil {
+				t.Fatal("want an error")
 			}
 		})
 	}

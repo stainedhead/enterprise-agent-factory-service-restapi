@@ -1,7 +1,9 @@
 package imports_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -187,6 +189,53 @@ func TestCatalogIsAppliedAndRolledBackInDryRun(t *testing.T) {
 		}
 		if len(r.repo.Catalog) != 1 || (dry && n != 0) || (!dry && n != 1) {
 			t.Fatalf("dry=%v catalog %d audits %d", dry, len(r.repo.Catalog), n)
+		}
+	}
+}
+
+type failRepo struct {
+	*importstest.Repo
+	apply, record error
+}
+
+func (f failRepo) ApplyTeam(ctx context.Context, tx port.Tx, t domain.TeamBundle) (imports.TeamOutcome, error) {
+	if f.apply != nil {
+		return imports.TeamOutcome{}, f.apply
+	}
+	return f.Repo.ApplyTeam(ctx, tx, t)
+}
+
+func (f failRepo) RecordImport(ctx context.Context, tx port.Tx, r imports.Record) error {
+	if f.record != nil {
+		return f.record
+	}
+	return f.Repo.RecordImport(ctx, tx, r)
+}
+
+// A driver error is never shown: the team is reported failed with a fixed text.
+func TestUnexpectedTeamErrorIsHiddenFromTheReport(t *testing.T) {
+	r := newRig()
+	r.svc.Repo = failRepo{Repo: r.repo, apply: errors.New(`pq: duplicate key value violates "teams_slug_key" password=hunter2`)}
+	res, err := r.svc.Run(t.Context(), admin, imports.Input{Bundle: doc(t, team("new", 0, ""))}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := res.Report.Teams[0]
+	if tr.Result != imports.ResultFailed || tr.Error == nil || *tr.Error != "the team could not be written" || strings.Contains(*tr.Error, "hunter2") {
+		t.Fatalf("%+v", tr)
+	}
+}
+
+// A failure to record the import fails the request and leaves no audit or event for it.
+func TestRecordFailureFailsTheImport(t *testing.T) {
+	r := newRig()
+	r.svc.Repo = failRepo{Repo: r.repo, record: errors.New("db down")}
+	if _, err := r.svc.Run(t.Context(), admin, imports.Input{Bundle: doc(t, team("new", 0, "")), DryRun: false}, nil); err == nil {
+		t.Fatal("want an error")
+	}
+	for _, ev := range r.outbox.Events {
+		if ev.Type == domain.EventImportApplied {
+			t.Fatal("import.applied published for a failed record")
 		}
 	}
 }
