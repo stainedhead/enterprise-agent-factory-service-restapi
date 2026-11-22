@@ -20,11 +20,8 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 )
 
-// Job names of the report jobs (M4-E): the stream that owns the main loop selects them by flag.
-const (
-	jobReportSchedules = "report-schedules"
-	jobShowback        = "showback"
-)
+// The report jobs are "report-schedules" (RunSchedules, every few minutes) and "showback" (RunShowback,
+// daily); the stream that owns the main loop selects them by flag.
 
 // reportJobSet is the scheduled report runner (BI-5) and the showback generator (BI-4) with their
 // dependencies. They need the database as afs_billing and the reports bucket.

@@ -82,3 +82,18 @@ Reports: ranges over two days read daily tables, shorter ranges the 5-minute tab
 columns followed by measures: usage `calls, inputTokens, outputTokens, costUsd`; costs `estimatedUsd, billedUsd`;
 activity and traffic as documented on `Report.rows` in `api/openapi.yaml`. `tag.<key>` query parameters filter the
 report operations only. The activity collector samples every running agent and pool worker per 5-minute window.
+
+## Showback and scheduled reports (M4-E)
+
+`port.ObjectStore` is the reports bucket (put with SSE-KMS, pre-signed GET, list); its S3 adapter
+(`adapter/aws/s3`) is linked by `afs-billing` and the export bundle builder, never by `afs-api` (archtest).
+`afs-api` stores report schedules (`usecase/reportschedules`, own-team channel rule, audit only); `afs-billing`
+runs them (`usecase/billing/schedules`): one transaction per due schedule claims the row (`FOR UPDATE SKIP
+LOCKED`), computes the report with the on-demand report's query rules and the single CSV renderer
+`httpapi.ReportCSV`, stores `reports/<team>/<schedule>/<report>-<due instant>.csv`, publishes `report.delivered`
+(`channelId`, `downloadUrl`; OQ-S2) and records the outcome through the four columns `afs_billing` may update. A
+failure publishes `report.failed`, records the error and leaves `next_run_at`. Each recorded run bumps the row's
+`version` (the touch trigger). A pre-signed URL made from temporary credentials stops working when those do, so its
+real lifetime is the shorter of 7 days and the job's credential lifetime. The monthly showback
+(`usecase/billing/showback`) reads `cost_daily` joined to the stamped tag set and refuses to write a CSV whose
+dimension does not add up to the month's total.
