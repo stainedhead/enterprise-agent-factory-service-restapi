@@ -23,7 +23,9 @@ const (
 )
 
 // GVK is the resource's group, version and kind.
-func GVK() schema.GroupVersionKind { return schema.GroupVersionKind{Group: Group, Version: Version, Kind: Kind} }
+func GVK() schema.GroupVersionKind {
+	return schema.GroupVersionKind{Group: Group, Version: Version, Kind: Kind}
+}
 
 // APIVersion is group/version.
 func APIVersion() string { return Group + "/" + Version }
