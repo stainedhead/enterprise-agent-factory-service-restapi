@@ -59,11 +59,7 @@ func main() {
 		_ = rt.Shutdown(sctx)
 	}()
 	log = rt.Log
-	srv := &http.Server{
-		Addr:              *addr,
-		Handler:           c.Handler,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	srv := newServer(*addr, c.Handler, s)
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -83,4 +79,16 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// newServer is the public listener: header, whole-request and idle timeouts bound slow clients
+// (FR-R09). There is no WriteTimeout, so long exports and downloads are not cut.
+func newServer(addr string, h http.Handler, s settings) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           h,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       s.HTTPReadTimeout,
+		IdleTimeout:       s.HTTPIdleTimeout,
+	}
 }

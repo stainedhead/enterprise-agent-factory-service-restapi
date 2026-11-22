@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/exports"
@@ -149,9 +150,15 @@ func toImportBody(r imports.Report) importBody {
 	return out
 }
 
+// importReadTimeout is how long CreateImport may take to receive its body.
+const importReadTimeout = 10 * time.Minute
+
 // importBundle serves CreateImport: dryRun defaults to true; the request body (up to 100 MB, enforced by
 // the route's body limit) carries the bundle and the account map.
 func (a *ExportsAPI) importBundle(w http.ResponseWriter, r *http.Request) {
+	// A bundle can be 100 MB; the server's read timeout is sized for ordinary requests (FR-R09). An
+	// error means the writer does not support deadlines (a test recorder), so the server default stays.
+	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(importReadTimeout))
 	c, err := w2Caller(r)
 	if err != nil {
 		WriteError(w, r, err)

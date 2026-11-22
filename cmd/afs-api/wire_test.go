@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres/pgtest"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/authz"
@@ -186,5 +187,25 @@ func TestSettingsIdempotencyHMACKey(t *testing.T) {
 				t.Fatalf("key = %q, want %q", s.IdempotencyHMACKey, c.wantKey)
 			}
 		})
+	}
+}
+
+// D-6 (FR-R09 AC1): the read and idle timeouts are settings with defaults of 60 s and 120 s.
+func TestSettingsHTTPTimeouts(t *testing.T) {
+	s, err := settingsFrom(env(nil))
+	if err != nil || s.HTTPReadTimeout != 60*time.Second || s.HTTPIdleTimeout != 120*time.Second {
+		t.Fatalf("defaults: %+v %v", s, err)
+	}
+	s, err = settingsFrom(env(map[string]string{"AFS_HTTP_READ_TIMEOUT": "5s", "AFS_HTTP_IDLE_TIMEOUT": "7s"}))
+	if err != nil || s.HTTPReadTimeout != 5*time.Second || s.HTTPIdleTimeout != 7*time.Second {
+		t.Fatalf("set: %+v %v", s, err)
+	}
+	for _, bad := range []map[string]string{
+		{"AFS_HTTP_READ_TIMEOUT": "soon"}, {"AFS_HTTP_READ_TIMEOUT": "0s"}, {"AFS_HTTP_READ_TIMEOUT": "-1s"},
+		{"AFS_HTTP_IDLE_TIMEOUT": "x"}, {"AFS_HTTP_IDLE_TIMEOUT": "0"},
+	} {
+		if _, err := settingsFrom(env(bad)); err == nil {
+			t.Errorf("%v accepted", bad)
+		}
 	}
 }

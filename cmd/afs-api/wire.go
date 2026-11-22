@@ -70,6 +70,10 @@ type settings struct {
 	// (AFS_IDEMPOTENCY_HMAC_KEY, at least 32 bytes, the same on every replica). Empty with one
 	// replica: wire draws a random per-process key.
 	IdempotencyHMACKey []byte
+	// HTTPReadTimeout bounds reading a whole request, body included (AFS_HTTP_READ_TIMEOUT, default
+	// 60s); HTTPIdleTimeout bounds an idle keep-alive connection (AFS_HTTP_IDLE_TIMEOUT, default 120s).
+	// CreateImport extends its own read deadline.
+	HTTPReadTimeout, HTTPIdleTimeout time.Duration
 	// OIDCHTTP fetches identity provider discovery documents and JWKS; nil uses a client with a 5 s
 	// timeout. Tests point it at a fake provider.
 	OIDCHTTP *http.Client
@@ -86,6 +90,19 @@ func settingsFrom(env func(string) string) (settings, error) {
 			return s, fmt.Errorf("AFS_MIGRATION_LOCK_TIMEOUT: %q is not a duration", v)
 		}
 		s.MigrationTimeout = d
+	}
+	s.HTTPReadTimeout, s.HTTPIdleTimeout = 60*time.Second, 120*time.Second
+	for _, v := range []struct {
+		name string
+		dst  *time.Duration
+	}{{"AFS_HTTP_READ_TIMEOUT", &s.HTTPReadTimeout}, {"AFS_HTTP_IDLE_TIMEOUT", &s.HTTPIdleTimeout}} {
+		if raw := env(v.name); raw != "" {
+			d, err := time.ParseDuration(raw)
+			if err != nil || d <= 0 {
+				return s, fmt.Errorf("%s: %q is not a positive duration", v.name, raw)
+			}
+			*v.dst = d
+		}
 	}
 	s.APIReplicas = 1
 	for _, v := range []struct {
