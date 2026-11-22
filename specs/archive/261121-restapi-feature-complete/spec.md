@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Spec** | `specs/261121-restapi-feature-complete/` (created 2026-11-21 by `create-spec`, step 1 of `implm-frm-prd`) |
+| **Spec** | `specs/archive/261121-restapi-feature-complete/` (created 2026-11-21 by `create-spec`, step 1 of `implm-frm-prd`) |
 | **Source PRD** | [`enterprise-agent-factory-service-restapi-PRD.md`](enterprise-agent-factory-service-restapi-PRD.md) (moved here; the repo root keeps a stub that points to it) |
 | **Branch** | `feat/restapi-feature-complete` |
 | **Scope** | Feature complete: every requirement of the PRD §4 and every story of §5. Milestones M0–M6 are build order only; all are in scope |
@@ -725,7 +725,7 @@ with the default the tasks build to: research.md §5 (OQ-S1 to OQ-S8). Schema ga
 
 ## 13. References
 
-- PRD: `specs/261121-restapi-feature-complete/enterprise-agent-factory-service-restapi-PRD.md`
+- PRD: `specs/archive/261121-restapi-feature-complete/enterprise-agent-factory-service-restapi-PRD.md`
 - Root PRD: `enterprise-agent-factory-service/enterprise-agent-factory-service-initial-PRD.md` (stories US-1..US-26, decisions D1–D57, settings §6.13)
 - Contracts: `enterprise-agent-factory-service/docs/contracts/{api,database,gateway}-contract.md`
 - Solution design: `enterprise-agent-factory-service/docs/solution-design.md`

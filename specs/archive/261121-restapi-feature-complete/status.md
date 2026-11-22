@@ -4,7 +4,7 @@
 |---|---|
 | **Feature** | restapi-feature-complete |
 | **Created** | 2026-11-21 |
-| **Spec** | `specs/261121-restapi-feature-complete/` |
+| **Spec** | `specs/archive/261121-restapi-feature-complete/` |
 | **Branch** | `feat/restapi-feature-complete` |
 | **Dashboard** | [restapi-feature-complete-status.md](restapi-feature-complete-status.md) |
 
@@ -20,7 +20,7 @@
 | 3 | Architecture and planning | Complete | architecture.md, plan.md |
 | 4 | Task breakdown | Complete | tasks.md: 60 streams, 255 tasks |
 | 5 | Implementation (M0–M6) | Complete except cluster-only checks | M0 complete 2026-11-21; M1 complete 2026-11-22 (step 3 started 2026-11-21T20:57:16Z); M2 complete 2026-11-22 (integrated); M3 complete 2026-11-22 (integrated); M4 complete 2026-11-22 (integrated); M5 complete 2026-11-22 (integrated); M6 complete 2026-11-22 (integrated, M6-X2 tag sync done) except the cluster-only checks M6-F3, F4, F5, F6 and M2-F8. Step 3 ended 2026-11-22T07:49:27Z. Task progress in tasks.md |
-| 6 | Completion and archival | Not Started | |
+| 6 | Completion and archival | Archived 2026-11-22 (dev-flow step 7) | Moved to `specs/archive/`. Cluster-only checks M2-F8, M6-F3..F6 stay open (review PRD section 7) |
 
 ## Phase 0 checklist
 

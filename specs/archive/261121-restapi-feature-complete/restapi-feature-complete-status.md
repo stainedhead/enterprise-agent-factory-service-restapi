@@ -1,7 +1,7 @@
 # Dev-Flow Implementation Status
 
-**PRD:** specs/261121-restapi-feature-complete/enterprise-agent-factory-service-restapi-PRD.md (root keeps a stub)
-**Spec:** specs/261121-restapi-feature-complete
+**PRD:** specs/archive/261121-restapi-feature-complete/enterprise-agent-factory-service-restapi-PRD.md (root keeps a stub)
+**Spec:** specs/archive/261121-restapi-feature-complete (archived at step 7)
 **Branch:** feat/restapi-feature-complete
 **Review PRD:** restapi-feature-complete-review-PRD.md
 **Process Start:** 2026-11-21T20:31:38Z
@@ -18,7 +18,7 @@
 | 4  | Documentation and User Docs     | ✅ Complete | 2026-11-22T07:49:27Z | 2026-11-22T07:52:03Z | 3 |
 | 5  | Code and Design Review          | ✅ Complete (1 P0, 6 P1, 10 P2) | 2026-11-22T07:52:13Z | 2026-11-22T08:05:43Z | 14 |
 | 6  | Prepare Review PRD              | ✅ Complete (review-prd: ready for spec; AC tightened, priorities confirmed, 5 fix streams) | 2026-11-22T08:05:43Z | 2026-11-22T08:06:36Z | 1 |
-| 7  | Archive Original Spec           | ⬜ Pending | — | — | — |
+| 7  | Archive Original Spec           | ✅ Complete (git mv to specs/archive/; root PRD stub link updated; no README, docs or AGENTS links pointed at the old path; archived with M2-F8 and M6-F3..F6 open, see decision below) | 2026-11-22T08:07:00Z | 2026-11-22T08:08:02Z | 1 |
 | 8  | Spec Review Fixes               | ⬜ Pending | — | — | — |
 | 9  | Implement Review Fixes          | ⬜ Pending | — | — | — |
 | 10 | Archive Fixes Spec              | ⬜ Pending | — | — | — |
@@ -26,3 +26,8 @@
 | 12 | Process Analysis Report         | ⬜ Pending | — | — | — |
 | 13 | Archive Spec                    | ⬜ Pending | — | — | — |
 | 14 | Open Pull Request               | ⬜ Pending | — | — | — |
+
+## Decisions (steps 7 and 8, authorized by J, no questions asked)
+
+- **D-7.1** Archived with 5 tasks still open (M2-F8, M6-F3, F4, F5, F6). They need the dev cluster, real AWS or a blocked toolchain download and are fenced off in the review PRD section 7. They stay open in `tasks.md` inside the archive and must not be marked done by the fix cycle. `archive-spec` asks for confirmation on an incomplete spec; J's authorization stood in for it.
+- **D-7.2** Links fixed: the root PRD stub. `README.md`, `docs/`, `AGENTS.md` and `user-docs/` held no path link to the old spec directory. ADR entries cite the spec by name only and were left unchanged. `user-docs/` links nowhere into `specs/`.
