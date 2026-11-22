@@ -3,6 +3,8 @@ package costtags_test
 import (
 	"context"
 	"errors"
+	"io"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -129,5 +131,52 @@ func TestSaveFailureIsReturned(t *testing.T) {
 	c, _, _ := setup(&costtagstest.Billing{Tags: map[string]costtags.Activation{}}, st, day(2026, 11, 22))
 	if _, err := c.Run(context.Background()); !errors.Is(err, boom) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+type failIDs struct{ err error }
+
+func (f failIDs) NewID(domain.IDPrefix) (domain.ID, error) {
+	var id domain.ID
+	return id, f.err
+}
+
+type failOutbox struct{ err error }
+
+func (f failOutbox) Publish(context.Context, port.Tx, domain.Event) error { return f.err }
+
+func TestPortFailuresAreReturned(t *testing.T) {
+	boom := errors.New("boom")
+	overdueStore := func() *costtagstest.Store { return &costtagstest.Store{KeyList: []string{"afs-agent-id"}} }
+	overdueBilling := &costtagstest.Billing{Tags: map[string]costtags.Activation{"afs-agent-id": {Active: true, Since: day(2026, 11, 1)}}}
+	for _, tc := range []struct {
+		name  string
+		store *costtagstest.Store
+		mod   func(c *costtags.Checker)
+	}{
+		{"keys", &costtagstest.Store{FailKeys: boom}, nil},
+		{"cur", &costtagstest.Store{FailSeen: boom}, nil},
+		{"stored", &costtagstest.Store{FailStored: boom}, nil},
+		{"ids", overdueStore(), func(c *costtags.Checker) { c.IDs = failIDs{boom} }},
+		{"outbox", overdueStore(), func(c *costtags.Checker) { c.Outbox = failOutbox{boom} }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _, _ := setup(overdueBilling, tc.store, day(2026, 11, 22))
+			if tc.mod != nil {
+				tc.mod(c)
+			}
+			if _, err := c.Run(context.Background()); !errors.Is(err, boom) {
+				t.Fatalf("err = %v", err)
+			}
+		})
+	}
+}
+
+func TestLogsWhenALoggerIsGiven(t *testing.T) {
+	st := &costtagstest.Store{KeyList: []string{"afs-team-id", "bad\x01key"}}
+	c, _, _ := setup(&costtagstest.Billing{Tags: map[string]costtags.Activation{}}, st, day(2026, 11, 22))
+	c.Log = slog.New(slog.NewTextHandler(io.Discard, nil))
+	if _, err := c.Run(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }

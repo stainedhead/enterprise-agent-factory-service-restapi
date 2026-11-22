@@ -27,22 +27,25 @@ type Store struct {
 	KeyList []string
 	CUR     map[string]costtags.Seen
 	Rows    map[string]costtags.Stored
-	// FailSave makes Save fail.
-	FailSave error
+	// FailSave makes Save fail; FailKeys, FailSeen and FailStored make the reads fail.
+	FailSave, FailKeys, FailSeen, FailStored error
 }
 
 var _ costtags.Store = (*Store)(nil)
 
 // Keys implements costtags.Store.
-func (s *Store) Keys(context.Context, port.Tx) ([]string, error) { return s.KeyList, nil }
+func (s *Store) Keys(context.Context, port.Tx) ([]string, error) { return s.KeyList, s.FailKeys }
 
 // SeenInCUR implements costtags.Store.
 func (s *Store) SeenInCUR(context.Context, port.Tx, []string) (map[string]costtags.Seen, error) {
-	return s.CUR, nil
+	return s.CUR, s.FailSeen
 }
 
 // Stored implements costtags.Store.
 func (s *Store) Stored(context.Context, port.Tx) (map[string]costtags.Stored, error) {
+	if s.FailStored != nil {
+		return nil, s.FailStored
+	}
 	out := map[string]costtags.Stored{}
 	for k, v := range s.Rows {
 		out[k] = v
