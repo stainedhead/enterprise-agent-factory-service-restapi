@@ -28,6 +28,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/housekeeping"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/lifecycle"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/tags"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/team"
 )
 
@@ -156,7 +157,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 		AWS: team.AWSConfig{Partition: as.Partition, Region: as.Region, AccountID: account, GatewayRoleARN: s.GatewayRoleARN,
 			PermissionsBoundaryARN: s.PermissionsBoundaryARN, ClusterARN: clusterARN, ESORoleARN: s.ESORoleARN, SecretsPrefix: s.SecretsPrefix},
 		Gateway: agent.Gateway{Namespace: s.GatewayNamespace, Name: s.GatewayName},
-		Cluster: s.ClusterName, AWSCfg: awsCfg, NodeClassJSON: env("AFS_NODECLASS_JSON"),
+		Cluster: s.ClusterName, AWSCfg: awsCfg, NodeClassJSON: env("AFS_NODECLASS_JSON"), LinkVerifierARN: env("AFS_RECONCILER_ROLE_ARN"),
 	}, log)
 	if err != nil {
 		return fail(err)
@@ -198,19 +199,24 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	if err != nil {
 		return fail(err)
 	}
-	controllers := []engine.Controller{teams, platform, adm, agents.Controller, eg.Controller}
+	lk, err := wireLinks(awsCfg, runner, pool, audit, outbox, ids, team.AWSConfig{Partition: as.Partition, Region: as.Region, AccountID: account},
+		env("AFS_RECONCILER_ROLE_ARN"), clock.Now)
+	if err != nil {
+		return fail(err)
+	}
+	controllers := []engine.Controller{teams, platform, adm, agents.Controller, eg.Controller, lk.Controller}
 	if lg.Controller != nil {
 		controllers = append(controllers, lg.Controller)
 	}
 	if nt.Controller != nil {
 		controllers = append(controllers, nt.Controller)
 	}
-	reg, err := routes(append(append(lg.Routes, eg.Routes...), nt.Routes...)...)
+	reg, err := routes(append(append(append(append(lg.Routes, eg.Routes...), nt.Routes...), lk.Routes...), tags.Routes()...)...)
 	if err != nil {
 		return fail(err)
 	}
 	r.Engine, err = engine.New(engine.Config{
-		Feed: postgres.NewChangeFeed(dbCfg, log), Lister: nt.WrapLister(lg.WrapLister(eg.WrapLister(postgres.NewLister(pool)))), Registry: reg,
+		Feed: postgres.NewChangeFeed(dbCfg, log), Lister: lk.WrapLister(nt.WrapLister(lg.WrapLister(eg.WrapLister(postgres.NewLister(pool))))), Registry: reg,
 		Controllers:  controllers,
 		Status:       status,
 		Drift:        postgres.NewDriftRecorder(runner, audit, outbox, ids),
@@ -227,6 +233,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 		Outbox: hk, Sink: eventbridge.New(awsCfg, s.EventBusName), Partitions: hk, Purger: hk, Recorder: m, Clock: clock.Now, Log: log,
 	}))
 	registerOrphanSweep(r.Engine, sm, runner, audit, clock.Now, log)
+	registerOrgMirror(r.Engine, awsCfg, runner, env, clock.Now, log)
 	if err := wireTraffic(r.Engine, runner, outbox, ids, env, clock.Now, log); err != nil {
 		return fail(err)
 	}

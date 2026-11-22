@@ -602,11 +602,11 @@ Owns: `internal/domain/identity.go`, `internal/usecase/{identity,accounts}/`, `i
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M4-A1 | Organizations account mirror hourly; a removed account shows in the next run [adapter with fake Organizations] | RC-US-18.3, TEAM-8 | — |
-| [ ] | M4-A2 | `ListOrgAccounts` (`admin:accounts`), `ListAllowedAccounts` (`identities:read`) | RA-1 (part) | M4-A1 |
-| [ ] | M4-A3 | Agent role links (list, create, get with `trustPolicy`, delete, verify) and agent identities (list, create, delete) | RA-1 (part), AGT-6, AGT-10 | — |
-| [ ] | M4-A4 | Links reconciler: `sts:AssumeRole` on the exact ARN, profile with `role_session_name` = agent id, status `pending_trust` → `verified` after an assume with external ID and session tags, or `failed` with the AWS error code; on create, daily and on demand; `role_link.verified`/`failed` [adapter with fake STS] | RC-US-4.1, RC-US-4.3, RC-3 | M4-A3 |
-| [ ] | M4-A5 | Narrowing the allowed-accounts filter disables links outside it on the next pass | RC-US-4.2 | M4-A4 |
+| [x] | M4-A1 | Organizations account mirror hourly; a removed account shows in the next run [adapter with fake Organizations] | RC-US-18.3, TEAM-8 | — |
+| [x] | M4-A2 | `ListOrgAccounts` (`admin:accounts`), `ListAllowedAccounts` (`identities:read`) | RA-1 (part) | M4-A1 |
+| [x] | M4-A3 | Agent role links (list, create, get with `trustPolicy`, delete, verify) and agent identities (list, create, delete) | RA-1 (part), AGT-6, AGT-10 | — |
+| [x] | M4-A4 | Links reconciler: `sts:AssumeRole` on the exact ARN, profile with `role_session_name` = agent id, status `pending_trust` → `verified` after an assume with external ID and session tags, or `failed` with the AWS error code; on create, daily and on demand; `role_link.verified`/`failed` [adapter with fake STS] | RC-US-4.1, RC-US-4.3, RC-3 | M4-A3 |
+| [x] | M4-A5 | Narrowing the allowed-accounts filter disables links outside it on the next pass | RC-US-4.2 | M4-A4 |
 
 ### M4-B · Tags (RC-9, GW-5)
 
@@ -614,8 +614,8 @@ Owns: `internal/usecase/reconcile/tags/`, `internal/usecase/gateway/metadata.go`
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M4-B1 | Effective tags on every managed AWS resource (roles, profiles, queues, snapshots, secrets, NodePools); changes within 10 minutes; `afs-team-id`/`afs-agent-id` always present; above 40 keys refused before any AWS call, resource `Degraded` with a condition naming the limit | RC-US-7.1, RC-US-7.2, RC-9 | — |
-| [ ] | M4-B2 | Gateway `requestMetadata`: at most 16 pairs in the D27 order including `afs-team-id` and `afs-agent-id`, dropped keys recorded (and exposed by `GetTeamTags`); refresh on notification, ≤ 60 s [adapter with fake Bedrock] | GW-US-2.1, GW-5 | — |
+| [x] | M4-B1 | Effective tags on every managed AWS resource (roles, profiles, queues, snapshots, secrets, NodePools); changes within 10 minutes; `afs-team-id`/`afs-agent-id` always present; above 40 keys refused before any AWS call, resource `Degraded` with a condition naming the limit | RC-US-7.1, RC-US-7.2, RC-9 | — |
+| [x] | M4-B2 | Gateway `requestMetadata`: at most 16 pairs in the D27 order including `afs-team-id` and `afs-agent-id`, dropped keys recorded (and exposed by `GetTeamTags`); refresh on notification, ≤ 60 s [adapter with fake Bedrock] | GW-US-2.1, GW-5 | — |
 
 ### M4-C · CUR and reconciliation (BI-1, BI-2, BI-7)
 

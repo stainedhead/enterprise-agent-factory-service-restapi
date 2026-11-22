@@ -102,13 +102,81 @@ func TestEnsureProfileIsIdempotent(t *testing.T) {
 		map[string]any{"inferenceProfileSummaries": []any{summary("afs-other", "arn:other")}, "nextToken": "p2"},
 		map[string]any{"inferenceProfileSummaries": []any{summary(pname, profARN)}},
 	))
+	want := spec()
+	want.Tags[team.TagManagedBy] = team.ManagedByValue
+	srv.On(tagsHandler(want.Tags))
 	p, err := c.EnsureProfile(t.Context(), spec())
 	if err != nil || p.ARN != profARN || p.SourceARN != srcARN {
 		t.Fatalf("EnsureProfile = %+v, %v", p, err)
 	}
 	for _, r := range srv.Requests() {
-		if r.Method == "POST" {
-			t.Error("an existing profile was created again")
+		if r.Method == "POST" && !strings.HasPrefix(r.Path, "/listTagsForResource") {
+			t.Errorf("an existing profile with the right tags was written: %s %s", r.Method, r.Path)
+		}
+	}
+}
+
+// tagsHandler answers ListTagsForResource with have.
+func tagsHandler(have map[string]string) awstest.Handler {
+	return func(r awstest.Request) *awstest.Response {
+		if r.Method != "POST" || !strings.HasPrefix(r.Path, "/listTagsForResource") {
+			return nil
+		}
+		var tags []map[string]string
+		for k, v := range have {
+			tags = append(tags, map[string]string{"key": k, "value": v})
+		}
+		resp := awstest.JSONOK(map[string]any{"tags": tags})
+		return &resp
+	}
+}
+
+// M4-B1 / RC-9: an existing profile gets changed tags, and loses the tags AFS applied that are no longer
+// wanted, but never tags somebody else put there; a profile we did not create is left alone.
+func TestEnsureProfileSyncsTags(t *testing.T) {
+	c, srv := newControl(t)
+	srv.On(listHandler(map[string]any{"inferenceProfileSummaries": []any{summary(pname, profARN)}}))
+	srv.On(tagsHandler(map[string]string{
+		team.TagManagedBy: team.ManagedByValue, team.TagTeamID: "team_01JD0000000000000000000001", team.TagTeamSlug: "old-slug",
+		"cost-center": "cc-1", "afs-tag-keys": "cost-center", "foreign": "keep", "afs-agent-name": "gone",
+	}))
+	srv.On(func(r awstest.Request) *awstest.Response {
+		if r.Method == "POST" && (r.Path == "/tagResource" || r.Path == "/untagResource") {
+			resp := awstest.JSONOK(map[string]any{})
+			return &resp
+		}
+		return nil
+	})
+	sp := spec()
+	sp.Tags["afs-tag-keys"] = "project"
+	sp.Tags["project"] = "apollo"
+	if _, err := c.EnsureProfile(t.Context(), sp); err != nil {
+		t.Fatal(err)
+	}
+	tag, ok := srv.Find("POST /tagResource")
+	if !ok || !strings.Contains(string(tag.Body), "apollo") || !strings.Contains(string(tag.Body), "payments") {
+		t.Errorf("tagResource = %s", tag.Body)
+	}
+	untag, ok := srv.Find("POST /untagResource")
+	if !ok {
+		t.Fatal("stale tags were not removed")
+	}
+	body := string(untag.Body)
+	if !strings.Contains(body, "cost-center") || !strings.Contains(body, "afs-agent-name") || strings.Contains(body, "foreign") || strings.Contains(body, team.TagManagedBy) {
+		t.Errorf("untagResource = %s", body)
+	}
+}
+
+func TestEnsureProfileLeavesAForeignProfileAlone(t *testing.T) {
+	c, srv := newControl(t)
+	srv.On(listHandler(map[string]any{"inferenceProfileSummaries": []any{summary(pname, profARN)}}))
+	srv.On(tagsHandler(map[string]string{"owner": "someone"}))
+	if _, err := c.EnsureProfile(t.Context(), spec()); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range srv.Requests() {
+		if r.Path == "/tagResource" || r.Path == "/untagResource" {
+			t.Errorf("a profile we did not create was retagged: %s", r.Path)
 		}
 	}
 }

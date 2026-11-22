@@ -206,3 +206,36 @@ func TestUnknownCallErrorsBecomeUpstreamErrors(t *testing.T) {
 		t.Fatal("an upstream failure before the first byte must release the whole reservation")
 	}
 }
+
+// M4-B2 / GW-5: a changed tag reaches the next call at once on its notification (a service tag change names
+// no team and reaches every team), and never later than the 60 s TTL.
+func TestTagChangesRefreshOnNotificationAndWithinSixtySeconds(t *testing.T) {
+	cs, s, clk := newCached(t)
+	ctx := t.Context()
+	read := func() []gateway.Tag {
+		tags, err := cs.Tags(ctx, teamA)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tags
+	}
+	s.TagRows[teamA] = []gateway.Tag{{Key: "a", Value: "1", Source: "team"}}
+	read()
+	s.TagRows[teamA] = []gateway.Tag{{Key: "a", Value: "2", Source: "team"}}
+	if got := read(); got[0].Value != "1" {
+		t.Fatalf("served %v before any notification", got)
+	}
+	cs.Invalidate("service_tags", "")
+	if got := read(); got[0].Value != "2" {
+		t.Fatalf("a service tag notification did not refresh: %v", got)
+	}
+	s.TagRows[teamA] = []gateway.Tag{{Key: "a", Value: "3", Source: "team"}}
+	clk.advance(59 * time.Second)
+	if got := read(); got[0].Value != "2" {
+		t.Fatalf("refreshed before the TTL: %v", got)
+	}
+	clk.advance(2 * time.Second)
+	if got := read(); got[0].Value != "3" {
+		t.Fatalf("a change missed by the notification took more than 60 s: %v", got)
+	}
+}

@@ -473,13 +473,13 @@ func TestTags(t *testing.T) {
 	if _, err := r.svc.PutTags(t.Context(), admin, tm.ID, ptr(domain.Version(99)), nil); domain.KindOf(err) != domain.KindPreconditionFailed {
 		t.Fatalf("stale: %v", err)
 	}
-	// 20 own keys: effective set has 1 system + 1 fixed + 1 required + 19 = 23; > 16 pairs drops keys.
+	// 20 own keys: effective set has 1 system + 1 fixed + 1 required + 19 = 23; > 15 pairs (16 less the agent id) drops keys.
 	var many []domain.TagValue
 	for i := range 20 {
 		many = append(many, domain.TagValue{Key: "k" + string(rune('a'+i)), Value: "v"})
 	}
 	res, err = r.svc.PutTags(t.Context(), admin, tm.ID, nil, many)
-	if err != nil || len(res.Dropped) != 7 {
+	if err != nil || len(res.Dropped) != 8 {
 		t.Fatalf("dropped = %v %v", res.Dropped, err)
 	}
 }

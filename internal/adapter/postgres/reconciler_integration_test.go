@@ -353,6 +353,10 @@ func TestTeamSource(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if _, err := admin.Exec(ctx, `INSERT INTO afs.team_tags (team_id, key, value) VALUES ($1, 'project', 'apollo')`, tm.ID); err != nil {
+		t.Fatal(err)
+	}
+
 	src := postgres.NewTeamSource(reconcilerPool(t, db))
 	got, err := src.LoadTeam(ctx, tm.ID)
 	if err != nil {
@@ -360,6 +364,9 @@ func TestTeamSource(t *testing.T) {
 	}
 	if got.Slug != tm.Slug || got.Namespace != "afs-t-"+tm.Slug || got.Quotas.CPU != "8" || got.Quotas.Pods != 20 || got.State != "active" {
 		t.Errorf("team = %+v", got)
+	}
+	if got.Tags["project"] != "apollo" || got.Tags["afs-team-id"] != "" {
+		t.Errorf("tags are the team's non-system effective tags: %v", got.Tags)
 	}
 	if len(got.Models) != 1 || got.Models[0].ID != model || got.Models[0].ProfileARN != "" {
 		t.Errorf("only enabled catalog models are returned: %+v", got.Models)

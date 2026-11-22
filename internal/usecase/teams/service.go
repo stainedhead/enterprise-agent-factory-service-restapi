@@ -535,7 +535,9 @@ func (s *Service) tagsResult(ctx context.Context, tx port.Tx, teamID string) (Ta
 		return TagsResult{}, err
 	}
 	set := domain.EffectiveTagSet(teamID, svc, own)
-	_, dropped := set.BedrockMetadata(domain.MaxRequestMetadataPairs)
+	// One pair is kept for the agent's (or pool's) id, which the gateway adds after afs-team-id, so these are
+	// the keys that no call can send.
+	_, dropped := set.BedrockMetadata(domain.MaxRequestMetadataPairs - 1)
 	return TagsResult{Tags: set, Dropped: dropped, Version: v}, nil
 }
 

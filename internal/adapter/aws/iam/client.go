@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"reflect"
 	"slices"
-	"strings"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	awsiam "github.com/aws/aws-sdk-go-v2/service/iam"
@@ -19,6 +18,7 @@ import (
 
 	afsaws "github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/aws"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/tags"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/team"
 )
 
@@ -133,8 +133,9 @@ func (c *Client) sync(ctx context.Context, spec team.RoleSpec, tags map[string]s
 	return c.syncPolicies(ctx, spec, true)
 }
 
-// syncTags adds or fixes the desired tags and removes afs- tags that are no longer desired. Tags the
-// reconciler does not own (no afs- prefix) are left alone.
+// syncTags adds or fixes the desired tags and removes the ones AFS applied earlier (the afs- system keys and
+// the keys recorded in afs-tag-keys) that are no longer desired. Tags put on the role by anyone else are left
+// alone (tags.Stale).
 func (c *Client) syncTags(ctx context.Context, name string, want map[string]string, have []types.Tag) error {
 	haveMap := map[string]string{}
 	for _, t := range have {
@@ -151,12 +152,7 @@ func (c *Client) syncTags(ctx context.Context, name string, want map[string]stri
 			return afsaws.WrapError(err)
 		}
 	}
-	var stale []string
-	for k := range haveMap {
-		if _, ok := want[k]; !ok && strings.HasPrefix(k, "afs-") {
-			stale = append(stale, k)
-		}
-	}
+	stale := tags.Stale(haveMap, want)
 	if len(stale) > 0 {
 		slices.Sort(stale)
 		if _, err := c.api.UntagRole(ctx, &awsiam.UntagRoleInput{RoleName: &name, TagKeys: stale}); err != nil {

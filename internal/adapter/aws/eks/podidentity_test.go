@@ -3,6 +3,8 @@ package eks
 import (
 	"context"
 	"errors"
+	"maps"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -71,9 +73,26 @@ func (f *fakePI) DeletePodIdentityAssociation(_ context.Context, in *awseks.Dele
 func (f *fakePI) TagResource(_ context.Context, in *awseks.TagResourceInput, _ ...func(*awseks.Options)) (*awseks.TagResourceOutput, error) {
 	f.calls = append(f.calls, "tag")
 	for _, a := range f.assoc {
-		a.tags = in.Tags
+		merged := map[string]string{}
+		maps.Copy(merged, a.tags)
+		maps.Copy(merged, in.Tags)
+		a.tags = merged
 	}
 	return &awseks.TagResourceOutput{}, nil
+}
+
+func (f *fakePI) UntagResource(_ context.Context, in *awseks.UntagResourceInput, _ ...func(*awseks.Options)) (*awseks.UntagResourceOutput, error) {
+	f.calls = append(f.calls, "untag")
+	for _, a := range f.assoc {
+		kept := map[string]string{}
+		for k, v := range a.tags {
+			if !slices.Contains(in.TagKeys, k) {
+				kept[k] = v
+			}
+		}
+		a.tags = kept
+	}
+	return &awseks.UntagResourceOutput{}, nil
 }
 
 const role1 = "arn:aws:iam::111122223333:role/afs/afs-t-a/afs-team"
@@ -146,5 +165,25 @@ func TestPodIdentityErrors(t *testing.T) {
 	f.listErr = &types.ResourceNotFoundException{}
 	if err := p.Delete(context.Background(), "ns", "sa"); err != nil {
 		t.Errorf("Delete with a missing cluster resource: %v", err)
+	}
+}
+
+// M4-B1 / RC-9: a tag AFS applied earlier and no longer wanted is removed; a foreign tag stays.
+func TestPodIdentityUntagsStaleTags(t *testing.T) {
+	f := newFakePI()
+	p := NewPodIdentityWithAPI(f, "afs-dev")
+	ctx := context.Background()
+	first := map[string]string{"afs-team-id": "team_1", "cost-center": "cc-1", "afs-tag-keys": "cost-center"}
+	if err := p.Ensure(ctx, "afs-t-a", "agent-x", role1, first); err != nil {
+		t.Fatal(err)
+	}
+	f.assoc["a-1"].tags["foreign"] = "keep"
+	next := map[string]string{"afs-team-id": "team_1"}
+	if err := p.Ensure(ctx, "afs-t-a", "agent-x", role1, next); err != nil {
+		t.Fatal(err)
+	}
+	got := f.assoc["a-1"].tags
+	if _, ok := got["cost-center"]; ok || got["foreign"] != "keep" || f.calls[len(f.calls)-1] != "untag" {
+		t.Errorf("tags = %v, calls = %v", got, f.calls)
 	}
 }

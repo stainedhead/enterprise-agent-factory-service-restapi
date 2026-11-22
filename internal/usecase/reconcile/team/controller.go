@@ -9,6 +9,7 @@ import (
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/tags"
 )
 
 // Defaults of the gateway's location (gateway contract §2).
@@ -126,11 +127,21 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 	var errs []error
 	var changed []string
 
-	roleARN, iamErr := c.reconcileAWS(ctx, t)
-	if iamErr != nil {
-		errs = append(errs, engine.WithCondition(domain.CondIamReady, iamErr))
+	// The tag set is checked before any AWS call: above the cap nothing is applied and the team shows
+	// TagsApplied false with the limit named (RC-9, TAG-4).
+	teamTags, tagErr := tags.Effective(tags.Subject{TeamID: t.ID, TeamSlug: t.Slug}, t.Tags)
+	var roleARN string
+	if tagErr != nil {
+		errs = append(errs, engine.WithCondition(tags.Condition, tagErr))
+		roleARN = c.teamRoleARN(t)
 	} else {
-		conds = append(conds, ok(domain.CondIamReady, "Reconciled"))
+		var iamErr error
+		roleARN, iamErr = c.reconcileAWS(ctx, t, teamTags)
+		if iamErr != nil {
+			errs = append(errs, engine.WithCondition(domain.CondIamReady, iamErr))
+		} else {
+			conds = append(conds, ok(domain.CondIamReady, "Reconciled"), ok(tags.Condition, "Applied"))
+		}
 	}
 
 	res, k8sErr := c.cfg.Cluster.ApplyTeam(ctx, Environment{

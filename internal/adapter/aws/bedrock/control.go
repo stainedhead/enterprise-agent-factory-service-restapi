@@ -17,6 +17,7 @@ import (
 
 	afsaws "github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/aws"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/tags"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/team"
 )
 
@@ -30,6 +31,8 @@ type api interface {
 	CreateInferenceProfile(ctx context.Context, in *awsbedrock.CreateInferenceProfileInput, opts ...func(*awsbedrock.Options)) (*awsbedrock.CreateInferenceProfileOutput, error)
 	DeleteInferenceProfile(ctx context.Context, in *awsbedrock.DeleteInferenceProfileInput, opts ...func(*awsbedrock.Options)) (*awsbedrock.DeleteInferenceProfileOutput, error)
 	ListTagsForResource(ctx context.Context, in *awsbedrock.ListTagsForResourceInput, opts ...func(*awsbedrock.Options)) (*awsbedrock.ListTagsForResourceOutput, error)
+	TagResource(ctx context.Context, in *awsbedrock.TagResourceInput, opts ...func(*awsbedrock.Options)) (*awsbedrock.TagResourceOutput, error)
+	UntagResource(ctx context.Context, in *awsbedrock.UntagResourceInput, opts ...func(*awsbedrock.Options)) (*awsbedrock.UntagResourceOutput, error)
 }
 
 // Control implements team.InferenceProfiles.
@@ -55,26 +58,60 @@ func (c *Control) EnsureProfile(ctx context.Context, spec team.ProfileSpec) (tea
 	if err != nil {
 		return team.Profile{}, err
 	}
+	want := map[string]string{team.TagManagedBy: team.ManagedByValue}
+	for k, v := range spec.Tags {
+		want[k] = v
+	}
 	for _, p := range all {
 		if p.Name == spec.Name {
-			return p, nil
+			return p, c.syncTags(ctx, p.ARN, want)
 		}
-	}
-	tags := map[string]string{team.TagManagedBy: team.ManagedByValue}
-	for k, v := range spec.Tags {
-		tags[k] = v
 	}
 	token := sha256.Sum256([]byte(spec.Name))
 	out, err := c.api.CreateInferenceProfile(ctx, &awsbedrock.CreateInferenceProfileInput{
 		InferenceProfileName: &spec.Name,
 		ModelSource:          &types.InferenceProfileModelSourceMemberCopyFrom{Value: spec.SourceARN},
-		Tags:                 toTags(tags),
+		Tags:                 toTags(want),
 		ClientRequestToken:   awssdk.String(hex.EncodeToString(token[:16])),
 	})
 	if err != nil {
 		return team.Profile{}, afsaws.WrapError(err)
 	}
 	return team.Profile{Name: spec.Name, ARN: awssdk.ToString(out.InferenceProfileArn), SourceARN: spec.SourceARN}, nil
+}
+
+// syncTags brings the tags of a profile the reconciler created to want: it adds or fixes the desired tags and
+// removes the ones AFS applied earlier that are no longer desired (tags.Stale). A profile without the
+// managed tag is not ours and is left alone.
+func (c *Control) syncTags(ctx context.Context, arn string, want map[string]string) error {
+	out, err := c.api.ListTagsForResource(ctx, &awsbedrock.ListTagsForResourceInput{ResourceARN: &arn})
+	if err != nil {
+		return afsaws.WrapError(err)
+	}
+	have := map[string]string{}
+	for _, t := range out.Tags {
+		have[awssdk.ToString(t.Key)] = awssdk.ToString(t.Value)
+	}
+	if have[team.TagManagedBy] != team.ManagedByValue {
+		return nil
+	}
+	diff := map[string]string{}
+	for k, v := range want {
+		if cur, ok := have[k]; !ok || cur != v {
+			diff[k] = v
+		}
+	}
+	if len(diff) > 0 {
+		if _, err := c.api.TagResource(ctx, &awsbedrock.TagResourceInput{ResourceARN: &arn, Tags: toTags(diff)}); err != nil {
+			return afsaws.WrapError(err)
+		}
+	}
+	if stale := tags.Stale(have, want); len(stale) > 0 {
+		if _, err := c.api.UntagResource(ctx, &awsbedrock.UntagResourceInput{ResourceARN: &arn, TagKeys: stale}); err != nil {
+			return afsaws.WrapError(err)
+		}
+	}
+	return nil
 }
 
 // ListProfiles implements team.InferenceProfiles.

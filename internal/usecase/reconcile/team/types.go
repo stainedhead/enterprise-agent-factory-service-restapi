@@ -35,6 +35,9 @@ type Desired struct {
 	Generation int64
 	Quotas     Quotas
 	Models     []Model
+	// Tags are the team's tags beyond the system ones: fixed and required service tags, defaults and the
+	// team's own (afs.team_effective_tags without the system rows).
+	Tags map[string]string
 	// DeletedAt is set once the team is deleted.
 	DeletedAt *time.Time
 }

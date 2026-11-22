@@ -49,6 +49,7 @@ type Service struct {
 	thresholds Thresholds
 	log        *slog.Logger
 	crossed    crossedSet
+	droppedLog droppedNotes
 	ensured    sync.Map // budget|period -> time.Time
 	wg         sync.WaitGroup
 }
@@ -141,6 +142,7 @@ func (s *Service) Do(ctx context.Context, req Request, invoke InvokeFunc) error 
 		return domain.Internal(err)
 	}
 	meta, dropped := BuildMetadata(caller, tags)
+	s.droppedLog.note(s.log, caller.TeamID, dropped)
 	res, callErr := invoke(ctx, Authorized{Caller: caller, ModelID: req.ModelID, ProfileARN: access.ProfileARN, RoleARN: roleARN,
 		MaxOutputTokens: cap, Metadata: meta, DroppedTags: dropped, RequestID: req.RequestID})
 

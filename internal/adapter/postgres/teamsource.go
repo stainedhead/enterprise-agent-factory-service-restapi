@@ -31,6 +31,11 @@ const loadModelsSQL = `SELECT tm.model_id, coalesce(tm.inference_profile_arn, ''
   FROM afs.team_models tm JOIN afs.models m ON m.id = tm.model_id
  WHERE tm.team_id = $1 AND m.enabled ORDER BY tm.model_id`
 
+// The team's tags beyond the system ones. Required keys with no value are listed with a NULL value and
+// are left out (they are reported as missing, not applied).
+const loadTeamTagsSQL = `SELECT key, value FROM afs.team_effective_tags
+ WHERE team_id = $1 AND source <> 'system' AND value IS NOT NULL ORDER BY key`
+
 // LoadTeam implements team.Source.
 func (s *TeamSource) LoadTeam(ctx context.Context, id string) (team.Desired, error) {
 	var d team.Desired
@@ -51,6 +56,9 @@ func (s *TeamSource) LoadTeam(ctx context.Context, id string) (team.Desired, err
 		d.DeletedAt = deleted
 		if d.Quotas, err = ParseQuotas(quotas); err != nil {
 			return fmt.Errorf("postgres: quotas of %s: %w", id, err)
+		}
+		if d.Tags, err = loadTags(ctx, t, loadTeamTagsSQL, id); err != nil {
+			return err
 		}
 		rows, err := t.Query(ctx, loadModelsSQL, id)
 		if err != nil {
@@ -135,4 +143,24 @@ func ParseQuotas(raw []byte) (team.Quotas, error) {
 		}
 	}
 	return q, nil
+}
+
+// loadTags reads (key, value) rows into a map.
+func loadTags(ctx context.Context, q interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}, sql string, args ...any) (map[string]string, error) {
+	rows, err := q.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, MapError(err, OpRead, "tags")
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, MapError(err, OpRead, "tags")
+		}
+		out[k] = v
+	}
+	return out, rows.Err()
 }

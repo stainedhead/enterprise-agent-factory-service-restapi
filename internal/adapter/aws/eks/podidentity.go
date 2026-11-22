@@ -10,6 +10,7 @@ import (
 	awseks "github.com/aws/aws-sdk-go-v2/service/eks"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/agent"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/tags"
 )
 
 // PodIdentityAPI is the subset of the EKS SDK client the Pod Identity association calls need.
@@ -20,6 +21,7 @@ type PodIdentityAPI interface {
 	UpdatePodIdentityAssociation(ctx context.Context, in *awseks.UpdatePodIdentityAssociationInput, opts ...func(*awseks.Options)) (*awseks.UpdatePodIdentityAssociationOutput, error)
 	DeletePodIdentityAssociation(ctx context.Context, in *awseks.DeletePodIdentityAssociationInput, opts ...func(*awseks.Options)) (*awseks.DeletePodIdentityAssociationOutput, error)
 	TagResource(ctx context.Context, in *awseks.TagResourceInput, opts ...func(*awseks.Options)) (*awseks.TagResourceOutput, error)
+	UntagResource(ctx context.Context, in *awseks.UntagResourceInput, opts ...func(*awseks.Options)) (*awseks.UntagResourceOutput, error)
 }
 
 // PodIdentity maps an agent's ServiceAccount to its IAM role through EKS Pod Identity (RC-2). It implements
@@ -43,7 +45,7 @@ func NewPodIdentityWithAPI(api PodIdentityAPI, cluster string) *PodIdentity {
 
 // Ensure implements agent.PodIdentities: one association per ServiceAccount, created when missing, pointed
 // at roleARN when it names another role, and tagged. Calling it again with the same inputs changes nothing.
-func (p *PodIdentity) Ensure(ctx context.Context, namespace, serviceAccount, roleARN string, tags map[string]string) error {
+func (p *PodIdentity) Ensure(ctx context.Context, namespace, serviceAccount, roleARN string, want map[string]string) error {
 	if p.cluster == "" {
 		return errors.New("eks: cluster name is not configured")
 	}
@@ -54,7 +56,7 @@ func (p *PodIdentity) Ensure(ctx context.Context, namespace, serviceAccount, rol
 	if id == "" {
 		_, err := p.api.CreatePodIdentityAssociation(ctx, &awseks.CreatePodIdentityAssociationInput{
 			ClusterName: aws.String(p.cluster), Namespace: aws.String(namespace), ServiceAccount: aws.String(serviceAccount),
-			RoleArn: aws.String(roleARN), Tags: maps.Clone(tags),
+			RoleArn: aws.String(roleARN), Tags: maps.Clone(want),
 			ClientRequestToken: aws.String(requestToken(p.cluster, namespace, serviceAccount, roleARN)),
 		})
 		if err != nil {
@@ -76,9 +78,14 @@ func (p *PodIdentity) Ensure(ctx context.Context, namespace, serviceAccount, rol
 			return wrap("update pod identity association", err)
 		}
 	}
-	if !sameTags(a.Tags, tags) && a.AssociationArn != nil {
-		if _, err := p.api.TagResource(ctx, &awseks.TagResourceInput{ResourceArn: a.AssociationArn, Tags: maps.Clone(tags)}); err != nil {
+	if !sameTags(a.Tags, want) && a.AssociationArn != nil {
+		if _, err := p.api.TagResource(ctx, &awseks.TagResourceInput{ResourceArn: a.AssociationArn, Tags: maps.Clone(want)}); err != nil {
 			return wrap("tag pod identity association", err)
+		}
+	}
+	if stale := tags.Stale(a.Tags, want); len(stale) > 0 && a.AssociationArn != nil {
+		if _, err := p.api.UntagResource(ctx, &awseks.UntagResourceInput{ResourceArn: a.AssociationArn, TagKeys: stale}); err != nil {
+			return wrap("untag pod identity association", err)
 		}
 	}
 	return nil
