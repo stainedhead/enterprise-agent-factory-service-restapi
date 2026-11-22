@@ -95,3 +95,29 @@ func TestDeniedForTeamAdmins(t *testing.T) {
 		t.Errorf("denied audit = %d", len(audit.Entries))
 	}
 }
+
+func TestPutCollabSettingRanges(t *testing.T) {
+	s, _ := rig()
+	ok := []struct{ key, val string }{
+		{"collab.base_domain", `"collab.example.com"`}, {"collab.base_domain", `null`}, {"collab.public_endpoints", `false`},
+		{"collab.allowed_source_cidrs", `["10.0.0.0/8","2001:db8::/32"]`}, {"collab.session_ttl_minutes", `15`},
+		{"collab.session_ttl_minutes", `1440`}, {"collab.content_scan", `"warn"`}, {"collab.max_body_mb", `100`},
+		{"collab.denied_spike_threshold", `100000`},
+	}
+	for _, tc := range ok {
+		if _, err := s.Put(t.Context(), svcAdmin, tc.key, json.RawMessage(tc.val), nil); err != nil {
+			t.Errorf("%s=%s refused: %v", tc.key, tc.val, err)
+		}
+	}
+	bad := []struct{ key, val string }{
+		{"collab.base_domain", `"nodots"`}, {"collab.public_endpoints", `"yes"`}, {"collab.allowed_source_cidrs", `["999.1.1.1/99"]`},
+		{"collab.session_ttl_minutes", `14`}, {"collab.session_ttl_minutes", `1441`}, {"collab.content_scan", `"strict"`},
+		{"collab.max_body_mb", `0`}, {"collab.max_body_mb", `101`}, {"collab.denied_spike_threshold", `0`},
+		{"collab.denied_spike_threshold", `100001`},
+	}
+	for _, tc := range bad {
+		if _, err := s.Put(t.Context(), svcAdmin, tc.key, json.RawMessage(tc.val), nil); domain.KindOf(err) != domain.KindValidation {
+			t.Errorf("%s=%s: want ValidationError, got %v", tc.key, tc.val, err)
+		}
+	}
+}
