@@ -25,7 +25,12 @@ type Repo struct {
 	Snaps     []domain.Snapshot
 	// TemplateWrites counts Update calls that wrote the template columns.
 	TemplateWrites int
+	// Err makes the named method fail: List, Get, Insert, Update, Template, ModelEnabled,
+	// StorageClassEnabled, Secrets, Snapshots or InsertSnapshot.
+	Err map[string]error
 }
+
+func (r *Repo) fail(m string) error { return r.Err[m] }
 
 // NewRepo returns a Repo with the gp3 class offered.
 func NewRepo() *Repo {
@@ -35,6 +40,9 @@ func NewRepo() *Repo {
 
 // List implements agents.Repository.
 func (r *Repo) List(_ context.Context, _ port.Tx, teamID, after string, limit int) ([]domain.Agent, error) {
+	if err := r.fail("List"); err != nil {
+		return nil, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []domain.Agent
@@ -52,6 +60,9 @@ func (r *Repo) List(_ context.Context, _ port.Tx, teamID, after string, limit in
 
 // Get implements agents.Repository.
 func (r *Repo) Get(_ context.Context, _ port.Tx, teamID, id string, _ bool) (domain.Agent, error) {
+	if err := r.fail("Get"); err != nil {
+		return domain.Agent{}, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	a, ok := r.Rows[id]
@@ -63,6 +74,9 @@ func (r *Repo) Get(_ context.Context, _ port.Tx, teamID, id string, _ bool) (dom
 
 // Insert implements agents.Repository.
 func (r *Repo) Insert(_ context.Context, _ port.Tx, a domain.Agent, _ string) error {
+	if err := r.fail("Insert"); err != nil {
+		return err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, x := range r.Rows {
@@ -77,6 +91,9 @@ func (r *Repo) Insert(_ context.Context, _ port.Tx, a domain.Agent, _ string) er
 
 // Update implements agents.Repository.
 func (r *Repo) Update(_ context.Context, _ port.Tx, a domain.Agent, _ string, templateChanged bool, expect domain.Version) error {
+	if err := r.fail("Update"); err != nil {
+		return err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cur := r.Rows[a.ID]
@@ -96,12 +113,18 @@ func (r *Repo) Update(_ context.Context, _ port.Tx, a domain.Agent, _ string, te
 
 // Template implements agents.Repository.
 func (r *Repo) Template(_ context.Context, _ port.Tx, name string) (agents.TemplateInfo, bool, error) {
+	if err := r.fail("Template"); err != nil {
+		return agents.TemplateInfo{}, false, err
+	}
 	t, ok := r.Templates[name]
 	return t, ok, nil
 }
 
 // ModelEnabled implements agents.Repository.
 func (r *Repo) ModelEnabled(_ context.Context, _ port.Tx, teamID, modelID string) (bool, error) {
+	if err := r.fail("ModelEnabled"); err != nil {
+		return false, err
+	}
 	for _, m := range r.Models[teamID] {
 		if m == modelID {
 			return true, nil
@@ -112,11 +135,17 @@ func (r *Repo) ModelEnabled(_ context.Context, _ port.Tx, teamID, modelID string
 
 // StorageClassEnabled implements agents.Repository.
 func (r *Repo) StorageClassEnabled(_ context.Context, _ port.Tx, name string) (bool, error) {
+	if err := r.fail("StorageClassEnabled"); err != nil {
+		return false, err
+	}
 	return r.Classes[name], nil
 }
 
 // Secrets implements agents.Repository.
 func (r *Repo) Secrets(_ context.Context, _ port.Tx, _ string, ids []string) (map[string]agents.SecretInfo, error) {
+	if err := r.fail("Secrets"); err != nil {
+		return nil, err
+	}
 	out := map[string]agents.SecretInfo{}
 	for _, id := range ids {
 		if s, ok := r.SecretsBy[id]; ok {
@@ -128,6 +157,9 @@ func (r *Repo) Secrets(_ context.Context, _ port.Tx, _ string, ids []string) (ma
 
 // Snapshots implements agents.Repository.
 func (r *Repo) Snapshots(_ context.Context, _ port.Tx, _, agentID, after string, limit int) ([]domain.Snapshot, error) {
+	if err := r.fail("Snapshots"); err != nil {
+		return nil, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []domain.Snapshot
@@ -145,6 +177,9 @@ func (r *Repo) Snapshots(_ context.Context, _ port.Tx, _, agentID, after string,
 
 // InsertSnapshot implements agents.Repository.
 func (r *Repo) InsertSnapshot(_ context.Context, _ port.Tx, _ string, s domain.Snapshot) error {
+	if err := r.fail("InsertSnapshot"); err != nil {
+		return err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.Snaps = append(r.Snaps, s)

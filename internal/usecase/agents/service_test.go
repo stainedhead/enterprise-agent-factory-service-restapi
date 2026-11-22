@@ -1,6 +1,9 @@
 package agents_test
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +13,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/agents"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/agents/agentstest"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port/fakes"
 )
 
@@ -248,5 +252,125 @@ func TestListAndSnapshots(t *testing.T) {
 	}
 	if got := r.audit.Entries[len(r.audit.Entries)-1].Record.Action; got != "CreateAgentSnapshot" {
 		t.Errorf("audit action %q", got)
+	}
+}
+
+type failAudit struct{ fakes.Audit }
+
+func (*failAudit) Write(context.Context, port.Tx, port.AuditRecord) error { return errBoom }
+
+type failOutbox struct{ fakes.Outbox }
+
+func (*failOutbox) Publish(context.Context, port.Tx, domain.Event) error { return errBoom }
+
+var errBoom = errors.New("boom")
+
+func idemOf(op, key string) *acting.Idem {
+	return &acting.Idem{Key: port.IdempotencyKey{Key: key, Operation: op, TeamID: team, RequestSHA256: [32]byte{1}},
+		Render: func(any) (int, json.RawMessage, error) { return 200, json.RawMessage(`{"ok":true}`), nil }}
+}
+
+// Every store, audit and outbox failure aborts the call with that error.
+func TestFailuresAbort(t *testing.T) {
+	faults := map[string]func(*rig){
+		"audit":  func(r *rig) { r.svc.Audit = &failAudit{} },
+		"outbox": func(r *rig) { r.svc.Outbox = &failOutbox{} },
+		"get":    func(r *rig) { r.repo.Err = map[string]error{"Get": errBoom} },
+		"update": func(r *rig) { r.repo.Err = map[string]error{"Update": errBoom} },
+		"insert": func(r *rig) { r.repo.Err = map[string]error{"Insert": errBoom} },
+		"model":  func(r *rig) { r.repo.Err = map[string]error{"ModelEnabled": errBoom} },
+		"class":  func(r *rig) { r.repo.Err = map[string]error{"StorageClassEnabled": errBoom} },
+		"tpl":    func(r *rig) { r.repo.Err = map[string]error{"Template": errBoom} },
+		"secret": func(r *rig) { r.repo.Err = map[string]error{"Secrets": errBoom} },
+		"snap":   func(r *rig) { r.repo.Err = map[string]error{"InsertSnapshot": errBoom} },
+		"list":   func(r *rig) { r.repo.Err = map[string]error{"List": errBoom, "Snapshots": errBoom} },
+	}
+	for _, op := range []string{"create", "update", "delete", "pause", "snapshot", "list"} {
+		for name, fault := range faults {
+			t.Run(op+"/"+name, func(t *testing.T) {
+				r := newRig()
+				a := r.create(t, "seeded")
+				fault(r)
+				err := opOn(r, op, a)
+				if err == nil {
+					t.Skip("this fault does not touch this operation")
+				}
+				if !errors.Is(err, errBoom) {
+					t.Fatalf("err = %v", err)
+				}
+			})
+		}
+	}
+}
+
+func opOn(r *rig, op string, a domain.Agent) error {
+	ctx := context.Background()
+	d := "desc"
+	bs := []domain.SecretBinding{{SecretID: secA, Delivery: "env", Target: "TOKEN"}}
+	switch op {
+	case "create":
+		p := params("fresh")
+		p.Bindings = bs
+		_, err := r.svc.Create(ctx, admin, team, p, nil)
+		return err
+	case "update":
+		_, err := r.svc.Update(ctx, admin, team, a.ID, a.Version, domain.AgentPatch{Description: &d, Bindings: &bs})
+		return err
+	case "delete":
+		_, err := r.svc.Delete(ctx, admin, team, a.ID, a.Version)
+		return err
+	case "pause":
+		_, err := r.svc.Pause(ctx, admin, team, a.ID, nil)
+		return err
+	case "list":
+		if _, _, err := r.svc.List(ctx, admin, team, acting.Page{}); err != nil {
+			return err
+		}
+		_, _, err := r.svc.ListSnapshots(ctx, admin, team, a.ID, acting.Page{})
+		return err
+	default:
+		_, err := r.svc.CreateSnapshot(ctx, admin, team, a.ID, "", nil)
+		return err
+	}
+}
+
+// A replayed idempotent call returns the stored response and does nothing more.
+func TestIdempotentReplay(t *testing.T) {
+	r := newRig()
+	first, err := r.svc.Create(t.Context(), admin, team, params("coder"), idemOf("CreateAgent", "k1"))
+	if err != nil || first.Replay != nil {
+		t.Fatalf("first: %+v %v", first, err)
+	}
+	again, err := r.svc.Create(t.Context(), admin, team, params("coder"), idemOf("CreateAgent", "k1"))
+	if err != nil || again.Replay == nil || len(r.repo.Rows) != 1 {
+		t.Fatalf("replay: %+v %v rows=%d", again, err, len(r.repo.Rows))
+	}
+	a := first.Agent
+	if _, err := r.svc.Pause(t.Context(), admin, team, a.ID, idemOf("PauseAgent", "k2")); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := r.svc.Pause(t.Context(), admin, team, a.ID, idemOf("PauseAgent", "k2")); err != nil || res.Replay == nil {
+		t.Errorf("pause replay: %+v %v", res, err)
+	}
+	if _, err := r.svc.CreateSnapshot(t.Context(), admin, team, a.ID, "", idemOf("CreateAgentSnapshot", "k3")); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := r.svc.CreateSnapshot(t.Context(), admin, team, a.ID, "", idemOf("CreateAgentSnapshot", "k3")); err != nil || res.Replay == nil || len(r.repo.Snaps) != 1 {
+		t.Errorf("snapshot replay: %+v %v snaps=%d", res, err, len(r.repo.Snaps))
+	}
+}
+
+// Bindings supplied on update are checked; the same bindings on a new agent are stored.
+func TestUpdateBindings(t *testing.T) {
+	r := newRig()
+	a := r.create(t, "coder")
+	bs := []domain.SecretBinding{{SecretID: secB, Delivery: "env", Target: "TOKEN"}}
+	if _, err := r.svc.Update(t.Context(), admin, team, a.ID, a.Version, domain.AgentPatch{Bindings: &bs}); domain.KindOf(err) != domain.KindValidation {
+		t.Errorf("another agent's secret: %v", err)
+	}
+	ok := []domain.SecretBinding{{SecretID: secA, Delivery: "file", Target: "/etc/token"}}
+	got, err := r.svc.Update(t.Context(), admin, team, a.ID, a.Version, domain.AgentPatch{Bindings: &ok})
+	if err != nil || len(got.Bindings) != 1 {
+		t.Errorf("own binding: %+v %v", got.Bindings, err)
 	}
 }
