@@ -186,6 +186,31 @@ Merge order: w1 (E budgets API, F budget reconciler), w2 (H reports, I activity 
 | 2026-11-22 | M3-A | New files beyond the Owns globs: `gatewayhttp/{wire,eventstream,sse}.go`, `gatewayhttp/gwtest/`, `usecase/gateway/gatewaytest/`, `cmd/afs-gateway/{settings,wire,tls}.go`, `postgres/{gateway_store,usage_writer}.go`; `go.mod` gained bedrockruntime, anthropic-sdk-go, eventstream and sts | Supporting code of the owned streams |
 | 2026-11-22 | M3-D3 | Load run (in-memory spend, 6 s, 200 agents on distinct loopback addresses, 500 req/s, budget for a third): 1000 ok, 2000 refused all `402`, overshoot 0, nothing left reserved, added latency p50 73 us, p99 163 us | Database-side concurrency is proven by the postgres integration tests (60 concurrent callers on a small budget) |
 
+## M4-C and M4-D decisions (worker w2, `m4/w2`)
+
+| Task | Decision | Why |
+|---|---|---|
+| M4-C1 | `afs-billing --job <name> [--day D]`; each job file registers itself from `init()` into a `register(name, fn)` map | M4-E adds jobs (showback, report schedules) in new files without editing the runner |
+| M4-C2 | Athena SQL assumes the CUR 2.0 standard export: `line_item_*`, `split_line_item_*`, `resource_tags` keyed with the `user_` prefix (`AFS_CUR_TAG_PREFIX`). One query per UTC day returns Bedrock by inference profile, EKS pods by namespace (pods on a dedicated node excluded, the node attributed whole by its team tag), EBS storage | One query per day keeps the cost bounded; classification in SQL keeps the adapter small |
+| M4-C2 | An empty fetch means "no data yet": the day's rows are left alone. A rerun deletes the day's `cur_*` rows and inserts the new ones in one transaction | Idempotent per day, no flicker for readers |
+| M4-C2 | Retry 4 attempts, 5 s doubling to 1 min; alert after 3 failed days (`afs_billing_cur_ingest_alerts_total` and a log line) | M4-C2 AC |
+| M4-C3 | Tag sets are built by `afs.tag_set_for(team, jsonb)` from the line's managed tag keys; a day with a tag change is split by line items because the SQL groups by the tag map; pool workers carry `pool_id` | BI-US-6.1, BI-7 |
+| M4-C4 | Reconciliation compares the gateway estimate with `cur_bedrock` only. EKS and storage have no gateway estimate | Comparing total CUR cost with model-call cost would always flag |
+| M4-C4 | A day with no CUR rows at all is skipped, not reconciled | Else every metered day looks `missing_billing` until AWS delivers |
+| M4-C4 | `cost.variance_detected` is published in the same transaction when the stored status turns `over_threshold`, not on reruns of a team-day that already was | One event per team-day |
+| M4-C4 | `cost_daily.calls` counts `usage_events` with outcome `ok` or `error` only | Brief; matches the reports |
+| M4-C | **-db gap X-DB-8**: `afs_billing` has no SELECT on `service_settings` and `team_models`. Inference profile attribution degrades to the `afs-team-id` tag (`Directory.ProfilesUnavailable`, no `model_id`); `pricing.price_list_sync` falls back to `AFS_PRICING_PRICE_LIST_SYNC`, failing closed when neither is available. Two tests flip (`TestBillingDirectoryReadsInferenceProfiles` variant, `TestPriceSyncEnabledFallsBackWhenTheSettingIsRefused` skips) once -db grants the reads | The -db pin a6ecc3c is not changed by this stream |
+| M4-C | A CronJob process is short-lived, so gauges such as `CURVariance` are set but never scraped; the alert counter is the same. Alerting for billing should come from job failure and logs until a pushgateway or a long-running mode exists | Known limitation, not in the chart |
+| M4-C5 | `ListCosts` default range is the shared 7 days; the cursor is an offset with the range, `ListCostReconciliations` is keyset by (day, team) descending; `variancePct` is a 2-decimal string and `0.00` when nothing was billed | OpenAPI pattern allows two decimals |
+| M4-D1 | Price List products: `attributes.model` (or `modelId`), `inferenceType` (input, output, cache read, cache write), `regionCode`, `terms.OnDemand` with `unit` `1K tokens`, `1M tokens` or `tokens`; batch, provisioned and custom products are skipped. Prices are normalized to USD per million tokens, six decimals | The shapes are the Price List API's documented JSON; confirm against a real response before the first run |
+| M4-D1 | A list product matches a catalog model by exact id, else by a normalized key (`anthropic.claude-sonnet-4-5-v1:0` and `Claude Sonnet 4.5` both give `claudesonnet45`); unmatched products are reported in the log | Display names differ from model ids |
+| M4-D1 | A price equal to the current one retires the open proposal (superseded); a price equal to the open proposal does nothing | One pending proposal per model (unique index) |
+| M4-D2 | Proposal ids are the database's `mpp_<ULID>`, not the numeric ids of the OpenAPI examples (`^[0-9]+$` in the path pattern, id example `"1042"`). `version` is 1 while pending and 2 after (the table has none). Notes are limited to 500 characters (database), where OpenAPI says 1000 | `api/openapi.yaml` is not in this stream's Owns; it needs the pattern, example and maxLength aligned |
+| M4-D2 | The idempotency operation name takes letters only (database check), so the proposal id is hashed into the claimed request instead of the operation | One key reused on another proposal is a mismatch |
+| M4-D2 | The database writes the price on approval at `greatest(effective_from, now())`; the event carries the same effective time | RA-7 |
+
+Files outside the Owns lines: `cmd/afs-api/wire.go` (two additive lines: `wireCosts`, `wirePricing`), `internal/adapter/httpapi/matrix/fixtures_{costs,pricing}.go`, `go.mod`/`go.sum` (Athena and Pricing SDK modules), `user-docs/billing.md`.
+
 ## Contract deltas for the root repository
 
 Collected for the M0 exit task's root PR (labelled `contract`): see research.md §3.1.6 and OQ-S1, OQ-S2.

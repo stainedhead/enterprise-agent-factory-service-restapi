@@ -11,12 +11,14 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.21
 	github.com/aws/aws-sdk-go-v2/credentials v1.21.3
 	github.com/aws/aws-sdk-go-v2/feature/rds/auth v1.7.12
+	github.com/aws/aws-sdk-go-v2/service/athena v1.68.0
 	github.com/aws/aws-sdk-go-v2/service/bedrock v1.75.0
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.64.0
 	github.com/aws/aws-sdk-go-v2/service/eks v1.105.6
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.55.11
 	github.com/aws/aws-sdk-go-v2/service/iam v1.68.0
 	github.com/aws/aws-sdk-go-v2/service/organizations v1.63.0
+	github.com/aws/aws-sdk-go-v2/service/pricing v1.51.6
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.51.0
 	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.80.0
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.53.0

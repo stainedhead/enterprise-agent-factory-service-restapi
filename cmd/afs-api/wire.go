@@ -183,6 +183,8 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 		wireLogDest(c, log)
 		wireBudgets(c)
 		wireReports(c, log)
+		wireCosts(c, log)
+		wirePricing(c, log)
 		wireChannels(c, log)
 		wireIdentity(c, s, log)
 		// An explicit Registrars list replaces the default one, so the areas bound by the streams

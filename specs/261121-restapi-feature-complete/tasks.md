@@ -623,11 +623,11 @@ Owns: `cmd/afs-billing/`, `internal/usecase/billing/{cur,reconcile}/`, `internal
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M4-C1 | `afs-billing` binary: jobs selected by flag, schema version check, health, metrics | CT-DB-1 (part) | — |
-| [ ] | M4-C2 | CUR ingest via Athena: Bedrock by inference-profile tag, EKS split cost by namespace (incl. dedicated nodes), EBS volumes and snapshots by `afs-team-id` → `cost_daily`; rerunning a day replaces that day's rows (idempotent); an Athena failure is retried with backoff and alerts after 3 failed days [adapter with fixture CUR] | BI-US-1.1 (part), BI-1 | M4-C1 |
-| [ ] | M4-C3 | Tag sets from CUR line item tags; a day with a tag change split by line items; pool workers carry the pool | BI-US-6.1, BI-7 | M4-C2 |
-| [ ] | M4-C4 | Reconciliation per team-day: `over_threshold` above `billing.variance_alert_pct`, one `cost.variance_detected` | BI-US-1.1, BI-2 | M4-C2 |
-| [ ] | M4-C5 | `ListCosts` (team, CSV) and `ListCostReconciliations` (`admin:reports`); deleted team costs readable by service admins | RA-1 (part), RA-US-16.3 (part) | M4-C2 |
+| [x] | M4-C1 | `afs-billing` binary: jobs selected by flag, schema version check, health, metrics | CT-DB-1 (part) | — |
+| [x] | M4-C2 | CUR ingest via Athena: Bedrock by inference-profile tag, EKS split cost by namespace (incl. dedicated nodes), EBS volumes and snapshots by `afs-team-id` → `cost_daily`; rerunning a day replaces that day's rows (idempotent); an Athena failure is retried with backoff and alerts after 3 failed days [adapter with fixture CUR] | BI-US-1.1 (part), BI-1 | M4-C1 |
+| [x] | M4-C3 | Tag sets from CUR line item tags; a day with a tag change split by line items; pool workers carry the pool | BI-US-6.1, BI-7 | M4-C2 |
+| [x] | M4-C4 | Reconciliation per team-day: `over_threshold` above `billing.variance_alert_pct`, one `cost.variance_detected` | BI-US-1.1, BI-2 | M4-C2 |
+| [x] | M4-C5 | `ListCosts` (team, CSV) and `ListCostReconciliations` (`admin:reports`); deleted team costs readable by service admins | RA-1 (part), RA-US-16.3 (part) | M4-C2 |
 
 ### M4-D · Pricing (BI-3, RA-7)
 
@@ -635,8 +635,8 @@ Owns: `internal/usecase/billing/prices/`, `internal/usecase/pricing/`, `internal
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M4-D1 | Price List sync when `pricing.price_list_sync` is on: one pending proposal per changed model, older pending superseded, nothing when off; `pricing.proposal_created` [adapter] | BI-US-2.1, BI-3 | M4-C1 |
-| [ ] | M4-D2 | `ListModelPriceProposals`, `ApproveModelPriceProposal`, `RejectModelPriceProposal` (service admins only); `pricing.proposal_decided`; effective from `max(effectiveFrom, approvedAt)`, no earlier usage repriced; the gateway uses the new price after the effective time [adapter]; `[e2e]` case | RA-US-8.1, RA-US-8.2, RA-7 | — |
+| [x] | M4-D1 | Price List sync when `pricing.price_list_sync` is on: one pending proposal per changed model, older pending superseded, nothing when off; `pricing.proposal_created` [adapter] | BI-US-2.1, BI-3 | M4-C1 |
+| [x] | M4-D2 | `ListModelPriceProposals`, `ApproveModelPriceProposal`, `RejectModelPriceProposal` (service admins only); `pricing.proposal_decided`; effective from `max(effectiveFrom, approvedAt)`, no earlier usage repriced; the gateway uses the new price after the effective time [adapter]; `[e2e]` case | RA-US-8.1, RA-US-8.2, RA-7 | — |
 
 ### M4-E · Showback and scheduled reports (BI-4, BI-5, RA-6 schedules)
 
