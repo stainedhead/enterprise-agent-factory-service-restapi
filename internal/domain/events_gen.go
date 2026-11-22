@@ -258,7 +258,10 @@ type EventDetail struct {
 
 // Known reports whether t is a type of API contract §7.
 func (t EventType) Known() bool {
-	_, ok := EventEmitters[t]
+	if _, ok := EventEmitters[t]; ok {
+		return true
+	}
+	_, ok := ExtensionEventEmitters[t]
 	return ok
 }
 

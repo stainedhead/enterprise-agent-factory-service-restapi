@@ -194,16 +194,23 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	if err != nil {
 		return fail(err)
 	}
+	nt, err := wireNotify(notifyDeps{AWS: awsCfg, Bus: s.EventBusName, Runner: runner, Status: status, Outbox: outbox, IDs: ids, Pool: pool, Env: env, Now: clock.Now, Log: log})
+	if err != nil {
+		return fail(err)
+	}
 	controllers := []engine.Controller{teams, platform, adm, agents.Controller, eg.Controller}
 	if lg.Controller != nil {
 		controllers = append(controllers, lg.Controller)
 	}
-	reg, err := routes(append(lg.Routes, eg.Routes...)...)
+	if nt.Controller != nil {
+		controllers = append(controllers, nt.Controller)
+	}
+	reg, err := routes(append(append(lg.Routes, eg.Routes...), nt.Routes...)...)
 	if err != nil {
 		return fail(err)
 	}
 	r.Engine, err = engine.New(engine.Config{
-		Feed: postgres.NewChangeFeed(dbCfg, log), Lister: lg.WrapLister(eg.WrapLister(postgres.NewLister(pool))), Registry: reg,
+		Feed: postgres.NewChangeFeed(dbCfg, log), Lister: nt.WrapLister(lg.WrapLister(eg.WrapLister(postgres.NewLister(pool)))), Registry: reg,
 		Controllers:  controllers,
 		Status:       status,
 		Drift:        postgres.NewDriftRecorder(runner, audit, outbox, ids),
@@ -214,6 +221,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 		return fail(err)
 	}
 	r.Engine.Every("agent-snapshots", snapshotEvery, agents.Snapshots.Run)
+	nt.Register(r.Engine)
 	hk := postgres.NewHousekeeping(runner)
 	housekeeping.Register(r.Engine, housekeeping.Jobs(housekeeping.Deps{
 		Outbox: hk, Sink: eventbridge.New(awsCfg, s.EventBusName), Partitions: hk, Purger: hk, Recorder: m, Clock: clock.Now, Log: log,
