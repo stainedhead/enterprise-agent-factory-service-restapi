@@ -156,3 +156,14 @@ func TestGetKubeconfigNeedsAConfiguredCluster(t *testing.T) {
 		})
 	}
 }
+
+func TestRenderQuotesWhatYAMLWouldMisread(t *testing.T) {
+	for _, tc := range []struct{ name, want string }{
+		{"true", `- "true"`}, {"123", `- "123"`}, {"a: b", `- "a: b"`}, {"plain-name", `- plain-name`}, {"ends:", `- "ends:"`},
+	} {
+		doc, err := kubeconfig.Render(kubeconfig.Cluster{Name: tc.name, Endpoint: "https://example.test", CAData: "QUJD", Region: "us-east-1"}, kubeconfig.Team{Slug: "x", Namespace: "afs-t-x"})
+		if err != nil || !strings.Contains(string(doc), tc.want+"\n") {
+			t.Errorf("%q: want %s in\n%s (err %v)", tc.name, tc.want, doc, err)
+		}
+	}
+}

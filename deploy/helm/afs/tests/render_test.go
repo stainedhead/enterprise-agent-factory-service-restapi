@@ -250,8 +250,8 @@ func TestBillingCronJobs(t *testing.T) {
 			t.Errorf("%s args = %v", key(d), args)
 		}
 	}
-	if n != 5 {
-		t.Errorf("%d billing CronJobs, want 5", n)
+	if n != 6 {
+		t.Errorf("%d billing CronJobs, want 6", n)
 	}
 	if find(t, docs, "CronJob", "afs-billing-cur-ingest") == nil {
 		t.Fatal("cur-ingest missing")

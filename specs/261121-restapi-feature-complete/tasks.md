@@ -741,8 +741,8 @@ Owns: `internal/usecase/billing/costtags/`, `internal/usecase/costtags/`, `inter
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M5-F1 | Daily: keys seen in CUR and AWS activation status; a key active 3 days but not seen → one `cost_tags.not_seen` [adapter with fake Billing API] | BI-US-4.1, BI-6 | — |
-| [ ] | M5-F2 | `ListCostTagStatus` for service admins (team-admin → `403`); `PutSetting billing.tag_activation_acknowledged = true` audited, non-boolean → `400` | RA-US-18.1, RA-US-18.2, RA-11 | — |
+| [x] | M5-F1 | Daily: keys seen in CUR and AWS activation status; a key active 3 days but not seen → one `cost_tags.not_seen` [adapter with fake Billing API] | BI-US-4.1, BI-6 | — |
+| [x] | M5-F2 | `ListCostTagStatus` for service admins (team-admin → `403`); `PutSetting billing.tag_activation_acknowledged = true` audited, non-boolean → `400` | RA-US-18.1, RA-US-18.2, RA-11 | — |
 
 ### M5-X · Milestone exit
 

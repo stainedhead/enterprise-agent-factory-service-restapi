@@ -4,8 +4,6 @@ import (
 	"slices"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/k8s/render"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/team"
 )
@@ -50,7 +48,7 @@ func TestViewerRoleIsReadOnly(t *testing.T) {
 			case res == "secrets", res == "pods/exec", res == "pods/attach", res == "pods/portforward", res == "pods/proxy",
 				res == "configmaps", res == "serviceaccounts", res == "roles", res == "rolebindings":
 				t.Errorf("resource %q is reachable: %v", res, m)
-			case res == "*" && !(len(groups) == 1 && groups[0] == "agenticteammates.stainedhead.io"):
+			case res == "*" && (len(groups) != 1 || groups[0] != "agenticteammates.stainedhead.io"):
 				t.Errorf("wildcard resource outside the agents' API group: %v", m)
 			}
 		}
@@ -88,5 +86,5 @@ func TestViewerRoleBindingNamesTheGroupsOnly(t *testing.T) {
 			t.Errorf("subject %v is not a group", m)
 		}
 	}
-	var _ *unstructured.Unstructured = b
+	var _ = b
 }

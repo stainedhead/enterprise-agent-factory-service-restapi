@@ -11,12 +11,12 @@ package kubeconfig
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/authz"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
@@ -107,67 +107,31 @@ func (s *Service) Get(ctx context.Context, c acting.Caller, teamID string) ([]by
 	return Render(s.Cluster, t)
 }
 
+// plainScalar matches strings that are the same string as a plain YAML scalar: they start with a letter,
+// hold no space, quote or "#", and do not end in a colon.
+var plainScalar = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._/:=+-]*[A-Za-z0-9._/=+-]$|^[A-Za-z]$`)
+
+// yamlWords are the plain scalars YAML reads as a boolean or null.
+var yamlWords = map[string]bool{"true": true, "false": true, "null": true, "yes": true, "no": true, "on": true, "off": true, "y": true, "n": true}
+
 // Render builds the kubeconfig document of a team: one cluster, one context named for the namespace and
 // one user whose credentials come from the exec plugin. There is no token, certificate or key in it.
 func Render(c Cluster, t Team) ([]byte, error) {
-	ctxName := "afs-" + t.Slug
-	doc := document{
-		APIVersion: "v1", Kind: "Config", CurrentContext: ctxName,
-		Clusters: []namedCluster{{Name: "afs", Cluster: clusterBody{Server: c.Endpoint, CAData: c.CAData}}},
-		Contexts: []namedContext{{Name: ctxName, Context: contextBody{Cluster: "afs", Namespace: t.Namespace, User: "afs"}}},
-		Users: []namedUser{{Name: "afs", User: userBody{Exec: execBody{
-			APIVersion: "client.authentication.k8s.io/v1beta1", Command: "aws",
-			Args:               []string{"eks", "get-token", "--cluster-name", c.Name, "--region", c.Region},
-			InteractiveMode:    "Never",
-			ProvideClusterInfo: false,
-		}}}},
+	q := func(v string) string {
+		if plainScalar.MatchString(v) && !yamlWords[strings.ToLower(v)] {
+			return v
+		}
+		b, _ := json.Marshal(v) // a JSON string is a valid YAML double-quoted scalar
+		return string(b)
 	}
-	return yaml.Marshal(doc)
-}
-
-type document struct {
-	APIVersion     string         `yaml:"apiVersion"`
-	Kind           string         `yaml:"kind"`
-	Clusters       []namedCluster `yaml:"clusters"`
-	Contexts       []namedContext `yaml:"contexts"`
-	CurrentContext string         `yaml:"current-context"`
-	Users          []namedUser    `yaml:"users"`
-}
-
-type namedCluster struct {
-	Name    string      `yaml:"name"`
-	Cluster clusterBody `yaml:"cluster"`
-}
-
-type clusterBody struct {
-	Server string `yaml:"server"`
-	CAData string `yaml:"certificate-authority-data"`
-}
-
-type namedContext struct {
-	Name    string      `yaml:"name"`
-	Context contextBody `yaml:"context"`
-}
-
-type contextBody struct {
-	Cluster   string `yaml:"cluster"`
-	Namespace string `yaml:"namespace"`
-	User      string `yaml:"user"`
-}
-
-type namedUser struct {
-	Name string   `yaml:"name"`
-	User userBody `yaml:"user"`
-}
-
-type userBody struct {
-	Exec execBody `yaml:"exec"`
-}
-
-type execBody struct {
-	APIVersion         string   `yaml:"apiVersion"`
-	Command            string   `yaml:"command"`
-	Args               []string `yaml:"args"`
-	InteractiveMode    string   `yaml:"interactiveMode"`
-	ProvideClusterInfo bool     `yaml:"provideClusterInfo"`
+	ctxName := "afs-" + t.Slug
+	var b strings.Builder
+	w := func(format string, a ...any) { fmt.Fprintf(&b, format, a...) }
+	w("apiVersion: v1\nkind: Config\ncurrent-context: %s\n", q(ctxName))
+	w("clusters:\n  - name: afs\n    cluster:\n      server: %s\n      certificate-authority-data: %s\n", q(c.Endpoint), q(c.CAData))
+	w("contexts:\n  - name: %s\n    context:\n      cluster: afs\n      namespace: %s\n      user: afs\n", q(ctxName), q(t.Namespace))
+	w("users:\n  - name: afs\n    user:\n      exec:\n        apiVersion: client.authentication.k8s.io/v1beta1\n        command: aws\n")
+	w("        args:\n          - eks\n          - get-token\n          - --cluster-name\n          - %s\n          - --region\n          - %s\n", q(c.Name), q(c.Region))
+	w("        interactiveMode: Never\n        provideClusterInfo: false\n")
+	return []byte(b.String()), nil
 }

@@ -194,7 +194,7 @@ func TestRolesPerProvider(t *testing.T) {
 	if !slices.Equal(got, []string{roleB}) {
 		t.Errorf("RolesFor = %v, want the provider's own role", got)
 	}
-	if kubectl.GroupFor(roleA) == kubectl.GroupFor(roleB) || kubectl.GroupFor(roleA) != kubectl.GroupFor(roleA) {
+	if kubectl.GroupFor(roleA) == kubectl.GroupFor(roleB) || kubectl.GroupFor(roleA) != kubectl.GroupFor(roleA+"") {
 		t.Error("GroupFor must be deterministic and distinct per role")
 	}
 	if g := kubectl.GroupFor(roleA); !strings.HasPrefix(g, "afs-kubectl-viewers-") || strings.HasPrefix(g, "system:") {
