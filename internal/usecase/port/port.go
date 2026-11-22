@@ -39,6 +39,9 @@ type Session struct {
 	TeamIDs []string
 	// RequestID is copied into audit rows.
 	RequestID string
+	// PoolID and WorkerPod attribute a pool's workload principal in audit rows (the pool and the pod
+	// that sent the request); empty for every other caller.
+	PoolID, WorkerPod string
 }
 
 // SystemSession is the session of a background job of service (actor system:<service>).

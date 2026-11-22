@@ -762,10 +762,10 @@ Owns: `internal/usecase/secops/`, `internal/usecase/apikeys/service*.go`, `inter
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M6-A1 | `ListSecurityOperators`, `AddSecurityOperator`, `RemoveSecurityOperator` (`admin:settings`); a team-admin adding one → `403` | RA-US-11.10 | — |
-| [ ] | M6-A2 | `ListServiceApiKeys`, `CreateServiceApiKey` (role `security_operator` only, secret once, replay without `secretKey`), `DeleteServiceApiKey` | RA-US-9.3 (part), RA-US-15.5 (part) | — |
-| [ ] | M6-A3 | `ListTeamDirectory` (`teams:read-directory`: id, slug, display name of every non-deleted team) | RA-US-11.1 (part), RA-1 (part) | — |
-| [ ] | M6-A4 | Security operator access: `403` on every team-scoped route for existing and unknown teams; a service key may call the work order operations, swarm list/get, directory and `GetMe` and nothing else; `GetMe` for operators | RA-US-1.4, RA-US-15.5, RA-US-3a.1 (part), RA-US-3a.2 (part), RA-US-11.1 (part) | M6-A2, M6-C4 |
+| [x] | M6-A1 | `ListSecurityOperators`, `AddSecurityOperator`, `RemoveSecurityOperator` (`admin:settings`); a team-admin adding one → `403` | RA-US-11.10 | — |
+| [x] | M6-A2 | `ListServiceApiKeys`, `CreateServiceApiKey` (role `security_operator` only, secret once, replay without `secretKey`), `DeleteServiceApiKey` | RA-US-9.3 (part), RA-US-15.5 (part) | — |
+| [x] | M6-A3 | `ListTeamDirectory` (`teams:read-directory`: id, slug, display name of every non-deleted team) | RA-US-11.1 (part), RA-1 (part) | — |
+| [x] | M6-A4 | Security operator access: `403` on every team-scoped route for existing and unknown teams; a service key may call the work order operations, swarm list/get, directory and `GetMe` and nothing else; `GetMe` for operators | RA-US-1.4, RA-US-15.5, RA-US-3a.1 (part), RA-US-3a.2 (part), RA-US-11.1 (part) | M6-A2, M6-C4 |
 
 ### M6-B · Swarm templates
 
@@ -793,9 +793,9 @@ Owns: `internal/adapter/oidc/cluster.go`, `internal/usecase/auth/workload*.go`, 
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M6-D1 | Offline validation against the cluster issuer JWKS (cached like the IdP keys): audience `afs-api`, expiry ≤ 1 h; audience `afs-gateway`, expired, or another cluster's issuer → `401`; works with the Kubernetes API unreachable [unit with fake JWKS] | RA-US-2b.3, RA-US-2b.4 | — |
-| [ ] | M6-D2 | Namespace and ServiceAccount → agent or pool through the database; principal `type: workload`; `GetMe`; audit with agent or pool id and worker pod | RA-US-3a.1 (part), RA-2b | M6-D1 |
-| [ ] | M6-D3 | A pool token of team A with an assigned work order can `UpdateWorkOrderRepo` on it and call `GetMe`; `404` on unassigned work orders and team B routes; `403` on other team A routes and service routes | RA-US-2b.1, RA-US-2b.2 | M6-D2, M6-C5 |
+| [x] | M6-D1 | Offline validation against the cluster issuer JWKS (cached like the IdP keys): audience `afs-api`, expiry ≤ 1 h; audience `afs-gateway`, expired, or another cluster's issuer → `401`; works with the Kubernetes API unreachable [unit with fake JWKS] | RA-US-2b.3, RA-US-2b.4 | — |
+| [x] | M6-D2 | Namespace and ServiceAccount → agent or pool through the database; principal `type: workload`; `GetMe`; audit with agent or pool id and worker pod | RA-US-3a.1 (part), RA-2b | M6-D1 |
+| [x] | M6-D3 | A pool token of team A with an assigned work order can `UpdateWorkOrderRepo` on it and call `GetMe`; `404` on unassigned work orders and team B routes; `403` on other team A routes and service routes | RA-US-2b.1, RA-US-2b.2 | M6-D2, M6-C5 |
 
 ### M6-E · Work order reconciler (RC-12)
 

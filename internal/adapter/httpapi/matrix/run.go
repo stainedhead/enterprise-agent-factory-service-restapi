@@ -35,7 +35,8 @@ type Case struct {
 	// NoOutbox exempts a mutation from the outbox check, with the reason (API contract CD-7).
 	NoOutbox string
 	// Suspended marks a case whose Prepare leaves team A suspended. A key of a suspended team does not
-	// authenticate (database contract §4.2): team keys get 401 and the oracle's answer is overridden.
+	// authenticate (database contract §4.2) and neither does a workload of it (afs.resolve_workload needs an
+	// active team): both get 401 and the oracle's answer is overridden.
 	Suspended bool
 	// NoAudit exempts a mutation from the audit check, with the reason.
 	NoAudit string
@@ -173,6 +174,9 @@ func Run(t *testing.T, w *World, h http.Handler) {
 func runOne(t *testing.T, w *World, h http.Handler, c *Contract, op Operation, rt httpapi.Route, cse Case, caller Caller, token string) {
 	t.Helper()
 	w.SetFlags(t, cse.Flags)
+	if caller == Workload {
+		w.seedWorkload(t)
+	}
 	subst := map[string]string{"{teamId}": w.TeamA.ID, "{otherTeamId}": w.TeamB.ID}
 	if cse.Prepare != nil {
 		for k, v := range cse.Prepare(t, w) {
@@ -197,7 +201,7 @@ func runOne(t *testing.T, w *World, h http.Handler, c *Contract, op Operation, r
 	rec := send(h, op.Method, apply(cse.Path), token, apply(cse.Body), hdr, rid)
 
 	want := c.Expected(op, caller, cse.Flags)
-	if cse.Suspended && (caller == TeamKeyViewer || caller == TeamKeyAdmin) {
+	if cse.Suspended && (caller == TeamKeyViewer || caller == TeamKeyAdmin || caller == Workload) {
 		want = Unauthorized
 	}
 	got := classify(rec.Code)

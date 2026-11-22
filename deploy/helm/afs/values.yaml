@@ -13,9 +13,14 @@ global:
   # The EKS API server for GetTeamKubeconfig (RA-10, afs-api): AFS_CLUSTER_ENDPOINT is the server URL and
   # AFS_CLUSTER_CA_DATA the cluster CA, base64. Both public, never a token. With either empty the operation
   # answers 503, so a viewer is never handed a file that cannot work.
+  # oidcIssuer is the cluster's service account issuer URL (AFS_CLUSTER_OIDC_ISSUER, afs-api): agents and
+  # pools call the API with a projected ServiceAccount token (audience afs-api), validated offline against
+  # this issuer's published keys (RA-2b). For EKS, https://oidc.eks.<region>.amazonaws.com/id/<cluster id>.
+  # Empty: the API refuses workload tokens.
   cluster:
     endpoint: ""
     caData: ""
+    oidcIssuer: ""
   region: ""              # AFS_AWS_REGION, required
   logLevel: info          # AFS_LOG_LEVEL
   otlpEndpoint: ""        # AFS_OTLP_ENDPOINT, empty disables trace and metric export

@@ -114,6 +114,8 @@ func TestCheckTeamRoutes(t *testing.T) {
 		{"security operator denied unknown team", secOp, authz.WorkOrdersRead, team("team_01JD00000000000000000000ZZ", authz.TeamFlags{}), authz.Deny},
 		{"service key denied team route", secKey, authz.WorkOrdersRead, team(teamA, authz.TeamFlags{}), authz.Deny},
 		{"workload denied team route", workload, authz.AgentsRead, team(teamA, authz.TeamFlags{}), authz.Deny},
+		{"workload not found on another team's route", workload, authz.AgentsRead, team(teamB, authz.TeamFlags{}), authz.NotFound},
+		{"workload not found on an unknown team's route", workload, authz.TeamsRead, team("team_0ZZZZZZZZZZZZZZZZZZZZZZZZZ", authz.TeamFlags{}), authz.NotFound},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
