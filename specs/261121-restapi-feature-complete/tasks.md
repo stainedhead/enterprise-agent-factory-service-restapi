@@ -829,7 +829,7 @@ Owns: `test/e2e/**`, `test/load/**`, `internal/domain/events_coverage_test.go`, 
 |---|---|---|---|---|
 | [x] | M6-X0 | After the merges: use `afs.resolve_workload` and `afs.team_directory` (X-DB-2, X-DB-3), remove `TxRunner.Lookup` and its test allowlist | RA-2b (part), RA-US-11.1 (part) | M6-E6, M6-A3, M6-D2 |
 | [~] | M6-X1 | Merge, full gate and suites; status.md at 100% for Phase 5; hand over to step 4 (documentation). Done: merge, `make gate`, `make cover` (domain, usecase, authz at least 90%), `test-db`, envtest, conformance. Left: see M6-F3 to F6 and M6-X2 | — | all M6 |
-| [ ] | M6-X2 | B1 tag sync for team secrets (`DescribeSecret`, `TagResource`, `UntagResource` by `tags.Stale`) and the work order and pool SQS queues (`ListQueueTags`, `TagQueue`, `UntagQueue`). **Open, not small:** it needs a reconcile kind that lists secret ARNs and queue URLs per team and pool, adapter methods and recorded fixtures for both services; today both are tagged at creation only (the B1 partial recorded in M4 and M5) | RC-US-5 (part), RC-12 (part) | M6-X1 |
+| [x] | M6-X2 | B1 tag sync for team secrets (`DescribeSecret`, `TagResource`, `UntagResource` by `tags.Stale`) and the work order and pool SQS queues (`ListQueueTags`, `TagQueue`, `UntagQueue`). **Done:** reconcile kind `tag_sync` (`reconcile/tagsync`, one resource per team), `secretsmanager.Tagger` and `sqs.QueueTagger` behind the `tagsync.Tagger` port, interface fakes in tests, `postgres.TagSyncSource`, wired in `cmd/afs-reconciler/wire_tagsync.go`; before this, both were tagged at creation only (the B1 partial recorded in M4 and M5) | RC-US-5 (part), RC-12 (part) | M6-X1 |
 
 ---
 

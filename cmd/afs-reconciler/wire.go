@@ -218,19 +218,23 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	if err != nil {
 		return fail(err)
 	}
-	controllers := []engine.Controller{teams, platform, adm, agents.Controller, pools.Controller, eg.Controller, lk.Controller, kt.Controller}
+	ts, err := wireTagSync(runner, awsCfg, as.Partition, as.Region, account, pool)
+	if err != nil {
+		return fail(err)
+	}
+	controllers := []engine.Controller{teams, platform, adm, agents.Controller, pools.Controller, eg.Controller, lk.Controller, kt.Controller, ts.Controller}
 	if lg.Controller != nil {
 		controllers = append(controllers, lg.Controller)
 	}
 	if nt.Controller != nil {
 		controllers = append(controllers, nt.Controller)
 	}
-	reg, err := routes(append(append(append(append(lg.Routes, eg.Routes...), nt.Routes...), lk.Routes...), append(append(kt.Routes, tags.Routes()...), pools.Routes...)...)...)
+	reg, err := routes(append(append(append(append(lg.Routes, eg.Routes...), nt.Routes...), lk.Routes...), append(append(append(kt.Routes, tags.Routes()...), pools.Routes...), ts.Routes...)...)...)
 	if err != nil {
 		return fail(err)
 	}
 	r.Engine, err = engine.New(engine.Config{
-		Feed: postgres.NewChangeFeed(dbCfg, log), Lister: kt.WrapLister(lk.WrapLister(nt.WrapLister(lg.WrapLister(eg.WrapLister(postgres.NewLister(pool)))))), Registry: reg,
+		Feed: postgres.NewChangeFeed(dbCfg, log), Lister: ts.WrapLister(kt.WrapLister(lk.WrapLister(nt.WrapLister(lg.WrapLister(eg.WrapLister(postgres.NewLister(pool))))))), Registry: reg,
 		Controllers:  controllers,
 		Status:       status,
 		Drift:        postgres.NewDriftRecorder(runner, audit, outbox, ids),

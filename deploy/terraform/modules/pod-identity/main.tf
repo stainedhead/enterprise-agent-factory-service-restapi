@@ -192,11 +192,12 @@ data "aws_iam_policy_document" "reconciler" {
   }
 
   statement {
-    sid = "ScheduleSecretDeletionAndSweepOrphans"
+    sid = "ScheduleSecretDeletionSweepOrphansAndSyncTags"
     actions = [
       "secretsmanager:DeleteSecret",
       "secretsmanager:DescribeSecret",
       "secretsmanager:TagResource",
+      "secretsmanager:UntagResource",
     ]
     resources = [local.secret_arn_pattern]
   }
