@@ -35,7 +35,7 @@ module "backup" {
   source = "./modules/backup"
 
   providers = {
-    aws = aws
+    aws    = aws
     aws.dr = aws.dr
   }
 
