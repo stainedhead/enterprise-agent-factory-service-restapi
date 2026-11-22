@@ -162,12 +162,22 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	if err != nil {
 		return fail(err)
 	}
+	pools, err := buildPoolStream(agentStreamDeps{
+		Client: kc, Runner: runner, Audit: audit, Status: cstatus, IAM: iamClient,
+		AWS: team.AWSConfig{Partition: as.Partition, Region: as.Region, AccountID: account, GatewayRoleARN: s.GatewayRoleARN,
+			PermissionsBoundaryARN: s.PermissionsBoundaryARN, ClusterARN: clusterARN, ESORoleARN: s.ESORoleARN, SecretsPrefix: s.SecretsPrefix},
+		Gateway: agent.Gateway{Namespace: s.GatewayNamespace, Name: s.GatewayName},
+		Cluster: s.ClusterName, AWSCfg: awsCfg, NodeClassJSON: env("AFS_NODECLASS_JSON"), LinkVerifierARN: env("AFS_RECONCILER_ROLE_ARN"),
+	}, env("AFS_EFS_STORAGE_CLASS"))
+	if err != nil {
+		return fail(err)
+	}
 	finalizer := lifecycle.NewTeamFinalizer(lifecycle.TeamDeps{
 		Secrets: lifecycle.UnionSecrets{Sources: []interface {
 			ListTeamSecrets(ctx context.Context, teamID string) ([]string, error)
 		}{lc, sm}, Scheduler: sm},
 		IAM: iamClient, Profiles: profiles, Access: eks.New(awsCfg, s.ClusterName), NS: cluster,
-	}, lifecycle.Hooks{Agents: agents.TeamSteps}, cstatus, lc)
+	}, lifecycle.Hooks{Agents: agents.TeamSteps, Pools: pools.TeamSteps}, cstatus, lc)
 
 	teams, err := team.NewController(team.Config{
 		Source: postgres.NewTeamSource(runner), Cluster: cluster, IAM: iamClient, Profiles: profiles,
@@ -204,14 +214,14 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	if err != nil {
 		return fail(err)
 	}
-	controllers := []engine.Controller{teams, platform, adm, agents.Controller, eg.Controller, lk.Controller}
+	controllers := []engine.Controller{teams, platform, adm, agents.Controller, pools.Controller, eg.Controller, lk.Controller}
 	if lg.Controller != nil {
 		controllers = append(controllers, lg.Controller)
 	}
 	if nt.Controller != nil {
 		controllers = append(controllers, nt.Controller)
 	}
-	reg, err := routes(append(append(append(append(lg.Routes, eg.Routes...), nt.Routes...), lk.Routes...), tags.Routes()...)...)
+	reg, err := routes(append(append(append(append(lg.Routes, eg.Routes...), nt.Routes...), lk.Routes...), append(tags.Routes(), pools.Routes...)...)...)
 	if err != nil {
 		return fail(err)
 	}
@@ -265,7 +275,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 		observability.SchemaCheck(schemaVersion, want),
 		observability.LeaderCheck(r.Elector.IsLeader),
 	}
-	r.Watcher, err = k8s.NewWatcher(kc, func(ref engine.Ref, object string) { r.Engine.NoteDrift(ref, object) }, log, append(k8s.OwnedKinds(), k8s.AgentOwnedKinds()...)...)
+	r.Watcher, err = k8s.NewWatcher(kc, func(ref engine.Ref, object string) { r.Engine.NoteDrift(ref, object) }, log, append(append(k8s.OwnedKinds(), k8s.AgentOwnedKinds()...), k8s.PoolOwnedKinds()...)...)
 	if err != nil {
 		return fail(err)
 	}
