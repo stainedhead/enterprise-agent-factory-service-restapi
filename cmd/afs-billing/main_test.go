@@ -47,7 +47,7 @@ func TestRunUsage(t *testing.T) {
 }
 
 func TestEveryHelmJobOfThisStreamIsRegistered(t *testing.T) {
-	for _, name := range []string{"cur-ingest", "reconcile"} {
+	for _, name := range []string{"cur-ingest", "reconcile", "price-sync"} {
 		if _, ok := jobs[name]; !ok {
 			t.Errorf("job %s is not registered (deploy/helm/afs/values/billing.yaml)", name)
 		}

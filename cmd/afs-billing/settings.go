@@ -24,6 +24,9 @@ type settings struct {
 	// PricingRegion is the Price List API region (AFS_PRICING_REGION): the API is served from a few
 	// regions only. Default us-east-1.
 	PricingRegion string
+	// PriceRegion is the region whose Bedrock prices are proposed (AFS_AWS_REGION, AWS_REGION as fallback,
+	// default us-east-1).
+	PriceRegion string
 	// PriceListSync is AFS_PRICING_PRICE_LIST_SYNC, used only while the billing role cannot read
 	// service_settings (-db gap X-DB-8); nil when unset.
 	PriceListSync *bool
@@ -39,6 +42,12 @@ func settingsFrom(env func(string) string) (settings, error) {
 		DatabaseURL: env("AFS_DATABASE_URL"), CURDatabase: env("AFS_CUR_DATABASE"), CURTable: env("AFS_CUR_TABLE"),
 		CURTagPrefix: env("AFS_CUR_TAG_PREFIX"), AthenaWorkgroup: env("AFS_ATHENA_WORKGROUP"), AthenaOutput: env("AFS_ATHENA_OUTPUT"),
 		PricingRegion: env("AFS_PRICING_REGION"), Lookback: defaultLookback,
+	}
+	if s.PriceRegion = env("AFS_AWS_REGION"); s.PriceRegion == "" {
+		s.PriceRegion = env("AWS_REGION")
+	}
+	if s.PriceRegion == "" {
+		s.PriceRegion = "us-east-1"
 	}
 	if s.PricingRegion == "" {
 		s.PricingRegion = "us-east-1"

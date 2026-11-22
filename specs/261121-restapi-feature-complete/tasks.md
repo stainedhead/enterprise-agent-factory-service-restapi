@@ -635,7 +635,7 @@ Owns: `internal/usecase/billing/prices/`, `internal/usecase/pricing/`, `internal
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M4-D1 | Price List sync when `pricing.price_list_sync` is on: one pending proposal per changed model, older pending superseded, nothing when off; `pricing.proposal_created` [adapter] | BI-US-2.1, BI-3 | M4-C1 |
+| [x] | M4-D1 | Price List sync when `pricing.price_list_sync` is on: one pending proposal per changed model, older pending superseded, nothing when off; `pricing.proposal_created` [adapter] | BI-US-2.1, BI-3 | M4-C1 |
 | [ ] | M4-D2 | `ListModelPriceProposals`, `ApproveModelPriceProposal`, `RejectModelPriceProposal` (service admins only); `pricing.proposal_decided`; effective from `max(effectiveFrom, approvedAt)`, no earlier usage repriced; the gateway uses the new price after the effective time [adapter]; `[e2e]` case | RA-US-8.1, RA-US-8.2, RA-7 | — |
 
 ### M4-E · Showback and scheduled reports (BI-4, BI-5, RA-6 schedules)

@@ -119,3 +119,4 @@
 - 2026-11-22: M4-C3 done (w2): tag sets from CUR line item tags; pool workers carry the pool.
 - 2026-11-22: M4-C4 done (w2): per team-day reconciliation against cur_bedrock, status by `billing.variance_alert_pct`, one `cost.variance_detected` on the transition.
 - 2026-11-22: M4-C5 done (w2): ListCosts (team, CSV) and ListCostReconciliations (`admin:reports`); deleted team costs readable by service admins; matrix rows added.
+- 2026-11-22: M4-D1 done (w2): price-sync job: Price List (AmazonBedrock, region filter, unit normalization) into one pending proposal per changed model, older pending superseded, nothing when off or unchanged, `pricing.proposal_created` in the same transaction; setting read falls back to AFS_PRICING_PRICE_LIST_SYNC while afs_billing cannot read service_settings (X-DB-8).

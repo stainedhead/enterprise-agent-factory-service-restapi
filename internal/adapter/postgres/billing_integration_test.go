@@ -18,11 +18,12 @@ import (
 )
 
 type billingRig struct {
-	t     *testing.T
-	db    *pgtest.DB
-	admin *pgx.Conn
-	store *postgres.BillingStore
-	rec   *reconcile.Reconciler
+	t      *testing.T
+	db     *pgtest.DB
+	admin  *pgx.Conn
+	store  *postgres.BillingStore
+	runner *postgres.TxRunner
+	rec    *reconcile.Reconciler
 }
 
 func newBillingRig(t *testing.T) *billingRig { return newBillingRigAs(t, "afs_billing") }
@@ -38,7 +39,7 @@ func newBillingRigAs(t *testing.T, role string) *billingRig {
 	t.Cleanup(pool.Close)
 	runner := postgres.NewTxRunner(pool)
 	store := postgres.NewBillingStore(runner)
-	return &billingRig{t: t, db: db, admin: db.Admin(t), store: store, rec: &reconcile.Reconciler{
+	return &billingRig{t: t, db: db, admin: db.Admin(t), store: store, runner: runner, rec: &reconcile.Reconciler{
 		Tx: runner, Outbox: postgres.NewOutboxWriter(), Clock: &fakes.Clock{T: time.Now().UTC()}, IDs: billingIDs{},
 		Repo: store, Session: postgres.BillingSession(),
 	}}
