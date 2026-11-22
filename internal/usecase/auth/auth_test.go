@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"testing"
 	"time"
@@ -284,5 +285,16 @@ func TestSessionOf(t *testing.T) {
 		if s.ActorType != c.want || s.Actor != c.p.ID || s.RequestID != "req_1" {
 			t.Errorf("%+v -> %+v", c.p, s)
 		}
+	}
+}
+
+// M1-A4: authentication hashes a presented key exactly as CreateApiKey hashed it when it was issued.
+func TestAPIKeyHashIsTheIssuedHash(t *testing.T) {
+	k, err := domain.GenerateAPIKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if HashAPIKey(k.Secret) != k.SHA256 {
+		t.Fatal("auth hashes a key differently from the way the key was issued")
 	}
 }

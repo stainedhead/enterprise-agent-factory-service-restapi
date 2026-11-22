@@ -140,6 +140,7 @@ func (w *World) OIDCClient() *http.Client { return w.IDP.Server.Client() }
 // SetFlags sets the guardrail flags of team A, which conditional grants read.
 func (w *World) SetFlags(t testing.TB, f authz.TeamFlags) {
 	t.Helper()
-	w.exec(t, `UPDATE afs.teams SET may_manage_aws_accounts = $2, viewer_kubectl = $3, may_add_external_systems = $4 WHERE id = $1`,
+	// The state is reset too: SuspendTeam and DeleteTeam leave team A suspended or deleting.
+	w.exec(t, `UPDATE afs.teams SET state = 'active', deleted_at = NULL, may_manage_aws_accounts = $2, viewer_kubectl = $3, may_add_external_systems = $4 WHERE id = $1`,
 		w.TeamA.ID, f.MayManageAwsAccounts, f.ViewerKubectl, f.MayAddExternalSystems)
 }

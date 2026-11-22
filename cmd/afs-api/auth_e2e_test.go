@@ -230,8 +230,8 @@ func TestAuthenticationEndToEnd(t *testing.T) {
 
 	t.Run("route authorization with real team flags: 404, 403 with a denied audit row, allowed", func(t *testing.T) {
 		adminTok := idp.token(t, "sub-admin", "admin@"+a.Slug+".example.com", []string{groupAdmin}, nil)
-		// Allowed callers reach the placeholder handler (501): authorization let them through.
-		if r := call(t, h, "GET", "/v1/teams/"+a.ID, adminTok); r.code != 501 {
+		// Allowed callers reach the handler: authorization let them through.
+		if r := call(t, h, "GET", "/v1/teams/"+a.ID, adminTok); r.code != 200 {
 			t.Fatalf("admin on own team: %d %s", r.code, r.body)
 		}
 		// A person bound to team A only: team B does not exist for them.

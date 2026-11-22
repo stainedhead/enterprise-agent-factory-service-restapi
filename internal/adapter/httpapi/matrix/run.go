@@ -34,6 +34,9 @@ type Case struct {
 	Flags authz.TeamFlags
 	// NoOutbox exempts a mutation from the outbox check, with the reason (API contract CD-7).
 	NoOutbox string
+	// Suspended marks a case whose Prepare leaves team A suspended. A key of a suspended team does not
+	// authenticate (database contract §4.2): team keys get 401 and the oracle's answer is overridden.
+	Suspended bool
 	// NoAudit exempts a mutation from the audit check, with the reason.
 	NoAudit string
 }
@@ -194,6 +197,9 @@ func runOne(t *testing.T, w *World, h http.Handler, c *Contract, op Operation, r
 	rec := send(h, op.Method, apply(cse.Path), token, apply(cse.Body), hdr, rid)
 
 	want := c.Expected(op, caller, cse.Flags)
+	if cse.Suspended && (caller == TeamKeyViewer || caller == TeamKeyAdmin) {
+		want = Unauthorized
+	}
 	got := classify(rec.Code)
 	if got != want {
 		t.Fatalf("%s %s as %s: %d %s, want %s", op.Method, apply(cse.Path), caller, rec.Code, rec.Body.String(), want)

@@ -44,8 +44,16 @@ func IfMatchRules(doc []byte) (map[string]bool, error) {
 			}
 		}
 	}
+	for op := range ifMatchOptional {
+		delete(required, op)
+	}
 	return required, nil
 }
+
+// ifMatchOptional lists operations whose OpenAPI parameter says If-Match is required although the
+// resource has no version a client could send (website CQ-2: ApiKey carries none). They accept the
+// header and ignore it, until the contract drops the parameter or adds the version.
+var ifMatchOptional = map[string]string{"DeleteApiKey": "ApiKey has no version (website CQ-2)"}
 
 // RequireIfMatch answers 428 PreconditionRequired for a request to an operation that requires If-Match
 // and carries none, and 400 ValidationError for one that is not a version. The version itself is

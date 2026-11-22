@@ -281,7 +281,8 @@ func TestIfMatchRulesFromOpenAPI(t *testing.T) {
 			t.Errorf("%s should require If-Match", op)
 		}
 	}
-	for _, op := range []string{"GetTeam", "CreateTeam", "ListTeams", "SuspendTeam", "PutTeamModels"} {
+	// CQ-2: an API key has no version to send, so its delete does not demand If-Match.
+	for _, op := range []string{"GetTeam", "CreateTeam", "ListTeams", "SuspendTeam", "PutTeamModels", "DeleteApiKey"} {
 		if req[op] {
 			t.Errorf("%s should not require If-Match", op)
 		}

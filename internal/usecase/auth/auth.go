@@ -5,7 +5,6 @@ package auth
 
 import (
 	"context"
-	"crypto/sha256"
 	"slices"
 	"strings"
 	"sync"
@@ -127,8 +126,9 @@ func (s *Service) now() time.Time {
 	return time.Now()
 }
 
-// HashAPIKey is the SHA-256 stored in api_keys.key_sha256 for a full key (prefix included).
-func HashAPIKey(key string) [32]byte { return sha256.Sum256([]byte(key)) }
+// HashAPIKey is the SHA-256 stored in api_keys.key_sha256 for a full key (prefix included). It is
+// domain.HashAPIKey, the function that hashed the key when CreateApiKey issued it.
+func HashAPIKey(key string) [32]byte { return domain.HashAPIKey(key) }
 
 func (s *Service) apiKey(ctx context.Context, token string) (*authz.Principal, error) {
 	rec, ok, err := s.Keys.AuthenticateAPIKey(ctx, HashAPIKey(token))
