@@ -222,6 +222,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	if err := wireTraffic(r.Engine, runner, outbox, ids, env, clock.Now, log); err != nil {
 		return fail(err)
 	}
+	wireBudget(r.Engine, runner, audit, outbox, ids, iamClient, m, clock.Now, log)
 	registerEngineStats(m, r.Engine.Stats)
 	schemaVersion := func(ctx context.Context) (int, error) {
 		var v int

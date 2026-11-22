@@ -100,7 +100,7 @@ func (c *Client) create(ctx context.Context, spec team.RoleSpec, tags map[string
 	if err != nil {
 		return "", afsaws.WrapError(err)
 	}
-	if err := c.syncPolicies(ctx, spec); err != nil {
+	if err := c.syncPolicies(ctx, spec, true); err != nil {
 		return "", err
 	}
 	return awssdk.ToString(out.Role.Arn), nil
@@ -130,7 +130,7 @@ func (c *Client) sync(ctx context.Context, spec team.RoleSpec, tags map[string]s
 	if err := c.syncTags(ctx, spec.Name, tags, role.Tags); err != nil {
 		return err
 	}
-	return c.syncPolicies(ctx, spec)
+	return c.syncPolicies(ctx, spec, true)
 }
 
 // syncTags adds or fixes the desired tags and removes afs- tags that are no longer desired. Tags the
@@ -166,8 +166,10 @@ func (c *Client) syncTags(ctx context.Context, name string, want map[string]stri
 	return nil
 }
 
-// syncPolicies makes the role's inline policies exactly spec.Policies.
-func (c *Client) syncPolicies(ctx context.Context, spec team.RoleSpec) error {
+// syncPolicies makes the role's inline policies exactly spec.Policies. The budget backstop's deny
+// (BudgetDenyPolicyName, deny.go) is owned by the budget reconciler: it is left alone when keepBudgetDeny
+// is set (EnsureRole), and removed with everything else when the role is deleted.
+func (c *Client) syncPolicies(ctx context.Context, spec team.RoleSpec, keepBudgetDeny bool) error {
 	have, err := c.listPolicies(ctx, spec.Name)
 	if err != nil {
 		return err
@@ -193,7 +195,7 @@ func (c *Client) syncPolicies(ctx context.Context, spec team.RoleSpec) error {
 		}
 	}
 	for _, n := range have {
-		if _, ok := spec.Policies[n]; !ok {
+		if _, ok := spec.Policies[n]; !ok && (!keepBudgetDeny || n != BudgetDenyPolicyName) {
 			if _, err := c.api.DeleteRolePolicy(ctx, &awsiam.DeleteRolePolicyInput{RoleName: &spec.Name, PolicyName: &n}); err != nil {
 				return afsaws.WrapError(err)
 			}
@@ -233,7 +235,7 @@ func (c *Client) DeleteRole(ctx context.Context, path, name string) error {
 	if got := awssdk.ToString(out.Role.Path); got != path {
 		return engine.Terminal(fmt.Errorf("%w: %s is under %s, expected %s", ErrPathChanged, name, got, path))
 	}
-	if err := c.syncPolicies(ctx, team.RoleSpec{Name: name}); err != nil { // no policies wanted: removes them all
+	if err := c.syncPolicies(ctx, team.RoleSpec{Name: name}, false); err != nil { // no policies wanted: removes them all
 		return err
 	}
 	if _, err := c.api.DeleteRole(ctx, &awsiam.DeleteRoleInput{RoleName: &name}); err != nil && !afsaws.IsNotFound(err) {

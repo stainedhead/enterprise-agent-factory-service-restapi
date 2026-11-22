@@ -78,6 +78,13 @@ func MergeStatus(prev *Stored, r Report) (next Stored, previous domain.Phase, ch
 				merged = append(merged, c)
 			}
 		}
+		// BudgetExhausted belongs to the budget reconciler (M3-F5), which sets and clears it itself; a
+		// controller replacing its own conditions must not wipe it.
+		if _, has := findCondition(merged, domain.CondBudgetExhausted); !has {
+			if c, ok := findCondition(old, domain.CondBudgetExhausted); ok {
+				merged = append(merged, c)
+			}
+		}
 	} else {
 		merged = slices.Clone(old)
 		for _, c := range r.Conditions {
