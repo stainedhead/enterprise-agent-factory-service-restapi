@@ -317,3 +317,50 @@ Each is decided in `api/openapi.yaml` 1.1.0 and needs the root api-contract.md t
 - **Teardown completion marker.** `torn_down_at` is set to the database `now()` when the teardown starts (the `teams_teardown_recorded` check wants it with the reason) and set equal to `deleted_at` when the record is closed. A deleted team with `torn_down_at < deleted_at` has not been closed, so the sweep does not read the outbox (whose rows are purged). Reasons are the contract's `expired`, `cap_reached`, `work_complete`; `manual` belongs to the API's delete path.
 - **Wrapper completer not used.** After the finalizer's Complete the team is `deleted` and no longer reconciles, so the closing record is a separate sweep in the same job.
 - **First apply of a PVC.** The API server touches a new claim's managed fields once more on the apply after its creation, so the no-op assertion in envtest is on the third pass.
+
+## M6-B and M6-C decisions (worker w2, `m6/w2`)
+
+- **Events.** `UpdateWorkOrder` emits `work_order.repo_updated` only when it adds repositories; a title, SLA or budget change emits nothing (the contract has no event for it). Swarm templates emit no event (CD-7).
+- **Visibility.** Work order reads rely on RLS (`app_read`: security operator, assigned team, or owner of a repository) and the use case answers 404 for rows RLS hides. Owner teams see only their own repository rows.
+- **Budget.** A work order budget equal to the template's stays NULL, so a later template change still applies; `budgetUsd` in responses is the effective cap. A change reaches only a team created afterwards.
+- **Security operator and teams.** A security operator cannot read `teams` rows, so owner team existence checks use `afs.team_directory()` (X-DB-3).
+- **Workload sessions.** The `work-orders:report` path needs the workload's team id in `acting.Session.TeamIDs` so RLS shows the work order; the matrix has no Workload token for these rows until M6-D2 lands.
+- **RC-12 secrets gap.** `afs.instantiate_work_order_team` (000016) copies tags, budget, models, stages, pools, handoffs and config values but ignores `spec.secrets`. A restapi-side fix is not possible: `afs.secrets.secrets_manager_arn` needs a real (empty) Secrets Manager secret created by the reconciler, and `afs_reconciler` has no grant on `afs.secrets` or `afs.pool_secret_bindings`. Proposed -db change (new migration, no secret value anywhere), which the reconciler (M6-E2) calls after creating the empty secrets and passing their ARNs:
+
+```sql
+CREATE FUNCTION afs.attach_work_order_secrets(p_team_id text, p_secrets jsonb) RETURNS integer
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, afs AS $$
+DECLARE
+  tpl afs.swarm_templates; e jsonb; s jsonb; v_id text; v_pool text; n integer := 0;
+BEGIN
+  SELECT st.* INTO tpl FROM afs.work_orders w JOIN afs.swarm_templates st ON st.id = w.template_id
+   WHERE w.team_id = p_team_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'team % is not a work order team', p_team_id USING ERRCODE = 'no_data_found';
+  END IF;
+  -- p_secrets: [{"name": "...", "arn": "arn:aws:secretsmanager:...:secret:..."}]; only names the template lists.
+  FOR e IN SELECT * FROM jsonb_array_elements(p_secrets) LOOP
+    SELECT x INTO s FROM jsonb_array_elements(coalesce(tpl.spec -> 'secrets', '[]')) x WHERE x ->> 'name' = e ->> 'name';
+    IF s IS NULL THEN
+      RAISE EXCEPTION 'secret % is not in swarm template %', e ->> 'name', tpl.name USING ERRCODE = 'foreign_key_violation';
+    END IF;
+    v_id := afs.new_id('sec');
+    INSERT INTO afs.secrets (id, team_id, name, secrets_manager_arn, origin)
+    VALUES (v_id, p_team_id, e ->> 'name', e ->> 'arn', 'managed')
+    ON CONFLICT (team_id, name) DO NOTHING;
+    IF s ? 'pool' THEN
+      SELECT id INTO v_pool FROM afs.agent_pools WHERE team_id = p_team_id AND name = s ->> 'pool';
+      INSERT INTO afs.pool_secret_bindings (team_id, pool_id, secret_id, delivery, target)
+      SELECT p_team_id, v_pool, sc.id, 'env', upper(replace(sc.name, '-', '_'))
+        FROM afs.secrets sc WHERE sc.team_id = p_team_id AND sc.name = e ->> 'name'
+      ON CONFLICT DO NOTHING;
+    END IF;
+    n := n + 1;
+  END LOOP;
+  RETURN n;
+END $$;
+REVOKE ALL ON FUNCTION afs.attach_work_order_secrets(text, jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION afs.attach_work_order_secrets(text, jsonb) TO afs_reconciler;
+```
+
+  The reconciler should code against a port (`WorkOrderSecrets.Attach(ctx, teamID, []{Name, ARN})`) so the call can be swapped in once the -db release exists.
