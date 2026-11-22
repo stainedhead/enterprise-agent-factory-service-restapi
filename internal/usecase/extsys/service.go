@@ -40,8 +40,9 @@ type Repository interface {
 	Update(ctx context.Context, tx port.Tx, s domain.ExternalSystem, expect domain.Version) error
 	// Delete removes a team-declared system (and its switches); PreconditionFailed when the version is not expect.
 	Delete(ctx context.Context, tx port.Tx, teamID, systemID string, expect domain.Version) error
-	// SetTeamOff switches the system off (true) or on (false) for the whole team.
-	SetTeamOff(ctx context.Context, tx port.Tx, teamID, systemID string, off bool) error
+	// SetTeamOff switches the system off (true) or on (false) for the whole team; optOutID names the
+	// row of a new switch. Both directions are idempotent.
+	SetTeamOff(ctx context.Context, tx port.Tx, teamID, systemID, optOutID string, off bool) error
 
 	// AgentExists reports whether the team has a live agent with this id.
 	AgentExists(ctx context.Context, tx port.Tx, teamID, agentID string) (bool, error)
@@ -49,8 +50,9 @@ type Repository interface {
 	ListAgent(ctx context.Context, tx port.Tx, teamID, agentID, after string, limit int) ([]domain.ExternalSystemAccess, error)
 	// GetAgent returns one effective system of the agent; NotFound when the agent's team cannot see it.
 	GetAgent(ctx context.Context, tx port.Tx, teamID, agentID, systemID string) (domain.ExternalSystemAccess, error)
-	// SetAgentOff switches the system off (true) or on (false) for one agent.
-	SetAgentOff(ctx context.Context, tx port.Tx, teamID, agentID, systemID string, off bool) error
+	// SetAgentOff switches the system off (true) or on (false) for one agent; optOutID names the row
+	// of a new switch. Both directions are idempotent.
+	SetAgentOff(ctx context.Context, tx port.Tx, teamID, agentID, systemID, optOutID string, off bool) error
 }
 
 // Service is the team and agent external system use case set.
@@ -130,7 +132,11 @@ func (s *Service) SetTeamState(ctx context.Context, c acting.Caller, teamID, sys
 			return domain.Conflict("disabled_above", "the system is switched off at the service level; a team cannot switch it on",
 				map[string]any{"disabledAt": string(cur.DisabledAt)})
 		}
-		if err := s.Repo.SetTeamOff(ctx, tx, teamID, systemID, !enabled); err != nil {
+		oid, err := s.IDs.NewID(domain.PrefixExtSystemOptout)
+		if err != nil {
+			return err
+		}
+		if err := s.Repo.SetTeamOff(ctx, tx, teamID, systemID, oid.String(), !enabled); err != nil {
 			return err
 		}
 		if out, err = s.Repo.GetTeam(ctx, tx, teamID, systemID, false); err != nil {
@@ -324,7 +330,11 @@ func (s *Service) SetAgentState(ctx context.Context, c acting.Caller, teamID, ag
 			return domain.Conflict("disabled_above", "the system is switched off at the "+string(cur.DisabledAt)+" level; an agent cannot switch it on",
 				map[string]any{"disabledAt": string(cur.DisabledAt)})
 		}
-		if err := s.Repo.SetAgentOff(ctx, tx, teamID, agentID, systemID, !enabled); err != nil {
+		oid, err := s.IDs.NewID(domain.PrefixExtSystemOptout)
+		if err != nil {
+			return err
+		}
+		if err := s.Repo.SetAgentOff(ctx, tx, teamID, agentID, systemID, oid.String(), !enabled); err != nil {
 			return err
 		}
 		if out, err = s.Repo.GetAgent(ctx, tx, teamID, agentID, systemID); err != nil {
