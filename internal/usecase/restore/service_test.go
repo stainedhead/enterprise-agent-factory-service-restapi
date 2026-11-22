@@ -10,6 +10,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/authz"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/agents/agentstest"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port/fakes"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/restore"
@@ -28,7 +29,8 @@ type rig struct {
 func newRig() *rig {
 	r := &rig{repo: restoretest.New(team), audit: &fakes.Audit{}, outbox: &fakes.Outbox{}}
 	r.svc = &restore.Service{Deps: acting.Deps{Tx: &fakes.TxRunner{}, Audit: r.audit, Outbox: r.outbox, Idem: &fakes.Idempotency{},
-		Clock: &fakes.Clock{T: time.Date(2026, 11, 22, 0, 0, 0, 0, time.UTC)}, IDs: &fakes.IDGen{}}, Repo: r.repo}
+		Clock: &fakes.Clock{T: time.Date(2026, 11, 22, 0, 0, 0, 0, time.UTC)}, IDs: &fakes.IDGen{}}, Repo: r.repo,
+		Guards: agentstest.NewRepo()}
 	r.repo.Targets = domain.RestoreState{
 		"agents":    {"agt_1": {"id": "agt_1", "state": "enabled", "persona": "old"}},
 		"team_tags": {team + "/env": {"id": team + "/env", "value": "prod"}},

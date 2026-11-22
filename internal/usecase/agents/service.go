@@ -6,9 +6,6 @@ package agents
 
 import (
 	"context"
-	"slices"
-	"strconv"
-	"strings"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
@@ -62,6 +59,9 @@ type Repository interface {
 	// InsertSnapshot stores a manual snapshot request.
 	InsertSnapshot(ctx context.Context, tx port.Tx, teamID string, s domain.Snapshot) error
 }
+
+// guard is the validator CreateAgent and UpdateAgent share with RestoreRevision (FR-R01).
+func (s *Service) guard() Guard { return Guard{Src: s.Repo} }
 
 // Service is the agent use case set.
 type Service struct {
@@ -137,68 +137,6 @@ func (s *Service) Get(ctx context.Context, c acting.Caller, teamID, id string) (
 	return a.WithDeletingStatus(), err
 }
 
-// checkTemplate refuses a template that is unknown, disabled or does not list the image's digest
-// (RA-US-4.1, RA-US-4.3). It returns the template's id.
-func (s *Service) checkTemplate(ctx context.Context, tx port.Tx, name string, image domain.ImageRef) (string, error) {
-	t, ok, err := s.Repo.Template(ctx, tx, name)
-	if err != nil {
-		return "", err
-	}
-	switch {
-	case !ok:
-		return "", domain.Validation(domain.FieldError{Field: "template", Reason: "no agent template named " + name})
-	case !t.Enabled:
-		return "", domain.Validation(domain.FieldError{Field: "template", Reason: "agent template " + name + " is disabled"})
-	}
-	digest := string(image)[strings.LastIndex(string(image), "@")+1:]
-	if !slices.Contains(t.AllowedDigests, digest) {
-		return "", domain.Validation(domain.FieldError{Field: "image", Reason: "digest " + digest + " is not allowed by agent template " + name})
-	}
-	return t.ID, nil
-}
-
-func (s *Service) checkModel(ctx context.Context, tx port.Tx, teamID, model string) error {
-	ok, err := s.Repo.ModelEnabled(ctx, tx, teamID, model)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return domain.Validation(domain.FieldError{Field: "modelId", Reason: model + " is not enabled for the team"})
-	}
-	return nil
-}
-
-// checkBindings refuses bindings of unknown secrets and of secrets owned by another agent or a
-// pool (RA-US-4.1). agentID is the agent the bindings are for.
-func (s *Service) checkBindings(ctx context.Context, tx port.Tx, teamID, agentID string, bs []domain.SecretBinding) error {
-	if len(bs) == 0 {
-		return nil
-	}
-	ids := make([]string, 0, len(bs))
-	for _, b := range bs {
-		ids = append(ids, b.SecretID)
-	}
-	found, err := s.Repo.Secrets(ctx, tx, teamID, ids)
-	if err != nil {
-		return err
-	}
-	var fe []domain.FieldError
-	for i, b := range bs {
-		f := "secretBindings[" + strconv.Itoa(i) + "].secretId"
-		info, ok := found[b.SecretID]
-		switch {
-		case !ok:
-			fe = append(fe, domain.FieldError{Field: f, Reason: "no such secret in the team"})
-		case info.PoolID != "" || (info.AgentID != "" && info.AgentID != agentID):
-			fe = append(fe, domain.FieldError{Field: f, Reason: "the secret belongs to another agent or a pool and cannot be bound here"})
-		}
-	}
-	if len(fe) > 0 {
-		return domain.Validation(fe...)
-	}
-	return nil
-}
-
 // Create implements CreateAgent: the model must be enabled for the team, the storage class offered,
 // the template known, enabled and listing the image digest, and no binding may name another
 // agent's secret. One transaction writes the row, the audit record and agent.created.
@@ -219,19 +157,17 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in
 		if err != nil {
 			return err
 		}
-		if err := s.checkModel(ctx, tx, teamID, a.ModelID); err != nil {
+		if err := s.guard().CheckModel(ctx, tx, teamID, a.ModelID); err != nil {
 			return err
 		}
-		if ok, err := s.Repo.StorageClassEnabled(ctx, tx, a.Volume.StorageClass); err != nil {
+		if err := s.guard().CheckStorageClass(ctx, tx, a.Volume.StorageClass); err != nil {
 			return err
-		} else if !ok {
-			return domain.Validation(domain.FieldError{Field: "volume.storageClass", Reason: a.Volume.StorageClass + " is not an offered storage class"})
 		}
-		tplID, err := s.checkTemplate(ctx, tx, a.Template, a.Image)
+		tplID, err := s.guard().CheckTemplate(ctx, tx, a.Template, a.Image)
 		if err != nil {
 			return err
 		}
-		if err := s.checkBindings(ctx, tx, teamID, a.ID, a.Bindings); err != nil {
+		if err := s.guard().CheckBindings(ctx, tx, teamID, a.ID, a.Bindings); err != nil {
 			return err
 		}
 		if err := s.Repo.Insert(ctx, tx, a, tplID); err != nil {
@@ -289,17 +225,17 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, teamID, id string
 		tplChanged := next.Template != cur.Template || next.Image != cur.Image
 		tplID := ""
 		if tplChanged {
-			if tplID, err = s.checkTemplate(ctx, tx, next.Template, next.Image); err != nil {
+			if tplID, err = s.guard().CheckTemplate(ctx, tx, next.Template, next.Image); err != nil {
 				return err
 			}
 		}
 		if next.ModelID != cur.ModelID {
-			if err := s.checkModel(ctx, tx, teamID, next.ModelID); err != nil {
+			if err := s.guard().CheckModel(ctx, tx, teamID, next.ModelID); err != nil {
 				return err
 			}
 		}
 		if p.Bindings != nil {
-			if err := s.checkBindings(ctx, tx, teamID, id, next.Bindings); err != nil {
+			if err := s.guard().CheckBindings(ctx, tx, teamID, id, next.Bindings); err != nil {
 				return err
 			}
 		}
