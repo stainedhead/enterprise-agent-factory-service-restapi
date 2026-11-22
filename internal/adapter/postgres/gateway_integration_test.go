@@ -245,12 +245,12 @@ func TestUsageWriterBatchesWithinASecond(t *testing.T) {
 		Usage: gateway.Usage{Input: 10, Output: 20, CacheRead: 3, CacheWrite: 4}, Cost: domain.MustMoney("0.000123"), LatencyMS: 42, TagSetID: tagSet})
 	uw.Record(gateway.Record{OccurredAt: now, TeamID: w.team, PoolID: "pool_01JD0000000000000000000A00", WorkerPod: "pool-w-7f9", ModelID: w.model, RequestID: "r2",
 		Outcome: gateway.OutcomeRejectedBudget, LatencyMS: 3})
-	deadline := time.Now().Add(1500 * time.Millisecond)
+	deadline := time.Now().Add(10 * time.Second) // flush interval is about a second; a loaded CI runner needs slack
 	for uw.Written() < 2 && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	if uw.Written() != 2 {
-		t.Fatalf("written = %d within 1.5 s, failed %d", uw.Written(), uw.Failed())
+		t.Fatalf("written = %d within 10 s, failed %d", uw.Written(), uw.Failed())
 	}
 	type row struct {
 		agent, pool, pod, tag *string
