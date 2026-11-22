@@ -327,23 +327,44 @@ func ValidateSwarmSpec(field string, spec map[string]any) []FieldError {
 	if len(secrets) > MaxTemplateSecrets {
 		bad(".secrets", "has at most "+itoa(MaxTemplateSecrets)+" secrets")
 	}
+	seenSecret, seenTarget := map[string]bool{}, map[[2]string]bool{}
 	for i, raw := range secrets {
 		at := fmt.Sprintf(".secrets[%d]", i)
 		s, ok := raw.(map[string]any)
 		if !ok {
-			bad(at, "must be an object {name, scope?, pool?}")
+			bad(at, "must be an object {pool, name, description?, delivery?, target?}")
 			continue
 		}
-		if _, err := ParseName(at+".name", asString(s["name"])); err != nil {
-			fe = append(fe, prefixed(field, fieldErrorsOf(err))...)
+		name := asString(s["name"])
+		if !secretNameRE.MatchString(name) {
+			bad(at+".name", "must match ^[a-z][a-z0-9-]{0,62}$")
+		} else if seenSecret[name] {
+			bad(at+".name", "repeats a secret name (secret names are unique within the team)")
 		}
+		seenSecret[name] = true
 		if _, hasValue := s["value"]; hasValue {
 			// A template names the secrets a swarm needs; it never carries one (AGENTS.md: no secret value).
 			bad(at+".value", "a template cannot hold a secret value; the secret is created empty and its value is set through PutSecretValue")
 		}
-		if p := asString(s["pool"]); p != "" && !pools[p] {
+		pool := asString(s["pool"])
+		if pool == "" || !pools[pool] {
 			bad(at+".pool", "must name a pool the template defines")
 		}
+		if utf8.RuneCountInString(asString(s["description"])) > MaxSecretDescription {
+			bad(at+".description", "must be at most 1000 characters")
+		}
+		delivery, target := TemplateSecretBinding(name, asString(s["delivery"]), asString(s["target"]))
+		switch {
+		case delivery != "env" && delivery != "file":
+			bad(at+".delivery", "must be env or file")
+		case delivery == "env" && !envTargetRE.MatchString(target):
+			bad(at+".target", "an env target must be UPPER_SNAKE (^[A-Z_][A-Z0-9_]{0,127}$)")
+		case delivery == "file" && !fileTargetRE.MatchString(target):
+			bad(at+".target", "a file target must be an absolute path (^/[A-Za-z0-9._/-]{1,255}$)")
+		case seenTarget[[2]string{pool, target}]:
+			bad(at+".target", "is bound twice in the pool")
+		}
+		seenTarget[[2]string{pool, target}] = true
 	}
 	return fe
 }
@@ -433,4 +454,19 @@ func asInt(v any) (int, bool) {
 		return int(n), n >= math.MinInt32 && n <= math.MaxInt32
 	}
 	return 0, false
+}
+
+// TemplateSecretBinding returns the delivery and target a swarm template's secret entry resolves to: delivery
+// defaults to env, and an env target to the upper-case name with underscores. The checks are the ones the database
+// makes on pool_secret_bindings (delivery in env, file; an env target ^[A-Z_][A-Z0-9_]{0,127}$; a file target an
+// absolute path), so a template that validates here records without a constraint error when its work order's team
+// is created. The work order reconciler resolves the entry the same way.
+func TemplateSecretBinding(name, delivery, target string) (string, string) {
+	if delivery == "" {
+		delivery = "env"
+	}
+	if target == "" && delivery == "env" {
+		target = strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
+	}
+	return delivery, target
 }

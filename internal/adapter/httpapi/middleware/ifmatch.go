@@ -55,14 +55,37 @@ func IfMatchRules(doc []byte) (map[string]bool, error) {
 // header and ignore it, until the contract drops the parameter or adds the version.
 var ifMatchOptional = map[string]bool{"DeleteApiKey": true, "DeleteServiceApiKey": true}
 
+// ifMatchOptionalForWorkload lists operations on which a workload principal may omit If-Match (CLI-CD-1): a work
+// order worker holds only work-orders:report, which gives it no read of the repository version it would have to
+// send. Its update is unconditional on the version; it still locks the row, writes the audit record naming the
+// pool and worker pod, and every other caller still needs the header.
+var ifMatchOptionalForWorkload = map[string]bool{"UpdateWorkOrderRepo": true}
+
+// IfMatchOptionalForWorkload reports whether a workload principal may omit If-Match on the operation.
+func IfMatchOptionalForWorkload(operationID string) bool {
+	return ifMatchOptionalForWorkload[operationID]
+}
+
 // RequireIfMatch answers 428 PreconditionRequired for a request to an operation that requires If-Match
 // and carries none, and 400 ValidationError for one that is not a version. The version itself is
 // compared by the use case against the row it locks (a stale value is 412 there). It runs after
 // authorization, so a caller who may not know the resource exists gets 404 or 403, never 428.
 func RequireIfMatch(required map[string]bool, routes RouteLookup, errs ErrorWriter) Middleware {
+	return RequireIfMatchFor(required, routes, nil, errs)
+}
+
+// RequireIfMatchFor is RequireIfMatch that lets a workload principal (principals) omit the header on the
+// operations of IfMatchOptionalForWorkload. A header it does send is still validated. principals may be nil.
+func RequireIfMatchFor(required map[string]bool, routes RouteLookup, principals PrincipalLookup, errs ErrorWriter) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if info, ok := routes(r); ok && required[info.OperationID] {
+				if r.Header.Get("If-Match") == "" && principals != nil && ifMatchOptionalForWorkload[info.OperationID] {
+					if p, ok := principals(r.Context()); ok && p.Workload != nil {
+						next.ServeHTTP(w, r)
+						return
+					}
+				}
 				if _, err := domain.ParseIfMatch(r.Header.Get("If-Match")); err != nil {
 					errs(w, r, err)
 					return

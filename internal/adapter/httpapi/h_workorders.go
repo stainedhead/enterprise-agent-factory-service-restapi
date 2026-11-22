@@ -218,10 +218,14 @@ func (a *WorkOrdersAPI) updateRepo(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
-	expect, err := w2IfMatch(r)
-	if err != nil {
-		WriteError(w, r, err)
-		return
+	// A workload principal may omit If-Match (CLI-CD-1): expect 0 means the current version, and only the
+	// use case honours it, for a workload.
+	var expect domain.Version
+	if r.Header.Get("If-Match") != "" || c.Principal.Workload == nil {
+		if expect, err = w2IfMatch(r); err != nil {
+			WriteError(w, r, err)
+			return
+		}
 	}
 	var req updateWorkOrderRepoRequest
 	if err := Decode(r, &req); err != nil {

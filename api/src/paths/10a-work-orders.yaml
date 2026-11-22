@@ -587,7 +587,9 @@
     summary: Update work order repo
     tags:
     - work-orders
-    description: '{status, prUrl?, prNumber?, detail?}'
+    description: '{status, prUrl?, prNumber?, detail?}. A workload principal (a worker of the assigned team) holds
+      no read of the repository version, so it may omit If-Match: the update then applies to the current version. A
+      version it does send is compared (412 when stale). Every other caller must send If-Match.'
     parameters:
     - name: workOrderId
       in: path

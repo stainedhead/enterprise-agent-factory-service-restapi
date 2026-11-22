@@ -37,9 +37,9 @@
 | M2 Agents | 9 (+ exit) | 44 | 43 |
 | M3 Gateway and budgets | 9 (+ exit) | 36 | 36 |
 | M4 Accounts, tags, billing | 7 (+ exit) | 26 | 26 |
-| M5 Swarms | 6 (+ exit) | 21 | 0 |
-| M6 CVE remediation and completion | 6 (+ exit) | 27 | 0 |
-| **Total** | **60** | **255** | **206** |
+| M5 Swarms | 6 (+ exit) | 21 | 21 |
+| M6 CVE remediation and completion | 6 (+ exit) | 28 | 22 |
+| **Total** | **60** | **256** | **249** |
 
 
 ## External dependencies (`-db` changes this spec needs)
@@ -816,19 +816,20 @@ Owns: `test/e2e/**`, `test/load/**`, `internal/domain/events_coverage_test.go`, 
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M6-F1 | No placeholder route remains; `test/contract` replays every OpenAPI example; every §7 event type has an emission test (`events_coverage_test.go`); every response carries `X-Afs-Contract-Version` | CT-API-7, CT-API-9, RA-US-6.5, RA-1 | all M6 |
-| [ ] | M6-F2 | Full matrix: every operation × every caller type | RA-US-1.3, CT-API-8 | M6-F1 |
-| [ ] | M6-F3 | Run the `[e2e]` suite on the dev cluster: RC-US-1.1, RC-US-1a.1, RC-US-1a.4, RC-US-2.5, RC-US-2.6, RC-US-11.1, RC-US-14.1, RC-US-14.5, RC-US-16.1, RC-US-16.3, RA-US-8.1; record results | RC-US-1.1 (part), RC-US-1a.1 (part), RC-US-1a.4 (part), RC-US-2.5 (part), RC-US-2.6 (part), RC-US-11.1 (part), RC-US-14.1 (part), RC-US-14.5 (part), RC-US-16.1 (part), RC-US-16.3 (part), RA-US-8.1 (part) | M6-F1 |
-| [ ] | M6-F4 | Restore drill: fresh cluster and a database restored to a point in time converge with volumes from snapshots, no manual step, within 1 hour | RC-US-3.2, NFR Recovery | M6-F3 |
-| [ ] | M6-F5 | Load at initial scale: API reads p99 < 300 ms, reports < 1 s, gateway rerun, reconcile lag p95 < 60 s for 200 teams and 2,000 agents | RA-US-7.2, GW-US-1.1, GW-US-1.3, NFR Performance | M6-F3 |
-| [ ] | M6-F6 | OWASP ASVS L2 checklist, `govulncheck`, coverage ≥ 90% on `domain`, `usecase`, `authz` | NFR Security, NFR Quality | M6-F2 |
+| [x] | M6-F1 | No placeholder route remains; `test/contract` replays every OpenAPI example; every §7 event type has an emission test (`events_coverage_test.go`); every response carries `X-Afs-Contract-Version` | CT-API-7, CT-API-9, RA-US-6.5, RA-1 | all M6 |
+| [x] | M6-F2 | Full matrix: every operation × every caller type | RA-US-1.3, CT-API-8 | M6-F1 |
+| [ ] | M6-F3 | Run the `[e2e]` suite on the dev cluster: RC-US-1.1, RC-US-1a.1, RC-US-1a.4, RC-US-2.5, RC-US-2.6, RC-US-11.1, RC-US-14.1, RC-US-14.5, RC-US-16.1, RC-US-16.3, RA-US-8.1; record results | RC-US-1.1 (part), RC-US-1a.1 (part), RC-US-1a.4 (part), RC-US-2.5 (part), RC-US-2.6 (part), RC-US-11.1 (part), RC-US-14.1 (part), RC-US-14.5 (part), RC-US-16.1 (part), RC-US-16.3 (part), RA-US-8.1 (part) | M6-F1 **Not done in the build sandbox:** needs the dev cluster and real AWS (cluster suite). |
+| [ ] | M6-F4 | Restore drill: fresh cluster and a database restored to a point in time converge with volumes from snapshots, no manual step, within 1 hour | RC-US-3.2, NFR Recovery | M6-F3 **Not done in the build sandbox:** needs a cluster and an RDS point-in-time restore. |
+| [ ] | M6-F5 | Load at initial scale: API reads p99 < 300 ms, reports < 1 s, gateway rerun, reconcile lag p95 < 60 s for 200 teams and 2,000 agents | RA-US-7.2, GW-US-1.1, GW-US-1.3, NFR Performance | M6-F3 **Not done in the build sandbox:** the sandbox load run passed (`make load`: report p99 and gateway tests, 20 teams x 10 agents); the 200 teams and 2,000 agents run and the reconcile lag need the dev cluster. |
+| [ ] | M6-F6 | OWASP ASVS L2 checklist, `govulncheck`, coverage ≥ 90% on `domain`, `usecase`, `authz` | NFR Security, NFR Quality | M6-F2 **Not done in the build sandbox:** coverage at least 90% on `domain`, `usecase`, `authz` holds (`make cover`); `govulncheck` did not run here (the toolchain download is blocked; CI runs `make vuln`); the ASVS L2 checklist is not written. |
 
 ### M6-X · Milestone exit
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M6-X0 | After the merges: use `afs.resolve_workload` and `afs.team_directory` (X-DB-2, X-DB-3), remove `TxRunner.Lookup` and its test allowlist | RA-2b (part), RA-US-11.1 (part) | M6-E6, M6-A3, M6-D2 |
-| [ ] | M6-X1 | Merge, full gate and suites; status.md at 100% for Phase 5; hand over to step 4 (documentation) | — | all M6 |
+| [x] | M6-X0 | After the merges: use `afs.resolve_workload` and `afs.team_directory` (X-DB-2, X-DB-3), remove `TxRunner.Lookup` and its test allowlist | RA-2b (part), RA-US-11.1 (part) | M6-E6, M6-A3, M6-D2 |
+| [~] | M6-X1 | Merge, full gate and suites; status.md at 100% for Phase 5; hand over to step 4 (documentation). Done: merge, `make gate`, `make cover` (domain, usecase, authz at least 90%), `test-db`, envtest, conformance. Left: see M6-F3 to F6 and M6-X2 | — | all M6 |
+| [ ] | M6-X2 | B1 tag sync for team secrets (`DescribeSecret`, `TagResource`, `UntagResource` by `tags.Stale`) and the work order and pool SQS queues (`ListQueueTags`, `TagQueue`, `UntagQueue`). **Open, not small:** it needs a reconcile kind that lists secret ARNs and queue URLs per team and pool, adapter methods and recorded fixtures for both services; today both are tagged at creation only (the B1 partial recorded in M4 and M5) | RC-US-5 (part), RC-12 (part) | M6-X1 |
 
 ---
 

@@ -52,7 +52,7 @@ func none(*Registry) error { return nil }
 // file (for example teams.go) when it binds its first operation.
 var Areas = []Area{
 	{"teams", none}, {"members", none}, {"apikeys", none}, {"me", none}, {"agents", none},
-	{"pools", none}, {"identity", none}, {"secrets", none}, {"config", none}, {"extsys", none},
+	{"pools", none}, {"identity", none}, {"identityproviders", none}, {"secrets", none}, {"config", none}, {"extsys", none},
 	{"budgets", none}, {"reports", none}, {"delivery", none}, {"audit", none}, {"revisions", none},
 	{"workorders", none}, {"swarmtemplates", none}, {"admin", none}, {"adminmodels", none},
 	{"adminsettings", none}, {"exports", none},

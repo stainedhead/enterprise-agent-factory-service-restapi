@@ -132,6 +132,9 @@ func TestUpdate(t *testing.T) {
 	if err != nil || got.Description != d || got.Generation != 2 || r.repo.TemplateWrites != 0 {
 		t.Fatalf("update: %+v %v writes=%d", got, err, r.repo.TemplateWrites)
 	}
+	if ev := r.outbox.Events[len(r.outbox.Events)-1]; ev.Type != domain.EventAgentUpdated || ev.Detail.AgentID != a.ID {
+		t.Errorf("update event = %+v, want agent.updated", ev)
+	}
 	if _, err := r.svc.Update(t.Context(), admin, team, a.ID, a.Version, domain.AgentPatch{Description: &d}); domain.KindOf(err) != domain.KindPreconditionFailed {
 		t.Errorf("stale version: %v", err)
 	}
@@ -172,6 +175,9 @@ func TestLifecycle(t *testing.T) {
 	if err != nil || p.Agent.State != domain.AgentPaused || p.Agent.Generation != 2 {
 		t.Fatalf("pause: %+v %v", p.Agent, err)
 	}
+	if ev := r.outbox.Events[len(r.outbox.Events)-1]; ev.Type != domain.EventAgentPaused || ev.Detail.AgentID != a.ID {
+		t.Errorf("pause event = %+v, want agent.paused", ev)
+	}
 	n := len(r.outbox.Events)
 	if p2, err := r.svc.Pause(ctx, admin, team, a.ID, nil); err != nil || p2.Agent.Generation != 2 || len(r.outbox.Events) != n {
 		t.Errorf("second pause must change nothing: %+v %v events=%d", p2.Agent, err, len(r.outbox.Events))
@@ -182,6 +188,9 @@ func TestLifecycle(t *testing.T) {
 	res, err := r.svc.Resume(ctx, admin, team, a.ID, nil)
 	if err != nil || res.Agent.State != domain.AgentEnabled || res.Agent.Generation != 3 {
 		t.Fatalf("resume: %+v %v", res.Agent, err)
+	}
+	if ev := r.outbox.Events[len(r.outbox.Events)-1]; ev.Type != domain.EventAgentResumed || ev.Detail.AgentID != a.ID {
+		t.Errorf("resume event = %+v, want agent.resumed", ev)
 	}
 	rs, err := r.svc.Restart(ctx, admin, team, a.ID, nil)
 	if err != nil || rs.Agent.Generation != 4 || r.outbox.Events[len(r.outbox.Events)-1].Type != domain.EventAgentRestarted {

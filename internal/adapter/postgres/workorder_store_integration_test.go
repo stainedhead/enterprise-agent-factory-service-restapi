@@ -399,9 +399,8 @@ func (f *fakeSM) CreateEmpty(_ context.Context, path string, tags map[string]str
 	return "arn:aws:secretsmanager:us-east-1:111122223333:secret:" + path + "-AbCdEf", nil
 }
 
-// RC-12 known gap: the template's secrets. The -db function that records them does not exist at the pinned -db
-// release, so nothing is created; with the proposed function installed the secrets exist empty, bound to their
-// pools, once.
+// RC-12: the template's secrets exist empty, bound to their pools, once, through -db's
+// afs.record_work_order_secret (000019).
 func TestWorkOrderTemplateSecrets(t *testing.T) {
 	r := newWORig(t)
 	ctx := t.Context()
@@ -413,21 +412,6 @@ func TestWorkOrderTemplateSecrets(t *testing.T) {
 	cr := &fakeSM{}
 	job := &workorder.Secrets{Store: r.store, Creator: cr}
 
-	if ok, err := r.store.Supported(ctx); err != nil || ok {
-		t.Fatalf("supported = %v, %v before the function exists", ok, err)
-	}
-	if err := job.Run(ctx); err != nil || len(cr.created) != 0 {
-		t.Fatalf("without the function: err = %v, created = %v (nothing may be created: it would be an orphan)", err, cr.created)
-	}
-
-	r.exec(`DROP FUNCTION IF EXISTS afs.record_work_order_secret(text, text, text, text, text, text, text)`)
-	r.exec(postgres.ProposedRecordWorkOrderSecretSQL)
-	t.Cleanup(func() {
-		_, _ = r.admin.Exec(context.Background(), `DROP FUNCTION IF EXISTS afs.record_work_order_secret(text, text, text, text, text, text, text)`)
-	})
-	if ok, err := r.store.Supported(ctx); err != nil || !ok {
-		t.Fatalf("supported = %v, %v with the function", ok, err)
-	}
 	pending, err := r.store.Pending(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -477,13 +461,48 @@ func TestWorkOrderTemplateSecrets(t *testing.T) {
 	if tagged != 2 {
 		t.Errorf("secrets created in Secrets Manager for the team = %d: once each, tagged with the team", tagged)
 	}
-	// The function refuses a pool of another team and a work order without a live team.
-	if _, err := r.admin.Exec(ctx, `SET ROLE afs_reconciler`); err == nil {
-		defer func() { _, _ = r.admin.Exec(context.Background(), `RESET ROLE`) }()
-		var x string
-		if err := r.admin.QueryRow(ctx, `SELECT afs.record_work_order_secret($1, $2, 'x-token', '', 'arn:aws:secretsmanager:us-east-1:111122223333:secret:x-AbCdEf', 'env', 'X')`, id, pgtest.NewID("pool")).Scan(&x); err == nil {
-			t.Error("a pool of another team was accepted")
+	// The function's refusals map to domain errors (P0002, 23503, 23514, 23505, 55000).
+	good := func(ts workorder.TemplateSecret) workorder.TemplateSecret {
+		ts.WorkOrderID, ts.Name, ts.Delivery, ts.Target = id, "x-token", "env", "X_TOKEN"
+		return ts
+	}
+	poolID := r.str(`SELECT id FROM afs.agent_pools WHERE team_id = $1 ORDER BY name LIMIT 1`, team)
+	triageID := r.str(`SELECT b.pool_id FROM afs.pool_secret_bindings b JOIN afs.secrets s ON s.id = b.secret_id WHERE s.team_id = $1 AND s.name = 'scanner-token'`, team)
+	arnFor2 := func(name, pool string) string {
+		return "arn:aws:secretsmanager:us-east-1:111122223333:secret:" + r.str(`SELECT afs.secret_path($1, NULL, $2, $3)`, team, pool, name) + "-AbCdEf"
+	}
+	arnFor := func(name string) string { return arnFor2(name, poolID) }
+	kindOf := func(err error) domain.ErrorKind {
+		var de *domain.Error
+		if !errors.As(err, &de) {
+			return ""
 		}
+		return de.Kind
+	}
+	for _, c := range []struct {
+		name string
+		ts   workorder.TemplateSecret
+		arn  string
+		want domain.ErrorKind
+	}{
+		{"unknown work order (P0002)", workorder.TemplateSecret{WorkOrderID: "wo_" + strings.Repeat("0", 26), PoolID: poolID, Name: "x-token", Delivery: "env", Target: "X_TOKEN"}, arnFor("x-token"), domain.KindNotFound},
+		{"pool of another team (23503)", good(workorder.TemplateSecret{PoolID: pgtest.NewID("pool")}), arnFor("x-token"), domain.KindValidation},
+		{"ARN not at the secret path (23514)", good(workorder.TemplateSecret{PoolID: poolID}), "arn:aws:secretsmanager:us-east-1:111122223333:secret:elsewhere-AbCdEf", domain.KindValidation},
+		{"relative file target (23514)", workorder.TemplateSecret{WorkOrderID: id, PoolID: poolID, Name: "x-token", Delivery: "file", Target: "relative"}, arnFor("x-token"), domain.KindValidation},
+		{"target already bound (23505)", workorder.TemplateSecret{WorkOrderID: id, PoolID: triageID, Name: "y-token", Delivery: "env", Target: "SCANNER_TOKEN"}, arnFor2("y-token", triageID), domain.KindConflict},
+	} {
+		if err := r.store.Record(ctx, c.ts, c.arn); kindOf(err) != c.want {
+			t.Errorf("%s: err = %v (kind %q), want %s", c.name, err, kindOf(err), c.want)
+		}
+	}
+	// Recording a secret the team already has is a no-op (the function is idempotent on team and name).
+	if err := r.store.Record(ctx, workorder.TemplateSecret{WorkOrderID: id, PoolID: poolID, Name: "scanner-token", Delivery: "env", Target: "SCANNER_TOKEN"}, arnFor("scanner-token")); err != nil {
+		t.Errorf("idempotent record: %v", err)
+	}
+	// A work order that is not live (cancelled) has no live remediation team (55000).
+	r.exec(`UPDATE afs.work_orders SET status = 'cancelled' WHERE id = $1`, id)
+	if err := r.store.Record(ctx, good(workorder.TemplateSecret{PoolID: poolID}), arnFor("x-token")); kindOf(err) != domain.KindConflict {
+		t.Errorf("not live: err = %v, want a Conflict", err)
 	}
 }
 
@@ -685,6 +704,16 @@ func TestWorkOrderNotifications(t *testing.T) {
 	}
 	if c := r.count(`SELECT count(*) FROM afs.work_order_notifications WHERE work_order_id = $1 AND kind = 'sla_warning' AND recipient = $2`, id, workorder.SentinelRecipient); c != 1 {
 		t.Errorf("sentinel rows = %d", c)
+	}
+	// A breached SLA writes work_order.sla_breached once, for the same team.
+	wo.SLAState = workorder.SLABreached
+	for pass := 0; pass < 2; pass++ {
+		if err := n.Notify(ctx, []workorder.WorkOrder{wo}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if c := r.count(`SELECT count(*) FROM afs.outbox_events WHERE aggregate_id = $1 AND event_type = 'work_order.sla_breached' AND team_id = $2`, id, team); c != 1 {
+		t.Errorf("own sla_breached events = %d", c)
 	}
 	if after := r.count(`SELECT count(*) FROM afs.work_order_notifications WHERE work_order_id = $1`, id); after <= sent {
 		t.Error("the SLA warning recorded nothing")

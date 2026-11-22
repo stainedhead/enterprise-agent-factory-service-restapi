@@ -37,7 +37,7 @@ type RevisionsAPI struct {
 // BindAdmin1 binds settings, identity provider and service tag handlers.
 func BindAdmin1(a *Admin1API) {
 	w2SetArea("adminsettings", a.registerSettings)
-	w2SetArea("identity", a.registerIdPs)
+	w2SetArea("identityproviders", a.registerIdPs)
 	w2SetArea("admin", a.registerTags)
 }
 

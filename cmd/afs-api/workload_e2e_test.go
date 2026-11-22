@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -199,14 +200,14 @@ func TestWorkloadReportsOnItsAssignedWorkOrder(t *testing.T) {
 		_, _ = g.w.Admin.Exec(t.Context(), `DELETE FROM afs.work_order_repos WHERE work_order_id = ANY($1)`, []string{mine, theirs})
 		_, _ = g.w.Admin.Exec(t.Context(), `DELETE FROM afs.work_orders WHERE id = ANY($1)`, []string{mine, theirs})
 	})
+	// patch sends the current repository version, as a team admin that can read it would.
 	patch := func(id, body string) result {
-		return g.do(t, "PATCH", "/v1/work-orders/"+id+"/repos/github.com/acme/app", pool, body, "If-Match", `"1"`)
+		v := int64(1) // an unknown work order has no row
+		_ = g.w.Admin.QueryRow(t.Context(), `SELECT version FROM afs.work_order_repos WHERE work_order_id = $1`, id).Scan(&v)
+		return g.do(t, "PATCH", "/v1/work-orders/"+id+"/repos/github.com/acme/app", pool, body, "If-Match", fmt.Sprintf(`"%d"`, v))
 	}
 
 	r := patch(mine, `{"status":"in_progress"}`)
-	if r.code == 501 && strings.Contains(r.body, "not_implemented") {
-		t.Skip("UpdateWorkOrderRepo is bound by M6-C5; the route authorization is proven by the matrix and TestWorkloadPrincipalEndToEnd")
-	}
 	if r.code != 200 {
 		t.Fatalf("pool reports on its team's work order: %d %s", r.code, r.body)
 	}
@@ -222,6 +223,23 @@ func TestWorkloadReportsOnItsAssignedWorkOrder(t *testing.T) {
 	}
 	if r = patch(mine, `{"status":"pr_opened","prUrl":"https://github.com/acme/app/pull/7","prNumber":7}`); r.code != 200 {
 		t.Fatalf("pr_opened: %d %s", r.code, r.body)
+	}
+	// CLI-CD-1: the workload cannot read the repository version, so it may omit If-Match (current version); a
+	// header it does send is still compared (412 when stale) and a malformed one is refused.
+	noHeader := func(id, body string) result {
+		return g.do(t, "PATCH", "/v1/work-orders/"+id+"/repos/github.com/acme/app", pool, body)
+	}
+	if r = noHeader(mine, `{"status":"in_progress","detail":"again"}`); r.code != 200 {
+		t.Fatalf("workload without If-Match: %d %s", r.code, r.body)
+	}
+	if r = g.do(t, "PATCH", "/v1/work-orders/"+mine+"/repos/github.com/acme/app", pool, `{"status":"in_progress"}`, "If-Match", `"1"`); r.code != 412 {
+		t.Fatalf("a stale If-Match from a workload: %d %s", r.code, r.body)
+	}
+	if r = g.do(t, "PATCH", "/v1/work-orders/"+mine+"/repos/github.com/acme/app", pool, `{"status":"in_progress"}`, "If-Match", "junk"); r.code != 400 {
+		t.Fatalf("a malformed If-Match from a workload: %d %s", r.code, r.body)
+	}
+	if r = noHeader(theirs, `{"status":"in_progress"}`); r.code != 404 {
+		t.Fatalf("no If-Match does not reveal another team's work order: %d %s", r.code, r.body)
 	}
 	if r = patch(theirs, `{"status":"in_progress"}`); r.code != 404 {
 		t.Fatalf("another team's work order: %d %s", r.code, r.body)

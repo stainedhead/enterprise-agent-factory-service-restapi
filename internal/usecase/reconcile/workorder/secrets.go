@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
-	"strings"
+
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 )
 
 // TemplateSecret is a secret a swarm template declares for one of its pools (spec.secrets entry
@@ -14,8 +15,8 @@ import (
 //
 // -db's afs.instantiate_work_order_team does not create these (a secrets row needs the ARN Secrets Manager
 // assigns, and afs_reconciler may not insert secrets or pool_secret_bindings). Secrets creates the secret in
-// Secrets Manager with no value, at the path afs.secret_path gives, and records it through the -db function
-// afs.record_work_order_secret (see postgres.WorkOrderStore for the SQL). A value is never copied from anywhere:
+// Secrets Manager with no value, at the path afs.secret_path(team, NULL, pool, name) gives, and records the
+// returned ARN through the -db function afs.record_work_order_secret (migration 000019). A value is never copied from anywhere:
 // the team puts it with PutSecretValue, like any managed secret.
 type TemplateSecret struct {
 	WorkOrderID string
@@ -40,12 +41,7 @@ var (
 // Normalize fills the defaults (delivery env, target the upper-case name with underscores) and reports why the
 // entry cannot be used, or "".
 func (s *TemplateSecret) Normalize() string {
-	if s.Delivery == "" {
-		s.Delivery = "env"
-	}
-	if s.Target == "" && s.Delivery == "env" {
-		s.Target = strings.ToUpper(strings.ReplaceAll(s.Name, "-", "_"))
-	}
+	s.Delivery, s.Target = domain.TemplateSecretBinding(s.Name, s.Delivery, s.Target)
 	switch {
 	case !secretNameRE.MatchString(s.Name):
 		return "the secret name must be lower-case letters, digits and hyphens, starting with a letter"
@@ -61,9 +57,6 @@ func (s *TemplateSecret) Normalize() string {
 
 // SecretStore is the database side of secret provisioning.
 type SecretStore interface {
-	// Supported reports whether the -db function that records a secret exists. When it does not, nothing is
-	// created in Secrets Manager (it would be an orphan).
-	Supported(ctx context.Context) (bool, error)
 	// Pending lists the template secrets of work orders that are assigned, in progress or have PRs open whose
 	// team has no secret of that name yet.
 	Pending(ctx context.Context) ([]TemplateSecret, error)
@@ -84,24 +77,11 @@ type Secrets struct {
 	Store   SecretStore
 	Creator SecretCreator
 	Log     *slog.Logger
-
-	warned bool
 }
 
 // Run creates and records every pending secret. An entry that cannot be used is logged and skipped. A failure for
 // one secret does not stop the others.
 func (s *Secrets) Run(ctx context.Context) error {
-	ok, err := s.Store.Supported(ctx)
-	if err != nil {
-		return fmt.Errorf("workorder secrets: %w", err)
-	}
-	if !ok {
-		if !s.warned {
-			s.log().Warn("swarm template secrets are not created: the database lacks afs.record_work_order_secret (a -db change, see the M6-E notes)")
-			s.warned = true
-		}
-		return nil
-	}
 	pending, err := s.Store.Pending(ctx)
 	if err != nil {
 		return fmt.Errorf("workorder secrets: list: %w", err)

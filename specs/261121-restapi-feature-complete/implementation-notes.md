@@ -283,6 +283,7 @@ Each is decided in `api/openapi.yaml` 1.1.0 and needs the root api-contract.md t
 | CD-9 | Identity provider client ids | The contract has separate console and CLI client ids; `afs.identity_providers` has one `client_id` |
 | CD-10 | Unbound caller on any-scope route | `403` with `requiredPermission` (see deviation above) |
 | CD-11 | Pool level of an external system switch | `ExternalSystem.disabledAt` adds `pool` for pool views (root enumeration: service, team, agent) |
+| CD-12 | Workload and `If-Match` on `UpdateWorkOrderRepo` (CLI-CD-1) | A workload principal may omit `If-Match` (applies to the current version); a header it sends is compared; every other caller needs it. `api-contract.md` §4.10a and §2 to say so |
 
 ## Lessons learned
 
@@ -325,49 +326,29 @@ Each is decided in `api/openapi.yaml` 1.1.0 and needs the root api-contract.md t
 - **Budget.** A work order budget equal to the template's stays NULL, so a later template change still applies; `budgetUsd` in responses is the effective cap. A change reaches only a team created afterwards.
 - **Security operator and teams.** A security operator cannot read `teams` rows, so owner team existence checks use `afs.team_directory()` (X-DB-3).
 - **Workload sessions.** The `work-orders:report` path needs the workload's team id in `acting.Session.TeamIDs` so RLS shows the work order; the matrix has no Workload token for these rows until M6-D2 lands.
-- **RC-12 secrets gap.** `afs.instantiate_work_order_team` (000016) copies tags, budget, models, stages, pools, handoffs and config values but ignores `spec.secrets`. A restapi-side fix is not possible: `afs.secrets.secrets_manager_arn` needs a real (empty) Secrets Manager secret created by the reconciler, and `afs_reconciler` has no grant on `afs.secrets` or `afs.pool_secret_bindings`. Proposed -db change (new migration, no secret value anywhere), which the reconciler (M6-E2) calls after creating the empty secrets and passing their ARNs:
+- **RC-12 secrets gap (SUPERSEDED).** `afs.instantiate_work_order_team` (000016) copies tags, budget, models, stages, pools, handoffs and config values but ignores `spec.secrets`, and `afs_reconciler` has no grant on `afs.secrets` or `afs.pool_secret_bindings`. This worker proposed a -db function `afs.attach_work_order_secrets(team_id, jsonb)`. It is superseded by -db 000019 `afs.record_work_order_secret(work_order_id, pool_id, name, description, arn, delivery, target)`, which M6-E calls after creating each empty secret (see "M6 integration decisions"). The proposal text and its SQL are removed; nothing in this repository calls `attach_work_order_secrets`.
 
-```sql
-CREATE FUNCTION afs.attach_work_order_secrets(p_team_id text, p_secrets jsonb) RETURNS integer
-  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, afs AS $$
-DECLARE
-  tpl afs.swarm_templates; e jsonb; s jsonb; v_id text; v_pool text; n integer := 0;
-BEGIN
-  SELECT st.* INTO tpl FROM afs.work_orders w JOIN afs.swarm_templates st ON st.id = w.template_id
-   WHERE w.team_id = p_team_id;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'team % is not a work order team', p_team_id USING ERRCODE = 'no_data_found';
-  END IF;
-  -- p_secrets: [{"name": "...", "arn": "arn:aws:secretsmanager:...:secret:..."}]; only names the template lists.
-  FOR e IN SELECT * FROM jsonb_array_elements(p_secrets) LOOP
-    SELECT x INTO s FROM jsonb_array_elements(coalesce(tpl.spec -> 'secrets', '[]')) x WHERE x ->> 'name' = e ->> 'name';
-    IF s IS NULL THEN
-      RAISE EXCEPTION 'secret % is not in swarm template %', e ->> 'name', tpl.name USING ERRCODE = 'foreign_key_violation';
-    END IF;
-    v_id := afs.new_id('sec');
-    INSERT INTO afs.secrets (id, team_id, name, secrets_manager_arn, origin)
-    VALUES (v_id, p_team_id, e ->> 'name', e ->> 'arn', 'managed')
-    ON CONFLICT (team_id, name) DO NOTHING;
-    IF s ? 'pool' THEN
-      SELECT id INTO v_pool FROM afs.agent_pools WHERE team_id = p_team_id AND name = s ->> 'pool';
-      INSERT INTO afs.pool_secret_bindings (team_id, pool_id, secret_id, delivery, target)
-      SELECT p_team_id, v_pool, sc.id, 'env', upper(replace(sc.name, '-', '_'))
-        FROM afs.secrets sc WHERE sc.team_id = p_team_id AND sc.name = e ->> 'name'
-      ON CONFLICT DO NOTHING;
-    END IF;
-    n := n + 1;
-  END LOOP;
-  RETURN n;
-END $$;
-REVOKE ALL ON FUNCTION afs.attach_work_order_secrets(text, jsonb) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION afs.attach_work_order_secrets(text, jsonb) TO afs_reconciler;
-```
-
-  The reconciler should code against a port (`WorkOrderSecrets.Attach(ctx, teamID, []{Name, ARN})`) so the call can be swapped in once the -db release exists.
 ## M6-E decisions (worker w3, m6/w3)
 
 - X-DB-4 is already in the pinned -db (000016), so M6-E6 needed no bump. Its outbox payloads lack the contract envelope (id, occurredAt, data); worth a -db follow-up.
-- Template secrets: `afs.instantiate_work_order_team` does not create them. The reconciler creates each secret empty in Secrets Manager (never a value; tags afs-team-id, afs-pool-id, afs-work-order-id) and records it via a proposed -db function `afs.record_work_order_secret` (SQL in `postgres.ProposedRecordWorkOrderSecretSQL`). Without it (`Supported()` false) the job logs a warning and skips. The `spec.secrets` entry shape `{pool, name, description, delivery, target}` is assumed.
+- Template secrets: `afs.instantiate_work_order_team` does not create them. The reconciler creates each secret empty in Secrets Manager (never a value; tags afs-team-id, afs-pool-id, afs-work-order-id) and records it with -db 000019 `afs.record_work_order_secret` (integration: no `Supported()` probe and no proposed SQL any more; see "M6 integration decisions"). The `spec.secrets` entry shape is `{pool, name, description, delivery, target}`, now validated by the swarm template domain.
 - Rate limits block the whole installation scope `host/org`; last known DB state is kept. Per-installation budget 4500/hour counts every call.
 - Notifications derive from state each pass; the uniqueness of `work_order_notifications` gives once-only. Email is at-least-once, team delivery exactly-once. Sentinel recipient `afs` records the work order's own SLA events.
 - Env: AFS_WORK_ORDER_QUEUE_URL (intake off if unset), AFS_GITHUB_APPS_FILE (GitHub off if unset).
+
+## M6 integration decisions (step 3, 2026-11-22)
+
+Merge order w1 (A secops and service keys, D workload principal), w2 (B swarm templates, C work orders), w3 (E work order reconciler), all `--no-ff` on `feat/restapi-feature-complete`. Conflicts: `cmd/afs-api/wire.go` (both sides kept: `wireSecOps`, `wireWorkload`, `wireWorkOrders`), spec `status.md` and `implementation-notes.md` (both sides kept). The two `wire.go` of the reconciler and the matrix files merged without conflict.
+
+| task | decision | reason |
+|---|---|---|
+| M6-E6 / RC-12 | Adopted -db `main` 83f0345 (000019, untagged) as the pseudo-version `v0.0.0-20261122071732-83f034507b16`. `postgres.ProposedRecordWorkOrderSecretSQL` and the `SecretStore.Supported()` probe are removed: the function ships with the pinned module, so a missing function is a deployment error, not a state to wait in. `WorkOrderStore.Record` calls `afs.record_work_order_secret`; the reconciler creates the empty secret at `afs.secret_path(team, NULL, pool, name)` (what `Pending` returns as `Path`) and passes the ARN Secrets Manager returned | the function checks the ARN ends in that path plus the six-character suffix |
+| M6-E6 | SQLSTATE mapping in `recordSecretError`: `P0002` unknown work order is NotFound (it was InternalError in `MapError`), `55000` no live remediation team or status not live is a 409 `invalid_state`, `23503` pool unknown, of another team or not live is a ValidationError, `23514` ARN, delivery or target refused is a ValidationError, `23505` target bound or ARN used is a 409 `duplicate`. Each has an integration test. A secret created empty in Secrets Manager whose record is refused is logged and retried from `Pending` only while the work order stays live | permanent refusals stop appearing once the work order is no longer live |
+| outbox | `housekeeping.Envelope` publishes both payload shapes: the 000019 envelope `{id, occurredAt, teamId, poolId?, actor, data}` (the API writes the same) goes out unchanged; a flat pre-000019 payload from `instantiate_work_order_team` (`{teamId, kind, workOrderId}`, `{poolId, teamId}`, `{workOrderId, teamId}`) is wrapped: flat keys become `data`, `teamId` (row, else payload) and `poolId` are lifted, `occurredAt` is the row's `created_at` in UTC seconds, `actor` is `system`, and `id` is `evt_` plus the outbox id zero-padded to 26 digits (a valid ULID shape, stable across redelivery so consumers can dedupe). An object that has an `id` but no `data` object counts as flat | rows already in the outbox keep their old payload after 000019 |
+| M6-C5 / RA-2b | A workload is authorized on a work order only through `Principal.Workload.TeamID` equal to the assigned team (`work-orders:report`, condition `assignedTeam`); `AgentID`, `PoolID` and `WorkerPod` are for audit. Another team's workload gets 404, an unknown work order 404, an unrelated route 403. `TestWorkloadReportsOnItsAssignedWorkOrder` is no longer skipped | the contract gives a workload exactly one permission |
+| CLI-CD-1 | The workload cannot read the repository version it would send in `If-Match` (it holds only `work-orders:report`, and `GetWorkOrder` and `ListWorkOrderRepos` need `work-orders:read`). Decision: a workload may omit `If-Match` on `UpdateWorkOrderRepo` (middleware `RequireIfMatchFor`, use case treats version 0 as current for a workload only); a header it does send is validated and compared (400 malformed, 412 stale); every other caller still gets 428. The row is still locked, the audit record names pool and worker pod. Granting the workload `work-orders:read` was rejected: it needs a change of the generated routes and of the root contract §2 ("the only permission of a workload principal"), and `make contract-check` compares against the root. Recorded as CD-12 | smallest change that does not touch the permission model; the update is idempotent per status, and a team admin edit in the same moment is the only conflict a version would catch |
+| matrix | The matrix already runs every operation for the Workload caller (w1), including the work order and swarm template routes registered by w2; the oracle gives a workload `work-orders:report` operations only. `TestAuthorizationMatrix` is green for every row, so no row was missing after the merge | |
+| tests | `m2w1_e2e_test.go` left `AFS_OWNED_REPOS = github.com/acme/*, github.com/acme/tool` on shared team A; it removes it in `t.Cleanup`, and `workorders_e2e_test.go` removes the owner values it adds to teams A and B | the leftover wildcard made later owner resolution tests order dependent |
+| M6-B / RC-12 | `spec.secrets` is `{pool, name, description?, delivery?, target?}`: `pool` required and a pool of the template, `name` `^[a-z][a-z0-9-]{0,62}$` and unique in the template, `description` at most 1000 characters, `delivery` `env` (default) or `file`, `target` an env name `^[A-Z_][A-Z0-9_]{0,127}$` (default: the upper-case name with underscores) or an absolute path `^/[A-Za-z0-9._/-]{1,255}$`, unique per pool. Same checks as `pool_secret_bindings`. `domain.TemplateSecretBinding` resolves the defaults for both the domain validation and the reconciler's `Normalize`; the shape is in the OpenAPI `SwarmTemplateSpec.secrets` | w2 had `{name, scope?, pool?}` and w3 `{pool, name, description, delivery, target}`; a template that validates must record |
+| M6-X0 | Already satisfied: `postgres.Credentials` calls `afs.resolve_workload` and `afs.team_directory`; no `TxRunner.Lookup` remains | |
+| B1 | Tag sync for team secrets and queues (Secrets Manager `DescribeSecret`, `TagResource`, `UntagResource` by `tags.Stale`; SQS `ListQueueTags`, `TagQueue`, `UntagQueue` for work order and pool queues) is **not implemented**: it needs a new reconcile kind with a lister of ARNs and queue URLs per team, adapter methods and fixtures for both services, not a small change. Open task M6-X2 in tasks.md; today both are tagged at creation | |

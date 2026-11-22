@@ -378,8 +378,35 @@ SwarmTemplateSpec:
         type: object
     secrets:
       type: array
+      description: Secrets a remediation team gets, created empty (the team sets the value with PutSecretValue), each bound
+        to one of the template's pools. A template never holds a value.
+      maxItems: 100
       items:
         type: object
+        required:
+        - pool
+        - name
+        properties:
+          pool:
+            type: string
+            description: A pool the template defines.
+          name:
+            type: string
+            pattern: ^[a-z][a-z0-9-]{0,62}$
+            description: Unique within the template.
+          description:
+            type: string
+            maxLength: 1000
+          delivery:
+            type: string
+            enum:
+            - env
+            - file
+            default: env
+          target:
+            type: string
+            description: An env variable name (^[A-Z_][A-Z0-9_]{0,127}$, default the upper-case name with underscores)
+              or, for file delivery, an absolute path (^/[A-Za-z0-9._/-]{1,255}$). Unique within the pool.
     configValues:
       type: array
       items:

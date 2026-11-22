@@ -59,7 +59,7 @@ func wirePipeline(c *components, cfg *httpapi.Config, s settings, log *slog.Logg
 	cfg.PreAuth = append(cfg.PreAuth, middleware.PublicLimit(p.Limiter, routeInfo, httpapi.WriteError))
 	cfg.PostAuth = append(cfg.PostAuth,
 		p.Auditor.Stage(routeInfo, httpapi.PrincipalFrom),
-		middleware.RequireIfMatch(required, routeInfo, httpapi.WriteError),
+		middleware.RequireIfMatchFor(required, routeInfo, httpapi.PrincipalFrom, httpapi.WriteError),
 		middleware.AutoETag(),
 	)
 	cfg.Hooks.Denied = func(ctx context.Context, d httpapi.Denial) {

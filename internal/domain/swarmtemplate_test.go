@@ -45,6 +45,26 @@ func TestValidateSwarmSpec(t *testing.T) {
 			s["configValues"] = []any{map[string]any{"pool": "fixer", "name": "API_TOKEN"}}
 		}), "configValues[0].name"},
 		{"secret value", mut(func(s map[string]any) { s["secrets"] = []any{map[string]any{"name": "gh-app", "value": "hunter2"}} }), "secrets[0].value"},
+		{"secret without a pool", mut(func(s map[string]any) { s["secrets"] = []any{map[string]any{"name": "gh-app"}} }), "secrets[0].pool"},
+		{"secret bad name", mut(func(s map[string]any) { s["secrets"] = []any{map[string]any{"name": "GH_App", "pool": "fixer"}} }), "secrets[0].name"},
+		{"secret name twice", mut(func(s map[string]any) {
+			s["secrets"] = []any{map[string]any{"name": "gh-app", "pool": "fixer"}, map[string]any{"name": "gh-app", "pool": "fixer", "target": "OTHER"}}
+		}), "secrets[1].name"},
+		{"secret delivery", mut(func(s map[string]any) {
+			s["secrets"] = []any{map[string]any{"name": "gh-app", "pool": "fixer", "delivery": "volume"}}
+		}), "secrets[0].delivery"},
+		{"secret env target", mut(func(s map[string]any) {
+			s["secrets"] = []any{map[string]any{"name": "gh-app", "pool": "fixer", "target": "lower"}}
+		}), "secrets[0].target"},
+		{"secret file target", mut(func(s map[string]any) {
+			s["secrets"] = []any{map[string]any{"name": "gh-app", "pool": "fixer", "delivery": "file", "target": "relative/path"}}
+		}), "secrets[0].target"},
+		{"secret target twice in a pool", mut(func(s map[string]any) {
+			s["secrets"] = []any{map[string]any{"name": "gh-app", "pool": "fixer"}, map[string]any{"name": "other", "pool": "fixer", "target": "GH_APP"}}
+		}), "secrets[1].target"},
+		{"secret description", mut(func(s map[string]any) {
+			s["secrets"] = []any{map[string]any{"name": "gh-app", "pool": "fixer", "description": strings.Repeat("x", 1001)}}
+		}), "secrets[0].description"},
 		{"tags", mut(func(s map[string]any) { s["tags"] = map[string]any{"a": 1} }), "tags.a"},
 		{"stage position", mut(func(s map[string]any) { s["stages"].([]any)[0].(map[string]any)["position"] = float64(99) }), "stages[0].position"},
 		{"pools not list", mut(func(s map[string]any) { s["handoffs"] = "x" }), "handoffs"},
@@ -110,5 +130,29 @@ func TestSwarmTemplateLifecycle(t *testing.T) {
 	}
 	if tpl.Audit()["pools"] != 2 {
 		t.Errorf("audit %v", tpl.Audit())
+	}
+}
+
+// The shape of spec.secrets is {pool, name, description?, delivery?, target?}; the work order reconciler resolves
+// each entry with TemplateSecretBinding and records it through -db's constraints, so what validates here records.
+func TestSwarmSpecSecretsShape(t *testing.T) {
+	spec := validSpec()
+	spec["secrets"] = []any{
+		map[string]any{"pool": "fixer", "name": "scanner-token", "description": "scanner", "delivery": "env", "target": "SCANNER_TOKEN"},
+		map[string]any{"pool": "fixer", "name": "deploy-key", "delivery": "file", "target": "/etc/afs/deploy-key"},
+		map[string]any{"pool": "reviewer", "name": "gh-app"},
+	}
+	if fe := ValidateSwarmSpec("spec", spec); len(fe) != 0 {
+		t.Fatalf("valid secrets refused: %v", fe)
+	}
+	for _, c := range []struct{ name, delivery, target, wantDelivery, wantTarget string }{
+		{"gh-app", "", "", "env", "GH_APP"},
+		{"gh-app", "env", "CUSTOM", "env", "CUSTOM"},
+		{"deploy-key", "file", "", "file", ""},
+		{"x", "volume", "", "volume", ""},
+	} {
+		if d, tg := TemplateSecretBinding(c.name, c.delivery, c.target); d != c.wantDelivery || tg != c.wantTarget {
+			t.Errorf("TemplateSecretBinding(%q, %q, %q) = %q, %q", c.name, c.delivery, c.target, d, tg)
+		}
 	}
 }

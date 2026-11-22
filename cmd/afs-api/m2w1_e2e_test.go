@@ -280,6 +280,11 @@ func TestM2W1ConfigValues(t *testing.T) {
 	m.expect(400, "PUT", team+"/config-values/DB_PASSWORD", matrix.TeamAdmin, `{"value":"x"}`)
 	m.expect(400, "PUT", team+"/config-values/BIG", matrix.TeamAdmin, `{"value":"`+strings.Repeat("x", 4097)+`"}`)
 	m.expect(400, "PUT", team+"/config-values/AFS_OWNED_REPOS", matrix.TeamAdmin, `{"value":"github.com/acme"}`)
+	// The wildcard names every acme repository for the shared team A; the world outlives this test, so remove it
+	// (it made the owner resolution of the work order tests ambiguous).
+	t.Cleanup(func() {
+		_, _ = m.w.Admin.Exec(context.WithoutCancel(t.Context()), `DELETE FROM afs.namespace_config_values WHERE team_id = $1 AND name = 'AFS_OWNED_REPOS'`, m.w.TeamA.ID)
+	})
 	m.expect(200, "PUT", team+"/config-values/AFS_OWNED_REPOS", matrix.TeamAdmin, `{"value":"github.com/acme/*, github.com/acme/tool"}`)
 	m.expect(400, "PUT", ns, matrix.TeamAdmin, `{}`)
 	m.expect(412, "PUT", ns, matrix.TeamAdmin, `{"value":"debug"}`, "If-Match", `"5"`)

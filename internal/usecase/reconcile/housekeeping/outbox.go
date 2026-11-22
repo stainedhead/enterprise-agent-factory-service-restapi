@@ -217,7 +217,7 @@ func aggKey(e OutboxEvent) string { return e.AggregateKind + "/" + e.AggregateID
 func (p *Publisher) send(ctx context.Context, batch []OutboxEvent) (ok, bad []OutboxEvent, err error) {
 	entries := make([]Entry, len(batch))
 	for i, e := range batch {
-		entries[i] = Entry{Key: e.ID, DetailType: e.Type, Detail: e.Payload, Time: e.CreatedAt, Resources: []string{aggKey(e)}}
+		entries[i] = Entry{Key: e.ID, DetailType: e.Type, Detail: Envelope(e), Time: e.CreatedAt, Resources: []string{aggKey(e)}}
 	}
 	results, callErr := p.sink.PutEvents(ctx, entries)
 	if callErr == nil && len(results) != len(entries) {
@@ -262,4 +262,60 @@ func (p *Publisher) send(ctx context.Context, batch []OutboxEvent) (ok, bad []Ou
 		}
 	}
 	return ok, bad, errors.Join(errs...)
+}
+
+// Envelope returns the event detail in the API contract section 7 shape {id, occurredAt, teamId, poolId?, actor,
+// data}. Two payload shapes sit in the outbox: the envelope that the API and -db 000019 (afs.event_detail) write,
+// which goes out unchanged, and the flat payload that afs.instantiate_work_order_team wrote before 000019
+// (for example {teamId, kind, workOrderId}), which is wrapped: the flat keys become data, teamId (and poolId when
+// present) are lifted into the envelope, occurredAt is the row's creation time, and the id derives from the outbox
+// id so a redelivery carries the same id (consumers dedupe on it). Rows already in the outbox keep their old
+// payload after 000019, so the publisher accepts both for as long as such rows can exist.
+func Envelope(e OutboxEvent) json.RawMessage {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(e.Payload, &top); err != nil {
+		return e.Payload // not an object: nothing to wrap, publish as is
+	}
+	if isEnvelope(top) {
+		return e.Payload
+	}
+	env := map[string]any{
+		"id":         fmt.Sprintf("evt_%026d", e.ID),
+		"occurredAt": e.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+		"actor":      "system",
+		"data":       top,
+	}
+	team := e.TeamID
+	if team == "" {
+		team = stringField(top, "teamId")
+	}
+	if team != "" {
+		env["teamId"] = team
+	}
+	if pool := stringField(top, "poolId"); pool != "" {
+		env["poolId"] = pool
+	}
+	out, err := json.Marshal(env)
+	if err != nil {
+		return e.Payload
+	}
+	return out
+}
+
+// isEnvelope reports whether the payload already has the section 7 shape: an id, an occurredAt and an object data.
+func isEnvelope(top map[string]json.RawMessage) bool {
+	d, ok := top["data"]
+	if !ok || stringField(top, "id") == "" || stringField(top, "occurredAt") == "" {
+		return false
+	}
+	var data map[string]json.RawMessage
+	return json.Unmarshal(d, &data) == nil
+}
+
+func stringField(top map[string]json.RawMessage, key string) string {
+	var s string
+	if raw, ok := top[key]; ok && json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	return ""
 }

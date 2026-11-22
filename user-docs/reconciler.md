@@ -41,6 +41,8 @@ is in `resource_status` with the conditions `NamespaceReady`, `IamReady` and `Re
 | `AFS_LEADER_LEASE_NAMESPACE` | no | Namespace of the Lease; default `afs-system` |
 | `AFS_GATEWAY_NAMESPACE`, `AFS_GATEWAY_NAME`, `AFS_GATEWAY_CA_CONFIGMAP` | no | Where `afs-gateway` and its CA bundle are; defaults `afs-system`, `afs-gateway`, `afs-gateway-ca` |
 | `AFS_NODECLASS_JSON` | no | Base `EC2NodeClass` spec (role, subnet and security group selectors, AMI family) that every dedicated-tier team's node class copies, as JSON; the team's tags are merged in |
+| `AFS_WORK_ORDER_QUEUE_URL` | no | SQS queue that receives `afs.work_order.requested` events from EventBridge; without it work order intake is off (see [work-orders.md](work-orders.md)) |
+| `AFS_GITHUB_APPS_FILE` | no | JSON file naming the GitHub Apps (host, organization, app id, installation id, private key file) the reconciler uses to read pull request state; without it repository tracking is off |
 | `AFS_POLL_INTERVAL`, `AFS_RESYNC_INTERVAL` | no | Backstop poll (30s) and full resync (10m) |
 | `AFS_METRICS_ADDR` | no | Probe and metrics address; default `:9090` |
 | `POD_NAME` | no | Leader election identity; the hostname if unset |

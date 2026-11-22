@@ -274,21 +274,6 @@ func (s *WorkOrderStore) Instantiate(ctx context.Context, id string) (string, er
 
 // ---- template secrets ------------------------------------------------------------------------------------
 
-const recordSecretSig = /* #nosec G101 -- a function signature */ `afs.record_work_order_secret(text,text,text,text,text,text,text)`
-
-// Supported implements workorder.SecretStore.
-func (s *WorkOrderStore) Supported(ctx context.Context) (bool, error) {
-	var ok bool
-	err := s.runner.ReadTx(ctx, reconcilerSession, func(ctx context.Context, tx port.Tx) error {
-		t, err := Unwrap(tx)
-		if err != nil {
-			return err
-		}
-		return t.QueryRow(ctx, `SELECT to_regprocedure('`+recordSecretSig+`') IS NOT NULL`).Scan(&ok)
-	})
-	return ok, MapError(err, OpRead, "work order secrets")
-}
-
 // Pending implements workorder.SecretStore.
 func (s *WorkOrderStore) Pending(ctx context.Context) ([]workorder.TemplateSecret, error) {
 	var out []workorder.TemplateSecret
@@ -319,7 +304,10 @@ SELECT w.id, w.team_id, p.id, p.name, e ->> 'name', coalesce(e ->> 'description'
 	return out, err
 }
 
-// Record implements workorder.SecretStore through afs.record_work_order_secret (ProposedRecordWorkOrderSecretSQL).
+// Record implements workorder.SecretStore through -db's afs.record_work_order_secret (migration 000019).
+//
+// arn is the ARN Secrets Manager returned for the secret created at ts.Path (afs.secret_path). The function
+// is idempotent on (team, name). Its SQLSTATEs map to domain errors in recordSecretError.
 func (s *WorkOrderStore) Record(ctx context.Context, ts workorder.TemplateSecret, arn string) error {
 	err := s.runner.InTx(ctx, reconcilerSession, func(ctx context.Context, tx port.Tx) error {
 		t, err := Unwrap(tx)
@@ -330,6 +318,18 @@ func (s *WorkOrderStore) Record(ctx context.Context, ts workorder.TemplateSecret
 		return t.QueryRow(ctx, `SELECT afs.record_work_order_secret($1, $2, $3, $4, $5, $6, $7)`,
 			ts.WorkOrderID, ts.PoolID, ts.Name, ts.Description, arn, ts.Delivery, ts.Target).Scan(&id)
 	})
+	return recordSecretError(err)
+}
+
+// recordSecretError maps the SQLSTATEs afs.record_work_order_secret raises: P0002 unknown work order (not found),
+// 55000 no live remediation team or status not live (409 invalid_state), 23503 pool unknown, of another team or
+// not live (validation on poolId), 23514 ARN, delivery or target refused (validation), 23505 target already bound
+// or ARN already used (409 duplicate). Anything else goes through MapError.
+func recordSecretError(err error) error {
+	var pe *pgconn.PgError
+	if errors.As(err, &pe) && pe.Code == codeNoDataFound {
+		return withCause(domain.NotFound("work order"), err)
+	}
 	return MapError(err, OpWrite, "work order secret")
 }
 

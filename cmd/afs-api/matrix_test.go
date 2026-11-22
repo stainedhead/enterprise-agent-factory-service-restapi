@@ -24,5 +24,19 @@ func TestAuthorizationMatrix(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(c.Close)
+	// M6-F1 (CT-API-7): no placeholder remains; every operation of the contract has a bound handler.
+	contract, err := matrix.LoadContract()
+	if err != nil {
+		t.Fatal(err)
+	}
+	have := map[string]bool{}
+	for _, id := range matrix.Implemented(t, w, c.Handler, contract) {
+		have[id] = true
+	}
+	for id := range contract.Operations {
+		if !have[id] {
+			t.Errorf("operation %s still answers the 501 not_implemented placeholder", id)
+		}
+	}
 	matrix.Run(t, w, c.Handler)
 }

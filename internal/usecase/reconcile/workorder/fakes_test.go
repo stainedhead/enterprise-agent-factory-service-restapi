@@ -111,14 +111,12 @@ func (s *fakeAssignStore) Instantiate(_ context.Context, id string) (string, err
 }
 
 type fakeSecretStore struct {
-	unsupported bool
-	pending     []workorder.TemplateSecret
-	recorded    []workorder.TemplateSecret
-	arns        []string
-	recordErr   error
+	pending   []workorder.TemplateSecret
+	recorded  []workorder.TemplateSecret
+	arns      []string
+	recordErr error
 }
 
-func (s *fakeSecretStore) Supported(context.Context) (bool, error) { return !s.unsupported, nil }
 func (s *fakeSecretStore) Pending(context.Context) ([]workorder.TemplateSecret, error) {
 	return s.pending, nil
 }

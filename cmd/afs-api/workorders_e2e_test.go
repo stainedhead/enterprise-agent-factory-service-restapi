@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -39,7 +40,11 @@ func TestWorkOrdersEndToEnd(t *testing.T) {
 	teamA, teamB := w.TeamA.ID, w.TeamB.ID
 	teamC, teamD := w.DB.SeedTeam(t), w.DB.SeedTeam(t)
 	owned := func(team, value string) {
-		exec(`INSERT INTO afs.namespace_config_values (id, team_id, name, config_value) VALUES ($1, $2, 'AFS_OWNED_REPOS', $3)`, pgtest.NewID("ncv"), team, value)
+		id := pgtest.NewID("ncv")
+		exec(`INSERT INTO afs.namespace_config_values (id, team_id, name, config_value) VALUES ($1, $2, 'AFS_OWNED_REPOS', $3)`, id, team, value)
+		t.Cleanup(func() { // teams A and B belong to the shared world
+			_, _ = w.Admin.Exec(context.WithoutCancel(t.Context()), `DELETE FROM afs.namespace_config_values WHERE id = $1`, id)
+		})
 	}
 	owned(teamA, "github.com/wosec/*")
 	owned(teamB, "github.com/wosec/special GITHUB.com/shared/lib")

@@ -65,20 +65,6 @@ func TestAssignerProvisionsTemplateSecrets(t *testing.T) {
 	}
 }
 
-func TestSecretsWaitsForTheDatabaseFunction(t *testing.T) {
-	ss := &fakeSecretStore{unsupported: true, pending: []workorder.TemplateSecret{{WorkOrderID: "wo_a", TeamID: "team_a", PoolID: "pool_1", Name: "x-token", Path: "p"}}}
-	cr := &fakeCreator{}
-	s := &workorder.Secrets{Store: ss, Creator: cr}
-	for i := 0; i < 2; i++ {
-		if err := s.Run(t.Context()); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if len(cr.created) != 0 || len(ss.recorded) != 0 {
-		t.Errorf("created %v: without the -db function nothing may be created (it would be an orphan)", cr.created)
-	}
-}
-
 func TestSecretsFailuresAreRetriedAndReported(t *testing.T) {
 	p := []workorder.TemplateSecret{{WorkOrderID: "wo_a", TeamID: "team_a", PoolID: "pool_1", Name: "x-token", Path: "p"}}
 	cr := &fakeCreator{err: errors.New("throttled")}

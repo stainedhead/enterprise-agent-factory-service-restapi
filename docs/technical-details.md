@@ -31,7 +31,7 @@ Engine (queue, backoff, leader-only jobs) with team environment, admission, life
 ## Database
 
 Schema and migrations come from `enterprise-agent-factory-service-db` (Go module, tagged releases).
-Integration tests use `AFS_TEST_DATABASE_URL`. The module is pinned to -db 9cc2941 (migrations 000001-000018);
+Integration tests use `AFS_TEST_DATABASE_URL`. The module is pinned to -db 83f0345 (pseudo-version `v0.0.0-20261122071732-83f034507b16`, migrations 000001-000019; untagged: re-pin to the release tag);
 `afs.schema_version()` is checked at startup. Envtest suites run with `-tags envtest` and `KUBEBUILDER_ASSETS`.
 
 ## Gateway (`afs-gateway`, M3)
@@ -147,3 +147,25 @@ Pools: the pool controller re-renders on a pool row change (handoffs and secret 
 opt-outs). Scaling changes replicas only. The reconciler may administer SQS queues named `afs-*`; team and agent roles
 are bounded to `afs-*` queues. Restore rebuilds agent secret bindings (resource id `<team>/<agent>/<target>`).
 The billing role reads `service_settings` and `team_models`; no env fallback remains.
+
+## Work orders and workloads (M6)
+
+- **Workload principal.** `afs-api` validates a projected ServiceAccount token offline against the cluster issuer's JWKS
+  (`AFS_CLUSTER_OIDC_ISSUER`): audience exactly `afs-api`, life at most one hour, subject
+  `system:serviceaccount:<ns>:<name>`. `afs.resolve_workload` maps it to team, agent or pool and worker pod. A workload
+  holds only `work-orders:report`, bounded by `Principal.Workload.TeamID` equal to the assigned team; pool and pod
+  are written to the audit record. It may omit `If-Match` on `UpdateWorkOrderRepo` (`middleware.RequireIfMatchFor`;
+  the use case treats version 0 as the current version for a workload only), because it cannot read the version.
+- **Work order reconciler** (`reconcile/workorder`): intake from the EventBridge queue (`AFS_WORK_ORDER_QUEUE_URL`,
+  dedupe on `sourceEventId`), `Assigner` (`afs.instantiate_work_order_team`), `Secrets`, `Tracker` (GitHub via
+  `AFS_GITHUB_APPS_FILE`) and `Notifier`.
+- **Template secrets.** `spec.secrets` entries are `{pool, name, description?, delivery?, target?}` (validated in
+  `domain.ValidateSwarmSpec`, resolved by `domain.TemplateSecretBinding`). The `Secrets` job creates each secret empty
+  in Secrets Manager at `afs.secret_path(team, NULL, pool, name)` and records the returned ARN with -db 000019
+  `afs.record_work_order_secret` (idempotent on team and name; SQLSTATEs mapped in `postgres.recordSecretError`).
+- **Outbox payloads.** `housekeeping.Envelope` publishes the section 7 envelope `{id, occurredAt, teamId, poolId?, actor,
+  data}` as stored (the API and -db 000019 write it) and wraps the flat payloads that `instantiate_work_order_team`
+  wrote before 000019 (id `evt_` plus the outbox id zero-padded, stable across redelivery).
+- **Handler areas.** Each handler area has one registrar. The identity provider operations are the area
+  `identityproviders` (M2 `BindIdentity` owns `identity`; they once shared a name and the second replaced the first).
+- **Open.** Tag sync for team secrets and the work order and pool queues (they are tagged at creation only).

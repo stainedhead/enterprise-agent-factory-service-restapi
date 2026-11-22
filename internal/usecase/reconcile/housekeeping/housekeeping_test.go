@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -110,7 +111,7 @@ func (r *rec) OutboxFailed(n int)               { r.fail += n }
 func (r *rec) OutboxLag(p int, _ time.Duration) { r.pending = p }
 
 func ev(id int64, agg string) OutboxEvent {
-	return OutboxEvent{ID: id, Type: "team.created", AggregateKind: "team", AggregateID: agg, Payload: json.RawMessage(`{"id":"evt"}`), CreatedAt: time.Unix(1700000000+id, 0)}
+	return OutboxEvent{ID: id, Type: "team.created", AggregateKind: "team", AggregateID: agg, Payload: json.RawMessage(envelopePayload), CreatedAt: time.Unix(1700000000+id, 0)}
 }
 
 type clock struct{ t time.Time }
@@ -272,10 +273,12 @@ func TestEntryShape(t *testing.T) {
 	if err := NewPublisher(st, sink, nil, nil).Drain(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].DetailType != "team.created" || got[0].Resources[0] != "team/team_x" || string(got[0].Detail) != `{"id":"evt"}` {
+	if len(got) != 1 || got[0].DetailType != "team.created" || got[0].Resources[0] != "team/team_x" || string(got[0].Detail) != envelopePayload {
 		t.Fatalf("entry %+v", got)
 	}
 }
+
+const envelopePayload = `{"id":"evt_01J0000000000000000000000A","occurredAt":"2026-11-22T07:00:00Z","teamId":"team_x","actor":"system","data":{}}`
 
 type sinkFunc func([]Entry) ([]error, error)
 
@@ -416,5 +419,86 @@ func TestPurgeAndRegistration(t *testing.T) {
 	}
 	if len(s.jobs) != len(want) {
 		t.Errorf("jobs = %v", s.jobs)
+	}
+}
+
+// The publisher accepts both payload shapes: the section 7 envelope (API and -db 000019) goes out unchanged, and
+// the flat payload of afs.instantiate_work_order_team before 000019 is wrapped.
+func TestEnvelopeBothPayloadShapes(t *testing.T) {
+	created := time.Date(2026, 11, 20, 8, 30, 15, 0, time.UTC)
+	cases := []struct {
+		name    string
+		in      OutboxEvent
+		want    string // JSON; "" means unchanged
+		compare func(t *testing.T, got map[string]any)
+	}{
+		{name: "000019 envelope with a pool", in: OutboxEvent{ID: 5, TeamID: "team_a", CreatedAt: created,
+			Payload: json.RawMessage(`{"id":"evt_01J0000000000000000000000B","occurredAt":"2026-11-22T07:00:00Z","teamId":"team_a","poolId":"pool_a","actor":"afs-reconciler","data":{"poolId":"pool_a","teamId":"team_a"}}`)}},
+		{name: "envelope written by the API", in: OutboxEvent{ID: 6, CreatedAt: created, Payload: json.RawMessage(envelopePayload)}},
+		{name: "flat team.created", in: OutboxEvent{ID: 42, TeamID: "team_a", CreatedAt: created,
+			Payload: json.RawMessage(`{"teamId":"team_a","kind":"ephemeral","workOrderId":"wo_1"}`)},
+			compare: func(t *testing.T, got map[string]any) {
+				if got["id"] != "evt_00000000000000000000000042" || got["occurredAt"] != "2026-11-20T08:30:15Z" || got["teamId"] != "team_a" || got["actor"] != "system" {
+					t.Errorf("envelope = %v", got)
+				}
+				if _, ok := got["poolId"]; ok {
+					t.Errorf("poolId on a team event: %v", got)
+				}
+				d, _ := got["data"].(map[string]any)
+				if d["kind"] != "ephemeral" || d["workOrderId"] != "wo_1" || d["teamId"] != "team_a" {
+					t.Errorf("data = %v", d)
+				}
+			}},
+		{name: "flat pool.created lifts the pool", in: OutboxEvent{ID: 43, CreatedAt: created,
+			Payload: json.RawMessage(`{"poolId":"pool_a","teamId":"team_a"}`)},
+			compare: func(t *testing.T, got map[string]any) {
+				if got["poolId"] != "pool_a" || got["teamId"] != "team_a" {
+					t.Errorf("envelope = %v: teamId falls back to the payload when the row has none", got)
+				}
+				if d, _ := got["data"].(map[string]any); d["poolId"] != "pool_a" {
+					t.Errorf("data = %v", d)
+				}
+			}},
+		{name: "an object with an id but no data is flat", in: OutboxEvent{ID: 44, TeamID: "team_a", CreatedAt: created,
+			Payload: json.RawMessage(`{"id":"x","workOrderId":"wo_1"}`)},
+			compare: func(t *testing.T, got map[string]any) {
+				if got["id"] != "evt_00000000000000000000000044" {
+					t.Errorf("envelope = %v", got)
+				}
+			}},
+		{name: "not an object", in: OutboxEvent{ID: 45, CreatedAt: created, Payload: json.RawMessage(`[1]`)}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := Envelope(c.in)
+			if c.compare == nil {
+				if string(got) != string(c.in.Payload) {
+					t.Fatalf("changed an envelope: %s", got)
+				}
+				return
+			}
+			var m map[string]any
+			if err := json.Unmarshal(got, &m); err != nil {
+				t.Fatal(err)
+			}
+			c.compare(t, m)
+			// Redelivery carries the same id.
+			if string(Envelope(c.in)) != string(got) {
+				t.Error("the wrapped event is not deterministic")
+			}
+		})
+	}
+}
+
+func TestPublisherSendsWrappedLegacyPayload(t *testing.T) {
+	flat := ev(9, "team_x")
+	flat.Payload = json.RawMessage(`{"teamId":"team_x","kind":"ephemeral","workOrderId":"wo_1"}`)
+	var got []Entry
+	sink := sinkFunc(func(es []Entry) ([]error, error) { got = es; return make([]error, len(es)), nil })
+	if err := NewPublisher(newStore(flat, ev(10, "team_y")), sink, nil, nil).Drain(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || !strings.Contains(string(got[0].Detail), `"data":{"kind":"ephemeral"`) || string(got[1].Detail) != envelopePayload {
+		t.Fatalf("entries = %+v", got)
 	}
 }

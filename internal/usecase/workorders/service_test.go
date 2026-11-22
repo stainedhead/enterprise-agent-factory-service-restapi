@@ -760,3 +760,29 @@ func TestStorageErrorsSurface(t *testing.T) {
 		}
 	}
 }
+
+// CLI-CD-1: a workload cannot read the repository version, so version 0 means the current one for a workload; a
+// version it does send is compared, and no other caller may pass 0.
+func TestUpdateRepoWorkloadMayOmitTheVersion(t *testing.T) {
+	s, r, _, _ := rig()
+	ctx := t.Context()
+	w := create(t, s, domain.RepoInput{Repo: "acme/api"})
+	x := r.wos[w.ID]
+	x.TeamID, x.Status = teamA, domain.WorkOrderStatusAssigned
+	r.wos[w.ID] = x
+	step := domain.RepoReport{Status: "in_progress"}
+
+	if got, err := s.UpdateRepo(ctx, workload, w.ID, "github.com", "acme/api", 0, step); err != nil || got.Version != 2 {
+		t.Fatalf("workload without a version = %+v %v", got, err)
+	}
+	if _, err := s.UpdateRepo(ctx, workload, w.ID, "github.com", "acme/api", 1, step); domain.KindOf(err) != domain.KindPreconditionFailed {
+		t.Errorf("a stale version from a workload = %v, want 412", err)
+	}
+	if _, err := s.UpdateRepo(ctx, adminA, w.ID, "github.com", "acme/api", 0, step); domain.KindOf(err) != domain.KindPreconditionFailed {
+		t.Errorf("a team admin with version 0 = %v, want 412", err)
+	}
+	// The other team's workload is still not found, with or without a version.
+	if _, err := s.UpdateRepo(ctx, otherWl, w.ID, "github.com", "acme/api", 0, step); domain.KindOf(err) != domain.KindNotFound {
+		t.Errorf("other team workload = %v", err)
+	}
+}

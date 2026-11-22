@@ -500,7 +500,8 @@ func (s *Service) Cancel(ctx context.Context, c acting.Caller, id, reason string
 
 // UpdateRepo implements UpdateWorkOrderRepo: work-orders:report on the assigned team (a team admin or
 // a workload principal of that team) or work-orders:write. It changes only the repository's progress
-// columns and never the work order's status (the reconciler derives that).
+// columns and never the work order's status (the reconciler derives that). expect is the If-Match version; a
+// workload principal, which has no read of it (CLI-CD-1), may pass 0 for the current version.
 func (s *Service) UpdateRepo(ctx context.Context, c acting.Caller, id, host, repo string, expect domain.Version, rep domain.RepoReport) (domain.WorkOrderRepo, error) {
 	perms := []authz.Permission{authz.WorkOrdersReport, authz.WorkOrdersWrite}
 	if err := s.route(ctx, c, "UpdateWorkOrderRepo", perms...); err != nil {
@@ -521,6 +522,9 @@ func (s *Service) UpdateRepo(ctx context.Context, c acting.Caller, id, host, rep
 		cur, err := s.Repo.Repo(ctx, tx, id, host, repo, true)
 		if err != nil {
 			return err
+		}
+		if expect == 0 && c.Principal.Workload != nil {
+			expect = cur.Version // CLI-CD-1: a workload cannot read the version, so it may send none
 		}
 		if err := domain.CheckVersion(cur.Version, expect); err != nil {
 			return err
