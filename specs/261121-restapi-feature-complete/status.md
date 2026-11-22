@@ -19,7 +19,7 @@
 | 2 | Research and data modeling | Complete | research.md, data-dictionary.md |
 | 3 | Architecture and planning | Complete | architecture.md, plan.md |
 | 4 | Task breakdown | Complete | tasks.md: 60 streams, 255 tasks |
-| 5 | Implementation (M0–M6) | In Progress | M0 complete 2026-11-21; M1 complete 2026-11-22 (step 3 started 2026-11-21T20:57:16Z); M2 complete 2026-11-22 (integrated); M3 next. Task progress in tasks.md |
+| 5 | Implementation (M0–M6) | In Progress | M0 complete 2026-11-21; M1 complete 2026-11-22 (step 3 started 2026-11-21T20:57:16Z); M2 complete 2026-11-22 (integrated); M3 complete 2026-11-22 (integrated); M4 next. Task progress in tasks.md |
 | 6 | Completion and archival | Not Started | |
 
 ## Phase 0 checklist
@@ -35,7 +35,7 @@
 | M0 Contract and foundation | Complete | 41 / 41 |
 | M1 Teams and core | Complete | all M1 tasks (see tasks.md; e2e cases G1b, G1d, H1, RC-US-1a.4 and terraform/helm/tflint validation deferred to the cluster suite and CI) |
 | M2 Agents | Complete | 44 of 45 tasks (M2-F8 `[e2e]` busybox case and the cluster parts of M2-F5, G1, G3, I3 wait for the cluster suite) |
-| M3 Gateway and budgets | Not Started | 0 |
+| M3 Gateway and budgets | Complete | all 36 tasks (gateway, budgets, notifications, reports, activity; cluster-only checks wait for the cluster suite and CI: real Bedrock, `helm lint`, `govulncheck`) |
 | M4 Accounts, tags, billing | Not Started | 0 |
 | M5 Swarms | Not Started | 0 |
 | M6 CVE remediation and completion | Not Started | 0 |
@@ -113,3 +113,4 @@
 - 2026-11-22: M3-C1..C3 done (w4): Bedrock event-stream and Anthropic SSE pumps, usage from the final events, abort and mid-stream error settle on tokens seen, JSON before the first event.
 - 2026-11-22: M3-D2 done (w4): test/conformance (tag conformance) with the AWS SDK Bedrock Runtime client and the Anthropic SDK on the contract §3 environment: every path, streams, §7 errors, reservation math, attribution.
 - 2026-11-22: M3-D3 done (w4): test/load/gateway (tag load): 200 agents, 500 req/s, 6 s, budget for a third: 1000 ok, 2000 refused all 402, overshoot 0, reservations all settled, added latency p50 73us p99 163us (in-memory spend).
+- 2026-11-22: M3-X1 done (integration of `m3/w1`..`m3/w4` on `feat/restapi-feature-complete`; w1 and w4 squash-merged so their build artifacts stay out of history). Cross-stream checks: `budget.reset` and `budget.exhausted` once each, one spend counter whichever side opens it first, gateway usage rows feed reports and the activity collector, costs report measures documented in OpenAPI, gateway Helm RBAC, readiness shutdown context. Results: `make gate` green; `make test-db` green; `make cover` every domain, usecase and authz package at least 90%; `make conformance` green; `make load`: gateway 200 agents at 500 req/s overshoot 0, added latency p99 163 us (in-memory spend); 90-day report p99 under 1 s (agent activity 0.84 s, the closest); envtest (`internal/adapter/k8s/...`) green. Decisions in implementation-notes.md (M3 integration decisions).

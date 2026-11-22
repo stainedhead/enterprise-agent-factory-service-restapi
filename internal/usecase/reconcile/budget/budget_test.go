@@ -249,3 +249,120 @@ func TestJobsAreScheduled(t *testing.T) {
 		t.Errorf("sweeper every %v", by["reservation-sweeper"].Every)
 	}
 }
+
+// A failing step does not stop the later ones, and every error is reported.
+func TestEveryStepFailureIsReportedAndTheRestStillRuns(t *testing.T) {
+	boom := errors.New("down")
+	g := newRig()
+	g.store.Budgets = []domain.Budget{monthly("bud_m")}
+	g.store.Expiries = []budget.OverrideExpiry{{TeamID: teamID}}
+	g.store.Limits = []budget.LimitChange{{TeamID: teamID, BudgetID: "bud_m"}}
+	for _, m := range []string{"ExpireOverrides", "CarryLimits", "OpenPeriod", "Exhaustion"} {
+		g.store.ErrOn[m] = boom
+	}
+	err := g.r.Reconcile(t.Context())
+	if err == nil {
+		t.Fatal("no error")
+	}
+	for _, m := range []string{"ExpireOverrides", "CarryLimits", "OpenPeriod", "Exhaustion"} {
+		if len(g.calledWith(m)) == 0 {
+			t.Errorf("%s was skipped after an earlier failure", m)
+		}
+	}
+	if !errors.Is(err, boom) {
+		t.Errorf("error %v does not wrap the cause", err)
+	}
+	// Listing the budgets fails.
+	g = newRig()
+	g.store.ErrOn["LiveBudgets"] = boom
+	if err := g.r.Reconcile(t.Context()); !errors.Is(err, boom) {
+		t.Fatalf("list: %v", err)
+	}
+}
+
+// A pre-open that fails is retried on the next pass; a budget that is gone is forgotten.
+func TestPreOpenRetriesAndGoneBudgetsAreForgotten(t *testing.T) {
+	boom := errors.New("down")
+	g := newRig()
+	g.store.Budgets = []domain.Budget{monthly("bud_m")}
+	if err := g.r.Reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	g.now = time.Date(2026, 11, 30, 23, 59, 0, 0, time.UTC)
+	g.store.ErrOn["OpenPeriod"] = boom
+	if err := g.r.Reconcile(t.Context()); !errors.Is(err, boom) {
+		t.Fatalf("pre-open: %v", err)
+	}
+	delete(g.store.ErrOn, "OpenPeriod")
+	g.calls.List = nil
+	if err := g.r.Reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := g.calledWith("OpenPeriod bud_m 2026-12-01T00:00 announce=false"); len(got) != 1 {
+		t.Fatalf("the failed pre-open was not retried: %v", g.calls.List)
+	}
+	g.store.Budgets = nil
+	if err := g.r.Reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	g.store.Budgets = []domain.Budget{monthly("bud_m")}
+	g.calls.List = nil
+	if err := g.r.Reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(g.calledWith("OpenPeriod")) == 0 {
+		t.Fatal("a budget that came back was not reopened")
+	}
+}
+
+// The backstop reports a store or IAM failure of one team and carries on with the next.
+func TestBackstopFailuresAreReportedPerTeam(t *testing.T) {
+	boom := errors.New("down")
+	other := "team_01JD2Q3R4S5T6V7W8X9Y0Z0002"
+	cases := map[string]func(g *rig){
+		"mark":  func(g *rig) { g.store.ErrOn["MarkExhausted"] = boom },
+		"deny":  func(g *rig) { g.iam.Err["DenyBedrock"] = boom },
+		"lift":  func(g *rig) { g.iam.Err["LiftBedrockDeny"] = boom },
+		"clear": func(g *rig) { g.store.ErrOn["ClearExhausted"] = boom },
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			g := newRig()
+			lifting := name == "lift" || name == "clear"
+			g.store.Teams = []budget.TeamBudget{
+				{TeamID: teamID, Namespace: "afs-t-payments", Exhausted: !lifting, Marked: lifting},
+				{TeamID: other, Namespace: "afs-t-other", Exhausted: !lifting, Marked: lifting},
+			}
+			setup(g)
+			if err := g.r.Reconcile(t.Context()); !errors.Is(err, boom) {
+				t.Fatalf("err %v", err)
+			}
+			n := 0
+			for _, c := range g.calls.List {
+				if strings.Contains(c, other) || strings.Contains(c, "afs-t-other") {
+					n++
+				}
+			}
+			if n == 0 {
+				t.Errorf("the second team was not tried: %v", g.calls.List)
+			}
+		})
+	}
+	// A team with an unusable id fails alone.
+	g := newRig()
+	g.store.Teams = []budget.TeamBudget{{TeamID: "bogus", Exhausted: true}}
+	if err := g.r.Reconcile(t.Context()); err == nil {
+		t.Fatal("an invalid team id must be reported")
+	}
+}
+
+// The defaults: no clock and no logger configured.
+func TestDefaultClockAndLogger(t *testing.T) {
+	g := newRig()
+	r := &budget.Reconciler{Store: g.store, IAM: g.iam}
+	g.store.Expiries = []budget.OverrideExpiry{{TeamID: teamID}}
+	g.store.Limits = []budget.LimitChange{{TeamID: teamID, BudgetID: "bud_m"}}
+	if err := r.Reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}

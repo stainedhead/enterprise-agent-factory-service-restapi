@@ -32,14 +32,14 @@
 
 | Milestone | Streams | Tasks | Done |
 |---|---|---|---|
-| M0 Contract and foundation | 10 (+ exit) | 41 | 0 |
-| M1 Teams and core | 13 (+ exit) | 60 | 0 |
-| M2 Agents | 9 (+ exit) | 44 | 0 |
-| M3 Gateway and budgets | 9 (+ exit) | 36 | 0 |
+| M0 Contract and foundation | 10 (+ exit) | 41 | 41 |
+| M1 Teams and core | 13 (+ exit) | 60 | 60 |
+| M2 Agents | 9 (+ exit) | 44 | 43 |
+| M3 Gateway and budgets | 9 (+ exit) | 36 | 36 |
 | M4 Accounts, tags, billing | 7 (+ exit) | 26 | 0 |
 | M5 Swarms | 6 (+ exit) | 21 | 0 |
 | M6 CVE remediation and completion | 6 (+ exit) | 27 | 0 |
-| **Total** | **60** | **255** | **0** |
+| **Total** | **60** | **255** | **180** |
 
 
 ## External dependencies (`-db` changes this spec needs)
@@ -587,7 +587,7 @@ Owns: `internal/usecase/reconcile/collector/activity/`, `internal/adapter/k8s/{m
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M3-X1 | Merge, gate, `test-db`, `envtest`, `conformance`; load results recorded; OQ-3 answer recorded or default kept; status.md | — | all M3 |
+| [x] | M3-X1 | Merge, gate, `test-db`, `envtest`, `conformance`; load results recorded; OQ-3 answer recorded or default kept; status.md | — | all M3 |
 
 ---
 

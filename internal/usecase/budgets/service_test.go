@@ -221,3 +221,65 @@ func TestAuthorization(t *testing.T) {
 		t.Fatal("a denied write changed the budget")
 	}
 }
+
+// A failing store surfaces as the error of the operation and changes nothing.
+func TestStoreFailuresSurface(t *testing.T) {
+	boom := errors.New("store down")
+	admin := member(authz.RoleTeamAdmin, team)
+	for _, method := range []string{"Team", "Get", "Insert"} {
+		t.Run("create "+method, func(t *testing.T) {
+			r := newRig()
+			r.repo.Fail[method] = boom
+			_, err := r.svc.Put(t.Context(), admin, team, monthly("100"), nil)
+			if !errors.Is(err, boom) || len(r.audit.Entries) != 0 {
+				t.Fatalf("err %v, audit %d", err, len(r.audit.Entries))
+			}
+		})
+	}
+	t.Run("replace Update", func(t *testing.T) {
+		r := newRig()
+		if _, err := r.svc.Put(t.Context(), admin, team, monthly("100"), nil); err != nil {
+			t.Fatal(err)
+		}
+		r.repo.Fail["Update"] = boom
+		if _, err := r.svc.Put(t.Context(), admin, team, monthly("200"), nil); !errors.Is(err, boom) {
+			t.Fatalf("err %v", err)
+		}
+	})
+	t.Run("get Counter", func(t *testing.T) {
+		r := newRig()
+		if _, err := r.svc.Put(t.Context(), admin, team, monthly("100"), nil); err != nil {
+			t.Fatal(err)
+		}
+		r.repo.Fail["Counter"] = boom
+		if _, err := r.svc.Get(t.Context(), admin, team); !errors.Is(err, boom) {
+			t.Fatalf("get: %v", err)
+		}
+		if _, err := r.svc.Put(t.Context(), admin, team, monthly("120"), nil); !errors.Is(err, boom) {
+			t.Fatalf("put reads the position back: %v", err)
+		}
+	})
+	t.Run("get Get", func(t *testing.T) {
+		r := newRig()
+		r.repo.Fail["Get"] = boom
+		if _, err := r.svc.Get(t.Context(), admin, team); !errors.Is(err, boom) {
+			t.Fatalf("get: %v", err)
+		}
+	})
+}
+
+// A lifetime budget with an expiry carries it into the audit record.
+func TestAuditCarriesTheExpiry(t *testing.T) {
+	r := newRig()
+	p := monthly("100")
+	p.Period = domain.BudgetPeriodLifetime
+	exp := now.Add(48 * time.Hour)
+	p.ExpiresAt = &exp
+	if _, err := r.svc.Put(t.Context(), serviceAdmin(), eph, p, nil); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := r.audit.Entries[0].Record.After.(map[string]any)
+	if after["expiresAt"] == nil {
+		t.Fatalf("audit after = %v", after)
+	}
+}

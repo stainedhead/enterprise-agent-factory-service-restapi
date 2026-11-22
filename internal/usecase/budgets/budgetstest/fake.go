@@ -20,17 +20,22 @@ type Repo struct {
 	Counters map[string]domain.SpendCounter
 	// Locked records the forUpdate reads.
 	Locked int
+	// Fail makes a method ("Team", "Get", "Insert", "Update", "Counter") return the error.
+	Fail map[string]error
 }
 
 var _ budgets.Repository = (*Repo)(nil)
 
 // New returns an empty store.
 func New() *Repo {
-	return &Repo{Teams: map[string]domain.BudgetTeam{}, Budgets: map[string]domain.Budget{}, Counters: map[string]domain.SpendCounter{}}
+	return &Repo{Teams: map[string]domain.BudgetTeam{}, Budgets: map[string]domain.Budget{}, Counters: map[string]domain.SpendCounter{}, Fail: map[string]error{}}
 }
 
 // Team implements budgets.Repository.
 func (r *Repo) Team(_ context.Context, _ port.Tx, teamID string) (domain.BudgetTeam, error) {
+	if err := r.Fail["Team"]; err != nil {
+		return domain.BudgetTeam{}, err
+	}
 	t, ok := r.Teams[teamID]
 	if !ok {
 		return domain.BudgetTeam{}, domain.NotFound("team")
@@ -40,6 +45,9 @@ func (r *Repo) Team(_ context.Context, _ port.Tx, teamID string) (domain.BudgetT
 
 // Get implements budgets.Repository.
 func (r *Repo) Get(_ context.Context, _ port.Tx, teamID string, forUpdate bool) (domain.Budget, error) {
+	if err := r.Fail["Get"]; err != nil {
+		return domain.Budget{}, err
+	}
 	if forUpdate {
 		r.Locked++
 	}
@@ -52,6 +60,9 @@ func (r *Repo) Get(_ context.Context, _ port.Tx, teamID string, forUpdate bool) 
 
 // Insert implements budgets.Repository.
 func (r *Repo) Insert(_ context.Context, _ port.Tx, b domain.Budget) error {
+	if err := r.Fail["Insert"]; err != nil {
+		return err
+	}
 	if _, ok := r.Budgets[b.TeamID]; ok {
 		return domain.Conflict("duplicate", "the team already has a budget", nil)
 	}
@@ -61,6 +72,9 @@ func (r *Repo) Insert(_ context.Context, _ port.Tx, b domain.Budget) error {
 
 // Update implements budgets.Repository; like the database it bumps the version.
 func (r *Repo) Update(_ context.Context, _ port.Tx, b domain.Budget, expect domain.Version) error {
+	if err := r.Fail["Update"]; err != nil {
+		return err
+	}
 	cur, ok := r.Budgets[b.TeamID]
 	if !ok {
 		return domain.NotFound("budget")
@@ -75,5 +89,8 @@ func (r *Repo) Update(_ context.Context, _ port.Tx, b domain.Budget, expect doma
 
 // Counter implements budgets.Repository.
 func (r *Repo) Counter(_ context.Context, _ port.Tx, budgetID string, _ time.Time) (domain.SpendCounter, error) {
+	if err := r.Fail["Counter"]; err != nil {
+		return domain.SpendCounter{}, err
+	}
 	return r.Counters[budgetID], nil
 }
