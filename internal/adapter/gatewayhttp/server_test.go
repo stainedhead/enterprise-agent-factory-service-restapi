@@ -469,4 +469,3 @@ func TestRequestIDIsEchoed(t *testing.T) {
 		t.Errorf("id %q", id)
 	}
 }
-
