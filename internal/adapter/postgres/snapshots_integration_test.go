@@ -106,12 +106,7 @@ func TestAgentLifecycleComplete(t *testing.T) {
 
 	s := seedAgent(t, db)
 	tgt := lifecycle.Target{Kind: "agent", ID: s.agentID, TeamID: s.team.ID}
-	if err := lc.Complete(ctx, tgt); err == nil {
-		t.Fatal("an enabled agent was finalized")
-	}
-	if _, err := admin.Exec(ctx, `UPDATE afs.agents SET state = 'deleting' WHERE id = $1`, s.agentID); err != nil {
-		t.Fatal(err)
-	}
+	// An agent still enabled (its team is being deleted) is finalized as well.
 	for i := 0; i < 2; i++ {
 		if err := lc.Complete(ctx, tgt); err != nil {
 			t.Fatalf("pass %d: %v", i, err)

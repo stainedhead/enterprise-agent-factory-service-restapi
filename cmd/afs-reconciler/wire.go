@@ -24,6 +24,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/admission"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/agent"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/housekeeping"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/lifecycle"
@@ -57,11 +58,11 @@ type reconciler struct {
 // routes is the table → controller registry (architecture §3): a row of teams is the team itself, a
 // row of team_models belongs to its team, and a service-level model change reconciles every team.
 func routes() (*engine.Registry, error) {
-	return engine.NewRegistry(
-		engine.Route{Table: "teams", Targets: []engine.Target{{Kind: engine.KindTeam, Self: true}}},
-		engine.Route{Table: "team_models", Targets: []engine.Target{{Kind: engine.KindTeam}}},
-		engine.Route{Table: "models", FanOut: []engine.Kind{engine.KindTeam}},
-	)
+	return engine.NewRegistry(mergeRoutes([]engine.Route{
+		{Table: "teams", Targets: []engine.Target{{Kind: engine.KindTeam, Self: true}}},
+		{Table: "team_models", Targets: []engine.Target{{Kind: engine.KindTeam}}},
+		{Table: "models", FanOut: []engine.Kind{engine.KindTeam}},
+	}, agentRoutes()...)...)
 }
 
 func restConfig(kubeconfig string) (*rest.Config, error) {
@@ -146,12 +147,23 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	// PriorStateStore exist.
 	lc := postgres.NewTeamLifecycle(runner, audit)
 	sm := secretsmanager.New(awsCfg)
+	cstatus := postgres.NewConditionStore(status, runner)
+	agents, err := buildAgentStream(agentStreamDeps{
+		Client: kc, Runner: runner, Audit: audit, Status: cstatus, IAM: iamClient,
+		AWS: team.AWSConfig{Partition: as.Partition, Region: as.Region, AccountID: account, GatewayRoleARN: s.GatewayRoleARN,
+			PermissionsBoundaryARN: s.PermissionsBoundaryARN, ClusterARN: clusterARN, ESORoleARN: s.ESORoleARN, SecretsPrefix: s.SecretsPrefix},
+		Gateway: agent.Gateway{Namespace: s.GatewayNamespace, Name: s.GatewayName},
+		Cluster: s.ClusterName, AWSCfg: awsCfg, NodeClassJSON: env("AFS_NODECLASS_JSON"),
+	}, log)
+	if err != nil {
+		return fail(err)
+	}
 	finalizer := lifecycle.NewTeamFinalizer(lifecycle.TeamDeps{
 		Secrets: lifecycle.UnionSecrets{Sources: []interface {
 			ListTeamSecrets(ctx context.Context, teamID string) ([]string, error)
 		}{lc, sm}, Scheduler: sm},
 		IAM: iamClient, Profiles: profiles, Access: eks.New(awsCfg, s.ClusterName), NS: cluster,
-	}, lifecycle.Hooks{}, postgres.NewConditionStore(status, runner), lc)
+	}, lifecycle.Hooks{Agents: agents.TeamSteps}, cstatus, lc)
 
 	teams, err := team.NewController(team.Config{
 		Source: postgres.NewTeamSource(runner), Cluster: cluster, IAM: iamClient, Profiles: profiles,
@@ -177,7 +189,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	}
 	r.Engine, err = engine.New(engine.Config{
 		Feed: postgres.NewChangeFeed(dbCfg, log), Lister: postgres.NewLister(pool), Registry: reg,
-		Controllers:  []engine.Controller{teams, platform, adm},
+		Controllers:  []engine.Controller{teams, platform, adm, agents.Controller},
 		Status:       status,
 		Drift:        postgres.NewDriftRecorder(runner, audit, outbox, ids),
 		Singletons:   []engine.Ref{team.PlatformRef, admission.Ref},
@@ -186,6 +198,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	if err != nil {
 		return fail(err)
 	}
+	r.Engine.Every("agent-snapshots", snapshotEvery, agents.Snapshots.Run)
 	hk := postgres.NewHousekeeping(runner)
 	housekeeping.Register(r.Engine, housekeeping.Jobs(housekeeping.Deps{
 		Outbox: hk, Sink: eventbridge.New(awsCfg, s.EventBusName), Partitions: hk, Purger: hk, Recorder: m, Clock: clock.Now, Log: log,
@@ -209,7 +222,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 		observability.SchemaCheck(schemaVersion, want),
 		observability.LeaderCheck(r.Elector.IsLeader),
 	}
-	r.Watcher, err = k8s.NewWatcher(kc, func(ref engine.Ref, object string) { r.Engine.NoteDrift(ref, object) }, log, k8s.OwnedKinds()...)
+	r.Watcher, err = k8s.NewWatcher(kc, func(ref engine.Ref, object string) { r.Engine.NoteDrift(ref, object) }, log, append(k8s.OwnedKinds(), k8s.AgentOwnedKinds()...)...)
 	if err != nil {
 		return fail(err)
 	}

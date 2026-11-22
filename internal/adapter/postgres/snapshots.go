@@ -185,7 +185,8 @@ var _ lifecycle.Completer = (*AgentLifecycle)(nil)
 
 // Complete implements lifecycle.Completer for an agent: state becomes `deleted` with deleted_at set and one
 // audit record is written in the same transaction. The row stays (usage, snapshots and audit refer to it).
-// An already deleted agent is a no-op.
+// An already deleted agent is a no-op. The agent need not be in state deleting: a team delete finalizes
+// every agent of the team.
 func (l *AgentLifecycle) Complete(ctx context.Context, tgt lifecycle.Target) error {
 	if tgt.Kind != "agent" {
 		return fmt.Errorf("postgres: agent lifecycle completer handles agents, not %q", tgt.Kind)
@@ -199,12 +200,9 @@ func (l *AgentLifecycle) Complete(ctx context.Context, tgt lifecycle.Target) err
 		if err := t.QueryRow(ctx, `SELECT state, team_id FROM afs.agents WHERE id = $1 FOR UPDATE`, tgt.ID).Scan(&state, &teamID); err != nil {
 			return err
 		}
-		switch state {
-		case "deleted":
+		// An agent of a team that is being deleted is finalized from any state; only a finished one is a no-op.
+		if state == "deleted" {
 			return nil
-		case "deleting":
-		default:
-			return domain.Conflict("agent_not_deleting", fmt.Sprintf("agent %s is %s, not deleting", tgt.ID, state), nil)
 		}
 		if _, err := t.Exec(ctx, `UPDATE afs.agents SET state = 'deleted', deleted_at = now() WHERE id = $1`, tgt.ID); err != nil {
 			return err
@@ -212,7 +210,7 @@ func (l *AgentLifecycle) Complete(ctx context.Context, tgt lifecycle.Target) err
 		return l.audit.Write(ctx, tx, port.AuditRecord{
 			Action: "agent.delete_finalized", Outcome: port.OutcomeAllowed,
 			ResourceKind: "agent", ResourceID: tgt.ID, TeamID: teamID,
-			Before: map[string]any{"state": "deleting"}, After: map[string]any{"state": "deleted"},
+			Before: map[string]any{"state": state}, After: map[string]any{"state": "deleted"},
 		})
 	})
 	return MapError(err, OpWrite, "agent")
