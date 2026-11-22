@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -177,7 +178,10 @@ func TestRepoReport(t *testing.T) {
 
 func TestOwnerResolutionError(t *testing.T) {
 	err := OwnerResolutionError([]AmbiguousRepo{{Repo: "a/b", TeamIDs: []string{"team_1", "team_2"}}}, []string{"c/d"})
-	e := err.(*Error)
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("%v", err)
+	}
 	if e.Kind != KindValidation || e.Details["unownedRepos"] == nil || e.Details["ambiguousRepos"] == nil ||
 		!strings.Contains(e.Message, "a/b") || !strings.Contains(e.Message, "=team_") {
 		t.Fatalf("%+v", e)

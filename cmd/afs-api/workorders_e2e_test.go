@@ -41,8 +41,8 @@ func TestWorkOrdersEndToEnd(t *testing.T) {
 	owned := func(team, value string) {
 		exec(`INSERT INTO afs.namespace_config_values (id, team_id, name, config_value) VALUES ($1, $2, 'AFS_OWNED_REPOS', $3)`, pgtest.NewID("ncv"), team, value)
 	}
-	owned(teamA, "github.com/acme/*")
-	owned(teamB, "github.com/acme/special GITHUB.com/shared/lib")
+	owned(teamA, "github.com/wosec/*")
+	owned(teamB, "github.com/wosec/special GITHUB.com/shared/lib")
 	owned(teamC.ID, "github.com/shared/lib")
 	owned(teamD.ID, "github.com/gone/*")
 	exec(`UPDATE afs.teams SET state = 'deleted', deleted_at = now() WHERE id = $1`, teamD.ID)
@@ -99,37 +99,38 @@ func TestWorkOrdersEndToEnd(t *testing.T) {
 			`","templateId":"` + tpl + `","repos":` + r + `}`
 	}
 	before := count(`SELECT count(*) FROM afs.work_orders`)
+	auditBefore := count(`SELECT count(*) FROM afs.audit_log WHERE action = 'CreateWorkOrder' AND outcome = 'allowed'`)
 	obj, _ = m.expect(http.StatusBadRequest, "POST", "/v1/work-orders", matrix.ServiceKey, create("CVE-2026-2001",
-		repos(repo("github.com", "shared/lib"), repo("github.com", "gone/x"), repo("github.com", "acme/api"))))
+		repos(repo("github.com", "shared/lib"), repo("github.com", "gone/x"), repo("github.com", "wosec/api"))))
 	details := obj["details"].(map[string]any)
 	amb := details["ambiguousRepos"].([]any)[0].(map[string]any)
 	ids := amb["teamIds"].([]any)
-	if amb["repo"] != "github.com/shared/lib" || len(ids) != 2 || !(anyContains(ids, teamB) && anyContains(ids, teamC.ID)) {
+	if amb["repo"] != "github.com/shared/lib" || len(ids) != 2 || !anyContains(ids, teamB) || !anyContains(ids, teamC.ID) {
 		t.Errorf("ambiguous: %v", details)
 	}
 	if un := details["unownedRepos"].([]any); len(un) != 1 || un[0] != "github.com/gone/x" {
 		t.Errorf("unowned (a deleted team is skipped): %v", details)
 	}
 	obj, _ = m.expect(http.StatusBadRequest, "POST", "/v1/work-orders", matrix.ServiceKey, create("CVE-2026-2001",
-		repos(repo("github.com", "acme/api", `,"owningTeamId":"`+teamD.ID+`"`))))
+		repos(repo("github.com", "wosec/api", `,"owningTeamId":"`+teamD.ID+`"`))))
 	if !strings.Contains(fmt.Sprint(obj["details"]), "owningTeamId") {
 		t.Errorf("deleted explicit team: %v", obj)
 	}
 	m.expect(http.StatusBadRequest, "POST", "/v1/work-orders", matrix.ServiceKey, create("CVE-2026-2001",
-		repos(repo("github.com", "acme/api", `,"owningTeamId":"team_0ZZZZZZZZZZZZZZZZZZZZZZZZZ"`))))
+		repos(repo("github.com", "wosec/api", `,"owningTeamId":"team_0ZZZZZZZZZZZZZZZZZZZZZZZZZ"`))))
 	if n := count(`SELECT count(*) FROM afs.work_orders`); n != before {
 		t.Fatalf("refused creates wrote %d work orders", n-before)
 	}
-	if n := count(`SELECT count(*) FROM afs.audit_log WHERE action = 'CreateWorkOrder' AND outcome = 'allowed'`); n != 0 {
+	if n := count(`SELECT count(*) FROM afs.audit_log WHERE action = 'CreateWorkOrder' AND outcome = 'allowed'`) - auditBefore; n != 0 {
 		t.Errorf("refused creates wrote %d audit rows", n)
 	}
 
 	events0 := count(`SELECT count(*) FROM afs.outbox_events WHERE event_type = 'work_order.created'`)
 	obj, h = m.expect(http.StatusCreated, "POST", "/v1/work-orders", matrix.ServiceKey, create("CVE-2026-2001", repos(
-		repo("github.com", "acme/api"),                                            // wildcard: team A
-		repo("github.com", "acme/special"),                                        // exact beats the wildcard: team B
-		repo("github.com", "acme/contact", `,"owningContact":"lead@example.com"`), // explicit contact
-		repo("github.com", "acme/both", `,"owningTeamId":"`+teamC.ID+`"`),         // explicit wins over config (A)
+		repo("github.com", "wosec/api"),                                            // wildcard: team A
+		repo("github.com", "wosec/special"),                                        // exact beats the wildcard: team B
+		repo("github.com", "wosec/contact", `,"owningContact":"lead@example.com"`), // explicit contact
+		repo("github.com", "wosec/both", `,"owningTeamId":"`+teamC.ID+`"`),         // explicit wins over config (A)
 	)), "Idempotency-Key", "wo-1")
 	wo := obj["id"].(string)
 	got := map[string]map[string]any{}
@@ -137,10 +138,10 @@ func TestWorkOrdersEndToEnd(t *testing.T) {
 		rm := r.(map[string]any)
 		got[rm["repo"].(string)] = rm
 	}
-	if got["acme/api"]["owningTeamId"] != teamA || got["acme/api"]["ownerSource"] != "team_config" ||
-		got["acme/special"]["owningTeamId"] != teamB || got["acme/special"]["ownerSource"] != "team_config" ||
-		got["acme/contact"]["owningContact"] != "lead@example.com" || got["acme/contact"]["ownerSource"] != "explicit" ||
-		got["acme/both"]["owningTeamId"] != teamC.ID || got["acme/both"]["ownerSource"] != "explicit" {
+	if got["wosec/api"]["owningTeamId"] != teamA || got["wosec/api"]["ownerSource"] != "team_config" ||
+		got["wosec/special"]["owningTeamId"] != teamB || got["wosec/special"]["ownerSource"] != "team_config" ||
+		got["wosec/contact"]["owningContact"] != "lead@example.com" || got["wosec/contact"]["ownerSource"] != "explicit" ||
+		got["wosec/both"]["owningTeamId"] != teamC.ID || got["wosec/both"]["ownerSource"] != "explicit" {
 		t.Fatalf("owners: %v", got)
 	}
 	if obj["status"] != "open" || obj["budgetUsd"] != "250.00" || obj["slaState"] != "on_track" || obj["teamId"] != nil ||
@@ -162,14 +163,14 @@ func TestWorkOrdersEndToEnd(t *testing.T) {
 	}
 	// Replay, second open work order for the CVE, another CVE.
 	_, h = m.expect(http.StatusCreated, "POST", "/v1/work-orders", matrix.ServiceKey, create("CVE-2026-2001", repos(
-		repo("github.com", "acme/api"), repo("github.com", "acme/special"),
-		repo("github.com", "acme/contact", `,"owningContact":"lead@example.com"`), repo("github.com", "acme/both", `,"owningTeamId":"`+teamC.ID+`"`))), "Idempotency-Key", "wo-1")
+		repo("github.com", "wosec/api"), repo("github.com", "wosec/special"),
+		repo("github.com", "wosec/contact", `,"owningContact":"lead@example.com"`), repo("github.com", "wosec/both", `,"owningTeamId":"`+teamC.ID+`"`))), "Idempotency-Key", "wo-1")
 	if h.Get("Idempotent-Replayed") != "true" {
 		t.Error("not a replay")
 	}
-	m.expect(http.StatusConflict, "POST", "/v1/work-orders", matrix.SecurityOperator, create("CVE-2026-2001", repos(repo("github.com", "acme/api"))))
+	m.expect(http.StatusConflict, "POST", "/v1/work-orders", matrix.SecurityOperator, create("CVE-2026-2001", repos(repo("github.com", "wosec/api"))))
 	for _, c := range []matrix.Caller{matrix.TeamAdmin, matrix.Viewer, matrix.TeamKeyAdmin} {
-		m.expect(http.StatusForbidden, "POST", "/v1/work-orders", c, create("CVE-2026-2002", repos(repo("github.com", "acme/api"))))
+		m.expect(http.StatusForbidden, "POST", "/v1/work-orders", c, create("CVE-2026-2002", repos(repo("github.com", "wosec/api"))))
 	}
 
 	// A disabled template refuses new work orders and changes nothing else.
@@ -178,7 +179,7 @@ func TestWorkOrdersEndToEnd(t *testing.T) {
 	if obj["enabled"] != false {
 		t.Fatalf("%v", obj)
 	}
-	obj, _ = m.expect(http.StatusBadRequest, "POST", "/v1/work-orders", matrix.ServiceAdmin, create("CVE-2026-2003", repos(repo("github.com", "acme/api"))))
+	obj, _ = m.expect(http.StatusBadRequest, "POST", "/v1/work-orders", matrix.ServiceAdmin, create("CVE-2026-2003", repos(repo("github.com", "wosec/api"))))
 	if !strings.Contains(fmt.Sprint(obj["details"]), "disabled") {
 		t.Errorf("%v", obj)
 	}
@@ -193,16 +194,16 @@ func TestWorkOrdersEndToEnd(t *testing.T) {
 		t.Errorf("assigned team: %v", obj)
 	}
 	obj, _ = m.expect(http.StatusOK, "GET", "/v1/work-orders/"+wo, ownerB, "")
-	if r := obj["repos"].([]any); len(r) != 1 || r[0].(map[string]any)["repo"] != "acme/special" {
+	if r := obj["repos"].([]any); len(r) != 1 || r[0].(map[string]any)["repo"] != "wosec/special" {
 		t.Errorf("owner team sees only its repositories: %v", obj["repos"])
 	}
 	m.expect(http.StatusNotFound, "GET", "/v1/work-orders/"+wo, unrelated, "")
 	m.expect(http.StatusNotFound, "GET", "/v1/work-orders/"+wo+"/repos", unrelated, "")
 	obj, _ = m.expect(http.StatusOK, "GET", "/v1/work-orders/"+wo, otherC, "")
-	if r := obj["repos"].([]any); len(r) != 1 || r[0].(map[string]any)["repo"] != "acme/both" {
+	if r := obj["repos"].([]any); len(r) != 1 || r[0].(map[string]any)["repo"] != "wosec/both" {
 		t.Errorf("explicit owner sees its repository: %v", obj["repos"])
 	}
-	m.expect(http.StatusNotFound, "PATCH", "/v1/work-orders/"+wo+"/repos/github.com/acme/api", unrelated, `{"status":"in_progress"}`, "If-Match", `"1"`)
+	m.expect(http.StatusNotFound, "PATCH", "/v1/work-orders/"+wo+"/repos/github.com/wosec/api", unrelated, `{"status":"in_progress"}`, "If-Match", `"1"`)
 	m.expect(http.StatusNotFound, "GET", "/v1/work-orders/wo_0ZZZZZZZZZZZZZZZZZZZZZZZZZ", matrix.TeamAdmin, "")
 	list, _ := m.expect(http.StatusOK, "GET", "/v1/work-orders", unrelated, "")
 	if len(items(t, list)) != 0 {
@@ -221,7 +222,7 @@ func TestWorkOrdersEndToEnd(t *testing.T) {
 		}
 	}
 	list, _ = m.expect(http.StatusOK, "GET", "/v1/work-orders?teamId="+teamC.ID, matrix.SecurityOperator, "")
-	if len(items(t, list)) != 1 { // team C owns acme/both explicitly
+	if len(items(t, list)) != 1 { // team C owns wosec/both explicitly
 		t.Errorf("teamId filter matches owner teams too: %v", list)
 	}
 	m.expect(http.StatusBadRequest, "GET", "/v1/work-orders?status=weird", matrix.SecurityOperator, "")
@@ -255,9 +256,9 @@ func TestWorkOrdersEndToEnd(t *testing.T) {
 	}
 
 	// Repository reports.
-	rp := "/v1/work-orders/" + wo + "/repos/github.com/acme/api"
+	rp := "/v1/work-orders/" + wo + "/repos/github.com/wosec/api"
 	obj, _ = m.expect(http.StatusOK, "GET", "/v1/work-orders/"+wo+"/repos", matrix.TeamAdmin, "")
-	api := find(items(t, obj), "repo", "acme/api")
+	api := find(items(t, obj), "repo", "wosec/api")
 	rver := fmt.Sprint(int64(api["version"].(float64)))
 	m.expect(http.StatusForbidden, "PATCH", rp, matrix.Viewer, `{"status":"in_progress"}`, "If-Match", `"`+rver+`"`)
 	m.expect(http.StatusForbidden, "PATCH", rp, matrix.TeamKeyViewer, `{"status":"in_progress"}`, "If-Match", `"`+rver+`"`)
@@ -267,7 +268,7 @@ func TestWorkOrdersEndToEnd(t *testing.T) {
 	m.expect(http.StatusPreconditionRequired, "PATCH", rp, matrix.TeamAdmin, `{"status":"in_progress"}`)
 	m.expect(http.StatusPreconditionFailed, "PATCH", rp, matrix.TeamAdmin, `{"status":"in_progress"}`, "If-Match", `"99"`)
 	ev0 := count(`SELECT count(*) FROM afs.outbox_events WHERE aggregate_id = $1 AND event_type IN ('work_order.repo_updated', 'work_order.pr_opened')`, wo)
-	obj, h = m.expect(http.StatusOK, "PATCH", rp, matrix.TeamKeyAdmin, `{"status":"pr_opened","prUrl":"https://github.com/acme/api/pull/7","prNumber":7,"detail":"bumped openssl"}`, "If-Match", `"`+rver+`"`)
+	obj, h = m.expect(http.StatusOK, "PATCH", rp, matrix.TeamKeyAdmin, `{"status":"pr_opened","prUrl":"https://github.com/wosec/api/pull/7","prNumber":7,"detail":"bumped openssl"}`, "If-Match", `"`+rver+`"`)
 	if obj["status"] != "pr_opened" || obj["prNumber"] != float64(7) || h.Get("ETag") == `"`+rver+`"` {
 		t.Fatalf("%v", obj)
 	}
@@ -284,15 +285,15 @@ func TestWorkOrdersEndToEnd(t *testing.T) {
 		t.Errorf("%v", obj)
 	}
 	m.expect(http.StatusConflict, "PATCH", rp, matrix.SecurityOperator, `{"status":"failed"}`, "If-Match", `"`+fmt.Sprint(int64(obj["version"].(float64)))+`"`)
-	m.expect(http.StatusNotFound, "PATCH", "/v1/work-orders/"+wo+"/repos/github.com/acme/none", matrix.TeamAdmin, `{"status":"in_progress"}`, "If-Match", `"1"`)
+	m.expect(http.StatusNotFound, "PATCH", "/v1/work-orders/"+wo+"/repos/github.com/wosec/none", matrix.TeamAdmin, `{"status":"in_progress"}`, "If-Match", `"1"`)
 	obj, _ = m.expect(http.StatusOK, "GET", "/v1/work-orders/"+wo, matrix.ServiceAdmin, "")
 	if p := obj["progress"].(map[string]any); p["prsMerged"] != float64(1) || p["remaining"] != float64(3) {
 		t.Errorf("progress %v", p)
 	}
 	// Notifications written by the reconciler show on the repository.
-	exec(`INSERT INTO afs.work_order_notifications (work_order_id, host, repo, kind, recipient) VALUES ($1, 'github.com', 'acme/api', 'pr_opened', 'lead@example.com')`, wo)
+	exec(`INSERT INTO afs.work_order_notifications (work_order_id, host, repo, kind, recipient) VALUES ($1, 'github.com', 'wosec/api', 'pr_opened', 'lead@example.com')`, wo)
 	obj, _ = m.expect(http.StatusOK, "GET", "/v1/work-orders/"+wo, matrix.ServiceAdmin, "")
-	if n := find(items(t, map[string]any{"items": obj["repos"]}), "repo", "acme/api")["notifications"].([]any); len(n) != 1 {
+	if n := find(items(t, map[string]any{"items": obj["repos"]}), "repo", "wosec/api")["notifications"].([]any); len(n) != 1 {
 		t.Errorf("notifications %v", n)
 	}
 
@@ -303,14 +304,14 @@ func TestWorkOrdersEndToEnd(t *testing.T) {
 	m.expect(http.StatusBadRequest, "PATCH", "/v1/work-orders/"+wo, matrix.SecurityOperator, `{}`, "If-Match", ifm)
 	m.expect(http.StatusBadRequest, "PATCH", "/v1/work-orders/"+wo, matrix.SecurityOperator, `{"addRepos":[{"repo":"nobody/owns"}]}`, "If-Match", ifm)
 	obj, _ = m.expect(http.StatusOK, "PATCH", "/v1/work-orders/"+wo, matrix.SecurityOperator,
-		`{"title":"Renamed","budgetUsd":"400.00","addRepos":[{"repo":"acme/added"}]}`, "If-Match", ifm)
+		`{"title":"Renamed","budgetUsd":"400.00","addRepos":[{"repo":"wosec/added"}]}`, "If-Match", ifm)
 	if obj["title"] != "Renamed" || obj["budgetUsd"] != "400.00" || obj["progress"].(map[string]any)["repos"] != float64(5) {
 		t.Errorf("%v", obj)
 	}
 	m.expect(http.StatusPreconditionFailed, "PATCH", "/v1/work-orders/"+wo, matrix.SecurityOperator, `{"title":"x"}`, "If-Match", ifm)
 
 	// Delete rules: an open work order uses the template.
-	obj, h = m.expect(http.StatusOK, "GET", "/v1/admin/swarm-templates/"+tpl, matrix.ServiceAdmin, "")
+	_, h = m.expect(http.StatusOK, "GET", "/v1/admin/swarm-templates/"+tpl, matrix.ServiceAdmin, "")
 	tver := h.Get("ETag")
 	m.expect(http.StatusConflict, "DELETE", "/v1/admin/swarm-templates/"+tpl, matrix.ServiceAdmin, "", "If-Match", tver)
 	m.expect(http.StatusForbidden, "DELETE", "/v1/admin/swarm-templates/"+tpl, matrix.SecurityOperator, "", "If-Match", tver)
@@ -329,7 +330,7 @@ func TestWorkOrdersEndToEnd(t *testing.T) {
 	m.expect(http.StatusConflict, "PATCH", "/v1/work-orders/"+wo, matrix.SecurityOperator, `{"title":"x"}`, "If-Match", `"`+fmt.Sprint(int64(obj["version"].(float64)))+`"`)
 	m.expect(http.StatusConflict, "PATCH", rp, matrix.TeamAdmin, `{"status":"in_progress"}`, "If-Match", `"1"`)
 	// The CVE is free again; a closed work order still names its template, so delete refuses.
-	m.expect(http.StatusCreated, "POST", "/v1/work-orders", matrix.SecurityOperator, create("CVE-2026-2001", repos(repo("github.com", "acme/api"))))
+	m.expect(http.StatusCreated, "POST", "/v1/work-orders", matrix.SecurityOperator, create("CVE-2026-2001", repos(repo("github.com", "wosec/api"))))
 	m.expect(http.StatusConflict, "DELETE", "/v1/admin/swarm-templates/"+tpl, matrix.ServiceAdmin, "", "If-Match", tver)
 	// An unused template deletes; update and the rest.
 	obj, h = m.expect(http.StatusCreated, "POST", "/v1/admin/swarm-templates", matrix.ServiceAdmin, tplBody("e2e-spare"))

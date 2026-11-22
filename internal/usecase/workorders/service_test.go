@@ -257,8 +257,7 @@ func TestCreateOwnerResolution(t *testing.T) {
 }
 
 func asDomain(err error, out **domain.Error) bool {
-	e, ok := err.(*domain.Error)
-	*out = e
+	ok := errors.As(err, out)
 	return ok
 }
 
