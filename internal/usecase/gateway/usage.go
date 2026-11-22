@@ -22,3 +22,20 @@ func workerPod(c Caller) string {
 	}
 	return ""
 }
+
+// UsageDropReason says why a usage row was dropped.
+type UsageDropReason string
+
+// Reasons a usage row is dropped (afs_gateway_usage_rows_dropped_total{reason}).
+const (
+	// UsageQueueFull: the writer's queue was full when the row arrived.
+	UsageQueueFull UsageDropReason = "queue_full"
+	// UsageWriteFailed: every attempt to write the row's batch failed.
+	UsageWriteFailed UsageDropReason = "write_failed"
+)
+
+// UsageDropRecorder is told of every usage row the writer drops, so the loss is exported and alertable
+// (FR-R08, RD-3, RD-4). The composition root binds it to a metric.
+type UsageDropRecorder interface {
+	UsageRowsDropped(reason UsageDropReason, rows int)
+}

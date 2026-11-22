@@ -151,12 +151,22 @@ func TestFullQueueIsCountedAndLogged(t *testing.T) {
 		}
 	}
 	q.svc.Wait()
+	// The two calls close their books concurrently, so the order is not fixed: one is queued, one dropped.
 	ev := q.rec.all()
-	if len(ev) != 2 || ev[0].reason != gateway.SettleQueued || ev[1].reason != gateway.SettleQueueFull {
-		t.Fatalf("events %+v, want queued then queue_full", ev)
+	if len(ev) != 2 {
+		t.Fatalf("events %+v, want one queued and one queue_full", ev)
 	}
-	if ev[1].team != teamA || ev[1].budget != budget || ev[1].amount != domain.MustMoney(actual100x50) {
-		t.Fatalf("the drop must name team, budget and amount: %+v", ev[1])
+	var drop settleEvent
+	switch {
+	case ev[0].reason == gateway.SettleQueued && ev[1].reason == gateway.SettleQueueFull:
+		drop = ev[1]
+	case ev[1].reason == gateway.SettleQueued && ev[0].reason == gateway.SettleQueueFull:
+		drop = ev[0]
+	default:
+		t.Fatalf("events %+v, want one queued and one queue_full", ev)
+	}
+	if drop.team != teamA || drop.budget != budget || drop.amount != domain.MustMoney(actual100x50) {
+		t.Fatalf("the drop must name team, budget and amount: %+v", drop)
 	}
 }
 

@@ -186,8 +186,8 @@ func (q *settleQueue) close(ctx context.Context) {
 func (s *Service) dropSettle(p *pendingSettle, reason SettleReason, err error) {
 	s.log.Error("settlement dropped; the actual cost is not in the period", "reason", string(reason),
 		"teamId", p.teamID, "budgetId", p.budgetID, "amountUsd", p.actual.String(), "err", err)
-	if s.Deps.SettleRecorder != nil {
-		s.Deps.SettleRecorder.SettleFailed(p.teamID, p.budgetID, p.actual, reason)
+	if s.SettleRecorder != nil {
+		s.SettleRecorder.SettleFailed(p.teamID, p.budgetID, p.actual, reason)
 	}
 }
 
@@ -200,8 +200,8 @@ func (s *Service) fallBack(p *pendingSettle, lastErr error) {
 	}
 	s.log.Error("settle reservation failed; queued for retry", "teamId", p.teamID, "budgetId", p.budgetID,
 		"amountUsd", p.actual.String(), "err", lastErr)
-	if s.Deps.SettleRecorder != nil {
-		s.Deps.SettleRecorder.SettleFailed(p.teamID, p.budgetID, p.actual, SettleQueued)
+	if s.SettleRecorder != nil {
+		s.SettleRecorder.SettleFailed(p.teamID, p.budgetID, p.actual, SettleQueued)
 	}
 }
 

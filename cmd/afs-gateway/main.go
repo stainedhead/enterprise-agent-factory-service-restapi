@@ -67,7 +67,8 @@ func run(ctx context.Context, log *slog.Logger, env func(string) string) error {
 	}()
 	log = rt.Log
 
-	app.Usage.Run()
+	// The usage writer outlives the signal: rows of calls still draining below must be written. Close stops it.
+	app.Usage.Run(context.WithoutCancel(ctx))
 	bg, cancelBG := context.WithCancel(ctx)
 	defer cancelBG()
 	var wg sync.WaitGroup
@@ -100,7 +101,9 @@ func run(ctx context.Context, log *slog.Logger, env func(string) string) error {
 	}
 	cancelBG()
 	wg.Wait()
-	app.Service.Wait()
+	// Close the books: finished calls first, then one last attempt for settlements still queued (bounded
+	// by SettleTimeout), then the usage rows those produced.
+	app.Service.Close(context.WithoutCancel(ctx))
 	app.Usage.Close()
 	log.Info("afs-gateway stopped")
 	if err == nil || errors.Is(err, http.ErrServerClosed) {

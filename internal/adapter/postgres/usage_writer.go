@@ -23,6 +23,8 @@ type UsageWriter struct {
 	flushEvery time.Duration
 	maxBatch   int
 	attempts   int
+	recorder   gateway.UsageDropRecorder
+	ctx        context.Context //nolint:containedctx // the writer's own lifetime, set by Run
 	ch         chan gateway.Record
 	dropped    atomic.Int64
 	failed     atomic.Int64
@@ -39,6 +41,8 @@ type UsageWriterConfig struct {
 	Queue      int           // default 20000
 	// Attempts is how often a failing batch is tried before it is dropped. Default 5.
 	Attempts int
+	// Recorder is told of every dropped row (reason queue_full or write_failed); optional.
+	Recorder gateway.UsageDropRecorder
 }
 
 // NewUsageWriter returns a writer; call Run before use and Close at shutdown.
@@ -58,7 +62,7 @@ func NewUsageWriter(pool *pgxpool.Pool, log *slog.Logger, cfg UsageWriterConfig)
 	if log == nil {
 		log = slog.Default()
 	}
-	return &UsageWriter{pool: pool, log: log, flushEvery: cfg.FlushEvery, maxBatch: cfg.MaxBatch, attempts: cfg.Attempts,
+	return &UsageWriter{pool: pool, log: log, flushEvery: cfg.FlushEvery, maxBatch: cfg.MaxBatch, attempts: cfg.Attempts, recorder: cfg.Recorder,
 		ch: make(chan gateway.Record, cfg.Queue), done: make(chan struct{})}
 }
 
@@ -70,6 +74,13 @@ func (w *UsageWriter) Record(r gateway.Record) {
 	case w.ch <- r:
 	default:
 		w.dropped.Add(1)
+		w.report(gateway.UsageQueueFull, 1)
+	}
+}
+
+func (w *UsageWriter) report(reason gateway.UsageDropReason, rows int) {
+	if w.recorder != nil {
+		w.recorder.UsageRowsDropped(reason, rows)
 	}
 }
 
@@ -83,8 +94,13 @@ func (w *UsageWriter) Failed() int64 { return w.failed.Load() }
 // Written returns the rows stored.
 func (w *UsageWriter) Written() int64 { return w.written.Load() }
 
-// Run starts the writer; it returns at once. Close stops it after the queue is written.
-func (w *UsageWriter) Run() {
+// Run starts the writer; it returns at once. Every batch write derives its timeout from ctx, so a
+// cancelled ctx fails the writes in flight; the flush Close triggers derives from ctx with
+// context.WithoutCancel and so completes after ctx is gone. Close stops the writer after the queue is
+// written. The composition root passes a context that outlives the HTTP drain, so rows recorded by
+// in-flight calls are still written.
+func (w *UsageWriter) Run(ctx context.Context) {
+	w.ctx = ctx
 	w.wg.Go(w.loop)
 }
 
@@ -98,9 +114,10 @@ func (w *UsageWriter) loop() {
 	batch := make([]gateway.Record, 0, w.maxBatch)
 	timer := time.NewTimer(w.flushEvery)
 	defer timer.Stop()
+	ctx := w.ctx
 	flush := func() {
 		if len(batch) > 0 {
-			w.write(batch)
+			w.write(ctx, batch)
 			batch = batch[:0]
 		}
 	}
@@ -118,6 +135,7 @@ func (w *UsageWriter) loop() {
 			flush()
 			timer.Reset(w.flushEvery)
 		case <-w.done:
+			ctx = context.WithoutCancel(w.ctx) // the shutdown flush must outlive the parent
 			for {
 				select {
 				case r := <-w.ch:
@@ -151,7 +169,7 @@ const insertUsageSQL = `INSERT INTO afs.usage_events
 SELECT * FROM unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[],
   $9::int[], $10::int[], $11::int[], $12::int[], $13::numeric[], $14::int[], $15::text[])`
 
-func (w *UsageWriter) write(batch []gateway.Record) {
+func (w *UsageWriter) write(parent context.Context, batch []gateway.Record) {
 	var (
 		at                     = make([]time.Time, 0, len(batch))
 		team, model, req, outc = make([]string, 0, len(batch)), make([]string, 0, len(batch)), make([]string, 0, len(batch)), make([]string, 0, len(batch))
@@ -163,6 +181,7 @@ func (w *UsageWriter) write(batch []gateway.Record) {
 		var c pgtype.Numeric
 		if err := c.Scan(r.Cost.String()); err != nil {
 			w.failed.Add(1)
+			w.report(gateway.UsageWriteFailed, 1)
 			w.log.Error("usage row dropped: cost", "err", err)
 			continue
 		}
@@ -177,7 +196,7 @@ func (w *UsageWriter) write(batch []gateway.Record) {
 	}
 	var err error
 	for attempt := 1; attempt <= w.attempts; attempt++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(parent, 5*time.Second)
 		_, err = w.pool.Exec(ctx, insertUsageSQL, at, team, agent, pool, pod, model, req, outc, in, out, cr, cw, cost, lat, tag)
 		cancel()
 		if err == nil {
@@ -187,6 +206,7 @@ func (w *UsageWriter) write(batch []gateway.Record) {
 		time.Sleep(time.Duration(attempt) * 100 * time.Millisecond)
 	}
 	w.failed.Add(int64(len(at)))
+	w.report(gateway.UsageWriteFailed, len(at))
 	// The error carries no row content (no prompt or completion is ever in a record).
 	w.log.Error("usage batch dropped", "rows", len(at), "err", err)
 }

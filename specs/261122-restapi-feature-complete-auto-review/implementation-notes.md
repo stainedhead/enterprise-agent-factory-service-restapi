@@ -26,6 +26,27 @@ orchestrator to apply in Step 11, and follow-ups.
 
 ## Stream B: Gateway spend integrity
 
+### FR-R08 (B-8, B-9) and wiring (B-10)
+
+- Decision (RD-4): `gateway.UsageDropRecorder.UsageRowsDropped(reason, rows)` in `usecase/gateway/usage.go`
+  with reasons `queue_full` and `write_failed`; `UsageWriterConfig.Recorder` is optional. A batch dropped after
+  every attempt reports its row count; a row whose cost cannot be encoded reports one `write_failed`.
+- Decision: `UsageWriter.Run(ctx)`. Each batch write derives its 5 s timeout from `ctx`; the flush `Close`
+  triggers uses `context.WithoutCancel(ctx)`. `usage_writer.go` holds no `context.Background()` (a test greps
+  for it). The three existing integration call sites now pass `t.Context()` (one-line edits in
+  `gateway_integration_test.go` and `m3_cross_stream_integration_test.go`).
+- Decision: `cmd/afs-gateway` passes `context.WithoutCancel(ctx)` to `Run`: after SIGTERM the HTTP drain
+  still produces rows that must be written; `Close` is what stops the writer. Shutdown order is now
+  drain HTTP, `Service.Close(ctx)` (books, then the last settle attempt), `Usage.Close()`.
+- B-10 (stub, for the integrator): `cmd/afs-gateway/recorders.go` binds `settleRecorder` and
+  `usageDropRecorder` to `gatewayCounters`. C is not in this branch, so `newGatewayCounters` builds the two
+  counters itself (named per RD-3, NOT registered; registering here would panic as a duplicate once C-7
+  registers them). After C merges: replace its body with C's `Metrics` fields (one line, instructions in the
+  comment) and remove the two `deferredWriters` entries in C's dead-metric test list in the same commit. That
+  list does not exist on this branch, so the removal was not done here. `make load` passed (api 344 s, gateway 8.5 s).
+- Design review: no secret or prompt in any recorded or logged value (team, budget, amount only); the
+  recorders are ports in `usecase`, bound only in `cmd`; contexts passed through.
+
 ### FR-R05 (B-5 to B-7)
 
 - Decision (Q2): `usecase/gateway/settle_queue.go`. After the three inline attempts fail, `Service.settle`

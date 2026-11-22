@@ -238,7 +238,7 @@ func TestUsageWriterBatchesWithinASecond(t *testing.T) {
 		t.Fatal(err)
 	}
 	uw := postgres.NewUsageWriter(w.pool, nil, postgres.UsageWriterConfig{})
-	uw.Run()
+	uw.Run(t.Context())
 	defer uw.Close()
 	now := time.Now().UTC()
 	uw.Record(gateway.Record{OccurredAt: now, TeamID: w.team, AgentID: "agt_01JD0000000000000000000A00", ModelID: w.model, RequestID: "r1", Outcome: gateway.OutcomeOK,
@@ -295,7 +295,7 @@ func TestServiceAgainstTheRealDatabase(t *testing.T) {
 	runner := postgres.NewTxRunner(w.pool)
 	thr := postgres.NewThresholdStore(runner, &fakes.IDGen{}, &fakes.Clock{T: time.Now()})
 	uw := postgres.NewUsageWriter(w.pool, nil, postgres.UsageWriterConfig{FlushEvery: 100 * time.Millisecond})
-	uw.Run()
+	uw.Run(t.Context())
 	defer uw.Close()
 	dir := staticDir{team: w.team}
 	svc := gateway.NewService(gateway.Deps{Pods: dir, Store: st, Spend: postgres.NewSpendStore(w.pool), Thresholds: thr, Usage: uw},
