@@ -467,8 +467,8 @@ Owns: `internal/domain/delivery_log.go`, `internal/usecase/logdest/`, `internal/
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M2-I1 | Log destinations API: list, create (CloudWatch, S3, OTLP, Splunk HEC, Datadog; credentials only as a secret reference, inline value → `400`), get, update, delete; viewer create → `403` + denied audit, viewer list and describe allowed | RA-US-17.1, RA-US-17.2 (part), RC-18 (part) | — |
-| [ ] | M2-I2 | Redaction library: passwords, bearer tokens, AWS keys, private keys, JWTs; bound secret values → `[redacted:<first 8 hex of HMAC-SHA-256 with a per-team key>]`, deterministic [unit] | RC-US-16.2, RC-US-16.1 (part), RC-18 (part) | — |
+| [x] | M2-I1 | Log destinations API: list, create (CloudWatch, S3, OTLP, Splunk HEC, Datadog; credentials only as a secret reference, inline value → `400`), get, update, delete; viewer create → `403` + denied audit, viewer list and describe allowed | RA-US-17.1, RA-US-17.2 (part), RC-18 (part) | — |
+| [x] | M2-I2 | Redaction library: passwords, bearer tokens, AWS keys, private keys, JWTs; bound secret values → `[redacted:<first 8 hex of HMAC-SHA-256 with a per-team key>]`, deterministic [unit] | RC-US-16.2, RC-US-16.1 (part), RC-18 (part) | — |
 | [ ] | M2-I3 | Per-team Fluent Bit aggregator: routing by namespace from the node DaemonSet, one output per destination, redaction filter before every output, credentials only through an ESO Secret only the aggregator reads; outputs change within 60 s of a destination change [envtest]; `[e2e]` cases | RC-US-16.4, RC-US-16.3 (part), RC-US-16.1 (part), RC-18 | M2-I1, M2-I2 |
 
 ### M2-X · Milestone exit
