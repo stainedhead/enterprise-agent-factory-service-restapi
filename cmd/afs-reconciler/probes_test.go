@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ func TestEngineStatsAreRegistered(t *testing.T) {
 	})
 	m.SetLeader(true)
 	rec := httptest.NewRecorder()
-	m.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
+	m.Handler().ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", nil))
 	body := rec.Body.String()
 	for _, want := range []string{
 		"afs_reconciler_is_leader 1",

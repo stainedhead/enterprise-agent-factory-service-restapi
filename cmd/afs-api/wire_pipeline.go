@@ -12,7 +12,6 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/authz"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/auth"
-	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 )
 
 // pipeline is what wirePipeline builds for the authentication wiring and for the use cases.
@@ -29,15 +28,6 @@ func routeInfo(r *http.Request) (middleware.RouteInfo, bool) {
 	}
 	return middleware.RouteInfo{OperationID: rt.OperationID, Method: rt.Method, Public: rt.Scope == authz.ScopePublic,
 		Idempotent: rt.Idempotent, Mutation: rt.Mutation}, true
-}
-
-// sessionFromContext is the database session of the authenticated caller of a request.
-func sessionFromContext(ctx context.Context) (port.Session, bool) {
-	p, ok := httpapi.PrincipalFrom(ctx)
-	if !ok {
-		return port.Session{}, false
-	}
-	return sessionOf(p, httpapi.RequestIDFrom(ctx)), true
 }
 
 // wirePipeline installs the request pipeline of M1-D into cfg: request metadata and CORS around the

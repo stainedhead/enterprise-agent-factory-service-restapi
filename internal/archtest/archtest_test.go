@@ -97,7 +97,10 @@ func forbiddenForAPI(dep string) string {
 	switch {
 	case strings.HasPrefix(dep, "github.com/aws/aws-sdk-go-v2/service/"):
 		svc := strings.SplitN(strings.TrimPrefix(dep, "github.com/aws/aws-sdk-go-v2/service/"), "/", 2)[0]
-		if svc == "secretsmanager" || svc == "internal" {
+		// sts, sso, ssooidc and signin are the credential providers the SDK's default configuration
+		// links (Pod Identity, web identity, SSO); afs-api calls none of them itself.
+		switch svc {
+		case "secretsmanager", "internal", "sts", "sso", "ssooidc", "signin":
 			return ""
 		}
 		return "the only AWS service client in afs-api is Secrets Manager"
@@ -112,6 +115,7 @@ func TestForbiddenForAPI(t *testing.T) {
 		"github.com/aws/aws-sdk-go-v2/service/secretsmanager":         false,
 		"github.com/aws/aws-sdk-go-v2/service/internal/presigned-url": false,
 		"github.com/aws/aws-sdk-go-v2/feature/rds/auth":               false,
+		"github.com/aws/aws-sdk-go-v2/service/sts":                    false,
 		"github.com/aws/aws-sdk-go-v2/service/s3":                     true,
 		"github.com/aws/aws-sdk-go-v2/service/iam":                    true,
 		"k8s.io/client-go/kubernetes":                                 true,

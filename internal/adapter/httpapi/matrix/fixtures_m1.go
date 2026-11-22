@@ -38,13 +38,12 @@ func unique() string {
 
 func init() {
 	// Teams.
-	for _, id := range []string{"GetTeam", "GetTeamStatus", "ListTeamModels", "GetTeamTags", "ListMembers", "ListApiKeys", "ListAuditEvents", "ListRevisions"} {
-		path := map[string]string{
-			"GetTeam": "/v1/teams/{teamId}", "GetTeamStatus": "/v1/teams/{teamId}/status", "ListTeamModels": "/v1/teams/{teamId}/models",
-			"GetTeamTags": "/v1/teams/{teamId}/tags", "ListMembers": "/v1/teams/{teamId}/members", "ListApiKeys": "/v1/teams/{teamId}/api-keys",
-			"ListAuditEvents": "/v1/teams/{teamId}/audit-events", "ListRevisions": "/v1/teams/{teamId}/revisions",
-		}[id]
-		Register(Case{Op: id, Path: path})
+	for _, c := range []struct{ op, path string }{
+		{"GetTeam", "/v1/teams/{teamId}"}, {"GetTeamStatus", "/v1/teams/{teamId}/status"}, {"ListTeamModels", "/v1/teams/{teamId}/models"},
+		{"GetTeamTags", "/v1/teams/{teamId}/tags"}, {"ListMembers", "/v1/teams/{teamId}/members"}, {"ListApiKeys", "/v1/teams/{teamId}/api-keys"},
+		{"ListAuditEvents", "/v1/teams/{teamId}/audit-events"}, {"ListRevisions", "/v1/teams/{teamId}/revisions"},
+	} {
+		Register(Case{Op: c.op, Path: c.path})
 	}
 	Register(Case{Op: "ListTeams", Path: "/v1/teams"})
 	Register(Case{Op: "GetRevision", Path: "/v1/teams/{teamId}/revisions/{rev}",

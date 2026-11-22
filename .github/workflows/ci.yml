@@ -75,6 +75,10 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - name: envtest assets (kube-apiserver and etcd)
+        run: |
+          go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.25.3 use 1.37.x --bin-dir "$RUNNER_TEMP/envtest" -p path > "$RUNNER_TEMP/envtest.path"
+          echo "KUBEBUILDER_ASSETS=$(cat "$RUNNER_TEMP/envtest.path")" >> "$GITHUB_ENV"
       - name: envtest suites
         run: make envtest
 
