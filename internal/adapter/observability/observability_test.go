@@ -184,6 +184,7 @@ func TestEveryMetricNameIsRegistered(t *testing.T) {
 	m.DriftCorrected.WithLabelValues("team")
 	m.GatewayReservationFailures.WithLabelValues("db")
 	m.NotificationFailures.WithLabelValues("slack")
+	m.GatewayUsageRowsDropped.WithLabelValues("queue_full")
 	m.RollupRuns.WithLabelValues("j", "ok")
 	m.RollupLastSuccess.WithLabelValues("j")
 	mfs, err := m.Registry.Gather()
@@ -355,4 +356,27 @@ func httpGet(t *testing.T, url string) (*http.Response, error) {
 		return nil, err
 	}
 	return http.DefaultClient.Do(req)
+}
+
+// C-7: the gateway counters of FR-R05 and FR-R08 are registered with the accessors stream B binds.
+func TestGatewayCountersAndNotificationAccessors(t *testing.T) {
+	m := NewMetrics("x", "v")
+	m.SettleFailed()
+	m.SettleFailed()
+	m.UsageRowDropped("queue_full")
+	m.UsageRowDropped("write_failed")
+	m.UsageRowDropped("write_failed")
+	m.NotificationFailed("slack")
+	if got := testutil.ToFloat64(m.GatewaySettleFailures); got != 2 {
+		t.Errorf("settle failures = %v", got)
+	}
+	if got := testutil.ToFloat64(m.GatewayUsageRowsDropped.WithLabelValues("write_failed")); got != 2 {
+		t.Errorf("dropped write_failed = %v", got)
+	}
+	if got := testutil.ToFloat64(m.GatewayUsageRowsDropped.WithLabelValues("queue_full")); got != 1 {
+		t.Errorf("dropped queue_full = %v", got)
+	}
+	if got := testutil.ToFloat64(m.NotificationFailures.WithLabelValues("slack")); got != 1 {
+		t.Errorf("notification failures = %v", got)
+	}
 }

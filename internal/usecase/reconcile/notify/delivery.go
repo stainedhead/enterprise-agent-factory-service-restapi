@@ -82,6 +82,12 @@ type Recorder interface {
 	Record(ctx context.Context, ch Channel, d Delivery) error
 }
 
+// FailureRecorder counts failed notifications by channel type (afs_notification_failures_total).
+// cmd/afs-reconciler binds it to the metric (RD-4); the field on each drainer is optional.
+type FailureRecorder interface {
+	NotificationFailed(channelType string)
+}
+
 // Events emits notification.delivery_failed.
 type Events interface {
 	DeliveryFailed(ctx context.Context, ch Channel, errText, eventType string) error

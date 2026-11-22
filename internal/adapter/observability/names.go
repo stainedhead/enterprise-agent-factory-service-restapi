@@ -23,6 +23,10 @@ const (
 	MetricGatewayReservationFailures = "afs_gateway_reservation_failures_total" // reason
 	MetricGatewayAddedLatency        = "afs_gateway_added_latency_seconds"      // histogram, excludes Bedrock time
 	MetricGatewayReservationsExpired = "afs_gateway_reservations_expired_total"
+	// MetricGatewaySettleFailures counts settlements that fell back to the retry queue or were dropped (FR-R05, RD-3).
+	MetricGatewaySettleFailures = "afs_gateway_settle_failures_total"
+	// MetricGatewayUsageRowsDropped counts usage rows the writer lost (FR-R08, RD-3); reason is queue_full or write_failed.
+	MetricGatewayUsageRowsDropped = "afs_gateway_usage_rows_dropped_total"
 
 	// Outbox.
 	MetricOutboxPending   = "afs_outbox_pending_events"
@@ -56,6 +60,7 @@ func AllMetricNames() []string {
 		MetricAPIRequests, MetricAPIRequestDuration, MetricAPIInFlight, MetricAPICrossTeamNotFound, MetricAPIOrphanSecrets,
 		MetricReconcileDuration, MetricReconcileErrors, MetricReconcileLag, MetricDriftCorrected, MetricLeader,
 		MetricGatewayReservationFailures, MetricGatewayAddedLatency, MetricGatewayReservationsExpired,
+		MetricGatewaySettleFailures, MetricGatewayUsageRowsDropped,
 		MetricOutboxPending, MetricOutboxOldestAge, MetricOutboxPublished, MetricOutboxFailed,
 		MetricNotificationFailures, MetricCURVariance, MetricReportRollupRuns, MetricReportRollupLastSuccess, MetricBuildInfo,
 	}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/condmsg"
 )
 
 // Config configures an Engine. Every field without a default is required.
@@ -21,6 +22,8 @@ type Config struct {
 	Controllers []Controller
 	Status      StatusWriter
 	Drift       DriftRecorder
+	// Recorder receives the reconcile metrics (duration, errors, lag, corrected drift). Optional.
+	Recorder Recorder
 	// Singletons are resources without a database row (cluster-wide objects the reconciler owns):
 	// they are queued at startup and at every resync.
 	Singletons []Ref
@@ -46,7 +49,10 @@ type Engine struct {
 
 	mu    sync.Mutex
 	drift map[Key]map[string]time.Time
-	jobs  []Job
+	// changedAt is when a desired-state change for a key was first queued and not yet observed; the
+	// reconcile lag is measured from it. Guarded by mu.
+	changedAt map[Key]time.Time
+	jobs      []Job
 
 	reconciled, failed atomic.Int64
 	lastPoll, lastSync atomic.Int64 // unix nanos
@@ -77,7 +83,7 @@ func New(cfg Config) (*Engine, error) {
 	}
 	e := &Engine{
 		cfg: cfg, queue: newQueue(cfg.Now, cfg.Backoff), controllers: map[Kind]Controller{},
-		pollNow: make(chan struct{}, 1), drift: map[Key]map[string]time.Time{},
+		pollNow: make(chan struct{}, 1), drift: map[Key]map[string]time.Time{}, changedAt: map[Key]time.Time{},
 	}
 	for _, c := range cfg.Controllers {
 		if _, dup := e.controllers[c.Kind()]; dup {
@@ -163,8 +169,28 @@ func (e *Engine) handleChange(ctx context.Context, c Change) {
 		return
 	}
 	for _, r := range refs {
+		e.markChanged(r.Key)
 		e.Enqueue(r)
 	}
+}
+
+// markChanged notes that a desired-state change for key is waiting to be observed. The first mark
+// wins, so a change that arrives during a retry still counts from the original time.
+func (e *Engine) markChanged(key Key) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if _, ok := e.changedAt[key]; !ok {
+		e.changedAt[key] = e.cfg.Now()
+	}
+}
+
+// takeChanged removes and returns the change time of key.
+func (e *Engine) takeChanged(key Key) (time.Time, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	t, ok := e.changedAt[key]
+	delete(e.changedAt, key)
+	return t, ok
 }
 
 func (e *Engine) pollLoop(ctx context.Context) {
@@ -190,6 +216,8 @@ func (e *Engine) poll(ctx context.Context) {
 	}
 	e.lastPoll.Store(e.cfg.Now().UnixNano())
 	for _, r := range refs {
+		// A stale generation is a change nobody observed yet.
+		e.markChanged(r.Key)
 		e.enqueueBackground(r)
 	}
 }
@@ -234,11 +262,15 @@ func (e *Engine) worker(ctx context.Context) {
 // reconcile runs one pass for ref and reports the result.
 func (e *Engine) reconcile(ctx context.Context, ref Ref) {
 	c := e.controllers[ref.Kind]
+	start := e.cfg.Now()
 	out, err := e.safeReconcile(ctx, c, ref)
 	now := e.cfg.Now()
 	if err != nil {
 		if ctx.Err() != nil {
 			return
+		}
+		if e.cfg.Recorder != nil {
+			e.cfg.Recorder.ReconcileDone(ref.Kind, now.Sub(start), err)
 		}
 		e.failed.Add(1)
 		// A terminal failure is fixed only by a change; it is retried at the longest interval.
@@ -249,6 +281,12 @@ func (e *Engine) reconcile(ctx context.Context, ref Ref) {
 	}
 	e.reconciled.Add(1)
 	e.queue.Forget(ref.Key)
+	if e.cfg.Recorder != nil {
+		e.cfg.Recorder.ReconcileDone(ref.Kind, now.Sub(start), nil)
+		if at, ok := e.takeChanged(ref.Key); ok && !out.NoStatus {
+			e.cfg.Recorder.ReconcileLag(ref.Kind, max(now.Sub(at), 0))
+		}
+	}
 	phase := out.Phase
 	if !phase.Valid() {
 		phase = domain.PhaseReady
@@ -258,6 +296,11 @@ func (e *Engine) reconcile(ctx context.Context, ref Ref) {
 	if _, objs := e.takeCorrectedDrift(ref.Key, out.Changed, now); len(objs) > 0 {
 		driftAt = &now
 		conds = append(append([]domain.Condition(nil), conds...), driftCondition(objs, now))
+		if e.cfg.Recorder != nil {
+			for range objs {
+				e.cfg.Recorder.DriftCorrected(ref.Kind)
+			}
+		}
 		if e.cfg.Drift != nil {
 			for _, o := range objs {
 				if err := e.cfg.Drift.Record(ctx, DriftRecord{Ref: ref, Object: o, At: now}); err != nil {
@@ -309,9 +352,12 @@ func (e *Engine) writeFailure(ctx context.Context, ref Ref, out Outcome, err err
 		phase = domain.PhaseFailed
 	}
 	conds := slices.DeleteFunc(slices.Clone(done), func(c domain.Condition) bool { return c.Type == condType || c.Type == "Ready" })
-	conds = append(conds, domain.Condition{Type: condType, Status: domain.ConditionFalse, Reason: reason, Message: err.Error(), LastTransitionTime: now})
+	// The upstream text (AWS and Kubernetes clients) can carry ARNs and account ids and is read by team
+	// viewers, so the condition gets a sanitised copy; the full error is logged by reconcile (FR-R13).
+	msg := condmsg.Sanitize(err.Error())
+	conds = append(conds, domain.Condition{Type: condType, Status: domain.ConditionFalse, Reason: reason, Message: msg, LastTransitionTime: now})
 	if condType != "Ready" {
-		conds = append(conds, domain.Condition{Type: "Ready", Status: domain.ConditionFalse, Reason: reason, Message: err.Error(), LastTransitionTime: now})
+		conds = append(conds, domain.Condition{Type: "Ready", Status: domain.ConditionFalse, Reason: reason, Message: msg, LastTransitionTime: now})
 	}
 	if werr := e.cfg.Status.Apply(ctx, Report{Ref: ref, Phase: phase, Conditions: conds, ReconciledAt: now}); werr != nil && ctx.Err() == nil {
 		e.cfg.Log.Error("write failure status", slog.String("resource", ref.String()), slog.Any("err", werr))

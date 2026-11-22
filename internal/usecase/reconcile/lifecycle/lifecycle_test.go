@@ -440,3 +440,21 @@ func TestResumeWithNothingRecorded(t *testing.T) {
 		t.Fatalf("err=%v resumed=%v", err, h.resumed)
 	}
 }
+
+// FR-R13: a failing delete step writes a sanitised message into the step's condition; the returned
+// error keeps the full text for the log.
+func TestStepConditionMessageIsSanitised(t *testing.T) {
+	f, a, st, _, _ := newFixture()
+	a.revokeErr = errors.New("AccessDenied: arn:aws:sts::111122223333:assumed-role/afs-reconciler/s cannot iam:DeleteRole " + strings.Repeat("x", 800))
+	_, err := f.Reconcile(context.Background(), team)
+	if err == nil || !strings.Contains(err.Error(), "111122223333") {
+		t.Fatalf("want the full error returned for the log, got %v", err)
+	}
+	got := st.cond(CondType(StepRevokeIAM))
+	if strings.Contains(got.Message, "111122223333") || strings.Contains(got.Message, "arn:aws") || len(got.Message) > 512 {
+		t.Errorf("message not sanitised: %q", got.Message)
+	}
+	if !strings.Contains(got.Message, "AccessDenied") {
+		t.Errorf("message lost its meaning: %q", got.Message)
+	}
+}

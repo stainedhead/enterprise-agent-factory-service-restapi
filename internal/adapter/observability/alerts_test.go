@@ -89,7 +89,7 @@ func TestEverySLIHasAnAlertAndAPanel(t *testing.T) {
 	dash, _ := os.ReadFile(chartDir + "dashboards/afs-slis.json")
 	for _, m := range []string{
 		MetricAPIRequestDuration, MetricReconcileLag, MetricDriftCorrected, MetricGatewayReservationFailures,
-		MetricGatewayAddedLatency, MetricGatewayReservationsExpired, MetricOutboxOldestAge, MetricNotificationFailures, MetricCURVariance,
+		MetricGatewayAddedLatency, MetricGatewayReservationsExpired, MetricGatewaySettleFailures, MetricOutboxOldestAge, MetricNotificationFailures, MetricCURVariance,
 	} {
 		if !strings.Contains(string(alerts), m) {
 			t.Errorf("no alert on %s", m)
@@ -97,5 +97,17 @@ func TestEverySLIHasAnAlertAndAPanel(t *testing.T) {
 		if !strings.Contains(string(dash), m) {
 			t.Errorf("no dashboard panel on %s", m)
 		}
+	}
+}
+
+// C-7: settle failures have an alert, dropped usage rows have a dashboard panel.
+func TestGatewayIntegrityCountersAreAlertedAndCharted(t *testing.T) {
+	alerts, _ := os.ReadFile(chartDir + "templates/prometheusrule.yaml")
+	if !strings.Contains(string(alerts), "alert: AFSGatewaySettleFailures") || !strings.Contains(string(alerts), "increase("+MetricGatewaySettleFailures) {
+		t.Error("no AFSGatewaySettleFailures alert on afs_gateway_settle_failures_total")
+	}
+	dash, _ := os.ReadFile(chartDir + "dashboards/afs-slis.json")
+	if !strings.Contains(string(dash), MetricGatewayUsageRowsDropped) || !strings.Contains(string(dash), "by (reason)") {
+		t.Error("no dashboard panel on afs_gateway_usage_rows_dropped_total by reason")
 	}
 }

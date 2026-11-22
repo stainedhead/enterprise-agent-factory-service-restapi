@@ -99,15 +99,15 @@ second (after A, before B's wiring commit).
 `deploy/helm/afs/templates/prometheusrule.yaml`, `deploy/helm/afs/dashboards/`.
 **Depends on:** nothing. **Blocks:** B-10.
 
-- [ ] **C-1** FR-R06 AC1, AC2 `[unit]` `engine.Recorder` interface; the engine records `afs_reconcile_duration_seconds` and `afs_reconcile_errors_total` per kind and `afs_reconcile_lag_seconds` (change to observed generation). Red: one successful and one failing reconcile through a fake recorder; both series change.
-- [ ] **C-2** FR-R06 AC1 `[unit]` The drift path (`engine/drift.go`) increments `afs_drift_corrected_total{kind}` through the recorder.
-- [ ] **C-3** FR-R06 AC1 `[unit]` The notification drainers in `reconcile/notify/` increment `afs_notification_failures_total{channel_type}` on a failed send.
-- [ ] **C-4** FR-R06 AC2 `[unit]` `cmd/afs-reconciler` binds the recorders to `observability.Metrics`; a test in `cmd/afs-reconciler` runs one success and one failure and asserts the registered series change. Depends on C-1 to C-3.
-- [ ] **C-5** FR-R06 AC3 `[unit]` Dead-metric test in `go test ./...`: parses `prometheusrule.yaml` and `dashboards/*.json`, extracts every metric name, and fails when one is unregistered or lacks a writer on the kept list. Red against the current tree (five dead metrics). Depends on C-1 to C-4 to go green.
-- [ ] **C-6** FR-R13 AC1 `[unit]` New `condmsg` package: strip ARNs and 12-digit account ids, apply an injected scrubber, cut to 512 bytes. Table test feeds an AWS `AccessDenied` message containing an ARN and asserts no 12-digit account id remains.
-- [ ] **C-7** FR-R05 AC3, FR-R08 AC1 `[unit]` Register `afs_gateway_settle_failures_total` and `afs_gateway_usage_rows_dropped_total{reason}` (RD-3) with accessors B can bind; add a `PrometheusRule` alert on settle failures and a dashboard panel for dropped rows. List both in the dead-metric test under `deferredWriters` (writer: stream B, B-10). Alert test in `alerts_test.go`.
-- [ ] **C-8** FR-R13 AC1, AC2 `[unit]` Apply `condmsg.Sanitize` at `engine.go:312,314`, `tagsync.go:157` and `finalizer.go:159-161`; the full error goes to the reconciler log through the redacting handler. One test per call site.
-- [ ] **C-9** All Design review per the checklist; notes in `implementation-notes.md` Stream C, including the dashboard and rule changes.
+- [x] **C-1** FR-R06 AC1, AC2 `[unit]` `engine.Recorder` interface; the engine records `afs_reconcile_duration_seconds` and `afs_reconcile_errors_total` per kind and `afs_reconcile_lag_seconds` (change to observed generation). Red: one successful and one failing reconcile through a fake recorder; both series change.
+- [x] **C-2** FR-R06 AC1 `[unit]` The drift path (`engine/drift.go`) increments `afs_drift_corrected_total{kind}` through the recorder.
+- [x] **C-3** FR-R06 AC1 `[unit]` The notification drainers in `reconcile/notify/` increment `afs_notification_failures_total{channel_type}` on a failed send.
+- [x] **C-4** FR-R06 AC2 `[unit]` `cmd/afs-reconciler` binds the recorders to `observability.Metrics`; a test in `cmd/afs-reconciler` runs one success and one failure and asserts the registered series change. Depends on C-1 to C-3.
+- [x] **C-5** FR-R06 AC3 `[unit]` Dead-metric test in `go test ./...`: parses `prometheusrule.yaml` and `dashboards/*.json`, extracts every metric name, and fails when one is unregistered or lacks a writer on the kept list. Red against the current tree (five dead metrics). Depends on C-1 to C-4 to go green.
+- [x] **C-6** FR-R13 AC1 `[unit]` New `condmsg` package: strip ARNs and 12-digit account ids, apply an injected scrubber, cut to 512 bytes. Table test feeds an AWS `AccessDenied` message containing an ARN and asserts no 12-digit account id remains.
+- [x] **C-7** FR-R05 AC3, FR-R08 AC1 `[unit]` Register `afs_gateway_settle_failures_total` and `afs_gateway_usage_rows_dropped_total{reason}` (RD-3) with accessors B can bind; add a `PrometheusRule` alert on settle failures and a dashboard panel for dropped rows. List both in the dead-metric test under `deferredWriters` (writer: stream B, B-10). Alert test in `alerts_test.go`.
+- [x] **C-8** FR-R13 AC1, AC2 `[unit]` Apply `condmsg.Sanitize` at `engine.go:312,314`, `tagsync.go:157` and `finalizer.go:159-161`; the full error goes to the reconciler log through the redacting handler. One test per call site.
+- [x] **C-9** All Design review per the checklist; notes in `implementation-notes.md` Stream C, including the dashboard and rule changes.
 
 ---
 

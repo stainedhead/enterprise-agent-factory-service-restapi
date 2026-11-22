@@ -39,6 +39,7 @@ type TestRunner struct {
 	Deliverer Deliverer
 	Recorder  Recorder
 	Events    Events
+	Failures  FailureRecorder
 	Now       func() time.Time
 	Log       *slog.Logger
 
@@ -108,6 +109,9 @@ func (t *TestRunner) handle(ctx context.Context, r TestRequest) error {
 	if err := t.Recorder.Record(ctx, ch, d); err != nil {
 		return fmt.Errorf("record test %s: %w", r.TestID, err)
 	}
+	if sendErr != nil && t.Failures != nil {
+		t.Failures.NotificationFailed(string(ch.Kind))
+	}
 	if sendErr != nil && t.Events != nil {
 		if err := t.Events.DeliveryFailed(ctx, ch, RedactURLs(d.Err), string(domain.EventNotificationTestRequested)); err != nil {
 			t.Log.Warn("emit delivery failure", slog.String("channel", ch.ID), slog.Any("err", err))
@@ -138,6 +142,7 @@ type FailureDrainer struct {
 	Source   Source
 	Recorder Recorder
 	Events   Events
+	Failures FailureRecorder
 	Now      func() time.Time
 	Log      *slog.Logger
 }
@@ -184,6 +189,9 @@ func (f *FailureDrainer) handle(ctx context.Context, m QueueMessage) error {
 		text = "delivery failed"
 	}
 	text = RedactURLs(text)
+	if f.Failures != nil {
+		f.Failures.NotificationFailed(string(ch.Kind))
+	}
 	var ev struct {
 		DetailType string `json:"detail-type"`
 	}
@@ -212,6 +220,7 @@ type EmailDrainer struct {
 	Mailer   Mailer
 	Recorder Recorder
 	Events   Events
+	Failures FailureRecorder
 	Now      func() time.Time
 	Log      *slog.Logger
 
@@ -316,6 +325,9 @@ func (e *EmailDrainer) handle(ctx context.Context, m QueueMessage) (bool, error)
 	body := fmt.Sprintf("%s\nEvent id: %s\n\n%s\n", env.DetailType, env.EventID, pretty)
 	if err := e.Mailer.Send(ctx, domain.Recipients(ch.Config), subject, body); err != nil {
 		text := RedactURLs(err.Error())
+		if e.Failures != nil {
+			e.Failures.NotificationFailed(string(ch.Kind))
+		}
 		_ = e.Recorder.Record(ctx, ch, Delivery{At: now, Err: text})
 		if n, _ := strconv.Atoi(m.Attrs["ApproximateReceiveCount"]); n >= failuresBeforeEvent {
 			_ = e.Events.DeliveryFailed(ctx, ch, text, env.DetailType)

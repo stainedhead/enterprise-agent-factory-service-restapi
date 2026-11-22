@@ -17,6 +17,7 @@ import (
 	"fmt"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/condmsg"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/tags"
 )
@@ -154,7 +155,7 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 		return out, engine.WithCondition(tags.Condition, errors.Join(append(failed, refused...)...))
 	case len(refused) > 0:
 		err := errors.Join(refused...)
-		out.Conditions = []domain.Condition{{Type: tags.Condition, Status: domain.ConditionFalse, Reason: tags.ErrorCode, Message: err.Error()}}
+		out.Conditions = []domain.Condition{{Type: tags.Condition, Status: domain.ConditionFalse, Reason: tags.ErrorCode, Message: condmsg.Sanitize(err.Error())}}
 		return out, engine.Terminal(engine.WithCondition(tags.Condition, err))
 	}
 	out.Conditions = []domain.Condition{{Type: tags.Condition, Status: domain.ConditionTrue, Reason: "Applied"}}

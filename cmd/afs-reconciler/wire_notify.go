@@ -59,6 +59,8 @@ type notifyDeps struct {
 	Env    func(string) string
 	Now    func() time.Time
 	Log    *slog.Logger
+	// Failures counts failed sends by channel type (afs_notification_failures_total). Optional.
+	Failures notify.FailureRecorder
 }
 
 // wireNotify builds the notification controller and jobs. It returns an inert notifyWiring, with a
@@ -84,7 +86,7 @@ func wireNotify(d notifyDeps) (notifyWiring, error) {
 	tests := &notify.TestRunner{
 		Requests: postgres.NewChannelTests(d.Runner), Source: source, Secrets: secrets,
 		Deliverer: notify.Deliverer{HTTP: notifyhttp.New(notifyhttp.Options{}), Mail: mailer, Bus: rules},
-		Recorder:  cstatus, Events: events, Now: d.Now, Log: d.Log,
+		Recorder:  cstatus, Events: events, Failures: d.Failures, Now: d.Now, Log: d.Log,
 	}
 	sweep := &notify.Sweeper{Bus: rules, Source: source, Cleaner: cstatus, Log: d.Log}
 	var email *notify.EmailDrainer
@@ -94,7 +96,7 @@ func wireNotify(d notifyDeps) (notifyWiring, error) {
 		if err != nil {
 			return notifyWiring{}, err
 		}
-		email = &notify.EmailDrainer{Queue: q, Source: source, Mailer: mailer, Recorder: cstatus, Events: events, Now: d.Now, Log: d.Log}
+		email = &notify.EmailDrainer{Queue: q, Source: source, Mailer: mailer, Recorder: cstatus, Events: events, Failures: d.Failures, Now: d.Now, Log: d.Log}
 	} else {
 		d.Log.Warn("email channels cannot be delivered: " + envNotifyEmailQueue + " is not set")
 	}
@@ -103,7 +105,7 @@ func wireNotify(d notifyDeps) (notifyWiring, error) {
 		if err != nil {
 			return notifyWiring{}, err
 		}
-		failures = &notify.FailureDrainer{Queue: q, Source: source, Recorder: cstatus, Events: events, Now: d.Now, Log: d.Log}
+		failures = &notify.FailureDrainer{Queue: q, Source: source, Recorder: cstatus, Events: events, Failures: d.Failures, Now: d.Now, Log: d.Log}
 	} else {
 		d.Log.Warn("delivery failures are not collected: " + envNotifyDLQ + " is not set")
 	}

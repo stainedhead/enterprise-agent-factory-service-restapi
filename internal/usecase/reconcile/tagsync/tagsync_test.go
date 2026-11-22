@@ -277,3 +277,29 @@ func TestRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// FR-R13: the refused-tags condition names resources by ARN; the stored message carries neither the
+// ARN nor the account id, and is bounded.
+func TestRefusedConditionMessageIsSanitised(t *testing.T) {
+	d := desired()
+	d.Tags = map[string]string{}
+	for i := range 45 {
+		d.Tags[fmt.Sprintf("k%02d", i)] = "v"
+	}
+	sm := newTagger(map[string]map[string]string{secARN: {}, agtARN: {}})
+	out, err := run(t, build(t, fakeSource{d: d}, sm, newTagger(map[string]map[string]string{queue1: {}})))
+	if err == nil || len(out.Conditions) != 1 {
+		t.Fatalf("err %v conditions %+v", err, out.Conditions)
+	}
+	msg := out.Conditions[0].Message
+	if strings.Contains(msg, "111122223333") || strings.Contains(msg, "arn:aws") || len(msg) > 512 {
+		t.Errorf("message not sanitised: %q", msg)
+	}
+	if !strings.Contains(msg, "limit is 40") {
+		t.Errorf("message lost its meaning: %q", msg)
+	}
+	// the returned error keeps the full text for the reconciler log
+	if !strings.Contains(err.Error(), "111122223333") {
+		t.Errorf("full error should reach the log, got %q", err.Error())
+	}
+}

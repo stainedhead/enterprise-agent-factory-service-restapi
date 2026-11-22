@@ -362,7 +362,7 @@ func TestObservabilityResources(t *testing.T) {
 	}
 	// one alert per SLI of the NFR table
 	for _, want := range []string{"AFSAPIReadLatencyHigh", "AFSAPIReportLatencyHigh", "AFSAPIErrorRatioHigh", "AFSReconcileLagHigh", "AFSDriftHigh",
-		"AFSGatewayReservationFailures", "AFSGatewayAddedLatencyHigh", "AFSGatewayReservationsExpiring", "AFSOutboxLagHigh", "AFSNotificationFailures", "AFSCURVarianceHigh", "AFSNoReconcilerLeader"} {
+		"AFSGatewayReservationFailures", "AFSGatewayAddedLatencyHigh", "AFSGatewayReservationsExpiring", "AFSOutboxLagHigh", "AFSNotificationFailures", "AFSCURVarianceHigh", "AFSNoReconcilerLeader", "AFSGatewaySettleFailures"} {
 		if !alerts[want] {
 			t.Errorf("alert %s missing", want)
 		}

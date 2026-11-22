@@ -81,6 +81,11 @@ spec:
           labels: {severity: warning}
           annotations:
             summary: spend reservations expire unsettled; a gateway replica is dying mid-request
+        - alert: AFSGatewaySettleFailures
+          expr: sum(increase(afs_gateway_settle_failures_total[15m])) > 0
+          labels: {severity: warning}
+          annotations:
+            summary: gateway settlements fell back to the retry queue or were dropped; spend is recorded late or only when holds expire
     - name: afs-events-and-billing
       rules:
         - alert: AFSOutboxLagHigh
