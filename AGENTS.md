@@ -69,7 +69,8 @@ repository's technical facts and decisions in `docs/technical-details.md` and
   `GET /v1/me` for UX only.
 - **The API writes desired state; the reconciler acts on it.** `afs-api` does not call Kubernetes, and
   calls AWS only for write-only secret values (Secrets Manager `PutSecretValue`). Every mutation writes
-  the row, an `audit_log` entry and an `outbox_events` entry in one transaction.
+  the row and an `audit_log` entry in one transaction, plus an `outbox_events` entry when the contract
+  defines an event type for it; the mutations in the root contract's section 4.12 are exempt (CD-7).
 - **Secrets never touch the database or logs.** Store ARNs and metadata only. No endpoint
   or log line may return or print a secret value. Redact `Authorization` headers and tokens.
 - **Optimistic concurrency.** Updates require `If-Match` and compare `version`; return
@@ -119,7 +120,7 @@ Vet, lint, test or build failures: fix before going further.
 - [ ] Dependency rule holds: no adapter, SQL, HTTP or AWS import in `domain` or `usecase`
 - [ ] Every new route declares a permission and has allowed and denied tests per role
 - [ ] No secret value stored, returned, logged or put in an error message
-- [ ] Mutations write audit and outbox records in the same transaction
+- [ ] Mutations write audit (and, where the contract has an event type, outbox) records in the same transaction
 - [ ] Context passed through every call; no `context.Background()` below `cmd/`
 - [ ] Errors wrapped with `%w` and mapped to API error codes at the edge
 - [ ] `api/openapi.yaml` updated with any API change

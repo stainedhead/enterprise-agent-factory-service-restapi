@@ -145,13 +145,13 @@ only), `internal/adapter/httpapi/h2_common.go` (`w2SetArea` only, and only after
 `docs/contracts/api-contract.md` (a separate PR in the root).
 **Depends on:** D-5 (`Config.IdempotencyHMACKey`, RD-2). E-4 to E-6 have no dependency and can start at once.
 
-- [ ] **E-1** FR-R14 AC1 `[unit]` The value's contribution to `idemBody` is HMAC-SHA-256 under the server key from `Config.IdempotencyHMACKey`, never a plain hash. Red: the current unsalted tag is recoverable. Wire the key in `wire_secrets.go`. Depends on D-5.
-- [ ] **E-2** FR-R14 AC2 `[unit]` An unparsable secret body is refused with 400 before the idempotency claim (`CreateSecret` and `RotateSecret`); test covers both.
-- [ ] **E-3** FR-R14 AC3 `[unit]` The stored `request_sha256` differs between two servers with different keys for the same request. Depends on E-1.
-- [ ] **E-4** FR-R17 AC1, AC2 `[adapter]` `imports_repo.go:91` and `:114` return the marshal error wrapped with `%w` and the table name; a value that cannot be marshalled (a channel) makes the import step fail and writes nothing.
-- [ ] **E-5** FR-R16 AC2 `[unit]` Test in the `matrix` package compares the matrix `NoOutbox` set with an embedded copy of the contract exemption list (members, API keys, settings, catalog, config, schedules, swarm templates); fails when they diverge.
-- [ ] **E-6** FR-R16 AC1 (Q4) Root-repository PR to `docs/contracts/api-contract.md`: list the CD-7 mutations as exempt from CT-API-8, record CD-9 (one `client_id` per identity provider) and CD-12 (a workload principal may omit `If-Match` on `UpdateWorkOrderRepo`). Align this repository's `AGENTS.md` line "every mutation writes ... an outbox_events entry" with the outcome. Open the PR; do not merge it.
-- [ ] **E-7** All Design review per the checklist; secret-path denial tests present; notes in `implementation-notes.md` Stream E, with the root PR link.
+- [x] **E-1** FR-R14 AC1 `[unit]` The value's contribution to `idemBody` is HMAC-SHA-256 under the server key from `Config.IdempotencyHMACKey`, never a plain hash. Red: the current unsalted tag is recoverable. Wire the key in `wire_secrets.go`. Depends on D-5.
+- [x] **E-2** FR-R14 AC2 `[unit]` An unparsable secret body is refused with 400 before the idempotency claim (`CreateSecret` and `RotateSecret`); test covers both.
+- [x] **E-3** FR-R14 AC3 `[unit]` The stored `request_sha256` differs between two servers with different keys for the same request. Depends on E-1.
+- [x] **E-4** FR-R17 AC1, AC2 `[adapter]` `imports_repo.go:91` and `:114` return the marshal error wrapped with `%w` and the table name; a value that cannot be marshalled (a channel) makes the import step fail and writes nothing.
+- [x] **E-5** FR-R16 AC2 `[unit]` Test in the `matrix` package compares the matrix `NoOutbox` set with an embedded copy of the contract exemption list (members, API keys, settings, catalog, config, schedules, swarm templates); fails when they diverge.
+- [x] **E-6** FR-R16 AC1 (Q4) Root-repository PR to `docs/contracts/api-contract.md`: list the CD-7 mutations as exempt from CT-API-8, record CD-9 (one `client_id` per identity provider) and CD-12 (a workload principal may omit `If-Match` on `UpdateWorkOrderRepo`). Align this repository's `AGENTS.md` line "every mutation writes ... an outbox_events entry" with the outcome. Open the PR; do not merge it.
+- [x] **E-7** All Design review per the checklist; secret-path denial tests present; notes in `implementation-notes.md` Stream E, with the root PR link.
 
 ---
 

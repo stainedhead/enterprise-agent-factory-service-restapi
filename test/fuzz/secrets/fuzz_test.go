@@ -87,7 +87,8 @@ func newRig(t testing.TB) *rig {
 	repo.Agents[agent] = "coder"
 	svc := &secrets.Service{Deps: acting.Deps{Tx: &fakes.TxRunner{}, Audit: r.audit, Outbox: r.outbox, Idem: &fakes.Idempotency{},
 		Clock: &fakes.Clock{T: time.Now()}, IDs: &fakes.IDGen{}}, Repo: repo, Writer: r.w}
-	api := &httpapi.SecretsAPI{Svc: svc, Pages: httpapi.NewPageTokens(bytes.Repeat([]byte("k"), 32), nil)}
+	api := &httpapi.SecretsAPI{Svc: svc, Pages: httpapi.NewPageTokens(bytes.Repeat([]byte("k"), 32), nil),
+		IdemKey: bytes.Repeat([]byte("i"), 32)}
 	h, err := httpapi.New(httpapi.Config{Auth: auth{}, Registrars: []httpapi.Registrar{api.Register}})
 	if err != nil {
 		t.Fatal(err)

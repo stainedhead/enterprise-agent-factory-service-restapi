@@ -2,10 +2,12 @@ package httpapi
 
 import (
 	"bytes"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -131,24 +133,36 @@ func decodeSecretBody(r *http.Request, dst any) error {
 	return nil
 }
 
-// idemBody is the body hashed for idempotency. The value is replaced by a 32-bit tag of itself, so
-// a reuse of the key with another value is still a mismatch (409) while the hash stored in the
-// database reveals at most 32 bits of the value and cannot be used to guess a secret.
-func idemBody(raw []byte, value *string) []byte {
+// minIdemKeyLen is the shortest accepted server key for the idempotency fingerprint.
+const minIdemKeyLen = 32
+
+// errIdemKey reports a server misconfiguration: no usable idempotency key. It is not a client error.
+var errIdemKey = errors.New("httpapi: the idempotency HMAC key is missing or shorter than 32 bytes")
+
+// idemBody is the body hashed for idempotency. The value is replaced by HMAC-SHA-256 of it under the
+// server key (shared by every replica), so a reuse of the key with another value is still a mismatch
+// (409) while the hash stored in the database cannot be used to test guesses of a secret without the
+// key. A body that is not a JSON object is refused (400) rather than sharing one hash.
+func idemBody(key, raw []byte, value *string) ([]byte, error) {
+	if len(key) < minIdemKeyLen {
+		return nil, errIdemKey
+	}
 	var m map[string]json.RawMessage
-	if json.Unmarshal(raw, &m) != nil {
-		return nil
+	if err := json.Unmarshal(raw, &m); err != nil || m == nil {
+		return nil, bad("body", "must be a JSON object with the documented fields")
 	}
 	delete(m, "value")
 	if value != nil {
-		sum := sha256.Sum256([]byte("afs-idem-value|" + *value))
-		m["valueTag"] = json.RawMessage(strconv.Quote(hex.EncodeToString(sum[:4])))
+		mac := hmac.New(sha256.New, key)
+		mac.Write([]byte("afs-idem-value|"))
+		mac.Write([]byte(*value))
+		m["valueMac"] = json.RawMessage(strconv.Quote(hex.EncodeToString(mac.Sum(nil))))
 	}
 	out, err := json.Marshal(m)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("idempotency body: %w", err)
 	}
-	return out
+	return out, nil
 }
 
 func secretValue(v *string) (domain.SecretValue, error) {
