@@ -688,8 +688,8 @@ Owns: `internal/usecase/teams/{ephemeral*.go,create.go}`, `internal/domain/team.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M5-A1 | `CreateTeam` with `kind: ephemeral`: needs expiry, teardown rule and lifetime budget (`400` otherwise); expiry beyond `teams.ephemeral_max_days` → `400`; team and budget in one transaction | RA-US-10.1, RA-8 | — |
-| [ ] | M5-A2 | Ephemeral → persistent, or removing the lifetime budget → `400` | RA-US-10.2 | M5-A1 |
+| [x] | M5-A1 | `CreateTeam` with `kind: ephemeral`: needs expiry, teardown rule and lifetime budget (`400` otherwise); expiry beyond `teams.ephemeral_max_days` → `400`; team and budget in one transaction | RA-US-10.1, RA-8 | — |
+| [x] | M5-A2 | Ephemeral → persistent, or removing the lifetime budget → `400` | RA-US-10.2 | M5-A1 |
 
 ### M5-B · Pools API (RA-8 pools)
 
@@ -697,13 +697,13 @@ Owns: `internal/domain/pool.go`, `internal/usecase/pools/`, `internal/adapter/po
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M5-B1 | Stages: list, create, update, delete | RA-1 (part) | — |
-| [ ] | M5-B2 | Pools: list, create, get, update, delete; persistent team → `409` checked before the write; name like an agent → `409`; template checks for `CreatePool`; `pool.created/updated/deleted` | RA-US-10.3 (part), RA-US-4.3 (part) | — |
-| [ ] | M5-B3 | `ScalePool` (0–200, else `400`; `pool.scaled`), `PausePool`, `ResumePool`, `GetPoolStatus` (desired, reporting, working, idle, impaired) | RA-US-10.3 (part) | M5-B2 |
-| [ ] | M5-B4 | Handoffs (list, put), pool secret bindings (list, put), `CreateSecret` with `scope: pool` (4-argument `secret_path`) | RA-1 (part) | M5-B2 |
-| [ ] | M5-B5 | Pool config values (list resolved, put, delete) and pool external systems (list, put) | RA-1 (part) | M5-B2 |
-| [ ] | M5-B6 | Pool role links (list, create, delete, verify): account outside the allowed accounts or a role name other than the pool's → `400` | RA-US-10.4 | M5-B2 |
-| [ ] | M5-B7 | Viewers read pools and get `403` on every pool mutation; matrix rows | RA-US-10.5, RA-US-1.3 (part) | M5-B3, M5-B4, M5-B5, M5-B6 |
+| [x] | M5-B1 | Stages: list, create, update, delete | RA-1 (part) | — |
+| [x] | M5-B2 | Pools: list, create, get, update, delete; persistent team → `409` checked before the write; name like an agent → `409`; template checks for `CreatePool`; `pool.created/updated/deleted` | RA-US-10.3 (part), RA-US-4.3 (part) | — |
+| [x] | M5-B3 | `ScalePool` (0–200, else `400`; `pool.scaled`), `PausePool`, `ResumePool`, `GetPoolStatus` (desired, reporting, working, idle, impaired) | RA-US-10.3 (part) | M5-B2 |
+| [x] | M5-B4 | Handoffs (list, put), pool secret bindings (list, put), `CreateSecret` with `scope: pool` (4-argument `secret_path`) | RA-1 (part) | M5-B2 |
+| [x] | M5-B5 | Pool config values (list resolved, put, delete) and pool external systems (list, put) | RA-1 (part) | M5-B2 |
+| [x] | M5-B6 | Pool role links (list, create, delete, verify): account outside the allowed accounts or a role name other than the pool's → `400` | RA-US-10.4 | M5-B2 |
+| [x] | M5-B7 | Viewers read pools and get `403` on every pool mutation; matrix rows | RA-US-10.5, RA-US-1.3 (part) | M5-B3, M5-B4, M5-B5, M5-B6 |
 
 ### M5-C · Pool workloads (RC-11, RC-17 pool part)
 
