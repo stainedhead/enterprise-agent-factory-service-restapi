@@ -24,8 +24,10 @@ var _ secrets.Repository = (*SecretRepo)(nil)
 const secretSelect = `SELECT s.id, s.team_id, coalesce(s.agent_id, ''), coalesce(s.pool_id, ''), s.name, s.description,
   coalesce(s.external_system_id, ''), s.path, s.secrets_manager_arn, coalesce(s.current_version_id, ''), s.last_changed_at,
   s.rotation_days, s.version, s.created_at, s.created_by, s.updated_at,
-  coalesce((SELECT array_agg(b.agent_id ORDER BY b.agent_id) FROM afs.agent_secret_bindings b
-            WHERE b.team_id = s.team_id AND b.secret_id = s.id), '{}')
+  coalesce((SELECT array_agg(u.owner_id ORDER BY u.owner_id) FROM (
+              SELECT b.agent_id AS owner_id FROM afs.agent_secret_bindings b WHERE b.team_id = s.team_id AND b.secret_id = s.id
+              UNION ALL
+              SELECT pb.pool_id FROM afs.pool_secret_bindings pb WHERE pb.team_id = s.team_id AND pb.secret_id = s.id) u), '{}')
 FROM afs.secrets s`
 
 func scanSecret(row pgx.Row) (domain.Secret, error) {
