@@ -123,7 +123,15 @@ reconciler a ClusterRole for the kinds it renders and a Role for its leader Leas
 
 Tags: the effective set (system tags, service tags, team tags; cap 40) is applied to roles, Pod Identity associations,
 inference profiles, snapshots and NodePools, and the keys AFS applied are recorded in `afs-tag-keys` so a removed tag
-is removed and foreign tags are kept. Secrets and work-order queues are tagged at creation only (M6 task).
+is removed and foreign tags are kept. Secrets and pool inbox queues are tagged at creation and then kept in step by
+the `tag_sync` controller (M6-X2; `usecase/reconcile/tagsync`): engine kind and status kind `tag_sync`, id = team id, one
+resource per active or suspended team (`postgres.NewTeamLister`). `postgres.TagSyncSource` reads the team's tags, its
+secrets with their agent or pool owner and names, and its live pools; the controller computes `tags.Effective` per
+resource, then `tags.Diff` and `tags.Stale`, and calls the `tagsync.Tagger` port: `secretsmanager.Tagger`
+(`DescribeSecret`, `TagResource`, `UntagResource`; metadata only) and `sqs.QueueTagger` (`ListQueueTags`, `TagQueue`,
+`UntagQueue`; URLs derived from `pool.QueueName`, nothing listed). Both map a missing resource (and a secret scheduled
+for deletion) to `tagsync.ErrMissing`, which is skipped. Routes: `team_tags`, `secrets`, `agent_pools`, `agents` and
+`service_tags` through the single `mergeRoutes`. The intake queue of work orders is platform-owned and not tagged here.
 
 Viewer kubectl (M5-E): `GetTeamKubeconfig` renders a kubeconfig in `afs-api` from `AFS_CLUSTER_NAME`,
 `AFS_CLUSTER_ENDPOINT`, `AFS_CLUSTER_CA_DATA` and `AFS_AWS_REGION` (`503` when unset); it uses the `aws eks get-token`
@@ -168,4 +176,6 @@ The billing role reads `service_settings` and `team_models`; no env fallback rem
   wrote before 000019 (id `evt_` plus the outbox id zero-padded, stable across redelivery).
 - **Handler areas.** Each handler area has one registrar. The identity provider operations are the area
   `identityproviders` (M2 `BindIdentity` owns `identity`; they once shared a name and the second replaced the first).
-- **Open.** Tag sync for team secrets and the work order and pool queues (they are tagged at creation only).
+- **Not covered here.** Checks that need a cluster or an account (end-to-end run, restore drill, full-scale load,
+  the ASVS checklist, `govulncheck` where the toolchain cannot be downloaded) run in CI and on the development
+  cluster. `-db` is pinned to a pseudo-version until it is tagged.

@@ -1,13 +1,23 @@
 # User docs
 
-How to deploy, configure and call the Agent Factory API. Written as features ship.
+How to deploy, configure and call the Agent Factory API.
+
+Start here:
+
+| Document | For |
+|---|---|
+| [Getting started](getting-started.md) | Everyone: build, run `afs-api` locally, run the checks |
+| [Configuration reference](configuration.md) | Operators: every environment variable per binary, service settings |
+| [Usage examples](usage-examples.md) | Callers: create a team, an agent, a secret, a budget; read a report |
+
+Guides:
 
 | Document | For |
 |---|---|
 | [Authentication, limits and CORS](authentication-and-limits.md) | Callers and operators |
 | [Deployment](deployment.md) | Operators |
 | [Observability](observability.md) | Operators |
-| [reconciler.md](reconciler.md) | Running `afs-reconciler`: what it applies, configuration, probes |
+| [Running afs-reconciler](reconciler.md) | Operators: what it applies, tag sync, configuration, probes |
 | [Reports and usage](reports.md) | Callers: report kinds, grouping, CSV, activity samples |
 | [Costs, reconciliation and prices](billing.md) | Callers and operators: cost reads, billing jobs, price proposals |
 | [Work orders and swarm templates](work-orders.md) | Callers and operators: swarm templates, work orders, security operators, service keys, worker tokens |

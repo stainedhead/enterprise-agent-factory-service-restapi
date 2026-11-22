@@ -14,6 +14,17 @@ For each active team it applies, and keeps correct:
 - the team's IAM roles (`afs-<ulid>` under `/afs/<namespace>/`, the Bedrock role trusting only the
   gateway) and one Bedrock application inference profile per enabled model
 
+Tags on AWS resources follow the team's effective tag set (system tags, service tags, team tags; at most 40
+keys). Roles, Pod Identity associations, inference profiles, snapshots and NodePools are tagged by their own
+controllers. The `tag_sync` resource of each team keeps the team's Secrets Manager secrets and its pool inbox
+queues (`afs-<team>-<hash>`) in step: a changed team or service tag, or a renamed agent or pool, is applied
+(`TagResource`, `TagQueue`), and a tag AFS applied earlier and the team no longer sets is removed (`UntagResource`,
+`UntagQueue`). Tags that someone else put on a resource are left alone. A secret scheduled for deletion and a
+queue that does not exist (a pool that receives no handoffs has none) are skipped. A set over the cap applies
+nothing to that resource and shows `TagsApplied` false with `TagLimitExceeded`. The reconciler's role needs
+`secretsmanager:DescribeSecret`, `TagResource` and `UntagResource` on the secrets path, and
+`sqs:ListQueueTags`, `TagQueue` and `UntagQueue` on `afs-*` queues; the Terraform `pod-identity` module grants them.
+
 It also applies, once per cluster, the Cilium policy on `afs-gateway` that admits only pods of team
 namespaces, and the admission policies that refuse, inside team namespaces, network policy changes by
 anyone but the reconciler, `LoadBalancer` and `NodePort` services, host networking, host PID and IPC,

@@ -19,7 +19,7 @@
 | 2 | Research and data modeling | Complete | research.md, data-dictionary.md |
 | 3 | Architecture and planning | Complete | architecture.md, plan.md |
 | 4 | Task breakdown | Complete | tasks.md: 60 streams, 255 tasks |
-| 5 | Implementation (M0–M6) | In Progress | M0 complete 2026-11-21; M1 complete 2026-11-22 (step 3 started 2026-11-21T20:57:16Z); M2 complete 2026-11-22 (integrated); M3 complete 2026-11-22 (integrated); M4 complete 2026-11-22 (integrated); M5 complete 2026-11-22 (integrated); M6 next. Task progress in tasks.md |
+| 5 | Implementation (M0–M6) | Complete except cluster-only checks | M0 complete 2026-11-21; M1 complete 2026-11-22 (step 3 started 2026-11-21T20:57:16Z); M2 complete 2026-11-22 (integrated); M3 complete 2026-11-22 (integrated); M4 complete 2026-11-22 (integrated); M5 complete 2026-11-22 (integrated); M6 complete 2026-11-22 (integrated, M6-X2 tag sync done) except the cluster-only checks M6-F3, F4, F5, F6 and M2-F8. Step 3 ended 2026-11-22T07:49:27Z. Task progress in tasks.md |
 | 6 | Completion and archival | Not Started | |
 
 ## Phase 0 checklist
@@ -38,7 +38,7 @@
 | M3 Gateway and budgets | Complete | all 36 tasks (gateway, budgets, notifications, reports, activity; cluster-only checks wait for the cluster suite and CI: real Bedrock, `helm lint`, `govulncheck`) |
 | M4 Accounts, tags, billing | Complete | all 26 tasks (identities, links, accounts, tags, CUR, pricing, showback, schedules, export, import, restore; cluster-only checks wait for the cluster suite and CI: real AWS, `helm lint`, `tflint`, `govulncheck`) |
 | M5 Swarms | Complete | all 21 tasks (ephemeral teams, pools, pool workloads, teardown, viewer kubectl, cost tags; cluster-only checks wait for the cluster suite and CI: real AWS and cluster, `helm lint`, `tflint`, `govulncheck`) |
-| M6 CVE remediation and completion | Complete except cluster-only and scale checks | 22 of 28 tasks (M6-F3, F4, F5 need the dev cluster and the full-scale load run; B1 tag sync for secrets and queues is open as M6-X2); see tasks.md |
+| M6 CVE remediation and completion | Complete except cluster-only and scale checks | 23 of 28 tasks (M6-F3, F4, F5, F6 need the dev cluster, the full-scale load run and a downloadable toolchain for `govulncheck`; M6-X2 B1 tag sync for secrets and queues done); see tasks.md |
 
 ## Blockers
 
@@ -175,3 +175,5 @@
 - 2026-11-22: M6-E4 done (`m6/w3`): `Tracker` poll and settle derive pr_opened/merged/done/failed/cancelled; done work orders feed `teams_due_for_teardown` (`work_complete`); integration tests `TestWorkOrderTrackingAndCompletion`, `TeamTornDownWithRepositoriesRemaining`.
 - 2026-11-22: M6-E5 done (`m6/w3`): `Notifier` once per (work order, host, repo, kind, recipient); team recipients through outbox (RC-15), contacts by email through `work_orders.notification_channel_id`, nothing when unset; integration test `TestWorkOrderNotifications`.
 - 2026-11-22: M6-X1 done (integration of `m6/w1`, `m6/w2`, `m6/w3` on `feat/restapi-feature-complete`, all `--no-ff`). Adopted -db 83f0345 (000019, pseudo-version): `afs.record_work_order_secret` replaces the proposed SQL and the `Supported()` probe, SQLSTATEs mapped to domain errors, `spec.secrets` shape aligned (`{pool, name, description?, delivery?, target?}`, validated like `pool_secret_bindings`); the outbox publisher accepts the 000019 envelope and pre-000019 flat payloads (wrapped, stable id); `TestWorkloadReportsOnItsAssignedWorkOrder` runs; CLI-CD-1 decided (CD-12: a workload may omit `If-Match` on `UpdateWorkOrderRepo`); the m2w1 e2e `AFS_OWNED_REPOS` leak removed. Found and fixed: the five identity provider operations answered `501` since M2 because `BindIdentity` (M4) replaced the `identity` area that `BindAdmin1` registered them under (now area `identityproviders`); the matrix had skipped them as "not implemented". M6-F1 (no placeholder test inside `TestAuthorizationMatrix`, `events_coverage_test.go` found three agent events and `work_order.sla_breached` without a test, now covered) and M6-F2 (matrix for every operation and caller) done; M6-X0 was already satisfied.
+- 2026-11-22: M6-X2 done: `tag_sync` reconcile kind (`usecase/reconcile/tagsync`), `secretsmanager.Tagger` and `sqs.QueueTagger`, `postgres.TagSyncSource`, wired in `cmd/afs-reconciler`; gate and cover green. Step 3 complete.
+- 2026-11-22: step 4 (documentation) complete: `docs/` (product summary, details, technical details, ADR-012..016), `README.md`, and `user-docs/` getting-started, configuration reference and usage examples, all linked from the README; dashboard updated for steps 3 and 4.

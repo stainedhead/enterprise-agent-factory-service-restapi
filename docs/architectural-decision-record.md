@@ -83,3 +83,52 @@ Decisions local to this repository. Cross-repo decisions live in the root reposi
 - Context: These suites need a cluster and an AWS account, which CI does not have.
 - Decision: They carry build tags (`e2e`, `load`, `conformance`) and CI compiles them with `go vet -tags e2e,load,conformance,envtest ./...`.
 - Consequences: They cannot rot silently; they run on the dev cluster in M6-F.
+
+## ADR-012 Workload principal from projected ServiceAccount tokens
+
+- Status: Accepted (spec 261121-restapi-feature-complete, M6-D, 2026-11-22)
+- Context: Agents and pool workers call the API (for work order progress) and must not hold long-lived keys.
+- Decision: `afs-api` validates a projected ServiceAccount token offline against the cluster issuer's JWKS
+  (`AFS_CLUSTER_OIDC_ISSUER`): audience exactly `afs-api`, life at most one hour. `afs.resolve_workload` (a
+  SECURITY DEFINER function in `-db`) maps namespace and service account to team, agent or pool. The principal holds
+  only `work-orders:report`, bounded by `Principal.Workload.TeamID` equal to the assigned team.
+- Consequences: no Kubernetes API call on the request path; with no issuer configured, workload tokens are refused.
+  A workload cannot read the version it would send in `If-Match`, so `UpdateWorkOrderRepo` accepts a missing
+  `If-Match` from a workload only (version 0 means the current version).
+
+## ADR-013 Lookups before team scope use SECURITY DEFINER functions
+
+- Status: Accepted (spec 261121-restapi-feature-complete, M0-F8 and M6-X0, 2026-11-22)
+- Context: API key and workload lookup, and the team directory for security operators, run before row-level security
+  has a team to scope by.
+- Decision: `-db` provides `afs.resolve_workload`, `afs.team_directory` and the credential lookup; `afs-api` calls them
+  and no connection uses an elevated login. The interim `TxRunner.Lookup` was removed.
+- Consequences: a schema gap is requested from `-db`, never worked around with elevated writes.
+
+## ADR-014 One envelope for outbox events
+
+- Status: Accepted (spec 261121-restapi-feature-complete, M6, 2026-11-22)
+- Context: Events written by the API and by database functions had different payload shapes before `-db` 000019.
+- Decision: the section 7 envelope `{id, occurredAt, teamId, poolId?, actor, data}` is published as stored;
+  `housekeeping.Envelope` wraps a flat payload and gives it a stable id (`evt_` plus the zero-padded outbox id).
+- Consequences: consumers see one shape; redelivery keeps the same id.
+
+## ADR-015 Tag sync as a team-level reconcile kind
+
+- Status: Accepted (spec 261121-restapi-feature-complete, M6-X2, 2026-11-22)
+- Context: secrets (created by `afs-api`) and pool inbox queues are tagged when created; a later change to team
+  or service tags, an agent or pool rename, or a removed tag was not applied to them.
+- Decision: a `tag_sync` kind, one resource per team, computes the same effective set the other controllers use and
+  applies the difference through a `Tagger` port (Secrets Manager and SQS adapters). A missing resource is skipped;
+  `afs-tag-keys` limits removal to the keys AFS applied.
+- Consequences: no change to the team, agent or pool controllers; the reconciler role gains `UntagResource` on
+  secrets. The platform-owned work order intake queue is not tagged.
+
+## ADR-016 Documentation split by reader
+
+- Status: Accepted (spec 261121-restapi-feature-complete, step 4, 2026-11-22)
+- Context: operators, API callers and contributors need different things, and `user-docs/` must not link into specs.
+- Decision: `user-docs/` has getting started, the configuration reference, usage examples and one guide per area;
+  `docs/` has the product summary and details, the technical details and this record; the README links all of them.
+- Consequences: a change of an environment variable or an operation updates `user-docs/configuration.md` or
+  `usage-examples.md` in the same change.
