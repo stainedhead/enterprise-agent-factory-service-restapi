@@ -32,7 +32,7 @@
   {
     "http": 409,
     "code": "Conflict",
-    "when": "Duplicate name, idempotency body mismatch or in progress, dependent objects exist, invalid state transition (for example a suspended team)",
+    "when": "Duplicate name, idempotency body mismatch or in progress (these two are `details.reason` values, `idempotency_mismatch` and `idempotency_in_progress`, not separate codes), dependent objects exist, invalid state transition (for example a suspended team)",
     "dbOrigin": "`23505`, `23503` (on delete), `55000`"
   },
   {

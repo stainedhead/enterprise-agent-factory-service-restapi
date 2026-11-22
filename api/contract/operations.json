@@ -1759,7 +1759,7 @@
     "screen": "P6",
     "priority": "P2",
     "csv": false,
-    "notes": "`{status, prUrl?, prNumber?, detail?}`"
+    "notes": "`{status, prUrl?, prNumber?, detail?}` (`If-Match` optional for a workload principal, §2, CD-12)"
   },
   {
     "operationId": "ListTeamWorkOrders",
@@ -1879,7 +1879,7 @@
     "screen": "S10",
     "priority": "P0",
     "csv": false,
-    "notes": "(every key of root PRD §6.13 with value, default and range)"
+    "notes": "(every key of root PRD §6.13 with value, default and range; the database-only keys `work_orders.cost_center` and `work_orders.owner_email` are not exposed, CD-8)"
   },
   {
     "operationId": "PutSetting",
