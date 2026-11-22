@@ -30,7 +30,7 @@
 | C | FR-R06, R13 (+ counters) | C-1 to C-9 | 0 of 9 | `../restapi-fix-c`, `fix/review-c` | Not Started |
 | B | FR-R04, R05, R08 | B-1 to B-11 | 0 of 11 | `../restapi-fix-b`, `fix/review-b` | Not Started |
 | D | FR-R03, R07, R09, R10, R11, R15 | D-1 to D-11 | 0 of 11 | `../restapi-fix-d`, `fix/review-d` | Not Started |
-| E | FR-R14, R17, R16 | E-1 to E-7 | 0 of 7 | `../restapi-fix-e`, `fix/review-e` | Not Started |
+| E | FR-R14, R17, R16 | E-1 to E-7 | 7 of 7 | `/home/user/wt/restapi-rf-e`, `rf/e` | Complete on branch (not merged; E-6 root PR text drafted, not opened) |
 
 Merge order: A, C, then B and D (B-10 after C, D-9 and D-10 after A), then E.
 

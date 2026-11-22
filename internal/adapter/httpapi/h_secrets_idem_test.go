@@ -16,7 +16,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/secrets/secretstest"
 )
 
-const secretsTeam = "team_01JD2Q3R4S5T6V7W8X9Y0Z0001"
+const teamUnderTest = "team_01JD2Q3R4S5T6V7W8X9Y0Z0001"
 
 // recIdem records the request fingerprint of every claim.
 type recIdem struct {
@@ -38,10 +38,10 @@ func secretsRig(key []byte) (*SecretsAPI, *recIdem) {
 
 func secretReq(t *testing.T, a *SecretsAPI, op, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	p := authz.Principal{ID: "usr_c", Type: authz.PrincipalUser, Bindings: []authz.Binding{{Role: authz.RoleTeamAdmin, TeamID: secretsTeam}}}
-	r := httptest.NewRequest(http.MethodPost, "/v1/teams/"+secretsTeam+"/secrets", strings.NewReader(body))
+	p := authz.Principal{ID: "usr_c", Type: authz.PrincipalUser, Bindings: []authz.Binding{{Role: authz.RoleTeamAdmin, TeamID: teamUnderTest}}}
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/teams/"+teamUnderTest+"/secrets", strings.NewReader(body))
 	r = r.WithContext(context.WithValue(r.Context(), keyPrincipal, &p))
-	r.SetPathValue("teamId", secretsTeam)
+	r.SetPathValue("teamId", teamUnderTest)
 	r.SetPathValue("secretId", "sec_01JD2Q3R4S5T6V7W8X9Y0Z0001")
 	r.Header.Set("Idempotency-Key", "k-1")
 	w := httptest.NewRecorder()

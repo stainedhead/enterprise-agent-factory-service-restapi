@@ -38,7 +38,44 @@ orchestrator to apply in Step 11, and follow-ups.
 
 ## Stream E: Secrets fingerprint, imports and contract
 
-(append here)
+Worktree `/home/user/wt/restapi-rf-e`, branch `rf/e` (base 80db7e1). Not pushed.
+
+**Decisions.**
+
+- **E-1 key source (D-5 not merged).** `SecretsAPI.IdemKey` carries the key. `cmd/afs-api/wire_secrets.go`
+  `idempotencyHMACKey` reads `AFS_IDEMPOTENCY_HMAC_KEY` with `os.LookupEnv` (E may not edit `settings`, which is D's).
+  Fewer than 32 bytes or unset: warn and draw a random per-process key (same behavior as `pageTokenKey`), so the
+  fingerprint is never unkeyed; a retry that reaches another replica then gets 409 `idempotency_mismatch`, which D-2/D-5
+  remove by refusing startup with replicas above 1. **Integrator:** after D-5 merges, pass `s.IdempotencyHMACKey` into
+  `wireSecrets` and delete `idempotencyHMACKey`; D-8's AST test (no `os.Getenv` outside `settingsFrom`) does not flag
+  `os.LookupEnv`, but the lookup should go anyway.
+- **Fingerprint shape.** `idemBody(key, raw, value)` removes `value` and adds `valueMac` = hex HMAC-SHA-256
+  (full 32 bytes, prefix `afs-idem-value|`). A key under 32 bytes returns an internal error (500, no detail): a server
+  misconfiguration, never an unkeyed hash. A body that is not a JSON object returns 400 instead of `nil`.
+- **E-2.** `decodeSecretBody` already ran before the claim; the shared-hash path was the `nil` return of `idemBody`, now
+  an error. Tests cover create and rotate with four malformed bodies each and assert no claim is made.
+- **E-4.** Both marshal sites return `import <table>: marshal row: %w`; test (white-box, real PostgreSQL) covers insert and
+  update paths, asserts `json.UnsupportedTypeError` is wrapped, no change is recorded and the row count is unchanged.
+  Red was the old behavior (insert: NOT NULL violation from the empty `$1`; update: no error).
+- **E-5.** `matrix/outbox_exemptions_test.go` embeds the 69 exempt operations by contract category and compares both ways.
+  The list is larger than the seven categories named in tasks.md: it also holds identity/role-link/snapshot/export/pool
+  secret-update ops (category `config`), settings-like ops (budget, IdPs, channels, log destinations) and catalog ops.
+- **E-6.** Proposed root text: `/tmp/claude-0/-home-user/27a36fd7-1505-5fa8-a56a-0bccddbe95fd/scratchpad/rf-e-root-contract.md`
+  (section 4.12 exemption table, CD-9 client id, CD-12 workload `If-Match`). The root repo was not edited and no PR was
+  opened (instructed). `AGENTS.md`: the outbox rule line, and the matching checklist item, now say "plus an outbox entry
+  when the contract defines an event type; exempt operations in contract section 4.12". The checklist edit goes slightly
+  beyond "outbox line only"; it is the same rule.
+
+**Design review (AGENTS.md checklist).** Dependency rule unchanged (httpapi, cmd only; no new imports in domain or usecase).
+No new route. No secret value in any hash input, log or error (tests assert the response never echoes the value). Audit and
+outbox behavior unchanged. Context passed (no `context.Background()`). Errors wrapped with `%w`. No OpenAPI change (the 400
+for a malformed body already exists). Exported `IdemKey` documented. No hardcoded ids or ARNs.
+
+**Doc text for D (`user-docs/configuration.md`).** `AFS_IDEMPOTENCY_HMAC_KEY`: at least 32 bytes, from a Secret, identical on
+every `afs-api` replica; keys the fingerprint of secret values in idempotency records. Unset: random per process, retries
+across replicas answer 409.
+
+**ADR draft line.** Idempotency fingerprints of secret values are HMAC-SHA-256 under a server key, never a bare hash.
 
 ## Orchestrator
 
