@@ -400,6 +400,40 @@
           "legendFormat": "variance"
         }
       ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Gateway settle failures and dropped usage rows",
+      "description": "Settlements that fell back to the retry queue, and usage rows lost, by reason",
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(afs_gateway_settle_failures_total[5m]))",
+          "legendFormat": "settle failures"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (reason) (increase(afs_gateway_usage_rows_dropped_total[5m]))",
+          "legendFormat": "dropped rows: {{reason}}"
+        }
+      ]
     }
   ]
 }

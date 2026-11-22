@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/condmsg"
 )
 
 // Target identifies the resource being finalized.
@@ -156,9 +157,9 @@ func next(c domain.Condition, err error, now time.Time) domain.Condition {
 	case err == nil:
 		n.Status, n.Reason = domain.ConditionTrue, "Done"
 	case errors.Is(err, ErrPending):
-		n.Status, n.Reason, n.Message = domain.ConditionFalse, "InProgress", err.Error()
+		n.Status, n.Reason, n.Message = domain.ConditionFalse, "InProgress", condmsg.Sanitize(err.Error())
 	default:
-		n.Status, n.Reason, n.Message = domain.ConditionFalse, reason(err), err.Error()
+		n.Status, n.Reason, n.Message = domain.ConditionFalse, reason(err), condmsg.Sanitize(err.Error())
 	}
 	if c.Status != n.Status || c.Reason != n.Reason {
 		n.LastTransitionTime = now.UTC()

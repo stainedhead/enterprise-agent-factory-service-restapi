@@ -85,6 +85,7 @@ func checkSchema(ctx context.Context, pool *pgxpool.Pool) error {
 // wire builds afs-reconciler. It is the only place adapters are connected.
 func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) string, m *observability.Metrics) (*reconciler, error) {
 	r := &reconciler{Metrics: m, Close: func() {}}
+	rm := newReconcileMetrics(m)
 	as, err := aws.SettingsFrom(env)
 	if err != nil {
 		return nil, err
@@ -205,7 +206,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	if err != nil {
 		return fail(err)
 	}
-	nt, err := wireNotify(notifyDeps{AWS: awsCfg, Bus: s.EventBusName, Runner: runner, Status: status, Outbox: outbox, IDs: ids, Pool: pool, Env: env, Now: clock.Now, Log: log})
+	nt, err := wireNotify(notifyDeps{AWS: awsCfg, Bus: s.EventBusName, Runner: runner, Status: status, Outbox: outbox, IDs: ids, Pool: pool, Env: env, Now: clock.Now, Log: log, Failures: rm})
 	if err != nil {
 		return fail(err)
 	}
@@ -238,6 +239,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 		Controllers:  controllers,
 		Status:       status,
 		Drift:        postgres.NewDriftRecorder(runner, audit, outbox, ids),
+		Recorder:     rm,
 		Singletons:   []engine.Ref{team.PlatformRef, admission.Ref},
 		PollInterval: s.PollInterval, ResyncInterval: s.ResyncInterval, Now: clock.Now, Log: log,
 	})
