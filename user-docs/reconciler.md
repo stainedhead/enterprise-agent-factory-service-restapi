@@ -33,7 +33,9 @@ is in `resource_status` with the conditions `NamespaceReady`, `IamReady` and `Re
 | `AFS_GATEWAY_ROLE_ARN` | yes | The only principal the team Bedrock roles trust; also names the account |
 | `AFS_RECONCILER_USERS` | yes | Comma-separated Kubernetes usernames of this service (the EKS access entry's username) |
 | `AFS_PERMISSIONS_BOUNDARY_ARN` | no | Boundary attached to every role it creates |
-| `AFS_CLUSTER_NAME` | no | Narrows the Pod Identity trust to this cluster |
+| `AFS_CLUSTER_NAME` | yes | The EKS cluster; narrows the Pod Identity trust and names the cluster for access entries |
+| `AFS_EVENT_BUS_NAME` | yes | EventBridge bus the outbox publisher writes to |
+| `AFS_DB_IAM_AUTH` | no | `true` to log in to RDS with IAM tokens instead of a password |
 | `AFS_ESO_ROLE_ARN` | no | External Secrets Operator's role, trusted by team roles |
 | `AFS_SECRETS_PREFIX` | no | Secrets Manager path prefix; default `afs` |
 | `AFS_LEADER_LEASE_NAMESPACE` | no | Namespace of the Lease; default `afs-system` |

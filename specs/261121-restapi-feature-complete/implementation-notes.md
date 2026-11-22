@@ -69,6 +69,22 @@ Decisions taken while creating the spec (step 1, 2026-11-21, under J's authoriza
 | N-11 | Schema gaps X-DB-1..6 are requested from `-db` rather than worked around with elevated writes; only read-only lookups get an interim path (M0-F8) | Elevated writes would bypass the database guards that are part of the security design |
 | N-10 | Viewer kubectl federated roles are configured per identity provider through a Helm-provided file, not the database | OQ-9 default: no access entry without a configured role; no schema column exists |
 
+## M1 integration decisions (step 3, 2026-11-22)
+
+| date | task | decision | reason |
+|---|---|---|---|
+| 2026-11-22 | M1-D1/B1 | One idempotency path: w2's `acting.Idem` claims and completes the key in the mutation's own transaction. The w1 middleware stage and `middleware/idempotency.go` are deleted. M2+ creates and `:verb` actions must use `acting.Idem`. | The middleware completed in a separate transaction, leaving a crash window between the mutation and the stored response. `secretKey` is stripped by the store and refused by the DB CHECK; `TestIdempotencyEndToEnd` proves replay, mismatch (409) and that it is never stored. |
+| 2026-11-22 | M1-A/B | `postgres.SettingsReader` (w1) is the only settings reader; w2's copy and `m1w2Settings` are removed. | One cache and one set of defaults. |
+| 2026-11-22 | M1-B/D | `cfg.Teams` and `cfg.TeamState` come only from `m1w2Teams` (teams use case); w1's `teamFlagLookup` is removed. | One source for team existence and suspended state, so the cross-team 404 and the suspended guard agree. |
+| 2026-11-22 | M1-A/C | `domain.HashAPIKey` is the canonical hash; `auth.HashAPIKey` delegates to it (`TestAPIKeyHashIsTheIssuedHash`). | Issuing (C) and authenticating (A) must hash identically. |
+| 2026-11-22 | M1-D6 | `Registrars` is the default plus every `httpapi.Areas` registrar, appended in `wire`. | An explicit list had replaced the default, leaving w2's handlers unrouted; the matrix now covers all M1 operations. |
+| 2026-11-22 | M1-D3 | `DeleteApiKey` is exempt from the If-Match requirement (`ifMatchOptional`). | ApiKey has no version (website CQ-2). |
+| 2026-11-22 | M1-C3 | Matrix `Case.Suspended`: team keys of a suspended team get 401 (database contract 4.2); users keep their role-based answer. | Matches `afs.authenticate_api_key`. |
+| 2026-11-22 | M1-I1 | A failing delete step keeps phase Deleting (engine `writeFailure` takes the Outcome); the finalizer reports through `ConditionStore` over `resource_status` (`Replace: true`). | Backoff must not flip a deleting team to Failed. |
+| 2026-11-22 | M1-I/J/L | Reconciler wiring: housekeeping jobs registered on the engine, `team.Hooks.Deleting = lifecycle.TeamDeleting(finalizer)`, `observability.Start` with the shared registry; new required `AFS_EVENT_BUS_NAME` and `AFS_CLUSTER_NAME`; `AFS_DB_IAM_AUTH` for both binaries. | Spec M1-F7/J/L. |
+| 2026-11-22 | M1-X | afs-api links the SDK credential-provider services (sts, sso, ssooidc, signin) for RDS IAM auth only; archtest allows these, not `adapter/aws`. | `config.LoadDefaultConfig` pulls them in; afs-api never calls them. |
+| 2026-11-22 | M1-X | Not wired yet: `PriorStateStore`, scale hooks and `Hooks.Suspended`; per-kind reconcile error and lag metrics. | No M2/M5 hooks exist to bind; recorded for M2+. |
+
 ## Edge cases and solutions
 
 (append during implementation)

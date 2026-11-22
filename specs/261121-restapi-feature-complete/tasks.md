@@ -237,7 +237,7 @@ Owns: `internal/domain/{member,apikey}.go`, `internal/usecase/{members,apikeys}/
 |---|---|---|---|---|
 | [x] | M1-C1 | `ListMembers`, `AddMember`, `UpdateMember`, `RemoveMember` with `CanGrant` (team roles only; `If-Match`); events and audit | RA-1 (part), ACC-2 | — |
 | [x] | M1-C2 | `ListApiKeys` (`api-keys:read`; viewers `403`, D50), `CreateApiKey` (team role, expiry ≤ 90 days, `secretKey` once), `DeleteApiKey`; a replayed create returns metadata without `secretKey` and `Idempotent-Replayed: true`; no stored response contains `secretKey` | RA-US-9.3 (part), RA-4 (part) | M1-D1 |
-| [ ] | M1-C3 | Matrix rows for every member and key operation (viewer, team-admin, service admin, security operator, team keys of each role, unbound user) | RA-US-1.3 (part) | M1-D6 |
+| [x] | M1-C3 | Matrix rows for every member and key operation (viewer, team-admin, service admin, security operator, team keys of each role, unbound user) | RA-US-1.3 (part) | M1-D6 |
 
 ### M1-D · Request pipeline (RA-4, RA-15)
 
@@ -354,7 +354,7 @@ Owns: `internal/adapter/observability/`, `internal/adapter/httpapi/middleware/me
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M1-X1 | Merge, `make gate`, `make test-db`, `make envtest`; matrix harness green for implemented operations; `docs/technical-details.md` updated; status.md | — | all M1 |
+| [x] | M1-X1 | Merge, `make gate`, `make test-db`, `make envtest`; matrix harness green for implemented operations; `docs/technical-details.md` updated; status.md | — | all M1 |
 
 ---
 

@@ -19,7 +19,7 @@
 | 2 | Research and data modeling | Complete | research.md, data-dictionary.md |
 | 3 | Architecture and planning | Complete | architecture.md, plan.md |
 | 4 | Task breakdown | Complete | tasks.md: 60 streams, 255 tasks |
-| 5 | Implementation (M0–M6) | In Progress | M0 complete 2026-11-21 (step 3 started 2026-11-21T20:57:16Z); M1 next. Task progress in tasks.md |
+| 5 | Implementation (M0–M6) | In Progress | M0 complete 2026-11-21; M1 complete 2026-11-22 (step 3 started 2026-11-21T20:57:16Z); M2 next. Task progress in tasks.md |
 | 6 | Completion and archival | Not Started | |
 
 ## Phase 0 checklist
@@ -33,7 +33,7 @@
 | Milestone | Status | Tasks done |
 |---|---|---|
 | M0 Contract and foundation | Complete | 41 / 41 |
-| M1 Teams and core | Not Started | 0 |
+| M1 Teams and core | Complete | all M1 tasks (see tasks.md; e2e cases G1b, G1d, H1, RC-US-1a.4 and terraform/helm/tflint validation deferred to the cluster suite and CI) |
 | M2 Agents | Not Started | 0 |
 | M3 Gateway and budgets | Not Started | 0 |
 | M4 Accounts, tags, billing | Not Started | 0 |
@@ -78,4 +78,4 @@
 - 2026-11-21: M1-I1, M1-I2 done (`m1/w4`): `usecase/reconcile/lifecycle` (ordered idempotent delete finalizer with a condition per step, secrets scheduled with the 30-day window before the namespace, hooks for agent and pool steps, suspend/resume with recorded prior state), `aws/secretsmanager` and `aws/eks` delete adapters, `postgres/lifecycle_repo.go` (finalize `deleted` + audit, secret rows). Tested with fakes and a real database; the envtest case of M1-I1 needs the M1-F1 harness and is left to the integrator.
 - 2026-11-21: M1-J1..J3 done (`m1/w4`): `usecase/reconcile/housekeeping` (outbox publisher: ordered per aggregate, at least once, backoff 1 s to 5 min, lag metric; daily partition ensure with two months ahead, monthly drop of 13-month-old partitions, 5-minute idempotency purge), `aws/eventbridge` PutEvents adapter, `postgres/housekeeping.go`; integration tests prove partitions, retention (audit_log untouched) and purge.
 - 2026-11-21: M1-K1..K3, M1-L1..L3 done (`m1/w4`): Terraform modules (rds, backup, buckets, boundary, pod-identity) checked by an HCL/policy test module; Helm chart `deploy/helm/afs` rendered and asserted with the Helm library (`deploy/helm/afs/tests`, golden); `test/e2e/harness.go`; `observability` (redacting slog, OTLP, Prometheus registry, ops server with /metrics /healthz /readyz, RED middleware), PrometheusRule and dashboard on the names in `names.go`. `terraform validate`, `tflint` and `helm lint` run in `.github/workflows/deploy.yml` (no such binaries in the build sandbox).
-
+- 2026-11-22: M1 integrated on feat/restapi-feature-complete (merges of m1/w1..w4). One idempotency path (`acting.Idem`, in the mutation transaction); `postgres.SettingsReader`, `m1w2Teams` and `domain.HashAPIKey` are the single sources; -db a6ecc3c adopted (migrations 1-17, X-DB-7 flipped); `cli_client_id` column and `max_output_tokens` read directly. Reconciler wired with housekeeping, lifecycle finalizer (`team.Hooks.Deleting`), ConditionStore over resource_status and `observability.Start`; afs-api serves every M1 route and has matrix rows for all of them (M1-C3). M1-X1: gate, cover, test-db, envtest and lint (`--build-tags envtest`) green.
