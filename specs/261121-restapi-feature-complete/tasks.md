@@ -380,13 +380,13 @@ Owns: `internal/domain/agent.go`, `internal/usecase/agents/`, `internal/adapter/
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M2-B1 | `Agent` aggregate: digest image, volume grow-only, storage class create-only, no replicas [unit] | RA-US-4.1 (part), RA-US-4.2 | — |
-| [ ] | M2-B2 | `CreateAgent`: model enabled for the team, storage class offered, no binding of another agent's secret, template checks (disabled, digest not allowed, unknown → `400` naming it); `agent.created` | RA-US-4.1, RA-US-4.3 (part) | M2-B1, M2-A3, M2-A4 |
-| [ ] | M2-B3 | `ListAgents`, `GetAgent`, `UpdateAgent`, `DeleteAgent` (marks; reconciler finalizes); events | RA-1 (part) | M2-B2 |
-| [ ] | M2-B4 | `PauseAgent`, `ResumeAgent`, `RestartAgent`, `GetAgentStatus`; events | RA-1 (part), AGT-1 | M2-B3 |
-| [ ] | M2-B5 | `ListAgentSnapshots`, `CreateAgentSnapshot` (manual request row) | RA-1 (part), AGT-9 | M2-B3 |
-| [ ] | M2-B6 | An agent whose template is later disabled is not changed by the API (only the reconciler flags it) [adapter] | RA-US-4.5 (part) | M2-B3 |
-| [ ] | M2-B7 | Matrix rows for every agent operation | RA-US-1.3 (part) | M2-B4, M2-B5 |
+| [x] | M2-B1 | `Agent` aggregate: digest image, volume grow-only, storage class create-only, no replicas [unit] | RA-US-4.1 (part), RA-US-4.2 | — |
+| [x] | M2-B2 | `CreateAgent`: model enabled for the team, storage class offered, no binding of another agent's secret, template checks (disabled, digest not allowed, unknown → `400` naming it); `agent.created` | RA-US-4.1, RA-US-4.3 (part) | M2-B1, M2-A3, M2-A4 |
+| [x] | M2-B3 | `ListAgents`, `GetAgent`, `UpdateAgent`, `DeleteAgent` (marks; reconciler finalizes); events | RA-1 (part) | M2-B2 |
+| [x] | M2-B4 | `PauseAgent`, `ResumeAgent`, `RestartAgent`, `GetAgentStatus`; events | RA-1 (part), AGT-1 | M2-B3 |
+| [x] | M2-B5 | `ListAgentSnapshots`, `CreateAgentSnapshot` (manual request row) | RA-1 (part), AGT-9 | M2-B3 |
+| [x] | M2-B6 | An agent whose template is later disabled is not changed by the API (only the reconciler flags it) [adapter] | RA-US-4.5 (part) | M2-B3 |
+| [x] | M2-B7 | Matrix rows for every agent operation | RA-US-1.3 (part) | M2-B4, M2-B5 |
 
 ### M2-C · Secrets (RA-5)
 

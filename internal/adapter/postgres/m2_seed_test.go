@@ -40,3 +40,14 @@ func arnFor(path string) string {
 }
 
 func lower(s string) string { return strings.ToLower(s) }
+
+// seedTemplateForAgents inserts an enabled catalog template allowing testDigest and returns its id.
+func seedTemplateForAgents(t *testing.T, db *pgtest.DB, name string) string {
+	t.Helper()
+	id := pgtest.NewID("tpl")
+	if _, err := db.Admin(t).Exec(t.Context(), `INSERT INTO afs.agent_templates (id, name, harness, allowed_image_digests, current_image_digest)
+VALUES ($1, $2, 'hermes', ARRAY[$3]::text[], $3)`, id, name, testDigest); err != nil {
+		t.Fatalf("seed template: %v", err)
+	}
+	return id
+}

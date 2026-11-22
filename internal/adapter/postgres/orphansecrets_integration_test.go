@@ -29,7 +29,9 @@ func TestOrphanSecretRows(t *testing.T) {
 	if _, err := admin.Exec(t.Context(), `INSERT INTO afs.service_settings (key, value) VALUES ('secrets.path_prefix', '"acme"') ON CONFLICT (key) DO UPDATE SET value = '"acme"'`); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _, _ = admin.Exec(t.Context(), `DELETE FROM afs.service_settings WHERE key = 'secrets.path_prefix'`) }()
+	defer func() {
+		_, _ = admin.Exec(t.Context(), `DELETE FROM afs.service_settings WHERE key = 'secrets.path_prefix'`)
+	}()
 	if p, err := rows.PathPrefix(t.Context()); err != nil || p != "acme" {
 		t.Fatalf("prefix after setting %q %v", p, err)
 	}

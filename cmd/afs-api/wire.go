@@ -174,6 +174,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 		}
 		wireAuth(c, &cfg, p, s)
 		wireM1W2(c, &cfg, log)
+		wireAgents(c, log)
 		if err := wireSecrets(ctx, c, s, log); err != nil {
 			pool.Close()
 			return nil, err

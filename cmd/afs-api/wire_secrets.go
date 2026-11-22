@@ -50,8 +50,10 @@ func (a smWriter) Create(ctx context.Context, name string, v domain.SecretValue,
 func (a smWriter) PutValue(ctx context.Context, arn string, v domain.SecretValue, token string) (string, error) {
 	return a.w.PutValue(ctx, arn, v.Expose(), token)
 }
-func (a smWriter) ForceDelete(ctx context.Context, arn string) error { return a.w.ForceDelete(ctx, arn) }
-func (a smWriter) TagOrphan(ctx context.Context, arn string) error   { return a.w.TagOrphan(ctx, arn) }
+func (a smWriter) ForceDelete(ctx context.Context, arn string) error {
+	return a.w.ForceDelete(ctx, arn)
+}
+func (a smWriter) TagOrphan(ctx context.Context, arn string) error { return a.w.TagOrphan(ctx, arn) }
 func (a smWriter) ScheduleDeletion(ctx context.Context, arn string, days int) error {
 	return a.w.ScheduleDeletion(ctx, arn, days)
 }
@@ -67,7 +69,7 @@ func (unconfiguredWriter) Create(context.Context, string, domain.SecretValue, st
 func (unconfiguredWriter) PutValue(context.Context, string, domain.SecretValue, string) (string, error) {
 	return "", errNoAWSRegion
 }
-func (unconfiguredWriter) ForceDelete(context.Context, string) error          { return errNoAWSRegion }
+func (unconfiguredWriter) ForceDelete(context.Context, string) error           { return errNoAWSRegion }
 func (unconfiguredWriter) TagOrphan(context.Context, string) error             { return errNoAWSRegion }
 func (unconfiguredWriter) ScheduleDeletion(context.Context, string, int) error { return errNoAWSRegion }
 
