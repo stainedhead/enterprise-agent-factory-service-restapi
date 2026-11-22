@@ -13,7 +13,7 @@
 - [x] C5.5 First admin invite by email and `bootstrap_completed` (COL-32); member sync (COL-33)
 - [x] C5.6 Terraform: reconciler writes worker keys only at `*/paperclip-agent-api-key-??????`
 - [x] C5.7 `TestStreamFailsPartWay` flake fixed (wire-level test)
-- [ ] C5.8 Collaboration report kind (RA-21, COL-36)
-- [ ] C5.9 Export/import of collaboration settings (CFG-5, COL-26)
+- [x] C5.8 Collaboration report kind (RA-21, COL-36)
+- [x] C5.9 Export/import of collaboration settings (CFG-5, COL-26)
 - [ ] C5.10 Review, archive, analysis, pr-body
 - [ ] Parked (real AWS only): see implementation-notes.md

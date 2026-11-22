@@ -63,6 +63,12 @@ func toReportBody(r domain.Report, next string) reportBody {
 		m := measureMap(r.MeasureCols, row.Measures)
 		for i, g := range r.GroupBy {
 			m[g] = row.Group[i]
+			if g == string(domain.DimPerson) && r.Kind == domain.ReportKindCollaboration {
+				m["principal"] = principalOf(row.Group[i])
+			}
+		}
+		if row.ServiceAdminEntry {
+			m["serviceAdminEntry"] = true
 		}
 		rows = append(rows, m)
 	}
@@ -132,4 +138,16 @@ func rawReportQuery(r *http.Request) domain.RawReportQuery {
 		}
 	}
 	return raw
+}
+
+// principalOf is the principal object of a collaboration row grouped by person: a user (usr_ id) or an API key
+// (its prefix). The anonymous group has none.
+func principalOf(id string) map[string]string {
+	switch {
+	case id == "(anonymous)":
+		return map[string]string{"id": "", "type": "anonymous"}
+	case strings.HasPrefix(id, "usr_"):
+		return map[string]string{"id": id, "type": "user"}
+	}
+	return map[string]string{"id": id, "type": "api_key"}
 }

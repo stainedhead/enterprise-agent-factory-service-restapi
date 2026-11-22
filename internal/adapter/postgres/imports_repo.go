@@ -225,6 +225,92 @@ func (im *importer) team(ctx context.Context, tb domain.TeamBundle, out *imports
 			return err
 		}
 	}
+	return im.collaboration(ctx, tb)
+}
+
+// collaboration restores the team's collaboration settings and each worker's connect choice (COL-26),
+// after every agent exists. Only choices travel: the link state starts pending (or disabled) and the
+// reconciler registers the agents again, so no Paperclip data, id or key is ever written from a bundle.
+func (im *importer) collaboration(ctx context.Context, tb domain.TeamBundle) error {
+	if len(tb.Collaboration) > 0 {
+		if err := im.teamCollaboration(ctx, tb.Collaboration); err != nil {
+			return err
+		}
+	}
+	for _, a := range tb.Agents {
+		if len(a.Collaboration) == 0 {
+			continue
+		}
+		if err := im.agentCollaboration(ctx, str(a.Agent, "name"), a.Collaboration); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (im *importer) teamCollaboration(ctx context.Context, c domain.Row) error {
+	agent := str(c, "agent_name")
+	var agentID string
+	if err := im.t.QueryRow(ctx, `SELECT id FROM afs.agents WHERE team_id = $1 AND name = $2 AND deleted_at IS NULL AND role = 'collaboration'`,
+		im.teamID, agent).Scan(&agentID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Validation(domain.FieldError{Field: "collaboration", Reason: "the collaboration agent " + agent + " is not in the bundle"})
+		}
+		return MapError(err, OpRead, "agent")
+	}
+	web, _ := c["web_ui_enabled"].(bool)
+	rest, _ := c["rest_api_enabled"].(bool)
+	mode := str(c, "registration_mode")
+	var curAgent, curMode string
+	var curWeb, curRest bool
+	err := im.t.QueryRow(ctx, `SELECT agent_id, web_ui_enabled, rest_api_enabled, registration_mode FROM afs.team_collaboration WHERE team_id = $1`,
+		im.teamID).Scan(&curAgent, &curWeb, &curRest, &curMode)
+	action := ""
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		_, err = im.t.Exec(ctx, `INSERT INTO afs.team_collaboration (team_id, agent_id, web_ui_enabled, rest_api_enabled, registration_mode)
+VALUES ($1, $2, $3, $4, $5)`, im.teamID, agentID, web, rest, mode)
+		action = "created"
+	case err == nil && (curWeb != web || curRest != rest || curMode != mode):
+		_, err = im.t.Exec(ctx, `UPDATE afs.team_collaboration SET web_ui_enabled = $2, rest_api_enabled = $3, registration_mode = $4 WHERE team_id = $1`,
+			im.teamID, web, rest, mode)
+		action = "updated"
+	case err == nil && curAgent != agentID:
+		im.notes = append(im.notes, "collaboration: the team already has a different collaboration agent; its settings were kept")
+	}
+	if err != nil {
+		return MapError(err, OpWrite, "team collaboration")
+	}
+	if action != "" {
+		im.changes = append(im.changes, imports.Change{Kind: "team_collaboration", ID: im.teamID, Name: "collaboration", Action: action})
+	}
+	return nil
+}
+
+func (im *importer) agentCollaboration(ctx context.Context, name string, c domain.Row) error {
+	var agentID string
+	if err := im.t.QueryRow(ctx, `SELECT id FROM afs.agents WHERE team_id = $1 AND name = $2 AND deleted_at IS NULL`, im.teamID, name).Scan(&agentID); err != nil {
+		return MapError(err, OpRead, "agent")
+	}
+	connect, _ := c["connect"].(bool)
+	var cur bool
+	err := im.t.QueryRow(ctx, `SELECT connect FROM afs.agent_collaboration WHERE team_id = $1 AND agent_id = $2`, im.teamID, agentID).Scan(&cur)
+	action := ""
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		_, err = im.t.Exec(ctx, `INSERT INTO afs.agent_collaboration (team_id, agent_id, connect) VALUES ($1, $2, $3)`,
+			im.teamID, agentID, connect)
+		action = "created"
+	case err == nil && cur != connect:
+		_, err = im.t.Exec(ctx, `UPDATE afs.agent_collaboration SET connect = $3 WHERE team_id = $1 AND agent_id = $2`, im.teamID, agentID, connect)
+		action = "updated"
+	}
+	if err != nil {
+		return MapError(err, OpWrite, "agent collaboration")
+	}
+	if action != "" {
+		im.changes = append(im.changes, imports.Change{Kind: "agent_collaboration", ID: agentID, Name: name + "/collaboration", Action: action})
+	}
 	return nil
 }
 
@@ -420,8 +506,20 @@ func secretLabel(s domain.Row) string {
 
 func (im *importer) agent(ctx context.Context, a domain.AgentBundle, tb domain.TeamBundle, shared map[string]string) error {
 	name := str(a.Agent, "name")
+	extra := map[string]any{"team_id": im.teamID}
+	if str(a.Agent, "role") == "collaboration" {
+		// A collaboration agent is made from its catalog template and keeps its role for life (immutable).
+		var tpl string
+		if err := im.t.QueryRow(ctx, `SELECT id FROM afs.agent_templates WHERE name = $1`, str(a.Agent, "template")).Scan(&tpl); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return domain.Validation(domain.FieldError{Field: "agents", Reason: "the template " + str(a.Agent, "template") + " of the collaboration agent " + name + " is not in this service's catalog"})
+			}
+			return MapError(err, OpRead, "agent template")
+		}
+		extra["role"], extra["template_id"] = "collaboration", tpl
+	}
 	agentID, _, err := im.upsert(ctx, tblAgent, `SELECT id FROM afs.agents WHERE team_id = $1 AND name = $2 AND deleted_at IS NULL`,
-		[]any{im.teamID, name}, a.Agent, map[string]any{"team_id": im.teamID}, name)
+		[]any{im.teamID, name}, a.Agent, extra, name)
 	if err != nil {
 		return err
 	}

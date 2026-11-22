@@ -126,9 +126,11 @@ func (r *exportRig) build(t *testing.T) (domain.Export, []byte) {
 
 // wipeTeam removes the team and everything under it, as an operator restoring into an empty environment would
 // see it.
-func (r *exportRig) wipeTeam(t *testing.T) {
+func (r *exportRig) wipeTeam(t *testing.T) { t.Helper(); r.wipeTeam2(t, r.team.team.ID) }
+
+// wipeTeam2 removes the team with the given id.
+func (r *exportRig) wipeTeam2(t *testing.T, tm string) {
 	t.Helper()
-	tm := r.team.team.ID
 	admin := r.db.Admin(t)
 	rows, err := admin.Query(t.Context(), `SELECT table_name FROM information_schema.columns
 		WHERE table_schema = 'afs' AND column_name = 'team_id'
@@ -380,5 +382,103 @@ func TestExportRowsAreForServiceAdmins(t *testing.T) {
 	})
 	if err != nil || seen != 0 {
 		t.Fatalf("a team member sees %d export rows (%v)", seen, err)
+	}
+}
+
+// COL-26, CFG-5: a bundle carries the collaboration settings, the collaboration agent and each worker's connect
+// choice, and nothing the service observed or manages: no Paperclip id, no link state and no key secret.
+func TestExportImportCollaboration(t *testing.T) {
+	r := newExportRig(t)
+	tm := r.team.team.ID
+	tpl := "pc-" + strings.ToLower(pgtest.NewID("x")[2:8])
+	r.exec(t, `INSERT INTO afs.agent_templates (id, name, harness, default_resources, allowed_image_digests, current_image_digest, enabled, capabilities)
+SELECT $1, $2, t.harness, t.default_resources, t.allowed_image_digests, t.current_image_digest, true, ARRAY['paperclip']
+FROM afs.agent_templates t WHERE t.id = $3`, pgtest.NewID("tpl"), tpl, r.team.templateID)
+	collab := pgtest.NewID("agt")
+	r.exec(t, `INSERT INTO afs.agents (id, team_id, name, template, template_id, image, model_id, role, iam_identity)
+SELECT $1, team_id, 'pc', $2, (SELECT id FROM afs.agent_templates WHERE name = $2), image, model_id, 'collaboration', 'dedicated'
+FROM afs.agents WHERE id = $3`, collab, tpl, r.team.agentID)
+	r.exec(t, `INSERT INTO afs.team_collaboration (team_id, agent_id, web_ui_enabled, rest_api_enabled, registration_mode) VALUES ($1, $2, true, true, 'managed')`, tm, collab)
+	r.exec(t, `INSERT INTO afs.agent_collaboration (team_id, agent_id, connect) VALUES ($1, $2, true)`, tm, r.team.agentID)
+	// The service's own key secret for the worker, bound to it, recorded as the reconciler does.
+	var path string
+	if err := r.db.Admin(t).QueryRow(t.Context(), `SELECT afs.secret_path($1, $2, 'paperclip-agent-api-key')`, tm, r.team.agentID).Scan(&path); err != nil {
+		t.Fatal(err)
+	}
+	ctx := t.Context()
+	tx, err := r.db.Admin(t).Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `SET LOCAL ROLE afs_reconciler`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `SELECT afs.record_collab_agent_key($1, $2, $3)`, tm, r.team.agentID,
+		"arn:aws:secretsmanager:us-east-1:111122223333:secret:"+path+"-AbCdEf"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if r.count(t, `SELECT count(*) FROM afs.agent_secret_bindings WHERE agent_id = $1 AND target = 'PAPERCLIP_AGENT_API_KEY'`, r.team.agentID) != 1 {
+		t.Fatal("the key binding was not recorded")
+	}
+
+	_, doc := r.build(t)
+	b, err := domain.ParseBundle(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tb := b.Teams[0]
+	if tb.Collaboration["agent_name"] != "pc" || tb.Collaboration["registration_mode"] != "managed" || tb.Collaboration["rest_api_enabled"] != true {
+		t.Fatalf("team collaboration: %v", tb.Collaboration)
+	}
+	for _, s := range tb.Secrets {
+		if s["path"] == path {
+			t.Fatalf("the managed key secret was exported: %v", s)
+		}
+	}
+	for _, a := range tb.Agents {
+		for _, sb := range a.SecretBindings {
+			if sb["target"] == "PAPERCLIP_AGENT_API_KEY" {
+				t.Fatalf("the managed binding was exported: %v", sb)
+			}
+		}
+		if strings.Contains(string(doc), "paperclip_agent_id") || strings.Contains(string(doc), "link_state") {
+			t.Fatal("observed link facts were exported")
+		}
+	}
+
+	r.wipeTeam(t)
+	same := map[string]string{"111122223333": "111122223333"}
+	rep := r.importBundle(t, doc, false, same)
+	if rep.Teams[0].Error != nil || rep.Teams[0].Result != imports.ResultCreated {
+		t.Fatalf("apply: %+v %+v", rep.Teams[0], *rep.Teams[0].Error)
+	}
+	var teamID string
+	if err := r.db.Admin(t).QueryRow(t.Context(), `SELECT id FROM afs.teams WHERE slug = $1`, r.team.team.Slug).Scan(&teamID); err != nil {
+		t.Fatal(err)
+	}
+	if r.count(t, `SELECT count(*) FROM afs.team_collaboration c JOIN afs.agents a ON a.id = c.agent_id AND a.role = 'collaboration' AND a.name = 'pc'
+WHERE c.team_id = $1 AND c.registration_mode = 'managed' AND c.rest_api_enabled`, teamID) != 1 {
+		t.Error("team collaboration not restored")
+	}
+	if r.count(t, `SELECT count(*) FROM afs.agent_collaboration WHERE team_id = $1 AND connect AND link_state = 'pending' AND paperclip_agent_id IS NULL`, teamID) != 1 {
+		t.Error("worker connect not restored as pending")
+	}
+	if r.count(t, `SELECT count(*) FROM afs.secrets WHERE team_id = $1 AND managed_by <> 'user'`, teamID) != 0 {
+		t.Error("an import created a managed secret")
+	}
+	// Importing again changes nothing.
+	again := r.importBundle(t, doc, false, same)
+	if again.Teams[0].Result != imports.ResultSkipped {
+		t.Errorf("second import: %+v", again.Teams[0])
+	}
+	// A bundle whose collaboration template is unknown to this service is refused for that team.
+	r.wipeTeam2(t, teamID)
+	r.exec(t, `UPDATE afs.agent_templates SET name = name || '-gone' WHERE name = $1`, tpl)
+	bad := r.importBundle(t, doc, false, same)
+	if bad.Teams[0].Error == nil {
+		t.Errorf("unknown collaboration template accepted: %+v", bad.Teams[0])
 	}
 }

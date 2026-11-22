@@ -107,6 +107,10 @@ type TeamBundle struct {
 	Optouts         []Row         `json:"externalSystemOptouts"`
 	Secrets         []Row         `json:"secrets"`
 	Agents          []AgentBundle `json:"agents"`
+	// Collaboration holds the team's collaboration settings (web_ui_enabled, rest_api_enabled,
+	// registration_mode) and the name of its collaboration agent; nil when the team has none (COL-26).
+	// It never carries Paperclip data, a Paperclip id or a secret value.
+	Collaboration Row `json:"collaboration,omitempty"`
 }
 
 // AgentBundle is one agent with everything that hangs off it.
@@ -117,6 +121,9 @@ type AgentBundle struct {
 	Identities     []Row `json:"identities"`
 	RoleLinks      []Row `json:"roleLinks"`
 	Optouts        []Row `json:"externalSystemOptouts"`
+	// Collaboration holds a worker's connect choice ({connect}); nil when it has no row. The link state and
+	// the Paperclip agent id are observed, not desired, and are never exported.
+	Collaboration Row `json:"collaboration,omitempty"`
 	// LatestSnapshot references the agent's newest completed volume snapshot; nil when none.
 	LatestSnapshot Row `json:"latestSnapshot,omitempty"`
 }

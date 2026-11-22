@@ -313,6 +313,7 @@
         - costs
         - activity
         - traffic
+        - collaboration
     - $ref: '#/components/parameters/From'
     - $ref: '#/components/parameters/To'
     - $ref: '#/components/parameters/Range'
@@ -495,6 +496,7 @@
         - costs
         - activity
         - traffic
+        - collaboration
     - $ref: '#/components/parameters/From'
     - $ref: '#/components/parameters/To'
     - $ref: '#/components/parameters/Range'

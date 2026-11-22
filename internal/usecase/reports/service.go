@@ -179,6 +179,9 @@ func (s *Service) TeamReport(ctx context.Context, c acting.Caller, teamID string
 
 // AgentReport implements GetAgentReport.
 func (s *Service) AgentReport(ctx context.Context, c acting.Caller, teamID, agentID string, kind domain.ReportKind, raw domain.RawReportQuery, p acting.Page) (domain.Report, error) {
+	if kind == domain.ReportKindCollaboration {
+		return domain.Report{}, domain.NotFound("report") // access to a team's Paperclip is not an agent's
+	}
 	return s.run(ctx, c, authz.ReportsRead, "GetAgentReport", Scope{TeamID: teamID, AgentID: agentID}, kind, raw, p)
 }
 

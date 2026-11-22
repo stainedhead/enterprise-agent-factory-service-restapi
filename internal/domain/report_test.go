@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -47,6 +48,14 @@ func TestParseReportQuery(t *testing.T) {
 		{name: "model filter on traffic", kind: ReportKindTraffic, raw: RawReportQuery{ModelID: "m"}, bad: "modelId"},
 		{name: "bad tag filter key", kind: ReportKindUsage, raw: RawReportQuery{Tags: map[string]string{"aws:x": "v"}}, bad: "tag.aws:x"},
 		{name: "bad tag filter value", kind: ReportKindUsage, raw: RawReportQuery{Tags: map[string]string{"env": "a|b"}}, bad: "tag.env"},
+		{name: "collaboration by surface and reason", kind: ReportKindCollaboration, raw: RawReportQuery{Range: "30d", GroupBy: "surface,reason,person"}, gran: FiveMinute, columns: "surface,reason,person"},
+		{name: "collaboration long range stays 5-minute", kind: ReportKindCollaboration, raw: RawReportQuery{Range: "90d"}, gran: FiveMinute, columns: "day"},
+		{name: "collaboration has no agent dimension", kind: ReportKindCollaboration, raw: RawReportQuery{GroupBy: "agent"}, bad: "groupBy"},
+		{name: "collaboration has no hour", kind: ReportKindCollaboration, raw: RawReportQuery{Range: "24h", GroupBy: "hour"}, bad: "groupBy"},
+		{name: "surface on usage", kind: ReportKindUsage, raw: RawReportQuery{GroupBy: "surface"}, bad: "groupBy"},
+		{name: "collaboration agent filter", kind: ReportKindCollaboration, raw: RawReportQuery{AgentID: "agt_01JD2Q3R4S5T6V7W8X9Y0Z0001"}, bad: "agentId"},
+		{name: "collaboration pool filter", kind: ReportKindCollaboration, raw: RawReportQuery{PoolID: "pool_01JD2Q3R4S5T6V7W8X9Y0Z0001"}, bad: "poolId"},
+		{name: "collaboration tag filter", kind: ReportKindCollaboration, raw: RawReportQuery{Tags: map[string]string{"env": "x"}}, bad: "tag"},
 		{name: "untagged filter", kind: ReportKindUsage, raw: RawReportQuery{Tags: map[string]string{"env": UntaggedValue}}, gran: Daily, columns: "day"},
 	}
 	for _, tc := range tests {
@@ -97,5 +106,25 @@ func TestReportDaysAndKind(t *testing.T) {
 	c := a
 	if a.Fingerprint() == b.Fingerprint() || a.Fingerprint() != c.Fingerprint() {
 		t.Error("fingerprint")
+	}
+}
+
+func TestCollaborationReportKindAndMeasures(t *testing.T) {
+	if k, err := ParseReportKind("collaboration"); err != nil || k != ReportKindCollaboration {
+		t.Fatalf("%v %v", k, err)
+	}
+	if ReportKindCollaboration.Valid() {
+		t.Error("collaboration must not be a schedulable report kind")
+	}
+	var names []string
+	for _, m := range ReportMeasures(ReportKindCollaboration) {
+		names = append(names, m.Name)
+	}
+	if got := fmt.Sprint(names); got != "[signIns uniquePeople requests deniedRequests secretDetections]" {
+		t.Errorf("measures %s", got)
+	}
+	q, _ := ParseReportQuery(ReportKindCollaboration, RawReportQuery{}, reportNow)
+	if n := ReportNotes(q); len(n) != 3 {
+		t.Errorf("notes %v", n)
 	}
 }
