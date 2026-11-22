@@ -69,6 +69,13 @@ func newExportRig(t *testing.T) *exportRig {
 	db := pgtest.Get(t)
 	r := &exportRig{db: db, blob: &memBlob{objects: map[string][]byte{}}}
 	r.team = seedFullAgent(t, db)
+	// Other tests assert on the shared outbox, so the events these tests publish are removed after.
+	admin := db.Admin(t)
+	var firstOutbox int64
+	_ = admin.QueryRow(t.Context(), `SELECT coalesce(max(id), 0) FROM afs.outbox_events`).Scan(&firstOutbox)
+	t.Cleanup(func() {
+		_, _ = admin.Exec(context.WithoutCancel(t.Context()), `DELETE FROM afs.outbox_events WHERE id > $1`, firstOutbox)
+	})
 	r.runner = postgres.NewTxRunner(appPool(t, db))
 	r.deps = acting.Deps{Tx: r.runner, Audit: postgres.NewAuditWriter(r.runner), Outbox: postgres.NewOutboxWriter(), Idem: postgres.NewIdempotencyStore(),
 		Clock: liveClock{}, IDs: liveIDs{}}
@@ -187,7 +194,7 @@ func TestExportBuildsABundleWithoutSecrets(t *testing.T) {
 	if e.Status != domain.ExportStatusSucceeded || e.SHA256 == nil || e.SizeBytes == nil || *e.SizeBytes != int64(len(doc)) || e.S3URI == nil || e.DownloadURL == nil || e.Error != nil {
 		t.Fatalf("%+v", e)
 	}
-	if left := e.DownloadExpiresAt.Sub(time.Now()); left < 7*24*time.Hour-time.Minute || left > 7*24*time.Hour+time.Minute {
+	if left := time.Until(*e.DownloadExpiresAt); left < 7*24*time.Hour-time.Minute || left > 7*24*time.Hour+time.Minute {
 		t.Fatalf("link valid for %v", left)
 	}
 	b, err := domain.ParseBundle(doc)

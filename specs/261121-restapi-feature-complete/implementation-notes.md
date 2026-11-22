@@ -207,3 +207,12 @@ Each is decided in `api/openapi.yaml` 1.1.0 and needs the root api-contract.md t
 ## Lessons learned
 
 (append at completion)
+
+## M4-F and M4-G decisions (worker w4, `m4/w4`)
+
+- Bundle: `domain.Bundle` carries `schemaVersion` (14, the -db schema), teams and agents as column allowlisted rows, and a SHA-256 over its canonical JSON (sorted keys, no whitespace). `ParseBundle` rejects a checksum mismatch, an unknown shape, a schema version it does not know, duplicate team slugs and any key that looks like a secret value, key hash or client secret.
+- Export build: the reconciler claims one pending row with `FOR UPDATE SKIP LOCKED`, reads the team state, writes the object through the `export.Blob` port (`Put`, `PresignGet`) and records `s3_uri`, `sha256`, `size_bytes`, `download_url` (7 days) and `succeeded`; a failure records `failed` with a summary and no checksum. ASSUMPTION for the integrator: M4-E4 supplies the `Blob` implementation (S3 with KMS, env `AFS_EXPORT_BUCKET`, `AFS_EXPORT_KMS_KEY_ID`); `cmd/afs-reconciler/wire_export.go` `exportBlob()` returns nil until it is plugged in, and the job stays unregistered. afs-api makes no S3 call (archtest `TestAPIBinaryClients`).
+- Import: dry run is the default (`dryRun=false` applies). Each team runs in its own savepoint, so a failing team writes nothing and is reported while the others apply. Rows are written with `jsonb_populate_record` through the same column allowlists as the export. Role links import as `pending_trust`. The account map rewrites allowed accounts, secret ARNs, identity references and role links; a missing account is a validation failure for that team. Secrets are created as metadata only and reported as needing a value.
+- Idempotency for import and restore uses `acting.Idem` in the first transaction; the per-team work is inside it.
+- Restore: `RestoreRevision` locks the team row (`FOR UPDATE`) so concurrent mutations serialize, rebuilds the target state from `config_revisions` (newest revision of each resource with id <= rev, a delete means absent), plans with `domain.PlanRestore`, and applies each step in a savepoint. A step refused by a DB guard (pg classes 22, 23, P0001, 55000, 42501) is skipped and reported. A dry run runs the same steps and rolls back. `generation` goes up by one; one audit record names the revision.
+- DB gap X-DB-8: `agent_secret_bindings` has no revision trigger, so restore cannot rebuild secret bindings and leaves them alone. A -db change is needed to restore them.

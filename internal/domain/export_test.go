@@ -102,7 +102,7 @@ func TestExportExpiry(t *testing.T) {
 func TestRewriteAccounts(t *testing.T) {
 	src := TeamBundle{
 		Team:    Row{"slug": "p", "allowed_aws_accounts": []any{"111122223333", "payments-*", "*"}},
-		Secrets: []Row{{"secrets_manager_arn": "arn:aws:secretsmanager:eu-west-1:111122223333:secret:afs/p/_shared/x-AbCdEf"}},
+		Secrets: []Row{{"secrets_manager_arn": "arn:aws:secretsmanager:eu-west-1:111122223333:secret:afs/p/_shared/x-AbCdEf"}}, //nolint:gosec // an ARN in a test fixture, not a credential
 		Agents: []AgentBundle{{Agent: Row{"name": "a"},
 			Identities: []Row{{"kind": "aws_iam_role", "external_ref": "arn:aws:iam::111122223333:role/afs-a"}, {"kind": "k8s_service_account", "external_ref": "sa-a"}},
 			RoleLinks:  []Row{{"account_id": "999988887777", "role_arn": "arn:aws:iam::999988887777:role/deploy"}}}},
