@@ -8,7 +8,7 @@
 | Source spec | `specs/261121-restapi-feature-complete/` |
 | Produced by | dev-flow `implm-frm-prd` Step 5 (code and design review), finalized in Step 6 (`review-prd`) |
 | Date | 2026-11-22 |
-| Status | Ready for spec (Step 8 turns this document into `specs/YYMMDD-restapi-feature-complete-auto-review/`) |
+| Status | Reviewed in Step 6: ready for spec (Step 8 turns this document into `specs/YYMMDD-restapi-feature-complete-auto-review/`) |
 
 ## 1. Executive summary
 
@@ -193,9 +193,16 @@ database triggers guard them.
 
 1. `w2Caller` takes the client address from the request metadata middleware, so allowed and denied
    records agree.
-2. A table-driven test sends a mutation with `X-Forwarded-For: 203.0.113.7, 10.0.0.5`, using hops 0, 1
-   and 2, and asserts the recorded `SourceIP` (`10.0.0.5`-peer, `10.0.0.5`, `203.0.113.7`). Allowed and
-   denied requests must record the same value.
+2. A table-driven test sends a mutation from socket peer `192.0.2.1` with
+   `X-Forwarded-For: 203.0.113.7, 10.0.0.5` and asserts the recorded `SourceIP`:
+
+   | Hops | Recorded `SourceIP` |
+   |---|---|
+   | 0 | `192.0.2.1` |
+   | 1 | `10.0.0.5` |
+   | 2 | `203.0.113.7` |
+
+   An allowed request and a denied request with the same headers record the same value.
 3. With hops 0, a client-supplied `X-Forwarded-For` never changes the recorded address.
 
 #### FR-R03 (P1) The public readiness endpoint must not return dependency error text
@@ -210,8 +217,8 @@ database triggers guard them.
 
 *Acceptance criteria.*
 
-1. `/readyz` on the API listener answers `{"status":"not ready","checks":{"database":"unavailable"}}`
-   (or another fixed word) when the check fails, and the cause is logged with the request id.
+1. When a check fails, `/readyz` on the API listener answers `503` with the body
+   `{"status":"not ready","checks":{"database":"unavailable"}}`. The cause is logged with the request id.
 2. A unit test that injects a check error with the text `failed to connect to user=afs_app host=10.1.2.3`
    asserts the response body contains neither `afs_app` nor `10.1.2.3`.
 3. The operations-port `/readyz` behaviour does not change.
@@ -257,14 +264,19 @@ database triggers guard them.
 
 *Acceptance criteria.*
 
-1. When settlement fails after its retries, the gateway keeps a durable or retried record of
-   `(holdID, budgetID, period, actual)` and settles it later. The settlement is idempotent:
-   `afs.settle_reservation` already adds the cost to a released hold.
+1. When settlement fails after its inline retries, the gateway queues
+   `(holdID, budgetID, period, actual)` in a bounded retry queue (default 10,000 entries). It retries with
+   exponential backoff for up to 10 minutes, the retry window. Settling twice is safe:
+   `afs.settle_reservation` returns false for a hold already released and still adds the cost, so the
+   queue retries only on an error, never after a successful call. If the queue is full or the window
+   runs out, the entry is counted and logged with team, budget and amount.
 2. A use-case test with a fake `Spend` that fails N times and then succeeds proves the period's spent
    amount ends up with the actual cost.
 3. A new counter, `afs_gateway_settle_failures_total`, is incremented for every settlement that falls
    back, and the chart's `PrometheusRule` alerts on it.
-4. On shutdown, pending settlements are flushed before exit, and a test proves it with `Close`.
+4. On shutdown, pending settlements are attempted once more before exit (bounded by `SettleTimeout`), and
+   a test proves it with `Close`. A gateway crash still falls back to hold expiry, as gateway contract §4
+   allows (see Q2).
 
 #### FR-R06 (P1) Every metric that an alert or dashboard reads must be recorded
 
@@ -338,9 +350,9 @@ connection indefinitely.
 
 *Acceptance criteria.*
 
-1. `ReadTimeout` and `IdleTimeout` are set from settings with documented defaults (`user-docs/configuration.md`).
-   The read timeout is long enough for a 100 MB import on the documented link speed, or `CreateImport`
-   gets a per-route deadline through `http.ResponseController`.
+1. `ReadTimeout` (default 60 s) and `IdleTimeout` (default 120 s) come from settings
+   (`AFS_HTTP_READ_TIMEOUT`, `AFS_HTTP_IDLE_TIMEOUT`) and are documented in `user-docs/configuration.md`.
+   `CreateImport` extends its own read deadline to 10 minutes with `http.ResponseController.SetReadDeadline`.
 2. A test with a deliberately slow body asserts the server closes the connection after the configured
    timeout.
 
@@ -372,7 +384,8 @@ before the IAM password function is built (`:132-142`). With `AFS_DB_IAM_AUTH=tr
    a table test per variable.
 2. `AFS_MAX_BODY_BYTES` is either read and applied as the default body limit, or removed from the chart
    and the docs.
-3. A test fails when `cmd/afs-api` calls `os.Getenv` outside `main.go` and `settingsFrom`.
+3. A test that parses the `cmd/afs-api` sources (go/ast) fails when `os.Getenv` is called outside
+   `main.go` and `settingsFrom`.
 
 #### FR-R12 (P2) Use-case denials must record their audit reliably
 
@@ -402,9 +415,9 @@ scrubbed nor bounded. Notification errors already go through `RedactURLs` and tr
 
 *Acceptance criteria.*
 
-1. Condition messages pass through one sanitiser that removes ARNs and account ids and runs the
-   observability scrubbers, and they are cut to a fixed length (for example 512 bytes). The full error
-   goes to the reconciler log.
+1. Condition messages pass through one sanitiser that removes ARNs and 12-digit account ids and runs the
+   observability scrubbers, and they are cut to 512 bytes. The full error goes to the reconciler log
+   (scrubbed by the redacting handler).
 2. A table test feeds an AWS-style `AccessDenied` message with an ARN and asserts the stored message has
    no 12-digit account id.
 
@@ -607,3 +620,41 @@ worktrees and run `make gate`.
 | FR-R15 | P2 | Design | Mutable package-level handler registry; 501 fallback not refused |
 | FR-R16 | P2 | Contract | CD-7, CD-9 and CD-12 not in the root contract |
 | FR-R17 | P2 | Error handling | Ignored `json.Marshal` errors in the import writer |
+
+## 13. Review record (Step 6, `review-prd`)
+
+**Verdict: ready for spec.** Every dimension passes, with one accepted warning.
+
+| Dimension | Status | Note |
+|---|---|---|
+| Problem clarity | Pass | Section 2 names the defect class (invariants skipped on side paths) and the affected binaries, roles and operators |
+| Scope definition | Pass | Five goals and four explicit non-goals. The infrastructure-bound tasks are fenced off in section 7 |
+| Functional completeness | Pass (warning accepted) | FR-R01 to FR-R17 map to goals 1 to 5 (see the finding index). FR-R08 and FR-R11 each bundle two small items. They are kept together because each pair has one owner and one file, and their acceptance criteria are numbered separately |
+| NFR coverage | Pass | Section 6 covers security, reliability (gateway latency budget), observability, performance and quality |
+| Acceptance criteria | Pass | Every FR has numbered, testable criteria with test level and inputs. Step 6 replaced the vague ones with fixed values: the FR-R02 address table, the FR-R03 body, the FR-R05 queue size and window, the FR-R09 timeouts, the FR-R13 length and the FR-R11 AST test |
+| Dependency identification | Pass | Section 10 names `-db` (optional, Q1), the root contract (FR-R16) and the client repositories (no change) |
+| Open questions | Pass | Q1 to Q4 each have a default, so Step 8 can proceed without an answer |
+
+**Priority check.**
+
+- **FR-R01 stays P0.** It is the only path where a team role overrides a service-admin guardrail through
+  the API. Under `review-code`, security findings are always Must Fix.
+- **FR-R04 and FR-R05 stay P1, not P0.** The overspend they allow is bounded per call: by the model's
+  own maximum in FR-R04, by a database failure in FR-R05. The cap still refuses new calls once spend is
+  recorded. Both are still high because the hard budget cap is a core product promise.
+- **FR-R03 stays P1.** It is unauthenticated information disclosure, cheap to fix and contained.
+- **FR-R07 stays P1.** It breaks pagination in the shipped default deployment, though it causes no data
+  loss.
+- **The P2 items are true mediums.** None is a security hole on its own. FR-R14 needs database read
+  access first, and FR-R13 exposes data only to members of the same team.
+- **No finding was a preference dressed as a blocker.**
+
+**Guidance check.** Section 9 requires:
+
+- TDD (Red, Green, Refactor) for every fix, with the refused case tested for security fixes
+- a code and design review per fix against the `AGENTS.md` checklist
+- one agent teammate per stream
+- git worktrees per stream, with a merge order and file ownership (section 8)
+
+**Next step.** Run `/create-spec restapi-feature-complete-review-PRD.md` (Step 8, after Step 7 archives
+the original spec).

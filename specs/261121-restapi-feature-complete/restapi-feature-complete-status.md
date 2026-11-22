@@ -17,7 +17,7 @@
 | 3  | Implement Product               | ✅ Complete (M0 to M6; M6-F3, F4, F5, F6 and M2-F8 need the dev cluster and stay open in tasks.md) | 2026-11-21T20:57:16Z | 2026-11-22T07:49:27Z | 652 |
 | 4  | Documentation and User Docs     | ✅ Complete | 2026-11-22T07:49:27Z | 2026-11-22T07:52:03Z | 3 |
 | 5  | Code and Design Review          | ✅ Complete (1 P0, 6 P1, 10 P2) | 2026-11-22T07:52:13Z | 2026-11-22T08:05:43Z | 14 |
-| 6  | Prepare Review PRD              | 🔄 In Progress | 2026-11-22T08:05:43Z | — | — |
+| 6  | Prepare Review PRD              | ✅ Complete (review-prd: ready for spec; AC tightened, priorities confirmed, 5 fix streams) | 2026-11-22T08:05:43Z | 2026-11-22T08:06:36Z | 1 |
 | 7  | Archive Original Spec           | ⬜ Pending | — | — | — |
 | 8  | Spec Review Fixes               | ⬜ Pending | — | — | — |
 | 9  | Implement Review Fixes          | ⬜ Pending | — | — | — |
