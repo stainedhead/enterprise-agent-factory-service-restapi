@@ -88,7 +88,10 @@ func (im *importer) upsert(ctx context.Context, tb tbl, find string, findArgs []
 		for k := range extra {
 			cols = append(cols, k)
 		}
-		raw, _ := json.Marshal(doc)
+		raw, err := json.Marshal(doc)
+		if err != nil {
+			return "", "", fmt.Errorf("import %s: marshal row: %w", tb.name, err)
+		}
 		list := strings.Join(cols, ", ")
 		if _, err := im.t.Exec(ctx, fmt.Sprintf(`INSERT INTO afs.%s (%s) SELECT %s FROM jsonb_populate_record(NULL::afs.%s, $1) r`,
 			tb.name, list, "r."+strings.Join(cols, ", r."), tb.name), raw); err != nil {
@@ -111,7 +114,10 @@ func (im *importer) upsert(ctx context.Context, tb tbl, find string, findArgs []
 	if tb.bump {
 		sets = append(sets, "generation = x.generation + 1")
 	}
-	raw, _ := json.Marshal(doc)
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		return "", "", fmt.Errorf("import %s: marshal row: %w", tb.name, err)
+	}
 	tag, err := im.t.Exec(ctx, fmt.Sprintf(`UPDATE afs.%s x SET %s FROM jsonb_populate_record(NULL::afs.%s, $1) r
 WHERE x.id = $2 AND ROW(x.%s) IS DISTINCT FROM ROW(r.%s)`, tb.name, strings.Join(sets, ", "), tb.name,
 		strings.Join(upd, ", x."), strings.Join(upd, ", r.")), raw, id)
