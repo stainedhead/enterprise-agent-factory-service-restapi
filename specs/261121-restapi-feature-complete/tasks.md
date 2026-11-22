@@ -368,11 +368,11 @@ Owns: `internal/domain/{model,catalog,extsys_catalog}.go`, `internal/usecase/{mo
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M2-A1 | `ListModels` (enabled, `models:read`), `ListAdminModels`, `CreateModel` (`maxOutputTokens` required), `UpdateModel` | RA-1 (part) | — |
-| [ ] | M2-A2 | `ListModelPrices`, `CreateModelPrice` (`admin:pricing`, effective-dated) | RA-1 (part) | M2-A1 |
-| [ ] | M2-A3 | `ListStorageClasses`, `ListStorageClassesAdmin`, `PutStorageClass`, `DeleteStorageClass` (in use → `409`) | RA-1 (part) | — |
-| [ ] | M2-A4 | `ListAgentTemplates` (enabled only), `ListAdminAgentTemplates`, `PutAgentTemplate`, `DeleteAgentTemplate` (team-admin → `403`; in use → `409`) | RA-US-4.4, RA-1 (part) | — |
-| [ ] | M2-A5 | Catalog systems: list, create, get, update (endpoints, service switch), delete (built-ins → `409`) | RA-1 (part), EXT-1 | — |
+| [x] | M2-A1 | `ListModels` (enabled, `models:read`), `ListAdminModels`, `CreateModel` (`maxOutputTokens` required), `UpdateModel` | RA-1 (part) | — |
+| [x] | M2-A2 | `ListModelPrices`, `CreateModelPrice` (`admin:pricing`, effective-dated) | RA-1 (part) | M2-A1 |
+| [x] | M2-A3 | `ListStorageClasses`, `ListStorageClassesAdmin`, `PutStorageClass`, `DeleteStorageClass` (in use → `409`) | RA-1 (part) | — |
+| [x] | M2-A4 | `ListAgentTemplates` (enabled only), `ListAdminAgentTemplates`, `PutAgentTemplate`, `DeleteAgentTemplate` (team-admin → `403`; in use → `409`) | RA-US-4.4, RA-1 (part) | — |
+| [x] | M2-A5 | Catalog systems: list, create, get, update (endpoints, service switch), delete (built-ins → `409`) | RA-1 (part), EXT-1 | — |
 
 ### M2-B · Agents API
 
@@ -407,8 +407,8 @@ Owns: `internal/domain/config.go`, `internal/usecase/config/`, `internal/adapter
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M2-D1 | Namespace values: list, put (creates or updates), delete (linked → `409`); `AFS_OWNED_REPOS` entries validated (`host/owner/repo` or `host/owner/*`, comma or whitespace separated) | RA-1 (part), CFG-7 | — |
-| [ ] | M2-D2 | Agent values: list resolved with `source`, put `{source: literal\|namespace, value?}`, delete | RA-1 (part) | M2-D1 |
+| [x] | M2-D1 | Namespace values: list, put (creates or updates), delete (linked → `409`); `AFS_OWNED_REPOS` entries validated (`host/owner/repo` or `host/owner/*`, comma or whitespace separated) | RA-1 (part), CFG-7 | — |
+| [x] | M2-D2 | Agent values: list resolved with `source`, put `{source: literal\|namespace, value?}`, delete | RA-1 (part) | M2-D1 |
 
 ### M2-E · External systems
 
@@ -416,9 +416,9 @@ Owns: `internal/domain/extsys.go`, `internal/usecase/extsys/`, `internal/adapter
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M2-E1 | `ListTeamExternalSystems` (catalog + declared, team state), `SetTeamExternalSystemState` | RA-1 (part), EXT-3 | — |
-| [ ] | M2-E2 | `DeclareTeamExternalSystem` (only with `mayAddExternalSystems`; allowed and denied cases), `UpdateTeamExternalSystem`, `DeleteTeamExternalSystem` (team-declared only) | RA-US-1.5 (part), EXT-2 | — |
-| [ ] | M2-E3 | `ListAgentExternalSystems` (effective, `disabledAt`), `SetAgentExternalSystemState` | RA-1 (part), EXT-4 | M2-E1 |
+| [x] | M2-E1 | `ListTeamExternalSystems` (catalog + declared, team state), `SetTeamExternalSystemState` | RA-1 (part), EXT-3 | — |
+| [x] | M2-E2 | `DeclareTeamExternalSystem` (only with `mayAddExternalSystems`; allowed and denied cases), `UpdateTeamExternalSystem`, `DeleteTeamExternalSystem` (team-declared only) | RA-US-1.5 (part), EXT-2 | — |
+| [x] | M2-E3 | `ListAgentExternalSystems` (effective, `disabledAt`), `SetAgentExternalSystemState` | RA-1 (part), EXT-4 | M2-E1 |
 
 ### M2-F · Agent workloads (RC-2, TEAM-6)
 
