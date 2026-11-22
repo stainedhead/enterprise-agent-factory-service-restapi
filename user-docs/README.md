@@ -22,3 +22,9 @@ Guides:
 | [Costs, reconciliation and prices](billing.md) | Callers and operators: cost reads, billing jobs, price proposals |
 | [Work orders and swarm templates](work-orders.md) | Callers and operators: swarm templates, work orders, security operators, service keys, worker tokens |
 | [Export, import and restore](export-import-restore.md) | Operators: bundles, dry-run imports with an account map, restoring a team revision |
+
+## The rest of the product
+
+These guides cover this repository only. For the service as a whole, start with the
+[service overview](https://github.com/stainedhead/enterprise-agent-factory-service#readme) and the
+[adoption guide](https://github.com/stainedhead/enterprise-agent-factory-service/blob/main/user-docs/adoption-guide.md).
