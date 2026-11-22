@@ -253,6 +253,9 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 		return fail(err)
 	}
 	wireTeardown(r.Engine, runner, audit, outbox, ids, clock.Now, log)
+	if err := wireWorkOrders(r.Engine, awsCfg, runner, audit, outbox, ids, env, clock.Now, log); err != nil {
+		return fail(err)
+	}
 	wireBudget(r.Engine, runner, audit, outbox, ids, iamClient, m, clock.Now, log)
 	if err := wireActivity(r.Engine, kc, runner, env, clock.Now, log); err != nil {
 		return fail(err)

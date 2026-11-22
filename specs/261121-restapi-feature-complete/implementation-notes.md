@@ -317,3 +317,11 @@ Each is decided in `api/openapi.yaml` 1.1.0 and needs the root api-contract.md t
 - **Teardown completion marker.** `torn_down_at` is set to the database `now()` when the teardown starts (the `teams_teardown_recorded` check wants it with the reason) and set equal to `deleted_at` when the record is closed. A deleted team with `torn_down_at < deleted_at` has not been closed, so the sweep does not read the outbox (whose rows are purged). Reasons are the contract's `expired`, `cap_reached`, `work_complete`; `manual` belongs to the API's delete path.
 - **Wrapper completer not used.** After the finalizer's Complete the team is `deleted` and no longer reconciles, so the closing record is a separate sweep in the same job.
 - **First apply of a PVC.** The API server touches a new claim's managed fields once more on the apply after its creation, so the no-op assertion in envtest is on the third pass.
+
+## M6-E decisions (worker w3, m6/w3)
+
+- X-DB-4 is already in the pinned -db (000016), so M6-E6 needed no bump. Its outbox payloads lack the contract envelope (id, occurredAt, data); worth a -db follow-up.
+- Template secrets: `afs.instantiate_work_order_team` does not create them. The reconciler creates each secret empty in Secrets Manager (never a value; tags afs-team-id, afs-pool-id, afs-work-order-id) and records it via a proposed -db function `afs.record_work_order_secret` (SQL in `postgres.ProposedRecordWorkOrderSecretSQL`). Without it (`Supported()` false) the job logs a warning and skips. The `spec.secrets` entry shape `{pool, name, description, delivery, target}` is assumed.
+- Rate limits block the whole installation scope `host/org`; last known DB state is kept. Per-installation budget 4500/hour counts every call.
+- Notifications derive from state each pass; the uniqueness of `work_order_notifications` gives once-only. Email is at-least-once, team delivery exactly-once. Sentinel recipient `afs` records the work order's own SLA events.
+- Env: AFS_WORK_ORDER_QUEUE_URL (intake off if unset), AFS_GITHUB_APPS_FILE (GitHub off if unset).

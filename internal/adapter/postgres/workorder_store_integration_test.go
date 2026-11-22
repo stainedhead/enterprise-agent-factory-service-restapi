@@ -217,7 +217,7 @@ func TestWorkOrderIntakeRefusalsWriteNothing(t *testing.T) {
 	}(), "ambiguous_repos")
 	amb := rej.Detail["ambiguousRepos"].([]map[string]any)
 	ids := amb[0]["teamIds"].([]string)
-	if len(amb) != 1 || amb[0]["repo"] != host+"/shared/x" || len(ids) != 2 || !((ids[0] == a && ids[1] == b) || (ids[0] == b && ids[1] == a)) {
+	if len(amb) != 1 || amb[0]["repo"] != host+"/shared/x" || len(ids) != 2 || (ids[0] != a || ids[1] != b) && (ids[0] != b || ids[1] != a) {
 		t.Errorf("ambiguous = %v", amb)
 	}
 	if un, _ := rej.Detail["unownedRepos"].([]string); len(un) != 1 || un[0] != host+"/nobody/x" {
@@ -235,7 +235,7 @@ func TestWorkOrderIntakeRefusalsWriteNothing(t *testing.T) {
 	gone := r.db.SeedTeam(t)
 	r.exec(`UPDATE afs.teams SET state = 'deleted', deleted_at = now() WHERE id = $1`, gone.ID)
 	for _, id := range []string{pgtest.NewID("team"), gone.ID} {
-		wantRejection(t, func() error {
+		_ = wantRejection(t, func() error {
 			_, err := r.store.CreateFromEvent(ctx, r.event(repoIn(host, "mine/ok", id, "")), time.Now())
 			return err
 		}(), "unknown_owner")
@@ -245,7 +245,7 @@ func TestWorkOrderIntakeRefusalsWriteNothing(t *testing.T) {
 	for _, id := range []string{off, pgtest.NewID("swt")} {
 		ev := r.event(repoIn(host, "mine/ok", "", ""))
 		ev.TemplateID = id
-		wantRejection(t, func() error { _, err := r.store.CreateFromEvent(ctx, ev, time.Now()); return err }(), "template_unavailable")
+		_ = wantRejection(t, func() error { _, err := r.store.CreateFromEvent(ctx, ev, time.Now()); return err }(), "template_unavailable")
 	}
 	if after := r.count(`SELECT count(*) FROM afs.work_orders`); after != before {
 		t.Errorf("work orders went from %d to %d: a refused event writes nothing", before, after)
@@ -613,6 +613,7 @@ func TestWorkOrderNotifications(t *testing.T) {
 	}
 	r.exec(`UPDATE afs.work_order_repos SET status = 'pr_opened', pr_url = 'https://github.com/acme/api/pull/7', pr_number = 7 WHERE work_order_id = $1 AND repo = 'acme/api'`, id)
 
+	r.exec(`UPDATE afs.service_settings SET value = 'null' WHERE key = 'work_orders.notification_channel_id'`)
 	if ch, err := r.store.NotificationChannel(ctx); err != nil || ch != "" {
 		t.Fatalf("channel = %q, %v: nothing is set", ch, err)
 	}
@@ -657,7 +658,7 @@ func TestWorkOrderNotifications(t *testing.T) {
 		t.Fatalf("channel = %q, want %q", got, ch)
 	}
 	t.Cleanup(func() {
-		_, _ = r.admin.Exec(context.Background(), `DELETE FROM afs.service_settings WHERE key = 'work_orders.notification_channel_id'`)
+		_, _ = r.admin.Exec(context.Background(), `UPDATE afs.service_settings SET value = 'null' WHERE key = 'work_orders.notification_channel_id'`)
 	})
 	for pass := 0; pass < 2; pass++ {
 		if err := n.Notify(ctx, []workorder.WorkOrder{wo}); err != nil {

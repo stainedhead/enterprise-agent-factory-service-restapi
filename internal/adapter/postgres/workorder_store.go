@@ -116,14 +116,15 @@ func (s *WorkOrderStore) CreateFromEvent(ctx context.Context, n workorder.NewWor
 		if errors.As(err, &rej) {
 			return workorder.CreateResult{}, rej
 		}
-		// A concurrent intake of the same event or CVE loses on the unique index; the rolled-back transaction
-		// wrote nothing, so the answer is the one the winner's row gives.
+		// A concurrent intake of the same event loses on a unique index (the event's or, since the same event names
+		// the same CVE, the open CVE's); the rolled-back transaction wrote nothing, so the answer is the one the
+		// winner's row gives. A different event for an open CVE is a refusal.
 		var pe *pgconn.PgError
-		if errors.As(err, &pe) && pe.Code == codeUnique {
-			switch pe.ConstraintName {
-			case eventOnceIndex:
-				return s.existing(ctx, n.SourceEventID)
-			case cveOpenIndex:
+		if errors.As(err, &pe) && pe.Code == codeUnique && (pe.ConstraintName == eventOnceIndex || pe.ConstraintName == cveOpenIndex) {
+			if got, gerr := s.existing(ctx, n.SourceEventID); gerr == nil {
+				return got, nil
+			}
+			if pe.ConstraintName == cveOpenIndex {
 				return workorder.CreateResult{}, &workorder.Rejection{Reason: "open_work_order", Detail: map[string]any{"cveId": n.CVEID}}
 			}
 		}
@@ -273,7 +274,7 @@ func (s *WorkOrderStore) Instantiate(ctx context.Context, id string) (string, er
 
 // ---- template secrets ------------------------------------------------------------------------------------
 
-const recordSecretSig = `afs.record_work_order_secret(text,text,text,text,text,text,text)`
+const recordSecretSig = /* #nosec G101 -- a function signature */ `afs.record_work_order_secret(text,text,text,text,text,text,text)`
 
 // Supported implements workorder.SecretStore.
 func (s *WorkOrderStore) Supported(ctx context.Context) (bool, error) {

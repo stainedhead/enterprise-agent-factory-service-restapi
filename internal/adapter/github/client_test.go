@@ -36,7 +36,7 @@ var testKey = func() *rsa.PrivateKey {
 // fixture reads a recorded GitHub response.
 func fixture(t testing.TB, name string) []byte {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("testdata", name))
+	b, err := os.ReadFile(filepath.Join("testdata", name)) //nolint:gosec // a fixed fixture directory
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 		f.gotJWT = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		f.tokenSeq++
 		w.WriteHeader(http.StatusCreated)
-		fmt.Fprintf(w, `{"token":"ghs_example%d","expires_at":%q}`, f.tokenSeq, f.clk.Now().Add(f.tokenTTL).Format(time.RFC3339))
+		_, _ = fmt.Fprintf(w, `{"token":"ghs_example%d","expires_at":%q}`, f.tokenSeq, f.clk.Now().Add(f.tokenTTL).Format(time.RFC3339))
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/repos/acme/"):
 		f.lastAuth = r.Header.Get("Authorization")
 		if f.badTokens[strings.TrimPrefix(f.lastAuth, "Bearer ")] {
