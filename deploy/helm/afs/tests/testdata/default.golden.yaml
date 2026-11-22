@@ -1632,6 +1632,8 @@ spec:
                       value: arn:aws:iam::111122223333:policy/afs-agent-boundary
                     - name: AFS_RECONCILER_ROLE_ARN
                       value: arn:aws:iam::111122223333:role/afs-reconciler
+                    - name: AFS_EFS_STORAGE_CLASS
+                      value: efs-sc
                     - name: AFS_LEADER_LEASE_NAMESPACE
                       value: afs-system
                   image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-reconciler:v0.1.0

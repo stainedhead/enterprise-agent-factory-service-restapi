@@ -794,6 +794,7 @@
   post:
     operationId: PausePool
     summary: Pause pool
+    description: Sets the pool's state to paused, which stops its workers (desired workers 0) and keeps the configured worker count. Emits `pool.updated` (the contract has no pause event). Pausing a paused pool changes nothing and emits nothing.
     tags:
     - pools
     parameters:
@@ -880,6 +881,7 @@
   post:
     operationId: ResumePool
     summary: Resume pool
+    description: Sets the pool's state to enabled, which restores the configured worker count. Emits `pool.updated` (the contract has no resume event). Resuming an enabled pool changes nothing and emits nothing.
     tags:
     - pools
     parameters:
@@ -1632,7 +1634,7 @@
               builtin: true
               scope: service
               teamState: 'on'
-              disabledAt: agent
+              disabledAt: pool
               unmetered: false
               version: 1
               createdAt: '2026-11-21T18:00:00Z'

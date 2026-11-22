@@ -34,6 +34,10 @@ const (
 	MetricNotificationFailures = "afs_notification_failures_total" // channel_type
 	MetricCURVariance          = "afs_cost_cur_variance_ratio"     // abs(estimate - billed) / billed, latest day
 
+	// Report rollups (reconciler).
+	MetricReportRollupRuns        = "afs_report_rollup_runs_total"                     // job, outcome
+	MetricReportRollupLastSuccess = "afs_report_rollup_last_success_timestamp_seconds" // job
+
 	// Build info, every binary.
 	MetricBuildInfo = "afs_build_info" // service, version
 )
@@ -53,6 +57,6 @@ func AllMetricNames() []string {
 		MetricReconcileDuration, MetricReconcileErrors, MetricReconcileLag, MetricDriftCorrected, MetricLeader,
 		MetricGatewayReservationFailures, MetricGatewayAddedLatency, MetricGatewayReservationsExpired,
 		MetricOutboxPending, MetricOutboxOldestAge, MetricOutboxPublished, MetricOutboxFailed,
-		MetricNotificationFailures, MetricCURVariance, MetricBuildInfo,
+		MetricNotificationFailures, MetricCURVariance, MetricReportRollupRuns, MetricReportRollupLastSuccess, MetricBuildInfo,
 	}
 }

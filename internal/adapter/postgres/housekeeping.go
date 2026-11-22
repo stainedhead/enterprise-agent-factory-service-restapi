@@ -156,3 +156,17 @@ var (
 	_ housekeeping.PartitionOps = (*Housekeeping)(nil)
 	_ housekeeping.KeyPurger    = (*Housekeeping)(nil)
 )
+
+// Recent implements rollup.Store: afs.rollup_reports_recent(days) (-db 000018) recomputes the daily
+// activity and traffic rollups for the last days UTC days and returns the rows written.
+func (h *Housekeeping) Recent(ctx context.Context, days int) (int64, error) {
+	var n int64
+	err := h.runner.InTx(ctx, hkSession, func(ctx context.Context, tx port.Tx) error {
+		t, err := Unwrap(tx)
+		if err != nil {
+			return err
+		}
+		return t.QueryRow(ctx, `SELECT afs.rollup_reports_recent($1::int)`, days).Scan(&n)
+	})
+	return n, MapError(err, OpWrite, "report rollup")
+}

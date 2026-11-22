@@ -37,6 +37,12 @@ spec:
             - {name: metrics, containerPort: {{ $c.ports.metrics }}}
           env:
             {{- include "afs.env" $ctx | nindent 12 }}
+            - name: AFS_EFS_STORAGE_CLASS
+              value: {{ $c.efsStorageClass | quote }}
+            {{- with (dig "viewerKubectl" "roles" dict $c) }}
+            - name: AFS_VIEWER_KUBECTL_ROLES
+              value: {{ toJson . | quote }}
+            {{- end }}
             - name: AFS_LEADER_LEASE_NAMESPACE
               value: {{ default .Release.Namespace $c.leaderLease.namespace | quote }}
           {{- include "afs.probes" $ | nindent 10 }}

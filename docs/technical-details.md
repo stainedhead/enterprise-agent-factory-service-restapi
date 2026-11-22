@@ -31,7 +31,7 @@ Engine (queue, backoff, leader-only jobs) with team environment, admission, life
 ## Database
 
 Schema and migrations come from `enterprise-agent-factory-service-db` (Go module, tagged releases).
-Integration tests use `AFS_TEST_DATABASE_URL`. The module is pinned to -db a6ecc3c (migrations 000001-000017);
+Integration tests use `AFS_TEST_DATABASE_URL`. The module is pinned to -db 9cc2941 (migrations 000001-000018);
 `afs.schema_version()` is checked at startup. Envtest suites run with `-tags envtest` and `KUBEBUILDER_ASSETS`.
 
 ## Gateway (`afs-gateway`, M3)
@@ -105,9 +105,9 @@ dimension does not add up to the month's total.
 minutes) and `showback` (daily 06:00 UTC). The reconcile job logs each day as one structured line with
 `metric="afs_cost_cur_variance_ratio"` (WARN when a team-day is over `billing.variance_alert_pct`) for a CloudWatch
 Logs metric filter, and publishes `cost.variance_detected` once per team-day transition; the Prometheus gauge is not
-scraped from a CronJob. `afs_billing` cannot read `service_settings` or `team_models` yet (-db X-DB-10): price sync
-falls back to `AFS_PRICING_PRICE_LIST_SYNC`. A scheduled report's `version` rises each time it runs (the run state is
-on the same row); clients re-read before an update.
+scraped from a CronJob. `afs_billing` reads `service_settings` and `team_models` (-db 000018): price sync follows
+`pricing.price_list_sync` and Bedrock lines are attributed by inference profile with a model id. The env override
+`AFS_PRICING_PRICE_LIST_SYNC` was removed.
 
 The export bundle builder runs in the reconciler as a leader-only job and is registered only when `AFS_EXPORT_BUCKET`
 is set; it then also requires `AFS_EXPORT_KMS_KEY_ID` (SSE-KMS) and uses the shared S3 adapter. `afs-api` never links
@@ -132,3 +132,18 @@ with `viewer_kubectl` on, a namespace `Role` and `RoleBinding` named `afs-viewer
 access entry per federated role (`AFS_VIEWER_KUBECTL_ROLES`, provider id or `default` to role ARN; unset means no access
 entry), tagged `afs-managed-by=viewer-kubectl` and mapped to a group derived from the role ARN with no access policy.
 The binding goes first on removal. An entry AFS did not create is never changed.
+
+## Report rollups and M5 integration
+
+Report rollups (-db 000018): the reconciler runs `afs.rollup_reports_recent(2)` every 10 minutes
+(`report-rollup-recent`) and `(7)` nightly (`report-rollup-nightly`) as leader jobs, with
+`afs_report_rollup_runs_total` and `afs_report_rollup_last_success_timestamp_seconds`. Activity and traffic reports
+over more than two days read `afs.agent_activity_rollup_daily` and `afs.external_traffic_rollup_daily` at every level;
+shorter ranges read the 5-minute tables, which are always current. Both paths give the same sums (a test compares
+them). Service activity p99 is 28 ms and service traffic 54 ms at 20 teams x 10 agents over 90 days.
+
+Pools: the pool controller re-renders on a pool row change (handoffs and secret bindings raise
+`agent_pools.generation`) and on the change feed of the tables that have revision triggers (config values, role links,
+opt-outs). Scaling changes replicas only. The reconciler may administer SQS queues named `afs-*`; team and agent roles
+are bounded to `afs-*` queues. Restore rebuilds agent secret bindings (resource id `<team>/<agent>/<target>`).
+The billing role reads `service_settings` and `team_models`; no env fallback remains.

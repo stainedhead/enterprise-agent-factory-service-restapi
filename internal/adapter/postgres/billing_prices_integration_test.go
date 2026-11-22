@@ -1,7 +1,6 @@
 package postgres_test
 
 import (
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -25,7 +24,6 @@ func TestPriceSyncProposesSupersedesAndStaysQuiet(t *testing.T) {
 VALUES ($1, now() - interval '30 days', 3, 15, 0.3, 3.75, 'manual')`, model)
 	from := g.scalar(`SELECT coalesce(max(id), 0)::text FROM afs.outbox_events`)
 
-	on := true
 	list := &pricestest.List{}
 	set := func(in, out string) {
 		eff := time.Now().UTC().Add(48 * time.Hour).Truncate(time.Second)
@@ -34,7 +32,7 @@ VALUES ($1, now() - interval '30 days', 3, 15, 0.3, 3.75, 'manual')`, model)
 			{Product: name, Kind: prices.Output, USDPerMtok: domain.MustMoney(out), EffectiveFrom: eff},
 		}
 	}
-	s := &prices.Syncer{List: list, Store: postgres.NewPriceStore(g.runner, &on), Tx: g.runner, Outbox: postgres.NewOutboxWriter(),
+	s := &prices.Syncer{List: list, Store: postgres.NewPriceStore(g.runner), Tx: g.runner, Outbox: postgres.NewOutboxWriter(),
 		Clock: &fakes.Clock{T: time.Now().UTC()}, IDs: billingIDs{}, Session: postgres.BillingSession()}
 
 	count := func(q string) string { return g.scalar(q, model) }
@@ -76,22 +74,18 @@ VALUES ($1, now() - interval '30 days', 3, 15, 0.3, 3.75, 'manual')`, model)
 	}
 }
 
-// The billing role cannot read service_settings yet (-db gap X-DB-9): the sync then uses the configured
-// value, and fails closed without one. The test skips once the role can read the setting.
-func TestPriceSyncEnabledFallsBackWhenTheSettingIsRefused(t *testing.T) {
+// afs_billing reads pricing.price_list_sync from service_settings (-db 000018): the default is on and a
+// service admin's setting wins.
+func TestPriceSyncEnabledReadsTheSetting(t *testing.T) {
 	g := newBillingRigAs(t, "afs_billing")
-	probe := postgres.NewPriceStore(g.runner, nil)
-	_, err := probe.SyncEnabled(t.Context())
-	if err == nil {
-		t.Skip("afs_billing can read pricing.price_list_sync: the env fallback is no longer needed")
+	store := postgres.NewPriceStore(g.runner)
+	if on, err := store.SyncEnabled(t.Context()); err != nil || !on {
+		t.Fatalf("default: %v, %v", on, err)
 	}
-	if !errors.Is(err, postgres.ErrSyncSettingUnavailable) {
-		t.Fatalf("err = %v", err)
-	}
-	for _, v := range []bool{true, false} {
-		on, err := postgres.NewPriceStore(g.runner, &v).SyncEnabled(t.Context())
-		if err != nil || on != v {
-			t.Fatalf("fallback %v: %v, %v", v, on, err)
-		}
+	owner := newBillingRigAs(t, "afs_owner")
+	owner.exec(`INSERT INTO afs.service_settings (key, value) VALUES ('pricing.price_list_sync', 'false'::jsonb) ON CONFLICT (key) DO UPDATE SET value = 'false'::jsonb`)
+	t.Cleanup(func() { owner.exec(`DELETE FROM afs.service_settings WHERE key = 'pricing.price_list_sync'`) })
+	if on, err := store.SyncEnabled(t.Context()); err != nil || on {
+		t.Fatalf("switched off: %v, %v", on, err)
 	}
 }

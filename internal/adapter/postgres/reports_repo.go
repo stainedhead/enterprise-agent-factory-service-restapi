@@ -15,11 +15,11 @@ import (
 
 // ReportsRepo implements reports.Repository (M3-H2). Usage and cost reports read the per-call table
 // for ranges of two days or less and the daily rollup (cost_daily) above that. Activity and traffic
-// reports read the 5-minute tables at every range: afs.agent_activity_daily and
-// afs.external_traffic_daily are plain views over those tables, carry no tag set, and nest a second
-// aggregation, so one aggregation over the base table gives the same sums (RA-US-7.1) in a fraction of
-// the time (M3-H4: the view took 0.95 s p99 for a 10-agent team over 90 days). Every statement runs in
-// the caller's transaction, so row-level security limits what is read.
+// reports read the 5-minute tables for ranges of two days or less and the daily rollups
+// (afs.agent_activity_rollup_daily, afs.external_traffic_rollup_daily, -db 000018) above that, filled by the
+// reconciler's rollup jobs (every 10 minutes for today and yesterday, nightly for a week), so a longer range
+// lags the 5-minute tables by up to one job interval for today. Both paths sum to the same figures
+// (RA-US-7.1). Every statement runs in the caller's transaction, so row-level security limits what is read.
 type ReportsRepo struct{}
 
 // NewReportsRepo returns a ReportsRepo.
@@ -142,6 +142,9 @@ func sourceFor(q domain.ReportQuery) (reportSource, bool) {
 		}
 		return s, true
 	case domain.ReportKindActivity:
+		if daily {
+			return rollupActivity(), true
+		}
 		w, i := `count(*) FILTER (WHERE x.state = 'working') * 300`, `count(*) FILTER (WHERE x.state = 'idle') * 300`
 		cond, _ := baseRange(`x.bucket_start`)
 		return reportSource{from: `afs.agent_activity x`, timeCond: cond,
@@ -151,6 +154,9 @@ func sourceFor(q domain.ReportQuery) (reportSource, bool) {
 				`(count(*) FILTER (WHERE x.state IN ('unhealthy', 'blocked_budget')) * 300)::bigint`, bigint(`coalesce(sum(x.model_calls), 0)`),
 				`round(100.0 * count(*) FILTER (WHERE x.state = 'working') / nullif(count(*) FILTER (WHERE x.state IN ('working', 'idle')), 0), 1)::float8`}}, true
 	case domain.ReportKindTraffic:
+		if daily {
+			return rollupTraffic(), true
+		}
 		sysDim := fmt.Sprintf(`coalesce(x.system_id, %s)`, none)
 		cond, _ := baseRange(`x.bucket_start`)
 		return reportSource{from: `afs.external_traffic x`, timeCond: cond,
@@ -162,6 +168,38 @@ func sourceFor(q domain.ReportQuery) (reportSource, bool) {
 				bigint(`coalesce(sum(x.bytes_out), 0)`), bigint(`coalesce(sum(x.bytes_in), 0)`)}}, true
 	}
 	return reportSource{}, false
+}
+
+// rollupDims are the dimensions of the daily rollup tables (no hour: a range over two days cannot group by it).
+func rollupDims() map[domain.ReportDim]string {
+	return map[domain.ReportDim]string{
+		domain.DimTeam: `x.team_id`, domain.DimAgent: fmt.Sprintf(`coalesce(x.agent_id, %s)`, none),
+		domain.DimPool: fmt.Sprintf(`coalesce(x.pool_id, %s)`, none), domain.DimDay: fmt.Sprintf(dayText, `x.day`),
+	}
+}
+
+// rollupActivity reads afs.agent_activity_rollup_daily (-db 000018), summed to the level the report shows.
+// Utilization is 100 * working / (working + idle) over those sums, the figure the 5-minute path gives.
+// The measure "workers" of the table is not a report column; across tag groups it would be a maximum.
+func rollupActivity() reportSource {
+	return reportSource{from: `afs.agent_activity_rollup_daily x`, timeCond: `x.day >= {fromDay}::date AND x.day <= {toDay}::date`,
+		dims: rollupDims(), tagCol: `x.tag_set_id`, team: `x.team_id`, agent: `x.agent_id`, pool: `x.pool_id`,
+		measures: []string{bigint(`coalesce(sum(x.working_seconds), 0)`), bigint(`coalesce(sum(x.idle_seconds), 0)`),
+			bigint(`coalesce(sum(x.off_seconds), 0)`), bigint(`coalesce(sum(x.impaired_seconds), 0)`),
+			bigint(`coalesce(sum(x.model_calls), 0)`),
+			`round(100.0 * sum(x.working_seconds) / nullif(sum(x.working_seconds) + sum(x.idle_seconds), 0), 1)::float8`}}
+}
+
+// rollupTraffic reads afs.external_traffic_rollup_daily. Requests and errors stay NULL where no egress
+// proxy saw HTTP (the sum of NULLs is NULL).
+func rollupTraffic() reportSource {
+	d := rollupDims()
+	d[domain.DimSystem] = fmt.Sprintf(`coalesce(x.system_id, %s)`, none)
+	return reportSource{from: `afs.external_traffic_rollup_daily x`, timeCond: `x.day >= {fromDay}::date AND x.day <= {toDay}::date`,
+		dims: d, tagCol: `x.tag_set_id`, team: `x.team_id`, agent: `x.agent_id`, pool: `x.pool_id`, system: `x.system_id`,
+		measures: []string{bigint(`coalesce(sum(x.connections), 0)`), bigint(`coalesce(sum(x.denied_connections), 0)`),
+			`sum(x.requests)::bigint`, `sum(x.errors)::bigint`,
+			bigint(`coalesce(sum(x.bytes_out), 0)`), bigint(`coalesce(sum(x.bytes_in), 0)`)}}
 }
 
 // builder collects statement arguments.

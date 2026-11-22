@@ -171,3 +171,32 @@ VALUES ('usr_x', $1, $2, 'CreateAgent', decode(repeat('ab', 32), 'hex'), now() -
 type sinkFn func([]housekeeping.Entry) ([]error, error)
 
 func (f sinkFn) PutEvents(_ context.Context, es []housekeeping.Entry) ([]error, error) { return f(es) }
+
+// The rollup job's database side: afs_reconciler runs afs.rollup_reports_recent (-db 000018) and the
+// samples of today show in the rollup; a role without the grant is refused.
+func TestHousekeepingRollupRecent(t *testing.T) {
+	db := pgtest.Get(t)
+	runner, _ := reconcilerRunner(t, db)
+	hk := postgres.NewHousekeeping(runner)
+	admin := db.Admin(t)
+	tm := db.SeedTeam(t)
+	agent := pgtest.NewID("agt")
+	if _, err := admin.Exec(t.Context(), `INSERT INTO afs.agent_activity (bucket_start, team_id, agent_id, state, active_seconds, model_calls)
+VALUES (date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC', $1, $2, 'working', 120, 3)`, tm.ID, agent); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := hk.Recent(t.Context(), 2); err != nil || n < 1 {
+		t.Fatalf("rollup recent = %d, %v", n, err)
+	}
+	var working, calls int64
+	if err := admin.QueryRow(t.Context(), `SELECT sum(working_seconds), sum(model_calls) FROM afs.agent_activity_rollup_daily WHERE agent_id = $1`, agent).Scan(&working, &calls); err != nil || working != 300 || calls != 3 {
+		t.Fatalf("rollup row = %d %d, %v", working, calls, err)
+	}
+	if _, err := hk.Recent(t.Context(), 0); err == nil {
+		t.Fatal("0 days accepted")
+	}
+	// The API's role cannot run it.
+	if _, err := appPool(t, db).Exec(t.Context(), `SELECT afs.rollup_reports_recent(2)`); err == nil {
+		t.Fatal("afs_app ran the rollup")
+	}
+}

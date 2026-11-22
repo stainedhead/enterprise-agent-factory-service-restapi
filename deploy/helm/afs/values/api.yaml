@@ -23,8 +23,9 @@ env:
   AFS_METRICS_ADDR: ":9090"
   AFS_MAX_BODY_BYTES: "1048576"
 # GetTeamKubeconfig (RA-10) also reads AFS_CLUSTER_ENDPOINT (the EKS API server URL) and AFS_CLUSTER_CA_DATA
-# (the cluster CA, base64); set both in env. AFS_CLUSTER_NAME and the region come from global. With either
-# unset the operation answers 503, so a viewer is never handed a file that cannot work.
+# (the cluster CA, base64): set global.cluster.endpoint and global.cluster.caData. AFS_CLUSTER_NAME and the
+# region come from global. With either unset the operation answers 503, so a viewer is never handed a file
+# that cannot work.
 # Number of replicas the per-principal rate limit is divided by; defaults to replicas.
 rateLimitReplicas: null
 cors:

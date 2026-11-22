@@ -17,6 +17,12 @@ var (
 	gvkRoleBinding = schema.GroupVersionKind{Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "RoleBinding"}
 )
 
+// ViewerKubectlOwnedKinds are the kinds the viewer kubectl controller owns in a team namespace: the drift
+// watcher reports an edit or delete of the viewer Role or RoleBinding, and the pass that follows reverts it.
+func ViewerKubectlOwnedKinds() []schema.GroupVersionKind {
+	return []schema.GroupVersionKind{gvkRole, gvkRoleBinding}
+}
+
 // KubectlCluster implements kubectl.Cluster: the read-only Role and its RoleBinding in a team namespace,
 // applied with server-side apply (M5-E2, RC-13).
 type KubectlCluster struct{ client *Client }

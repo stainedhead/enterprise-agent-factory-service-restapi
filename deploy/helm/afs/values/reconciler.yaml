@@ -28,3 +28,6 @@ leaderLease:
 # The EKS access entry takes the role ARN without an IAM path (an SSO permission set role needs its real ARN).
 viewerKubectl:
   enabled: true           # the ClusterRole that lets the reconciler manage the viewer Role and RoleBinding
+  roles: {}               # rendered as AFS_VIEWER_KUBECTL_ROLES, e.g. {default: arn:aws:iam::111122223333:role/afs-viewers}
+# Storage class of the shared EFS volume of a pool (AFS_EFS_STORAGE_CLASS, RC-11).
+efsStorageClass: efs-sc

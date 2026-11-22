@@ -748,7 +748,7 @@ Owns: `internal/usecase/billing/costtags/`, `internal/usecase/costtags/`, `inter
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M5-X1 | Merge, gate, `test-db`, `envtest`; OQ-9 answer recorded or default kept; status.md | — | all M5 |
+| [x] | M5-X1 | Merge, gate, `test-db`, `envtest`; OQ-9 answer recorded or default kept; status.md | — | all M5 |
 
 ---
 

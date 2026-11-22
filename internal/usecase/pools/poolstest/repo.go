@@ -427,7 +427,7 @@ func (r *Repo) DeleteConfig(_ context.Context, tx port.Tx, _, poolID string, nam
 
 func (r *Repo) access(poolID string, s domain.ExternalSystemAccess) domain.ExternalSystemAccess {
 	if s.DisabledAt == "" && r.Optouts[poolID+"/"+s.ID] {
-		s.DisabledAt = domain.ExtSystemDisabledAtAgent
+		s.DisabledAt = domain.ExtSystemDisabledAtPool
 	}
 	return s
 }

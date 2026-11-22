@@ -287,7 +287,12 @@ func TestEnumsMatchDomain(t *testing.T) {
 				got = append(got, e.Value)
 			}
 		}
-		if want := domain.EnumValues[c.enum]; !slices.Equal(got, want) {
+		want := domain.EnumValues[c.enum]
+		// OpenAPI-only values: the root contract does not list them yet (CD-11, pool views).
+		if c.schema == "ExternalSystem" && c.prop == "disabledAt" {
+			want = append(slices.Clone(want), string(domain.ExtSystemDisabledAtPool))
+		}
+		if !slices.Equal(got, want) {
 			t.Errorf("%s.%s enum = %v, want domain.%s %v", c.schema, c.prop, got, c.enum, want)
 		}
 	}

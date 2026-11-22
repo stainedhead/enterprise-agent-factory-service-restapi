@@ -13,7 +13,7 @@ func init() { register("price-sync", priceSync) }
 // priceSync reads the AWS Price List and proposes changed model prices (M4-D1, BI-3). With
 // pricing.price_list_sync off it ends before it calls AWS.
 func priceSync(ctx context.Context, a *app, _ jobInput) error {
-	store := postgres.NewPriceStore(a.runner, a.settings.PriceListSync)
+	store := postgres.NewPriceStore(a.runner)
 	s := &prices.Syncer{Store: store, Tx: a.runner, Outbox: postgres.NewOutboxWriter(), Clock: realClock{}, IDs: ulidGen{},
 		Log: a.log, Session: postgres.BillingSession()}
 	// The list is built only when the setting is on, so a switched-off sync needs no AWS credentials.

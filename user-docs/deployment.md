@@ -62,8 +62,13 @@ values wins. Highlights:
   output, reports bucket). `deploy/helm/afs/ci/default-values.yaml` shows a complete example.
 
 - `GetTeamKubeconfig` needs `AFS_CLUSTER_ENDPOINT` (the cluster's API server URL, `aws eks describe-cluster`)
-  and `AFS_CLUSTER_CA_DATA` (its base64 certificate authority) under `api.env`; without them the operation
-  answers `503`. The kubeconfig it returns holds no token: `kubectl` runs `aws eks get-token` as the viewer.
-  Viewer access itself is set up by the reconciler (`AFS_VIEWER_KUBECTL_ROLES`, see `reconciler.md`).
+  and `AFS_CLUSTER_CA_DATA` (its base64 certificate authority): set `global.cluster.endpoint` and
+  `global.cluster.caData`; without them the operation answers `503`. The kubeconfig it returns holds no token: `kubectl` runs `aws eks get-token` as the viewer.
+  Viewer access itself is set up by the reconciler: set `reconciler.viewerKubectl.roles` (rendered as
+  `AFS_VIEWER_KUBECTL_ROLES`, see `reconciler.md`).
+- Pools with a shared volume use the EFS storage class `reconciler.efsStorageClass` (`AFS_EFS_STORAGE_CLASS`,
+  default `efs-sc`). The reconciler creates and deletes pool queues named `afs-<team>-<hash>`; the Terraform
+  `pod-identity` module grants it queue administration on `afs-*` queues only, and the permissions boundary lets
+  team and agent roles use `afs-*` queues and no other.
 
 Verify with `helm lint deploy/helm/afs -f deploy/helm/afs/ci/default-values.yaml --strict`.

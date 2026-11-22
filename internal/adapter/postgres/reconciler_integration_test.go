@@ -385,3 +385,35 @@ func TestTeamSource(t *testing.T) {
 		t.Error("an unknown team must be NotFound")
 	}
 }
+
+// -db 000018: a change to agent_secret_bindings reaches the change feed (table and team, no id); the
+// reconciler's route for the table (TestRoutesRouteAgentTables) sends it to the team's agents.
+func TestChangeFeedDeliversSecretBindingChanges(t *testing.T) {
+	db := pgtest.Get(t)
+	s := seedFullAgent(t, db)
+	feed := postgres.NewChangeFeed(postgres.Config{URL: db.URLs["afs_reconciler"], Service: "afs-feed-bindings", SystemActor: true}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	rec := &recordedFeed{}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() { defer close(done); _ = feed.Listen(ctx, rec.handler()) }()
+	defer func() { cancel(); <-done }()
+	waitFor(t, "first connection", func() bool { _, c := rec.snapshot(); return c >= 1 })
+
+	if _, err := db.Admin(t).Exec(t.Context(), `UPDATE afs.agent_secret_bindings SET delivery = delivery WHERE team_id = $1 AND target = 'GH_TOKEN'`, s.team.ID); err != nil {
+		t.Fatal(err)
+	}
+	var got engine.Change
+	waitFor(t, "agent_secret_bindings notification", func() bool {
+		cs, _ := rec.snapshot()
+		for _, c := range cs {
+			if c.Table == "agent_secret_bindings" && c.TeamID == s.team.ID {
+				got = c
+				return true
+			}
+		}
+		return false
+	})
+	if got.ID != "" {
+		t.Errorf("a binding has no id, got %q", got.ID)
+	}
+}

@@ -27,7 +27,7 @@ not reconciled, so metered days are not reported as unbilled before AWS delivers
 |---|---|---|
 | `cur-ingest` | Reads the last `AFS_BILLING_LOOKBACK_DAYS` days (default 3, ending yesterday) from the CUR through Athena into `cost_daily`. Rerunning a day replaces that day's CUR rows. Failed queries are retried with backoff; three failed days raise an alert. | `AFS_CUR_DATABASE`, `AFS_CUR_TABLE`, `AFS_ATHENA_WORKGROUP`, `AFS_ATHENA_OUTPUT`, `AFS_CUR_TAG_PREFIX` (default `user_`) |
 | `reconcile` | Rolls the day's gateway usage into `cost_daily`, writes the reconciliation and publishes one `cost.variance_detected` when a team-day turns `over_threshold`. Run it after `cur-ingest`. | |
-| `price-sync` | Reads the AWS Price List for Bedrock and proposes new model prices (below). | `AFS_PRICING_REGION` (Price List API region, default `us-east-1`), `AFS_AWS_REGION` (region whose prices are read, default `us-east-1`), `AFS_PRICING_PRICE_LIST_SYNC` (see below) |
+| `price-sync` | Reads the AWS Price List for Bedrock and proposes new model prices (below). | `AFS_PRICING_REGION` (Price List API region, default `us-east-1`), `AFS_AWS_REGION` (region whose prices are read, default `us-east-1`) |
 | `cost-tags` | Daily at 06:30. For each AFS tag key (`afs-team-id`, `afs-agent-id`, `afs-pool-id`, the service tags and the teams' tags) records whether the CUR has shown it and whether AWS Billing has it active as a cost allocation tag. A key active for 3 days without the CUR showing it raises one `cost_tags.not_seen` event. Read the result with `ListCostTagStatus` (service admins). Needs `ce:ListCostAllocationTags` on the billing role. | |
 
 Add `--day YYYY-MM-DD` to run one completed UTC day.
@@ -54,6 +54,4 @@ when the proposal is no longer `pending`. Approval makes the price effective fro
 proposal's `effectiveFrom` and the approval time, so usage before that moment is never repriced; the
 gateway uses it for calls from then on. Proposal ids look like `mpp_...`.
 
-`pricing.price_list_sync` is read by the billing job from the database. Until the billing database role can
-read that setting, set `AFS_PRICING_PRICE_LIST_SYNC=true|false` on the job; without either the job fails
-rather than guess.
+`pricing.price_list_sync` is read by the billing job from the database (default on).

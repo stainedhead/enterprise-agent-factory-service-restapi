@@ -248,6 +248,24 @@ data "aws_iam_policy_document" "reconciler" {
     resources = ["*"]
   }
 
+  # Pool inbox and handoff queues (M5-C2): one SQS queue per receiving pool, named afs-<team ulid>-<short hash>.
+  # Administration is limited to queues with the afs- prefix; the queue policy it sets lets only the senders'
+  # roles send and only the receiver's role receive. No ReceiveMessage or SendMessage here.
+  statement {
+    sid = "PoolQueues"
+    actions = [
+      "sqs:CreateQueue",
+      "sqs:DeleteQueue",
+      "sqs:GetQueueUrl",
+      "sqs:GetQueueAttributes",
+      "sqs:SetQueueAttributes",
+      "sqs:TagQueue",
+      "sqs:UntagQueue",
+      "sqs:ListQueueTags",
+    ]
+    resources = ["arn:${var.partition}:sqs:${var.region}:${var.account_id}:afs-*"]
+  }
+
   # Verifying an agent role link: the reconciler assumes the agent's own role (which trusts it), and that
   # session assumes the linked role in the other account. Only the first hop is here, and only on roles
   # under /afs/.

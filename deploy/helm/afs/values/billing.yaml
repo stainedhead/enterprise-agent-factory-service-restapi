@@ -13,7 +13,7 @@ env:
   AFS_METRICS_ADDR: ":9090"
 # Required: AFS_CUR_DATABASE, AFS_CUR_TABLE, AFS_ATHENA_WORKGROUP, AFS_ATHENA_OUTPUT,
 # AFS_REPORTS_BUCKET, AFS_REPORTS_KMS_KEY_ID (from Terraform outputs reports_bucket, buckets_kms_key_id).
-# Optional: AFS_SHOWBACK_TAG_KEY (second showback dimension), AFS_PRICING_PRICE_LIST_SYNC (until -db X-DB-10).
+# Optional: AFS_SHOWBACK_TAG_KEY (second showback dimension).
 # cost-tags (M5-F1) needs no extra settings: it reads the CUR rows cur-ingest stored and calls Cost Explorer
 # (ce:ListCostAllocationTags on the billing role, Terraform billing policy).
 # The reconcile job logs each day with metric=afs_cost_cur_variance_ratio (WARN over the threshold):

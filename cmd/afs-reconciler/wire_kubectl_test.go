@@ -6,6 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/k8s"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/kubectl"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/links"
@@ -84,5 +87,25 @@ func TestRoutesCombineKubectlRoutes(t *testing.T) {
 	}
 	if !slices.Contains(got, kcA) || !slices.Contains(got, kcB) {
 		t.Errorf("a service-level provider change reached %v, want every team's viewer access", got)
+	}
+}
+
+// The drift watcher follows the viewer Role and RoleBinding only when a provider has a role (M5-E2 gap).
+func TestDriftKindsAddTheViewerRoleAndBindingWhenConfigured(t *testing.T) {
+	has := func(kinds []schema.GroupVersionKind, kind string) bool {
+		for _, k := range kinds {
+			if k.Kind == kind && k.Group == "rbac.authorization.k8s.io" {
+				return true
+			}
+		}
+		return false
+	}
+	without := driftKinds(kubectlWiring{})
+	if has(without, "Role") || has(without, "RoleBinding") || len(without) == 0 {
+		t.Errorf("kinds without viewer kubectl = %v", without)
+	}
+	with := driftKinds(kubectlWiring{OwnedKinds: k8s.ViewerKubectlOwnedKinds()})
+	if !has(with, "Role") || !has(with, "RoleBinding") || len(with) != len(without)+2 {
+		t.Errorf("kinds with viewer kubectl = %v", with)
 	}
 }

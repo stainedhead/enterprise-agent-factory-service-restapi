@@ -607,7 +607,7 @@ const poolDisabledAt = `CASE
   WHEN NOT s.enabled THEN CASE WHEN s.team_id IS NULL THEN 'service' ELSE 'team' END
   WHEN EXISTS (SELECT 1 FROM afs.external_system_optouts o
                WHERE o.team_id = $1 AND o.agent_id IS NULL AND o.pool_id IS NULL AND o.system_id = s.id) THEN 'team'
-  WHEN EXISTS (SELECT 1 FROM afs.external_system_optouts o WHERE o.pool_id = $2 AND o.system_id = s.id) THEN 'agent'
+  WHEN EXISTS (SELECT 1 FROM afs.external_system_optouts o WHERE o.pool_id = $2 AND o.system_id = s.id) THEN 'pool'
 END`
 
 // ListSystems implements pools.SatelliteRepository.

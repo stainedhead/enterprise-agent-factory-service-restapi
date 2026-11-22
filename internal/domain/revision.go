@@ -57,9 +57,9 @@ type RestoreSpec struct {
 // RestoreSpecs lists what a restore covers, in apply order (RA-13): team settings, agents, configuration
 // values, external system switches, tags and budget. Each kind is the table whose revisions are read.
 //
-// Agent secret bindings are not listed: the database keeps no revisions of them (database gap X-DB-8), so a
-// restore leaves them as they are. Role bindings (membership) are never restored, so a restore cannot lock
-// a team out.
+// Agent secret bindings (references and a target name, never a value) are restored since -db 000018 gave the
+// table a revision trigger; a binding whose agent or secret is gone is skipped. Role bindings (membership)
+// are never restored, so a restore cannot lock a team out.
 var RestoreSpecs = []RestoreSpec{
 	{Kind: "teams", Update: true, Fields: []string{"display_name", "description", "owner_email", "cost_center"},
 		Note: "team settings are updated in place"},
@@ -69,6 +69,8 @@ var RestoreSpecs = []RestoreSpec{
 	{Kind: "namespace_config_values", Create: true, Update: true, Delete: true, Fields: []string{"config_value", "description"}},
 	{Kind: "agent_config_values", Create: true, Update: true, Delete: true, Fields: []string{"source", "config_value"}},
 	{Kind: "external_system_optouts", Create: true, Delete: true, Fields: []string{"reason"}},
+	{Kind: "agent_secret_bindings", Create: true, Update: true, Delete: true, Fields: []string{"secret_id", "delivery"},
+		Note: "resource id is <team>/<agent>/<target>; a binding to an agent or secret that no longer exists is skipped"},
 	{Kind: "team_tags", Create: true, Update: true, Delete: true, Fields: []string{"value"}},
 	{Kind: "budgets", Create: true, Update: true, Fields: []string{"period", "amount_usd", "thresholds", "on_exhaust", "starts_at", "expires_at"}},
 }

@@ -83,9 +83,6 @@ type Directory struct {
 	// TagKeys is the set of managed tag keys (service and team tags); other tags on a line are not
 	// part of a tag set.
 	TagKeys map[string]bool
-	// ProfilesUnavailable is true when the store may not read the inference profiles: Bedrock lines are
-	// then attributed by tag only and carry no model.
-	ProfilesUnavailable bool
 }
 
 // Row is one cost_daily row to write for a day.
@@ -370,9 +367,6 @@ func (i *Ingestor) runDay(ctx context.Context, day time.Time) DayResult {
 	if err != nil {
 		dr.Err = fmt.Errorf("read directory: %w", err)
 		return dr
-	}
-	if dir.ProfilesUnavailable {
-		i.log().Warn("inference profiles are not readable by the billing role; Bedrock cost is attributed by tag and has no model")
 	}
 	att := Attribute(lines, dir)
 	if att.UnattributedLines > 0 {

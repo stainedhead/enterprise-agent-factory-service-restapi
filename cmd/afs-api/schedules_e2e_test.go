@@ -155,13 +155,17 @@ func TestReportSchedulesEndToEnd(t *testing.T) {
 		t.Errorf("delete of a channel a schedule uses: %d, want 409", code)
 	}
 
-	// Delete: 204, then gone.
-	if code, _, _ := ldCall(t, c.Handler, http.MethodDelete, patch, adm, "", "If-Match", `"2"`); code == 204 {
-		t.Fatalf("a delete with a stale version succeeded")
-	}
+	// Delete: 204, then gone. The runner's updates (-db 000018) did not raise the version, so the ETag
+	// the update returned is still current; a stale one is refused.
 	var v int
 	if err := w.Admin.QueryRow(t.Context(), `SELECT version FROM afs.report_schedules WHERE id = $1`, made.ID).Scan(&v); err != nil {
 		t.Fatal(err)
+	}
+	if v != 2 {
+		t.Fatalf("version after the runner's updates = %d, want 2 (a run must not raise it)", v)
+	}
+	if code, _, _ := ldCall(t, c.Handler, http.MethodDelete, patch, adm, "", "If-Match", `"1"`); code != 412 {
+		t.Fatalf("a delete with a stale version: %d, want 412", code)
 	}
 	if code, out, _ := ldCall(t, c.Handler, http.MethodDelete, patch, adm, "", "If-Match", `"`+strconv.Itoa(v)+`"`); code != 204 || out != "" {
 		t.Fatalf("delete: %d %q", code, out)

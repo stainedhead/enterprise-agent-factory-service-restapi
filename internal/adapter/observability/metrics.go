@@ -32,6 +32,9 @@ type Metrics struct {
 	GatewayAddedLatency        prometheus.Histogram
 	GatewayReservationsExpired prometheus.Counter
 
+	RollupRuns        *prometheus.CounterVec
+	RollupLastSuccess *prometheus.GaugeVec
+
 	OutboxPending        prometheus.Gauge
 	OutboxOldestAge      prometheus.Gauge
 	OutboxPublishedTotal prometheus.Counter
@@ -61,6 +64,8 @@ func NewMetrics(service, version string) *Metrics {
 	m.GatewayReservationFailures = prometheus.NewCounterVec(prometheus.CounterOpts(f(MetricGatewayReservationFailures, "Calls the gateway rejected because it could not reserve spend.")), []string{"reason"})
 	m.GatewayAddedLatency = prometheus.NewHistogram(prometheus.HistogramOpts{Name: MetricGatewayAddedLatency, Help: "Latency the gateway adds, excluding Bedrock time.", Buckets: GatewayBuckets})
 	m.GatewayReservationsExpired = prometheus.NewCounter(prometheus.CounterOpts(f(MetricGatewayReservationsExpired, "Spend reservations that expired unsettled.")))
+	m.RollupRuns = prometheus.NewCounterVec(prometheus.CounterOpts(f(MetricReportRollupRuns, "Report rollup runs by job and outcome.")), []string{"job", "outcome"})
+	m.RollupLastSuccess = prometheus.NewGaugeVec(prometheus.GaugeOpts(f(MetricReportRollupLastSuccess, "Unix time of the last successful report rollup run, by job.")), []string{"job"})
 	m.OutboxPending = prometheus.NewGauge(prometheus.GaugeOpts(f(MetricOutboxPending, "Unpublished outbox events.")))
 	m.OutboxOldestAge = prometheus.NewGauge(prometheus.GaugeOpts(f(MetricOutboxOldestAge, "Age of the oldest unpublished outbox event.")))
 	m.OutboxPublishedTotal = prometheus.NewCounter(prometheus.CounterOpts(f(MetricOutboxPublished, "Outbox events published.")))
@@ -71,7 +76,7 @@ func NewMetrics(service, version string) *Metrics {
 		m.ReconcileDuration, m.ReconcileErrors, m.ReconcileLag, m.DriftCorrected, m.Leader,
 		m.GatewayReservationFailures, m.GatewayAddedLatency, m.GatewayReservationsExpired,
 		m.OutboxPending, m.OutboxOldestAge, m.OutboxPublishedTotal, m.OutboxFailedTotal,
-		m.NotificationFailures, m.CURVariance)
+		m.NotificationFailures, m.CURVariance, m.RollupRuns, m.RollupLastSuccess)
 	bi := prometheus.NewGaugeVec(prometheus.GaugeOpts(f(MetricBuildInfo, "Build information.")), []string{"service", "version"})
 	r.MustRegister(bi)
 	bi.WithLabelValues(service, version).Set(1)
@@ -81,6 +86,16 @@ func NewMetrics(service, version string) *Metrics {
 // Handler serves the registry in the Prometheus text format.
 func (m *Metrics) Handler() http.Handler {
 	return promhttp.HandlerFor(m.Registry, promhttp.HandlerOpts{Registry: m.Registry})
+}
+
+// RollupRun records one report rollup run (reconcile/rollup.Recorder).
+func (m *Metrics) RollupRun(job string, _ int64, err error) {
+	if err != nil {
+		m.RollupRuns.WithLabelValues(job, "error").Inc()
+		return
+	}
+	m.RollupRuns.WithLabelValues(job, "ok").Inc()
+	m.RollupLastSuccess.WithLabelValues(job).SetToCurrentTime()
 }
 
 // OutboxPublished implements housekeeping.Recorder.

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -332,8 +333,21 @@ func TestIAMLeastPrivilege(t *testing.T) {
 	if s := byID["VerifyAgentRoleLinks"]; len(s.actions) != 2 || s.actions[0] != "sts:AssumeRole" || s.effect != "Allow" {
 		t.Errorf("role link verification = %+v", s)
 	}
+	// M5: the reconciler administers the pool queues, and only queues named afs-*, without reading or sending.
+	pq := byID["PoolQueues"]
+	if pq.effect != "Allow" || !slices.Contains(pq.actions, "sqs:CreateQueue") || !slices.Contains(pq.actions, "sqs:DeleteQueue") {
+		t.Errorf("pool queue administration = %+v", pq)
+	}
+	for _, a := range pq.actions {
+		if a == "sqs:*" || a == "sqs:SendMessage" || a == "sqs:ReceiveMessage" {
+			t.Errorf("the reconciler's pool queue statement grants %s", a)
+		}
+	}
 	// trust is Pod Identity only
 	src := sources(t)[f]
+	if !strings.Contains(string(src), `:sqs:${var.region}:${var.account_id}:afs-*"]`) {
+		t.Error("the reconciler's pool queue statement is not limited to queues named afs-*")
+	}
 	if !strings.Contains(string(src), `role/afs/*"]`) {
 		t.Error("role link verification is not limited to roles under /afs/")
 	}
@@ -361,6 +375,16 @@ func TestBoundaryDeniesBedrockAndIAM(t *testing.T) {
 	for _, a := range []string{"bedrock:*", "iam:*", "organizations:*"} {
 		if !denied[a] {
 			t.Errorf("the permissions boundary does not deny %s", a)
+		}
+	}
+	// M5: a team or agent role may use pool queues (afs-*) and no other queue.
+	src := string(sources(t)[f])
+	if !strings.Contains(src, `resources = ["arn:*:sqs:*:*:afs-*"]`) {
+		t.Error("the permissions boundary does not allow the afs-* queues")
+	}
+	for _, s := range statements(t, parsed(t)[f], f) {
+		if s.sid == "AllowWorkloadBasics" && slices.Contains(s.actions, "sqs:*") {
+			t.Error("the permissions boundary allows sqs:* on every queue")
 		}
 	}
 }

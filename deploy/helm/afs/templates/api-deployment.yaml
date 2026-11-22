@@ -38,6 +38,14 @@ spec:
             - {name: metrics, containerPort: {{ $c.ports.metrics }}}
           env:
             {{- include "afs.env" $ctx | nindent 12 }}
+            {{- with .Values.global.cluster.endpoint }}
+            - name: AFS_CLUSTER_ENDPOINT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.global.cluster.caData }}
+            - name: AFS_CLUSTER_CA_DATA
+              value: {{ . | quote }}
+            {{- end }}
             - name: AFS_API_REPLICAS
               value: {{ default $c.replicas $c.rateLimitReplicas | quote }}
             {{- if $c.migrate.ownerUser }}

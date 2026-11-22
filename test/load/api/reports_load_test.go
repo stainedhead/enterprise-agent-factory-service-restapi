@@ -30,9 +30,8 @@ func envInt(name string, def int) int {
 // AFS_LOAD_TEAMS teams (default 20) of AFS_LOAD_AGENTS agents (default 10): 90 days of 5-minute
 // activity per agent, hourly traffic, and daily cost rollups. The initial scale of the PRD is 200 teams
 // and 2,000 agents; run with AFS_LOAD_TEAMS=200 for it. Team and agent reports of every kind and the
-// service usage and cost reports must meet the bound. Service activity and traffic reports read the
-// whole 5-minute table (the daily views are plain views over it); their timings are logged, and
-// research X-DB-8 asks -db for a rollup table.
+// service reports of every kind must meet the bound. Activity and traffic reports over more than two
+// days read the daily rollups (-db 000018, X-DB-8), filled here by afs.rollup_reports_daily.
 func TestReportsP99Over90Days(t *testing.T) {
 	db := pgtest.Get(t)
 	teams, perTeam := envInt("AFS_LOAD_TEAMS", 20), envInt("AFS_LOAD_AGENTS", 10)
@@ -75,6 +74,10 @@ FROM generate_series($2::date, $3::date, interval '1 day') d, unnest($4::text[])
 			t.Fatal(err)
 		}
 	}
+	// The reconciler's nightly rollup over the whole range (the reports over two days read the rollups).
+	must(`SELECT afs.rollup_reports_daily(current_date - 91, current_date)`)
+	must(`ANALYZE afs.agent_activity_rollup_daily`)
+	must(`ANALYZE afs.external_traffic_rollup_daily`)
 	must(`ANALYZE afs.agent_activity`)
 	must(`ANALYZE afs.external_traffic`)
 	must(`ANALYZE afs.cost_daily`)
@@ -114,8 +117,8 @@ FROM generate_series($2::date, $3::date, interval '1 day') d, unnest($4::text[])
 	probes = append(probes,
 		probe{"service usage by team", service, domain.ReportKindUsage, r90("team", nil), true},
 		probe{"service costs by day", service, domain.ReportKindCosts, r90("day", nil), true},
-		probe{"service activity by team", service, domain.ReportKindActivity, r90("team", nil), false},
-		probe{"service traffic by system", service, domain.ReportKindTraffic, r90("system", nil), false})
+		probe{"service activity by team", service, domain.ReportKindActivity, r90("team", nil), true},
+		probe{"service traffic by system", service, domain.ReportKindTraffic, r90("system", nil), true})
 
 	for _, p := range probes {
 		q, err := domain.ParseReportQuery(p.kind, p.raw, time.Now())

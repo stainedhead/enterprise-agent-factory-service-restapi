@@ -96,12 +96,13 @@ ORDER BY resource_kind, resource_id, id DESC`, teamID, rev, domain.RestoreKinds(
 
 // currentQueries select (resource id, row as JSON) of each restorable kind for team $1. A deleting or
 // deleted agent is not current: a restore leaves it alone.
-var currentQueries = map[string]string{
+var currentQueries = map[string]string{ //nolint:gosec // table names, not credentials
 	"teams":                   `SELECT id, to_jsonb(x) FROM afs.teams x WHERE id = $1`,
 	"agents":                  `SELECT id, to_jsonb(x) FROM afs.agents x WHERE team_id = $1 AND deleted_at IS NULL AND state IN ('enabled', 'paused')`,
 	"namespace_config_values": `SELECT id, to_jsonb(x) FROM afs.namespace_config_values x WHERE team_id = $1`,
 	"agent_config_values":     `SELECT id, to_jsonb(x) FROM afs.agent_config_values x WHERE team_id = $1`,
 	"external_system_optouts": `SELECT id, to_jsonb(x) FROM afs.external_system_optouts x WHERE team_id = $1 AND pool_id IS NULL`,
+	"agent_secret_bindings":   `SELECT team_id || '/' || agent_id || '/' || target, to_jsonb(x) FROM afs.agent_secret_bindings x WHERE team_id = $1`,
 	"team_tags":               `SELECT team_id || '/' || key, to_jsonb(x) FROM afs.team_tags x WHERE team_id = $1`,
 	"budgets":                 `SELECT id, to_jsonb(x) FROM afs.budgets x WHERE team_id = $1`,
 }
@@ -191,6 +192,9 @@ func (*RestoreRepo) Apply(ctx context.Context, tx port.Tx, teamID string, step d
 		return "", fmt.Errorf("postgres: restore of %s is not supported", kind)
 	}
 	key := restoreKey(kind, teamID, step.Change.ResourceID)
+	if kind == "agent_secret_bindings" {
+		return applyBinding(ctx, t, teamID, step, key)
+	}
 	var raw []byte
 	if step.Row != nil {
 		if raw, err = json.Marshal(step.Row); err != nil {
@@ -235,6 +239,51 @@ func (*RestoreRepo) Apply(ctx context.Context, tx port.Tx, teamID string, step d
 		return "", MapError(execErr, OpWrite, kind)
 	}
 	return "", MapError(sp.Commit(ctx), OpWrite, kind)
+}
+
+// applyBinding restores one agent secret binding (id is "<team>/<agent>/<target>"; a target may contain
+// slashes). The agent's generation goes up so the reconciler renders its pod again.
+func applyBinding(ctx context.Context, t pgx.Tx, teamID string, step domain.RestoreStep, key string) (string, error) {
+	agent, target, ok := strings.Cut(strings.TrimPrefix(key, teamID+"/"), "/")
+	if !ok || agent == "" || target == "" {
+		return "", fmt.Errorf("postgres: restore of agent_secret_bindings: bad resource id %q", step.Change.ResourceID)
+	}
+	var raw []byte
+	var err error
+	if step.Row != nil {
+		if raw, err = json.Marshal(step.Row); err != nil {
+			return "", err
+		}
+	}
+	sp, err := t.Begin(ctx)
+	if err != nil {
+		return "", MapError(err, OpWrite, "agent_secret_bindings")
+	}
+	var execErr error
+	switch step.Change.Action {
+	case domain.RestoreUpdate:
+		_, execErr = sp.Exec(ctx, `UPDATE afs.agent_secret_bindings x SET secret_id = r.secret_id, delivery = r.delivery
+FROM jsonb_populate_record(NULL::afs.agent_secret_bindings, $4) r WHERE x.team_id = $1 AND x.agent_id = $2 AND x.target = $3`, teamID, agent, target, raw)
+	case domain.RestoreCreate:
+		_, execErr = sp.Exec(ctx, `INSERT INTO afs.agent_secret_bindings SELECT * FROM jsonb_populate_record(NULL::afs.agent_secret_bindings, $1)`, raw)
+	case domain.RestoreDelete:
+		_, execErr = sp.Exec(ctx, `DELETE FROM afs.agent_secret_bindings WHERE team_id = $1 AND agent_id = $2 AND target = $3`, teamID, agent, target)
+	default:
+		execErr = fmt.Errorf("postgres: restore action %q", step.Change.Action)
+	}
+	if execErr == nil {
+		_, execErr = sp.Exec(ctx, `UPDATE afs.agents SET generation = generation + 1 WHERE team_id = $1 AND id = $2`, teamID, agent)
+	}
+	if execErr != nil {
+		if rbErr := sp.Rollback(ctx); rbErr != nil {
+			return "", MapError(rbErr, OpWrite, "agent_secret_bindings")
+		}
+		if why, ok := skippable(execErr); ok {
+			return why, nil
+		}
+		return "", MapError(execErr, OpWrite, "agent_secret_bindings")
+	}
+	return "", MapError(sp.Commit(ctx), OpWrite, "agent_secret_bindings")
 }
 
 // BumpGeneration implements restore.Repository.

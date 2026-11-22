@@ -65,6 +65,11 @@ func (s ExternalSystem) TeamDeclared() bool { return s.TeamID != "" }
 // Unmetered reports whether calls to the system bypass the gateway's metering and caps.
 func (s ExternalSystem) Unmetered() bool { return s.Category == ExtLLM }
 
+// ExtSystemDisabledAtPool says a pool's own switch has the system off. The enumeration in enums.go is generated
+// from the root contract (service, team, agent); the OpenAPI document adds pool for pool views, which the
+// contract does not list yet.
+const ExtSystemDisabledAtPool ExtSystemDisabledAt = "pool"
+
 // ExternalSystemAccess is a system as one team or agent sees it: the effective state and the level
 // that switched it off.
 type ExternalSystemAccess struct {

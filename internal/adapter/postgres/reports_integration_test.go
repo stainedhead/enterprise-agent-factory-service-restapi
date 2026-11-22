@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -125,6 +126,8 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::numeric, $10)`, rptNow.Add(-ago), te
 		tr(f.a.ID, f.agt1, rptNow.AddDate(0, 0, -d).Truncate(24*time.Hour), "api.example.org", "allowed", 2, f.tagged)
 		tr(f.a.ID, f.agt1, rptNow.AddDate(0, 0, -d).Truncate(24*time.Hour), "evil.example.net", "denied", 1, f.tagged)
 	}
+	// What the reconciler's rollup jobs do every ten minutes: the reports over more than two days read it.
+	f.exec(t, `SELECT afs.rollup_reports_daily(($1::timestamptz)::date, ($2::timestamptz)::date)`, rptNow.AddDate(0, 0, -40), rptNow.AddDate(0, 0, 1))
 	return f
 }
 
@@ -374,4 +377,58 @@ func TestReportsTeamAndAgentLookups(t *testing.T) {
 		wantKind(t, err, domain.KindNotFound) // RLS hides team B
 		return nil
 	})
+}
+
+// The daily rollup path gives the same answer as the 5-minute path (-db 000018, RA-US-7.1): the same
+// whole-UTC-day range read from both tables, at every level and grouping, with requests and errors NULL
+// where no proxy saw HTTP.
+func TestReportsRollupPathEqualsTheFiveMinutePath(t *testing.T) {
+	f := newRptFixture(t)
+	for _, tc := range []struct {
+		kind  domain.ReportKind
+		group string
+		raw   domain.RawReportQuery
+	}{
+		{domain.ReportKindActivity, "team", domain.RawReportQuery{}},
+		{domain.ReportKindActivity, "agent", domain.RawReportQuery{TeamID: f.a.ID}},
+		{domain.ReportKindActivity, "day", domain.RawReportQuery{}},
+		{domain.ReportKindActivity, "tag:business-unit", domain.RawReportQuery{}},
+		{domain.ReportKindActivity, "agent,day", domain.RawReportQuery{AgentID: f.agt1}},
+		{domain.ReportKindTraffic, "team", domain.RawReportQuery{}},
+		{domain.ReportKindTraffic, "system", domain.RawReportQuery{}},
+		{domain.ReportKindTraffic, "agent,day", domain.RawReportQuery{TeamID: f.a.ID}},
+		{domain.ReportKindTraffic, "tag:business-unit", domain.RawReportQuery{}},
+	} {
+		t.Run(string(tc.kind)+"/"+tc.group, func(t *testing.T) {
+			raw := tc.raw
+			raw.Range, raw.GroupBy = "30d", tc.group
+			q, err := domain.ParseReportQuery(tc.kind, raw, rptNow)
+			if err != nil || q.Granularity != domain.Daily {
+				t.Fatalf("query: %v %s", err, q.Granularity)
+			}
+			// The 5-minute path over the same whole days.
+			q5 := q
+			q5.Granularity, q5.From, q5.To = domain.FiveMinute, q.FirstDay(), q.LastDay().Add(24*time.Hour)
+			svc := port.Session{Actor: user, ActorType: port.ActorUser, ServiceAdmin: true, RequestID: "req_test"}
+			read := func(q domain.ReportQuery) reports.Result {
+				var res reports.Result
+				err := f.runner.InTx(t.Context(), svc, func(ctx context.Context, tx port.Tx) error {
+					var err error
+					res, err = f.repo.Run(ctx, tx, q, 0, 10000)
+					return err
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return res
+			}
+			got, want := read(q), read(q5)
+			if len(want.Rows) == 0 {
+				t.Fatal("the fixture has no rows for this report")
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("rollup path differs from the 5-minute path:\nrollup: %+v\n5 min:  %+v", got, want)
+			}
+		})
+	}
 }

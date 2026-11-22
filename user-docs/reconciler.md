@@ -53,6 +53,7 @@ arrive with is configuration, because it depends on how your identity provider f
 
 | Variable | Required | Meaning |
 |---|---|---|
+| `AFS_EFS_STORAGE_CLASS` | no | Storage class of a pool's shared EFS volume (default `efs-sc`) |
 | `AFS_VIEWER_KUBECTL_ROLES` | to enable | JSON object from an identity provider id (`idp_...`), or `default` for the default provider, to the ARN of the IAM role that provider federates to for kubectl: `{"default":"arn:aws:iam::111122223333:role/afs-viewers"}`. Unset: no access entry is created for anyone |
 
 For each team with the flag on, the reconciler keeps a `Role` named `afs-viewer` in the team namespace that

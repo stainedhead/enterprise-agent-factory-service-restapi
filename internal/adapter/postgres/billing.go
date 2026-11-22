@@ -84,12 +84,7 @@ func (s *BillingStore) Directory(ctx context.Context) (cur.Directory, error) {
 			func(arn, team, model string) { d.Profiles[arn] = cur.ProfileRef{TeamID: team, ModelID: model} })
 	})
 	if err != nil {
-		e := MapError(err, OpRead, "inference profiles")
-		if domain.KindOf(e) == domain.KindAccessDenied {
-			d.Profiles, d.ProfilesUnavailable = map[string]cur.ProfileRef{}, true
-			return d, nil
-		}
-		return cur.Directory{}, e
+		return cur.Directory{}, MapError(err, OpRead, "inference profiles")
 	}
 	return d, nil
 }

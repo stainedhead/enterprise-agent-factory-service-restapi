@@ -30,8 +30,8 @@ Stage:
       $ref: '#/components/schemas/Name'
     position:
       type: integer
-      minimum: 0
-      maximum: 100
+      minimum: 1
+      maximum: 50
     description:
       type: string
 StageList:
@@ -57,8 +57,8 @@ CreateStageRequest:
       $ref: '#/components/schemas/Name'
     position:
       type: integer
-      minimum: 0
-      maximum: 100
+      minimum: 1
+      maximum: 50
     description:
       type: string
 UpdateStageRequest:
@@ -66,8 +66,8 @@ UpdateStageRequest:
   properties:
     position:
       type: integer
-      minimum: 0
-      maximum: 100
+      minimum: 1
+      maximum: 50
     description:
       type: string
 Pool:

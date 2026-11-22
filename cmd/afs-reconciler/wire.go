@@ -246,6 +246,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	housekeeping.Register(r.Engine, housekeeping.Jobs(housekeeping.Deps{
 		Outbox: hk, Sink: eventbridge.New(awsCfg, s.EventBusName), Partitions: hk, Purger: hk, Recorder: m, Clock: clock.Now, Log: log,
 	}))
+	wireRollup(r.Engine, hk, m, log)
 	registerOrphanSweep(r.Engine, sm, runner, audit, clock.Now, log)
 	registerOrgMirror(r.Engine, awsCfg, runner, env, clock.Now, log)
 	if err := wireTraffic(r.Engine, runner, outbox, ids, env, clock.Now, log); err != nil {
@@ -280,7 +281,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 		observability.SchemaCheck(schemaVersion, want),
 		observability.LeaderCheck(r.Elector.IsLeader),
 	}
-	r.Watcher, err = k8s.NewWatcher(kc, func(ref engine.Ref, object string) { r.Engine.NoteDrift(ref, object) }, log, append(append(k8s.OwnedKinds(), k8s.AgentOwnedKinds()...), k8s.PoolOwnedKinds()...)...)
+	r.Watcher, err = k8s.NewWatcher(kc, func(ref engine.Ref, object string) { r.Engine.NoteDrift(ref, object) }, log, driftKinds(kt)...)
 	if err != nil {
 		return fail(err)
 	}

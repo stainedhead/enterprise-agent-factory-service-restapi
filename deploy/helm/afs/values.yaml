@@ -10,6 +10,12 @@ global:
     pullPolicy: IfNotPresent
     pullSecrets: []
   clusterName: ""         # AFS_CLUSTER_NAME, required
+  # The EKS API server for GetTeamKubeconfig (RA-10, afs-api): AFS_CLUSTER_ENDPOINT is the server URL and
+  # AFS_CLUSTER_CA_DATA the cluster CA, base64. Both public, never a token. With either empty the operation
+  # answers 503, so a viewer is never handed a file that cannot work.
+  cluster:
+    endpoint: ""
+    caData: ""
   region: ""              # AFS_AWS_REGION, required
   logLevel: info          # AFS_LOG_LEVEL
   otlpEndpoint: ""        # AFS_OTLP_ENDPOINT, empty disables trace and metric export

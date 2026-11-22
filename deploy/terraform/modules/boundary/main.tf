@@ -8,8 +8,18 @@ data "aws_iam_policy_document" "boundary" {
   statement {
     sid       = "AllowWorkloadBasics"
     effect    = "Allow"
-    actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret", "kms:Decrypt", "sqs:*", "s3:GetObject", "s3:PutObject", "s3:ListBucket", "ec2:DescribeSnapshots", "elasticfilesystem:Client*", "logs:CreateLogStream", "logs:PutLogEvents"]
+    actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret", "kms:Decrypt", "s3:GetObject", "s3:PutObject", "s3:ListBucket", "ec2:DescribeSnapshots", "elasticfilesystem:Client*", "logs:CreateLogStream", "logs:PutLogEvents"]
     resources = ["*"]
+  }
+
+  # Pool inbox and handoff queues (M5-C2): the reconciler creates one queue per receiving pool, named
+  # afs-<team ulid>-<short hash>, and a team or agent role may use only queues with that prefix. Which of
+  # them a role may send to or receive from is granted by the role's own policy, naming the queue.
+  statement {
+    sid       = "AllowAFSQueues"
+    effect    = "Allow"
+    actions   = ["sqs:*"]
+    resources = ["arn:*:sqs:*:*:afs-*"]
   }
 
   statement {

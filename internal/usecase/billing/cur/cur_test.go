@@ -284,15 +284,14 @@ func TestSleepErrorEndsRetries(t *testing.T) {
 	}
 }
 
-// Lines for no known team and an unreadable profile list are warned about, not failed.
-func TestUnattributedAndProfilesUnavailableWarn(t *testing.T) {
+// Lines for no known team are warned about, not failed.
+func TestUnattributedLinesWarn(t *testing.T) {
 	f := &curtest.Fetcher{Lines: map[string][]cur.Line{"2026-11-16": {{Kind: cur.KindBedrock, Resource: "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/unknown", Cost: usd("2")}}}}
 	dir := directory()
-	dir.ProfilesUnavailable = true
 	var buf bytes.Buffer
 	in := &cur.Ingestor{Fetch: f, Store: &curtest.Store{Dir: dir}, Log: slog.New(slog.NewTextHandler(&buf, nil))}
 	res := in.Run(t.Context(), []time.Time{monday})
-	if res.Err() != nil || !strings.Contains(buf.String(), "not readable") || !strings.Contains(buf.String(), "not attributed") {
+	if res.Err() != nil || !strings.Contains(buf.String(), "not attributed") {
 		t.Fatalf("err=%v log=%s", res.Err(), buf.String())
 	}
 }

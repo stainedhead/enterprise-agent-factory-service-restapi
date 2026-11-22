@@ -74,22 +74,22 @@ func TestSettings(t *testing.T) {
 	}
 	base := map[string]string{"AFS_DATABASE_URL": "postgres://u@h/db"}
 	s, err := settingsFrom(env(base))
-	if err != nil || s.Lookback != 3 || s.PricingRegion != "us-east-1" || s.DBIAMAuth || s.PriceListSync != nil {
+	if err != nil || s.Lookback != 3 || s.PricingRegion != "us-east-1" || s.DBIAMAuth {
 		t.Fatalf("defaults = %+v err=%v", s, err)
 	}
 	if _, err := s.athenaConfig(); err == nil || !strings.Contains(err.Error(), "AFS_CUR_DATABASE") {
 		t.Fatalf("athena config without CUR settings: %v", err)
 	}
 	full := map[string]string{"AFS_DATABASE_URL": "x", "AFS_CUR_DATABASE": "d", "AFS_CUR_TABLE": "t", "AFS_ATHENA_WORKGROUP": "w",
-		"AFS_ATHENA_OUTPUT": "s3://b/p/", "AFS_BILLING_LOOKBACK_DAYS": "7", "AFS_DB_IAM_AUTH": "true", "AFS_PRICING_PRICE_LIST_SYNC": "false"}
+		"AFS_ATHENA_OUTPUT": "s3://b/p/", "AFS_BILLING_LOOKBACK_DAYS": "7", "AFS_DB_IAM_AUTH": "true"}
 	s, err = settingsFrom(env(full))
-	if err != nil || s.Lookback != 7 || !s.DBIAMAuth || s.PriceListSync == nil || *s.PriceListSync {
+	if err != nil || s.Lookback != 7 || !s.DBIAMAuth {
 		t.Fatalf("settings = %+v err=%v", s, err)
 	}
 	if c, err := s.athenaConfig(); err != nil || c.Database != "d" || c.OutputLocation != "s3://b/p/" {
 		t.Fatalf("athena config = %+v err=%v", c, err)
 	}
-	for k, v := range map[string]string{"AFS_BILLING_LOOKBACK_DAYS": "0", "AFS_DB_IAM_AUTH": "maybe", "AFS_PRICING_PRICE_LIST_SYNC": "x"} {
+	for k, v := range map[string]string{"AFS_BILLING_LOOKBACK_DAYS": "0", "AFS_DB_IAM_AUTH": "maybe"} {
 		bad := map[string]string{"AFS_DATABASE_URL": "x", k: v}
 		if _, err := settingsFrom(env(bad)); err == nil {
 			t.Errorf("%s=%s accepted", k, v)

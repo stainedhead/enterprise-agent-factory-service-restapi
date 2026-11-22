@@ -148,6 +148,8 @@ func TestMetricsEndpointAndRecorder(t *testing.T) {
 	m.OutboxPublished(3)
 	m.OutboxFailed(1)
 	m.SetLeader(true)
+	m.RollupRun("report-rollup-recent", 3, nil)
+	m.RollupRun("report-rollup-recent", 0, errors.New("x"))
 	if testutil.ToFloat64(m.OutboxPending) != 7 || testutil.ToFloat64(m.OutboxOldestAge) != 90 {
 		t.Error("outbox lag not recorded")
 	}
@@ -156,7 +158,7 @@ func TestMetricsEndpointAndRecorder(t *testing.T) {
 	body := rec.Body.String()
 	for _, name := range []string{
 		MetricOutboxPending, MetricOutboxOldestAge, MetricOutboxPublished, MetricOutboxFailed, MetricLeader, MetricBuildInfo,
-		MetricAPIInFlight, MetricAPICrossTeamNotFound, MetricGatewayReservationsExpired, MetricCURVariance, "go_goroutines",
+		MetricAPIInFlight, MetricAPICrossTeamNotFound, MetricGatewayReservationsExpired, MetricCURVariance, MetricReportRollupRuns, MetricReportRollupLastSuccess, "go_goroutines",
 	} {
 		if !strings.Contains(body, name) {
 			t.Errorf("/metrics lacks %s", name)
@@ -182,6 +184,8 @@ func TestEveryMetricNameIsRegistered(t *testing.T) {
 	m.DriftCorrected.WithLabelValues("team")
 	m.GatewayReservationFailures.WithLabelValues("db")
 	m.NotificationFailures.WithLabelValues("slack")
+	m.RollupRuns.WithLabelValues("j", "ok")
+	m.RollupLastSuccess.WithLabelValues("j")
 	mfs, err := m.Registry.Gather()
 	if err != nil {
 		t.Fatal(err)

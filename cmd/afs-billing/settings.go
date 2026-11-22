@@ -27,10 +27,6 @@ type settings struct {
 	// PriceRegion is the region whose Bedrock prices are proposed (AFS_AWS_REGION, AWS_REGION as fallback,
 	// default us-east-1).
 	PriceRegion string
-	// PriceListSync is AFS_PRICING_PRICE_LIST_SYNC, used only while the billing role cannot read
-	// service_settings (-db gap X-DB-9); nil when unset.
-	PriceListSync *bool
-
 	// Lookback is how many days ending yesterday a CUR job covers (AFS_BILLING_LOOKBACK_DAYS, default 3).
 	Lookback int
 }
@@ -58,13 +54,6 @@ func settingsFrom(env func(string) string) (settings, error) {
 			return s, fmt.Errorf("AFS_DB_IAM_AUTH: %q is not a boolean", v)
 		}
 		s.DBIAMAuth = b
-	}
-	if v := env("AFS_PRICING_PRICE_LIST_SYNC"); v != "" {
-		b, err := strconv.ParseBool(v)
-		if err != nil {
-			return s, fmt.Errorf("AFS_PRICING_PRICE_LIST_SYNC: %q is not a boolean", v)
-		}
-		s.PriceListSync = &b
 	}
 	if v := env("AFS_BILLING_LOOKBACK_DAYS"); v != "" {
 		n, err := strconv.Atoi(v)

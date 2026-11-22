@@ -18,22 +18,14 @@ import (
 // supersedes model_price_proposals).
 type PriceStore struct {
 	runner *TxRunner
-	// fallback answers pricing.price_list_sync while the billing role cannot read service_settings
-	// (-db gap X-DB-9); nil fails the sync closed instead.
-	fallback *bool
 }
 
-// NewPriceStore returns a PriceStore on the billing pool's runner. fallback is the configured value of
-// pricing.price_list_sync used only when the database refuses the setting to the billing role.
-func NewPriceStore(runner *TxRunner, fallback *bool) *PriceStore {
-	return &PriceStore{runner: runner, fallback: fallback}
+// NewPriceStore returns a PriceStore on the billing pool's runner.
+func NewPriceStore(runner *TxRunner) *PriceStore {
+	return &PriceStore{runner: runner}
 }
 
 var _ prices.Store = (*PriceStore)(nil)
-
-// ErrSyncSettingUnavailable is returned when the billing role cannot read pricing.price_list_sync and
-// no fallback is configured: the sync does nothing rather than guess whether a service admin switched it off.
-var ErrSyncSettingUnavailable = errors.New("pricing.price_list_sync is not readable by the billing role (db gap X-DB-9) and AFS_PRICING_PRICE_LIST_SYNC is not set")
 
 // SyncEnabled implements prices.Store. An unset setting row means the default, on.
 func (s *PriceStore) SyncEnabled(ctx context.Context) (bool, error) {
@@ -54,12 +46,6 @@ func (s *PriceStore) SyncEnabled(ctx context.Context) (bool, error) {
 		return json.Unmarshal(raw, &on)
 	})
 	if err != nil {
-		if e := MapError(err, OpRead, "pricing.price_list_sync"); domain.KindOf(e) == domain.KindAccessDenied {
-			if s.fallback == nil {
-				return false, ErrSyncSettingUnavailable
-			}
-			return *s.fallback, nil
-		}
 		return false, MapError(err, OpRead, "pricing.price_list_sync")
 	}
 	return on, nil

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/aws/eks"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/k8s"
@@ -23,6 +24,10 @@ type kubectlWiring struct {
 	Controller *kubectl.Controller
 	Routes     []engine.Route
 	WrapLister func(engine.Lister) engine.Lister
+	// OwnedKinds are the kinds the drift watcher adds: the viewer Role and RoleBinding. Empty when no
+	// provider has a role (AFS_VIEWER_KUBECTL_ROLES unset), because then nothing owns them and the
+	// reconciler needs no list and watch rights on roles for the watch.
+	OwnedKinds []schema.GroupVersionKind
 }
 
 // roleARNRE is an IAM role ARN, with or without a path.
@@ -76,6 +81,18 @@ func wireKubectl(kc *k8s.Client, awsCfg awssdk.Config, cluster string, runner *p
 	if err != nil {
 		return kubectlWiring{}, err
 	}
-	return kubectlWiring{Controller: ctl, Routes: kubectl.Routes(),
+	var owned []schema.GroupVersionKind
+	if len(roles) > 0 {
+		owned = k8s.ViewerKubectlOwnedKinds()
+	}
+	return kubectlWiring{Controller: ctl, Routes: kubectl.Routes(), OwnedKinds: owned,
 		WrapLister: func(l engine.Lister) engine.Lister { return postgres.NewTeamLister(l, pool, kubectl.Kind) }}, nil
+}
+
+// driftKinds lists every kind the drift watcher follows: the team objects, the agents' and pools' objects and,
+// when viewer kubectl is configured, the viewer Role and RoleBinding.
+func driftKinds(kt kubectlWiring) []schema.GroupVersionKind {
+	kinds := append(k8s.OwnedKinds(), k8s.AgentOwnedKinds()...)
+	kinds = append(kinds, k8s.PoolOwnedKinds()...)
+	return append(kinds, kt.OwnedKinds...)
 }

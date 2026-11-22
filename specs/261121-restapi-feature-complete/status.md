@@ -19,7 +19,7 @@
 | 2 | Research and data modeling | Complete | research.md, data-dictionary.md |
 | 3 | Architecture and planning | Complete | architecture.md, plan.md |
 | 4 | Task breakdown | Complete | tasks.md: 60 streams, 255 tasks |
-| 5 | Implementation (M0–M6) | In Progress | M0 complete 2026-11-21; M1 complete 2026-11-22 (step 3 started 2026-11-21T20:57:16Z); M2 complete 2026-11-22 (integrated); M3 complete 2026-11-22 (integrated); M4 complete 2026-11-22 (integrated); M5 next. Task progress in tasks.md |
+| 5 | Implementation (M0–M6) | In Progress | M0 complete 2026-11-21; M1 complete 2026-11-22 (step 3 started 2026-11-21T20:57:16Z); M2 complete 2026-11-22 (integrated); M3 complete 2026-11-22 (integrated); M4 complete 2026-11-22 (integrated); M5 complete 2026-11-22 (integrated); M6 next. Task progress in tasks.md |
 | 6 | Completion and archival | Not Started | |
 
 ## Phase 0 checklist
@@ -37,7 +37,7 @@
 | M2 Agents | Complete | 44 of 45 tasks (M2-F8 `[e2e]` busybox case and the cluster parts of M2-F5, G1, G3, I3 wait for the cluster suite) |
 | M3 Gateway and budgets | Complete | all 36 tasks (gateway, budgets, notifications, reports, activity; cluster-only checks wait for the cluster suite and CI: real Bedrock, `helm lint`, `govulncheck`) |
 | M4 Accounts, tags, billing | Complete | all 26 tasks (identities, links, accounts, tags, CUR, pricing, showback, schedules, export, import, restore; cluster-only checks wait for the cluster suite and CI: real AWS, `helm lint`, `tflint`, `govulncheck`) |
-| M5 Swarms | Not Started | 0 |
+| M5 Swarms | Complete | all 21 tasks (ephemeral teams, pools, pool workloads, teardown, viewer kubectl, cost tags; cluster-only checks wait for the cluster suite and CI: real AWS and cluster, `helm lint`, `tflint`, `govulncheck`) |
 | M6 CVE remediation and completion | Not Started | 0 |
 
 ## Blockers
@@ -156,3 +156,4 @@
 - 2026-11-22: M5-C6 done (`m5/w2`): the pinned `-db` (a6ecc3c, migration 000016) already holds X-DB-5; `postgres.PoolLifecycle.Complete` marks a pool `deleted` with `deleted_at` and one audit record, idempotently (integration test `TestPoolLifecycleComplete` under `afs_reconciler`).
 - 2026-11-22: M5-C5 done (`m5/w2`): pool pods carry `LabelPoolID` and `AFS_WORKER_POD`; the pod names the Deployment produces satisfy `afs.worker_pod_ok` (integration test); collector, gateway and traffic paths already attribute pool and worker pod (M3-X1 tests).
 - 2026-11-22: M5-D1 done (`m5/w2`): `reconcile/teardown` job every 30 s (`Engine.Every`): due ephemeral teams (`teams_due_for_teardown`) move to `deleting` with `torn_down_at` and reason, audit and `team.teardown_started` in one transaction, the team controller's RC-17 finalizer deletes pools, agents and the namespace, and once `deleted` the record is closed (`torn_down_at` = `deleted_at`, `team.torn_down`, audit); rows, revisions, usage and audit stay; integration tests `TestTeardownStoreFlow` and `TestTeardownJobEndToEnd`.
+- 2026-11-22: M5-X1 done (integration of `m5/w1`, `m5/w3`, `m5/w2` on `feat/restapi-feature-complete`, all `--no-ff`; no object over 10 MB). Adopted -db 9cc2941 (000018): report rollup jobs and rollup-backed activity and traffic reports (service activity p99 28 ms), restore rebuilds secret bindings, billing reads service_settings and team_models (env fallback removed), schedule runs keep the version. Cross-stream: pool re-render test through the API, drift watch for the viewer Role and RoleBinding, OpenAPI (stage position 1-50, `disabledAt: pool`, pause and resume events), Helm (efs class, cluster endpoint, viewer roles) and Terraform (pool queues on `afs-*`). Results: `make gate` green; `make test-db` green; `make cover` every domain, usecase and authz package at least 90%; `make conformance` green; envtest (`internal/adapter/k8s/...`) green; helm and terraform tests green; authorization matrix green for every M5 route (in the race run). Decisions in implementation-notes.md (M5 integration decisions).

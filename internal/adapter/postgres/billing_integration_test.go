@@ -94,26 +94,25 @@ func TestBillingDirectory(t *testing.T) {
 	if !d.TagKeys["bill-key-"+team.Slug] {
 		t.Fatalf("tag keys = %v", d.TagKeys)
 	}
-	// -db gap X-DB-9: afs_billing has no SELECT on team_models. Until -db grants it the directory
-	// degrades instead of failing; when it does, this assertion is the one to flip.
-	if !d.ProfilesUnavailable {
-		t.Fatal("afs_billing can now read team_models: drop ProfilesUnavailable and the degraded path")
+	if d.Profiles == nil {
+		t.Fatal("profiles not read")
 	}
 }
 
 func TestBillingDirectoryReadsInferenceProfiles(t *testing.T) {
-	g := newBillingRigAs(t, "afs_owner")
+	g := newBillingRig(t) // afs_billing reads team_models since -db 000018
+	owner := newBillingRigAs(t, "afs_owner")
 	team := g.db.SeedTeam(t)
 	model := "bill-model-" + team.Slug
 	arn := "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/" + team.Slug
-	g.exec(`INSERT INTO afs.models (id, provider, display_name, context_window, max_output_tokens) VALUES ($1, 'Example', 'M', 1000, 100)`, model)
-	g.exec(`INSERT INTO afs.team_models (team_id, model_id, inference_profile_arn) VALUES ($1, $2, $3)`, team.ID, model, arn)
+	owner.exec(`INSERT INTO afs.models (id, provider, display_name, context_window, max_output_tokens) VALUES ($1, 'Example', 'M', 1000, 100)`, model)
+	owner.exec(`INSERT INTO afs.team_models (team_id, model_id, inference_profile_arn) VALUES ($1, $2, $3)`, team.ID, model, arn)
 	d, err := g.store.Directory(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.ProfilesUnavailable || d.Profiles[arn].TeamID != team.ID || d.Profiles[arn].ModelID != model {
-		t.Fatalf("profiles = %+v unavailable=%v", d.Profiles[arn], d.ProfilesUnavailable)
+	if d.Profiles[arn].TeamID != team.ID || d.Profiles[arn].ModelID != model {
+		t.Fatalf("profiles = %+v", d.Profiles[arn])
 	}
 }
 

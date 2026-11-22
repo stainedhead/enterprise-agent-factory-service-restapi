@@ -72,7 +72,9 @@ ExternalSystem:
       - service
       - team
       - agent
+      - pool
       - null
+      description: The level whose switch has the system off; pool applies to the pool views only.
       readOnly: true
     unmetered:
       type: boolean

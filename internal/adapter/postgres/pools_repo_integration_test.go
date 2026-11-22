@@ -362,7 +362,7 @@ func TestPoolRepo(t *testing.T) {
 			t.Fatalf("switching off twice is idempotent: %v", err)
 		}
 		got, err := repo.GetSystem(ctx, tx, swarm, p.ID, sys)
-		if err != nil || got.DisabledAt != domain.ExtSystemDisabledAtAgent {
+		if err != nil || got.DisabledAt != domain.ExtSystemDisabledAtPool {
 			t.Errorf("off: %+v %v", got, err)
 		}
 		if other, _ := repo.GetSystem(ctx, tx, swarm, q.ID, sys); !other.On() {
