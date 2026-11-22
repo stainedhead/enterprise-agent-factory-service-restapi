@@ -14,6 +14,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/athena v1.68.0
 	github.com/aws/aws-sdk-go-v2/service/bedrock v1.75.0
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.64.0
+	github.com/aws/aws-sdk-go-v2/service/costexplorer v1.63.12
 	github.com/aws/aws-sdk-go-v2/service/eks v1.105.6
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.55.11
 	github.com/aws/aws-sdk-go-v2/service/iam v1.68.0

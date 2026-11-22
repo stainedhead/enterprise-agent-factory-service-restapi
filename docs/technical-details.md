@@ -124,3 +124,11 @@ reconciler a ClusterRole for the kinds it renders and a Role for its leader Leas
 Tags: the effective set (system tags, service tags, team tags; cap 40) is applied to roles, Pod Identity associations,
 inference profiles, snapshots and NodePools, and the keys AFS applied are recorded in `afs-tag-keys` so a removed tag
 is removed and foreign tags are kept. Secrets and work-order queues are tagged at creation only (M6 task).
+
+Viewer kubectl (M5-E): `GetTeamKubeconfig` renders a kubeconfig in `afs-api` from `AFS_CLUSTER_NAME`,
+`AFS_CLUSTER_ENDPOINT`, `AFS_CLUSTER_CA_DATA` and `AFS_AWS_REGION` (`503` when unset); it uses the `aws eks get-token`
+exec plugin and holds no token. Access is the reconciler's `kubectl` controller (kind `kubectl`, id = team id): per team
+with `viewer_kubectl` on, a namespace `Role` and `RoleBinding` named `afs-viewer` (get, list and watch only), and one EKS
+access entry per federated role (`AFS_VIEWER_KUBECTL_ROLES`, provider id or `default` to role ARN; unset means no access
+entry), tagged `afs-managed-by=viewer-kubectl` and mapped to a group derived from the role ARN with no access policy.
+The binding goes first on removal. An entry AFS did not create is never changed.

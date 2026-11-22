@@ -61,4 +61,9 @@ values wins. Highlights:
   role ARNs, OIDC provider, export bucket and key; billing: CUR database and table, Athena workgroup and
   output, reports bucket). `deploy/helm/afs/ci/default-values.yaml` shows a complete example.
 
+- `GetTeamKubeconfig` needs `AFS_CLUSTER_ENDPOINT` (the cluster's API server URL, `aws eks describe-cluster`)
+  and `AFS_CLUSTER_CA_DATA` (its base64 certificate authority) under `api.env`; without them the operation
+  answers `503`. The kubeconfig it returns holds no token: `kubectl` runs `aws eks get-token` as the viewer.
+  Viewer access itself is set up by the reconciler (`AFS_VIEWER_KUBECTL_ROLES`, see `reconciler.md`).
+
 Verify with `helm lint deploy/helm/afs -f deploy/helm/afs/ci/default-values.yaml --strict`.

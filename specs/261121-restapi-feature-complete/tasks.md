@@ -732,8 +732,8 @@ Owns: `internal/usecase/kubeconfig/`, `internal/usecase/reconcile/kubectl/`, `in
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M5-E1 | `GetTeamKubeconfig`: off → `403`; on → YAML using the `aws eks get-token` exec plugin, no token (OQ-S5) | RA-US-12.1, RA-10 | — |
-| [ ] | M5-E2 | Access entry for the provider's federated role (configured per provider, OQ-9) mapped to a namespace read-only Role (no secrets, exec, attach, port-forward); removed within 60 s when off; none without a configured role; `[e2e]` case | RC-US-11.1, RC-13 | — |
+| [x] | M5-E1 | `GetTeamKubeconfig`: off → `403`; on → YAML using the `aws eks get-token` exec plugin, no token (OQ-S5) | RA-US-12.1, RA-10 | — |
+| [x] | M5-E2 | Access entry for the provider's federated role (configured per provider, OQ-9) mapped to a namespace read-only Role (no secrets, exec, attach, port-forward); removed within 60 s when off; none without a configured role; `[e2e]` case | RC-US-11.1, RC-13 | — |
 
 ### M5-F · Cost allocation tag status (RA-11, BI-6)
 
@@ -741,8 +741,8 @@ Owns: `internal/usecase/billing/costtags/`, `internal/usecase/costtags/`, `inter
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M5-F1 | Daily: keys seen in CUR and AWS activation status; a key active 3 days but not seen → one `cost_tags.not_seen` [adapter with fake Billing API] | BI-US-4.1, BI-6 | — |
-| [ ] | M5-F2 | `ListCostTagStatus` for service admins (team-admin → `403`); `PutSetting billing.tag_activation_acknowledged = true` audited, non-boolean → `400` | RA-US-18.1, RA-US-18.2, RA-11 | — |
+| [x] | M5-F1 | Daily: keys seen in CUR and AWS activation status; a key active 3 days but not seen → one `cost_tags.not_seen` [adapter with fake Billing API] | BI-US-4.1, BI-6 | — |
+| [x] | M5-F2 | `ListCostTagStatus` for service admins (team-admin → `403`); `PutSetting billing.tag_activation_acknowledged = true` audited, non-boolean → `400` | RA-US-18.1, RA-US-18.2, RA-11 | — |
 
 ### M5-X · Milestone exit
 
