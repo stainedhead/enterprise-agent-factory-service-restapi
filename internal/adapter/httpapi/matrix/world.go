@@ -18,6 +18,9 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/auth"
 )
 
+// workloadAgent is the name of the agent behind the Workload caller.
+const workloadAgent = "mx-workload"
+
 // ClientID is the audience of the matrix identity provider.
 const ClientID = "afs-matrix"
 
@@ -47,11 +50,29 @@ func NewIDP(t testing.TB) *IDP {
 	return p
 }
 
+// ClusterToken signs a projected ServiceAccount token of the fake cluster issuer: audience afs-api, an
+// hour of life, bound to pod. subject is system:serviceaccount:<namespace>:<name>.
+func (p *IDP) ClusterToken(t testing.TB, namespace, serviceAccount, pod string) string {
+	t.Helper()
+	now := time.Now()
+	return p.Sign(t, map[string]any{
+		"iss": p.Server.URL, "sub": "system:serviceaccount:" + namespace + ":" + serviceAccount, "aud": []string{"afs-api"},
+		"iat": now.Unix(), "exp": now.Add(time.Hour).Unix(),
+		"kubernetes.io": map[string]any{"namespace": namespace, "serviceaccount": map[string]any{"name": serviceAccount},
+			"pod": map[string]any{"name": pod}},
+	})
+}
+
 // Token signs an access token for subject with the given groups.
 func (p *IDP) Token(t testing.TB, sub, email string, groups []string) string {
 	t.Helper()
-	claims := map[string]any{"iss": p.Server.URL, "sub": sub, "aud": ClientID, "exp": time.Now().Add(time.Hour).Unix(),
-		"email": email, "name": sub, "groups": groups}
+	return p.Sign(t, map[string]any{"iss": p.Server.URL, "sub": sub, "aud": ClientID, "exp": time.Now().Add(time.Hour).Unix(),
+		"email": email, "name": sub, "groups": groups})
+}
+
+// Sign signs claims with the fake issuer's key (kid k1).
+func (p *IDP) Sign(t testing.TB, claims map[string]any) string {
+	t.Helper()
 	s, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: p.key}, (&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", "k1"))
 	if err != nil {
 		t.Fatal(err)
@@ -76,6 +97,9 @@ type World struct {
 	IDP   *IDP
 	// TeamA is the team the cases target; TeamB is another team nobody in the matrix is bound to.
 	TeamA, TeamB pgtest.Team
+	// Cluster is the fake EKS issuer of workload tokens (RA-2b); pass its URL to the server's
+	// ClusterOIDCIssuer. The Workload caller's token names the agent seedWorkload creates in team A.
+	Cluster *IDP
 	// Tokens maps a caller to the bearer token it sends; a caller without one is skipped.
 	Tokens     map[Caller]string
 	ProviderID string
@@ -87,7 +111,7 @@ type World struct {
 // authentication exists (M6-D2).
 func NewWorld(t testing.TB, db *pgtest.DB) *World {
 	t.Helper()
-	w := &World{DB: db, Admin: db.Admin(t), IDP: NewIDP(t), Tokens: map[Caller]string{}}
+	w := &World{DB: db, Admin: db.Admin(t), IDP: NewIDP(t), Cluster: NewIDP(t), Tokens: map[Caller]string{}}
 	w.TeamA, w.TeamB = db.SeedTeam(t), db.SeedTeam(t)
 	w.ProviderID = pgtest.NewID("idp")
 	w.exec(t, `INSERT INTO afs.identity_providers (id, kind, name, issuer_url, client_id, is_default) VALUES ($1, 'okta', 'Matrix IdP', $2, $3, true)`,
@@ -124,6 +148,12 @@ func NewWorld(t testing.TB, db *pgtest.DB) *World {
 	key(TeamKeyViewer, w.TeamA.ID, "team_viewer")
 	key(TeamKeyAdmin, w.TeamA.ID, "team_admin")
 	key(ServiceKey, nil, "security_operator")
+
+	var namespace string
+	if err := w.Admin.QueryRow(t.Context(), `SELECT namespace FROM afs.teams WHERE id = $1`, w.TeamA.ID).Scan(&namespace); err != nil {
+		t.Fatalf("matrix seed: %v", err)
+	}
+	w.Tokens[Workload] = w.Cluster.ClusterToken(t, namespace, "agent-"+workloadAgent, workloadAgent+"-0")
 	return w
 }
 
@@ -143,4 +173,14 @@ func (w *World) SetFlags(t testing.TB, f authz.TeamFlags) {
 	// The state is reset too: SuspendTeam and DeleteTeam leave team A suspended or deleting.
 	w.exec(t, `UPDATE afs.teams SET state = 'active', deleted_at = NULL, may_manage_aws_accounts = $2, viewer_kubectl = $3, may_add_external_systems = $4 WHERE id = $1`,
 		w.TeamA.ID, f.MayManageAwsAccounts, f.ViewerKubectl, f.MayAddExternalSystems)
+}
+
+// seedWorkload makes the agent the Workload caller's token names, in team A, for the length of the
+// subtest: an agent keeps its model in team_models, so leaving one in the shared world would stop cases
+// such as PutTeamModels. The cleanup of SeedAgentCatalog removes it with the subtest.
+func (w *World) seedWorkload(t *testing.T) {
+	t.Helper()
+	model, tpl := w.SeedAgentCatalog(t)
+	w.exec(t, `INSERT INTO afs.agents (id, team_id, name, template, image, model_id) VALUES ($1, $2, $3, $4, $5, $6)`,
+		pgtest.NewID("agt"), w.TeamA.ID, workloadAgent, tpl, mxImage, model)
 }

@@ -66,6 +66,12 @@ values wins. Highlights:
   `global.cluster.caData`; without them the operation answers `503`. The kubeconfig it returns holds no token: `kubectl` runs `aws eks get-token` as the viewer.
   Viewer access itself is set up by the reconciler: set `reconciler.viewerKubectl.roles` (rendered as
   `AFS_VIEWER_KUBECTL_ROLES`, see `reconciler.md`).
+- Agents and pools call the API with their projected ServiceAccount token (audience `afs-api`). `afs-api`
+  validates it offline against the cluster's service account issuer: set `global.cluster.oidcIssuer`
+  (`AFS_CLUSTER_OIDC_ISSUER`, for EKS `https://oidc.eks.<region>.amazonaws.com/id/<cluster id>`). It fetches
+  only the issuer's public keys (cached ten minutes) and never calls the Kubernetes API. Tokens that name
+  another audience, live longer than an hour or come from another issuer are refused with `401`; with no issuer
+  set, workload tokens are refused.
 - Pools with a shared volume use the EFS storage class `reconciler.efsStorageClass` (`AFS_EFS_STORAGE_CLASS`,
   default `efs-sc`). The reconciler creates and deletes pool queues named `afs-<team>-<hash>`; the Terraform
   `pod-identity` module grants it queue administration on `afs-*` queues only, and the permissions boundary lets

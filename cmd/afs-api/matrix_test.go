@@ -18,7 +18,7 @@ func TestAuthorizationMatrix(t *testing.T) {
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
 	c, err := wire(context.Background(), quiet, settings{
 		DatabaseURL: db.URLs["afs_app"], OwnerURL: db.URLs["afs_owner"], APIReplicas: 1,
-		OIDCHTTP: w.OIDCClient(), RatePerSecond: 1e6, RateBurst: 1e6, AWSRegion: "us-east-1",
+		OIDCHTTP: w.OIDCClient(), RatePerSecond: 1e6, RateBurst: 1e6, AWSRegion: "us-east-1", ClusterOIDCIssuer: w.Cluster.Server.URL,
 	})
 	if err != nil {
 		t.Fatal(err)

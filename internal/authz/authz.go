@@ -200,8 +200,8 @@ func Authorize(p Principal, perm Permission, res Resource) Decision {
 }
 
 // Check decides whether p meets req on res, applying API contract §2 and §3 and the PRD §3 rule:
-// a caller not bound to the team gets NotFound; a security operator or workload is denied every
-// team route; a bound caller without the permission is denied; service routes deny all but service
+// a caller not bound to the team gets NotFound; a security operator is denied every team route, a workload
+// principal on its own team and not found on another; a bound caller without the permission is denied; service routes deny all but service
 // admins and the security operator column.
 func Check(p Principal, req Requirement, res Resource) Decision {
 	perms := req.AnyOf
@@ -234,9 +234,15 @@ func checkTeam(p Principal, perms []Permission, cond Condition, res Resource, de
 	switch {
 	case p.ServiceAdmin:
 		return Decision{Outcome: Allow}
-	case p.Workload != nil, p.SecurityOperator:
-		// A security operator is denied every team route, existing team or not (RA-US-1.4); a
-		// workload principal holds nothing on team routes (§2).
+	case p.Workload != nil:
+		// A workload principal holds nothing on team routes (§2): 403 on its own team's, and 404 on
+		// any other team's, so it learns nothing about teams it does not belong to (RA-US-2b.2).
+		if p.Workload.TeamID == res.TeamID {
+			return deny
+		}
+		return Decision{Outcome: NotFound}
+	case p.SecurityOperator:
+		// A security operator is denied every team route, existing team or not (RA-US-1.4).
 		return deny
 	}
 	roles := p.TeamRoles(res.TeamID)

@@ -247,19 +247,26 @@ func groupCounts(id Identity, r BindingRow, defaultProvider string) bool {
 	return r.BindingProviderID != "" || via == defaultProvider
 }
 
-// SessionOf turns a principal into the database session of database contract §3.
+// SessionOf turns a principal into the database session of database contract §3. A workload
+// principal sees its own team (so row-level security lets it report on that team's work orders); the
+// route authorization, not the session, keeps it off every other route. A pool's audit rows carry the
+// pool and the worker pod.
 func SessionOf(p authz.Principal, requestID string) port.Session {
 	s := port.Session{Actor: p.ID, ServiceAdmin: p.ServiceAdmin, SecurityOperator: p.SecurityOperator,
 		TeamIDs: p.TeamIDs(), RequestID: requestID}
 	switch {
 	case p.Workload != nil && p.Workload.PoolID != "":
 		s.ActorType = port.ActorPool
+		s.PoolID, s.WorkerPod = p.Workload.PoolID, p.Workload.WorkerPod
 	case p.Workload != nil:
 		s.ActorType = port.ActorAgent
 	case p.Type == authz.PrincipalAPIKey:
 		s.ActorType = port.ActorAPIKey
 	default:
 		s.ActorType = port.ActorUser
+	}
+	if p.Workload != nil && p.Workload.TeamID != "" && !slices.Contains(s.TeamIDs, p.Workload.TeamID) {
+		s.TeamIDs = append(s.TeamIDs, p.Workload.TeamID)
 	}
 	return s
 }

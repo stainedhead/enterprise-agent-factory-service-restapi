@@ -10,6 +10,7 @@ import (
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/authz"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/auth"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 )
 
@@ -21,23 +22,8 @@ type Caller struct {
 	UserAgent string
 }
 
-// Session turns the caller into the database session of database contract §3.
-func (c Caller) Session() port.Session {
-	p := c.Principal
-	s := port.Session{Actor: p.ID, ServiceAdmin: p.ServiceAdmin, SecurityOperator: p.SecurityOperator,
-		TeamIDs: p.TeamIDs(), RequestID: c.RequestID}
-	switch {
-	case p.Workload != nil && p.Workload.PoolID != "":
-		s.ActorType = port.ActorPool
-	case p.Workload != nil:
-		s.ActorType = port.ActorAgent
-	case p.Type == authz.PrincipalAPIKey:
-		s.ActorType = port.ActorAPIKey
-	default:
-		s.ActorType = port.ActorUser
-	}
-	return s
-}
+// Session turns the caller into the database session of database contract §3 (auth.SessionOf).
+func (c Caller) Session() port.Session { return auth.SessionOf(c.Principal, c.RequestID) }
 
 // Record builds an audit record for an allowed mutation by the caller.
 func (c Caller) Record(action, kind, id, teamID string, before, after any) port.AuditRecord {

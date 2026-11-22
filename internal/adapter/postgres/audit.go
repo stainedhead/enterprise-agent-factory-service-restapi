@@ -74,6 +74,10 @@ func auditArgs(s port.Session, rec port.AuditRecord) ([]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A pool's rows carry the pool and the worker pod of its session; an explicit record wins.
+	if rec.PoolID == "" {
+		rec.PoolID, rec.WorkerPod = s.PoolID, s.WorkerPod
+	}
 	return []any{string(actorType), s.Actor, rec.Action, string(rec.Outcome), rec.ResourceKind,
 		rec.ResourceID, rec.TeamID, s.RequestID, ip, rec.UserAgent, before, after, rec.PoolID, rec.WorkerPod}, nil
 }

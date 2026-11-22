@@ -61,6 +61,9 @@ type settings struct {
 	// OIDCHTTP fetches identity provider discovery documents and JWKS; nil uses a client with a 5 s
 	// timeout. Tests point it at a fake provider.
 	OIDCHTTP *http.Client
+	// ClusterOIDCIssuer is the EKS cluster's service account issuer URL (AFS_CLUSTER_OIDC_ISSUER):
+	// workload tokens (RA-2b) are validated against its keys. Empty: workload tokens are refused.
+	ClusterOIDCIssuer string
 }
 
 func settingsFrom(env func(string) string) (settings, error) {
@@ -102,6 +105,9 @@ func settingsFrom(env func(string) string) (settings, error) {
 	}
 	if s.OwnerURL != "" && s.DatabaseURL == "" {
 		return s, fmt.Errorf("AFS_DATABASE_OWNER_URL is set without AFS_DATABASE_URL")
+	}
+	if err := workloadSettings(env, &s); err != nil {
+		return s, err
 	}
 	return s, nil
 }
@@ -194,6 +200,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 		wireKubeconfig(c, s)
 		wireCostTags(c, log)
 		wireSecOps(c, log)
+		wireWorkload(c, s)
 		// An explicit Registrars list replaces the default one, so the areas bound by the streams
 		// (wireM1W2 and later) are added next to the sign-in handlers wireAuth registered.
 		for _, a := range httpapi.Areas {

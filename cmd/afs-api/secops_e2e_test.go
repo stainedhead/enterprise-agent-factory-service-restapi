@@ -28,7 +28,7 @@ func newSecopsRig(t *testing.T) secopsRig {
 	setClusterEnv(t)
 	w := matrix.NewWorld(t, db)
 	c, err := wire(t.Context(), quiet, settings{DatabaseURL: db.URLs["afs_app"], OwnerURL: db.URLs["afs_owner"], APIReplicas: 1,
-		OIDCHTTP: w.OIDCClient(), RatePerSecond: 1e6, RateBurst: 1e6, AWSRegion: "us-east-1"})
+		OIDCHTTP: w.OIDCClient(), RatePerSecond: 1e6, RateBurst: 1e6, AWSRegion: "us-east-1", ClusterOIDCIssuer: w.Cluster.Server.URL})
 	if err != nil {
 		t.Fatal(err)
 	}
