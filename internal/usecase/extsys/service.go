@@ -238,7 +238,7 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, teamID, systemID 
 		if err := domain.CheckVersion(cur.Version, expect); err != nil {
 			return err
 		}
-		next, err := cur.ExternalSystem.Apply(u)
+		next, err := cur.Apply(u)
 		if err != nil {
 			return err
 		}

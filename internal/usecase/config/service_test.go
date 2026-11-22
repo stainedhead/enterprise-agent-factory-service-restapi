@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"testing"
@@ -214,7 +215,7 @@ func TestAgentValues(t *testing.T) {
 	}
 	if err := s.DeleteNamespace(ctx, admin, team, "LOG_LEVEL", 1); domain.KindOf(err) != domain.KindConflict {
 		t.Errorf("delete of a linked value = %v", err)
-	} else if d := err.(*domain.Error).Details; d["agents"] == nil {
+	} else if d := domainDetails(err); d["agents"] == nil {
 		t.Errorf("conflict lists no agents: %v", d)
 	}
 	lit, err := s.PutAgent(ctx, admin, team, agent, "LOG_LEVEL", config.AgentValueInput{Source: domain.ConfigSourceLiteral, Value: str("trace")}, ver(1))
@@ -358,4 +359,12 @@ func TestRepositoryFailures(t *testing.T) {
 			}
 		}
 	}
+}
+
+func domainDetails(err error) map[string]any {
+	var de *domain.Error
+	if errors.As(err, &de) {
+		return de.Details
+	}
+	return nil
 }

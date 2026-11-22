@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"regexp"
 	"strconv"
 	"strings"
@@ -122,8 +123,9 @@ func validateExtCommon(fe []FieldError, slug *string, name *string, cat *ExtCate
 		fe = append(fe, FieldError{Field: "docsUrl", Reason: "must be an https:// URL of at most 500 characters"})
 	}
 	if epsSet {
-		if err := ValidateEndpoints("endpoints", eps); err != nil {
-			fe = append(fe, err.(*Error).Fields...)
+		var verr *Error
+		if err := ValidateEndpoints("endpoints", eps); errors.As(err, &verr) {
+			fe = append(fe, verr.Fields...)
 		}
 	}
 	return fe
