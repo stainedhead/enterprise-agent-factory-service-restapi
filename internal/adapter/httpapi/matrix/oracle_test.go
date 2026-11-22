@@ -17,7 +17,7 @@ func principalFor(c Caller, teamA string) (authz.Principal, bool) {
 	case SecurityOperator, ServiceKey:
 		return authz.Principal{ID: "p", SecurityOperator: true}, true
 	case Workload:
-		return authz.Principal{ID: "agt_1", Type: authz.PrincipalWorkload, Workload: &authz.Workload{TeamID: "team_other", AgentID: "agt_1"}}, true
+		return authz.Principal{ID: "agt_1", Type: authz.PrincipalWorkload, Workload: &authz.Workload{TeamID: teamA, AgentID: "agt_1"}}, true
 	case Unbound:
 		return authz.Principal{ID: "p"}, true
 	}
