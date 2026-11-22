@@ -13,6 +13,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/audit"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/revisions"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/teams"
 )
@@ -497,4 +498,32 @@ VALUES ('user', $1, 'CreateTeam', 'allowed', 'teams', $2, $2, 'req_1')`, user, t
 
 func revisionsFilter(kind, id string) revisions.Filter {
 	return revisions.Filter{ResourceKind: kind, ResourceID: id}
+}
+
+// The status the engine writes under engine.KindTeam is the status the teams repository reads (the
+// contract says resource_kind "team").
+func TestTeamStatusKindMatchesTheEngine(t *testing.T) {
+	db := pgtest.Get(t)
+	repo := postgres.NewTeamRepo()
+	tm := newTeam(t, "stk"+pgtest.NewID("x")[2:6])
+	if err := inTx(t, db, adminSession(), func(ctx context.Context, tx port.Tx) error { return repo.Insert(ctx, tx, tm) }); err != nil {
+		t.Fatal(err)
+	}
+	if teams.StatusKind != string(engine.KindTeam) {
+		t.Fatalf("StatusKind = %q, engine kind %q", teams.StatusKind, engine.KindTeam)
+	}
+	if _, err := db.Admin(t).Exec(t.Context(), `INSERT INTO afs.resource_status (resource_kind, resource_id, team_id, phase, conditions, observed_generation)
+VALUES ($1, $2, $2, 'Ready', '[]', 1)`, string(engine.KindTeam), tm.ID); err != nil {
+		t.Fatal(err)
+	}
+	err := inTx(t, db, adminSession(), func(ctx context.Context, tx port.Tx) error {
+		got, err := repo.Get(ctx, tx, tm.ID, false)
+		if err == nil && got.Status.Phase != domain.PhaseReady {
+			t.Errorf("phase = %q, want Ready", got.Status.Phase)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }

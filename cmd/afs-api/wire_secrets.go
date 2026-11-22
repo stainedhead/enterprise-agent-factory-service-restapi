@@ -8,7 +8,6 @@ import (
 	"log/slog"
 
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/aws/secretsmanager"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/httpapi"
@@ -17,9 +16,6 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/secrets"
 )
-
-// metricOrphanSecrets counts secrets whose compensating delete failed (M2-C2).
-const metricOrphanSecrets = "afs_api_orphan_secrets_total" //nolint:gosec // a metric name, not a credential
 
 // newSecretsWriter builds the Secrets Manager writer; tests replace it with a fake so no test
 // reaches AWS.
@@ -80,9 +76,7 @@ func wireSecrets(ctx context.Context, c *components, s settings, log *slog.Logge
 	if err != nil {
 		return err
 	}
-	orphans := prometheus.NewCounter(prometheus.CounterOpts{Name: metricOrphanSecrets,
-		Help: "Secrets Manager secrets created for a request whose database write failed and that could not be deleted again."})
-	c.Metrics.Registry.MustRegister(orphans)
+	orphans := c.Metrics.APIOrphanSecrets
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
 	svc := &secrets.Service{Deps: deps, Repo: postgres.NewSecretRepo(), Writer: w, OnOrphan: func() {
 		orphans.Inc()

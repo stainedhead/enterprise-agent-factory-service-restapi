@@ -115,7 +115,6 @@ func TestEgressSource(t *testing.T) {
 	}
 }
 
-
 // M2-H1: EgressPolicyReady is merged onto the agent's status without changing its phase, keeps the
 // transition time while the status stays, and does nothing for an agent that has no status yet.
 func TestAgentConditions(t *testing.T) {

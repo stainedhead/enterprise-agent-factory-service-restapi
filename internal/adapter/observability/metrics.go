@@ -19,6 +19,8 @@ type Metrics struct {
 	APIRequestDuration   *prometheus.HistogramVec
 	APIInFlight          prometheus.Gauge
 	APICrossTeamNotFound prometheus.Counter
+	// APIOrphanSecrets counts secrets left in Secrets Manager when the compensating delete failed.
+	APIOrphanSecrets prometheus.Counter
 
 	ReconcileDuration *prometheus.HistogramVec
 	ReconcileErrors   *prometheus.CounterVec
@@ -50,6 +52,7 @@ func NewMetrics(service, version string) *Metrics {
 	m.APIRequestDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: MetricAPIRequestDuration, Help: "API request duration.", Buckets: APIBuckets}, []string{"route", "method"})
 	m.APIInFlight = prometheus.NewGauge(prometheus.GaugeOpts(f(MetricAPIInFlight, "API requests being served.")))
 	m.APICrossTeamNotFound = prometheus.NewCounter(prometheus.CounterOpts(f(MetricAPICrossTeamNotFound, "404s that hid a resource of another team.")))
+	m.APIOrphanSecrets = prometheus.NewCounter(prometheus.CounterOpts(f(MetricAPIOrphanSecrets, "Secrets Manager secrets created for a request whose database write failed and that could not be deleted again.")))
 	m.ReconcileDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: MetricReconcileDuration, Help: "Duration of one reconcile.", Buckets: ReconcileBucket}, []string{"kind"})
 	m.ReconcileErrors = prometheus.NewCounterVec(prometheus.CounterOpts(f(MetricReconcileErrors, "Failed reconciles.")), []string{"kind"})
 	m.ReconcileLag = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: MetricReconcileLag, Help: "Time from a desired-state change to observedGeneration = generation.", Buckets: ReconcileBucket}, []string{"kind"})
@@ -64,7 +67,7 @@ func NewMetrics(service, version string) *Metrics {
 	m.OutboxFailedTotal = prometheus.NewCounter(prometheus.CounterOpts(f(MetricOutboxFailed, "Failed outbox publish attempts.")))
 	m.NotificationFailures = prometheus.NewCounterVec(prometheus.CounterOpts(f(MetricNotificationFailures, "Notifications that could not be delivered.")), []string{"channel_type"})
 	m.CURVariance = prometheus.NewGauge(prometheus.GaugeOpts(f(MetricCURVariance, "Relative variance between gateway estimates and the CUR for the latest day.")))
-	r.MustRegister(m.APIRequests, m.APIRequestDuration, m.APIInFlight, m.APICrossTeamNotFound,
+	r.MustRegister(m.APIRequests, m.APIRequestDuration, m.APIInFlight, m.APICrossTeamNotFound, m.APIOrphanSecrets,
 		m.ReconcileDuration, m.ReconcileErrors, m.ReconcileLag, m.DriftCorrected, m.Leader,
 		m.GatewayReservationFailures, m.GatewayAddedLatency, m.GatewayReservationsExpired,
 		m.OutboxPending, m.OutboxOldestAge, m.OutboxPublishedTotal, m.OutboxFailedTotal,

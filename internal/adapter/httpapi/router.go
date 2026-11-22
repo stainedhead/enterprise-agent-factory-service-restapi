@@ -178,8 +178,12 @@ func mount(mux *http.ServeMux, ops map[string]*operation, wrap func(*operation) 
 		mux.Handle(key, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			val := r.PathValue(g.wildcard)
 			verb := ""
-			if i := strings.LastIndex(val, ":"); i >= 0 {
-				val, verb = val[:i], val[i+1:]
+			// Only a registered verb is split off, so ids that contain a colon (Bedrock model ids such as
+			// "anthropic.claude-v2:0") stay whole.
+			if i := strings.LastIndex(val, ":"); i >= 0 && verb == "" {
+				if _, known := g.byVerb[val[i+1:]]; known && val[i+1:] != "" {
+					val, verb = val[:i], val[i+1:]
+				}
 			}
 			h, ok := g.byVerb[verb]
 			if !ok || val == "" {

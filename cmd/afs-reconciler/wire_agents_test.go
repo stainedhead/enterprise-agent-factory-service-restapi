@@ -62,7 +62,7 @@ func TestRoutesMergeEveryRouteList(t *testing.T) {
 		t.Fatalf("routes: %v", err)
 	}
 	got, _ := reg.Resolve(t.Context(), engine.Change{Table: "agents", TeamID: "team_A", ID: "agt_1"}, func(context.Context, []engine.Kind) ([]engine.Ref, error) { return nil, nil })
-	if !slices.Contains(got, engine.NewRef(engine.KindAgent, "team_A", "agt_1")) {
+	if !slices.Contains(got, engine.NewRef(engine.KindAgent, "agt_1", "team_A")) {
 		t.Errorf("agent target lost: %v", got)
 	}
 }

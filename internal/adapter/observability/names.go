@@ -9,6 +9,8 @@ const (
 	MetricAPIRequestDuration   = "afs_api_request_duration_seconds" // route, method (histogram)
 	MetricAPIInFlight          = "afs_api_requests_in_flight"
 	MetricAPICrossTeamNotFound = "afs_api_cross_team_not_found_total"
+	// MetricAPIOrphanSecrets counts Secrets Manager secrets left behind when the compensating delete failed (M2-C2).
+	MetricAPIOrphanSecrets = "afs_api_orphan_secrets_total"
 
 	// Reconciler.
 	MetricReconcileDuration = "afs_reconcile_duration_seconds" // kind (histogram)
@@ -47,7 +49,7 @@ var (
 // AllMetricNames lists every metric AFS declares (not the Go and process collectors).
 func AllMetricNames() []string {
 	return []string{
-		MetricAPIRequests, MetricAPIRequestDuration, MetricAPIInFlight, MetricAPICrossTeamNotFound,
+		MetricAPIRequests, MetricAPIRequestDuration, MetricAPIInFlight, MetricAPICrossTeamNotFound, MetricAPIOrphanSecrets,
 		MetricReconcileDuration, MetricReconcileErrors, MetricReconcileLag, MetricDriftCorrected, MetricLeader,
 		MetricGatewayReservationFailures, MetricGatewayAddedLatency, MetricGatewayReservationsExpired,
 		MetricOutboxPending, MetricOutboxOldestAge, MetricOutboxPublished, MetricOutboxFailed,

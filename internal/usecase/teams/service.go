@@ -15,7 +15,7 @@ import (
 const (
 	kindTeam = "teams"
 	// StatusKind is the resource_kind the reconciler writes team status under.
-	StatusKind = "teams"
+	StatusKind = "team"
 )
 
 // Service is the team use case set.

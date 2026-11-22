@@ -183,6 +183,31 @@ func TestVerbDispatch(t *testing.T) {
 	}
 }
 
+// A colon in the last segment is part of the id unless it introduces a registered verb: Bedrock model ids
+// end in ":0", and a team id followed by ":suspend" is still the verb.
+func TestColonIDIsNotAVerb(t *testing.T) {
+	var gotModel, gotTeam string
+	h, _ := newServer(t, func(g *Registry) error {
+		if err := g.Handle("UpdateModel", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotModel = r.PathValue("modelId")
+			w.WriteHeader(http.StatusNoContent)
+		})); err != nil {
+			return err
+		}
+		return g.Handle("SuspendTeam", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotTeam = r.PathValue("teamId")
+			w.WriteHeader(http.StatusNoContent)
+		}))
+	})
+	const model = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+	if rec := do(t, h, "PATCH", "/v1/admin/models/"+model, "svc", `{}`); rec.Code != http.StatusNoContent || gotModel != model {
+		t.Fatalf("model id with a colon: %d, got %q", rec.Code, gotModel)
+	}
+	if rec := do(t, h, "POST", "/v1/teams/"+teamA+":suspend", "svc", ""); rec.Code != http.StatusNoContent || gotTeam != teamA {
+		t.Fatalf("real verb: %d, got %q", rec.Code, gotTeam)
+	}
+}
+
 func TestRegistry(t *testing.T) {
 	ok := http.NotFoundHandler()
 	if _, err := New(Config{Registrars: []Registrar{func(g *Registry) error { return g.Handle("NoSuchOp", ok) }}}); err == nil {

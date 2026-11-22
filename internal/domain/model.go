@@ -13,10 +13,9 @@ const (
 	maxPriceMicros = 999_999_999_999
 )
 
-// modelIDRE accepts Bedrock model ids and inference profile ids. A colon is refused: the router
-// reads a trailing ":word" of the last path segment as an action verb, so a model whose id ends in
-// ":0" could be created but never updated (UpdateModel is PATCH /v1/admin/models/{modelId}).
-var modelIDRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$`)
+// modelIDRE accepts Bedrock model ids and inference profile ids, including the ":0" version suffix
+// (the router splits a trailing ":word" off a path segment only when it is a registered action verb).
+var modelIDRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$`)
 
 // Model is a Bedrock model in the catalog. MaxOutputTokens is the gateway's worst case when a
 // request sets no max tokens (D28), so it is required on create.
@@ -62,7 +61,7 @@ func validateModelFields(provider, displayName *string, ctxWindow, maxOut *int) 
 func NewModel(p NewModelParams) (Model, error) {
 	fe := validateModelFields(&p.Provider, &p.DisplayName, &p.ContextWindow, &p.MaxOutputTokens)
 	if !modelIDRE.MatchString(p.ID) {
-		fe = append([]FieldError{{Field: "id", Reason: "must be a Bedrock model id of letters, digits, '.', '-', '_' or '/' (no ':')"}}, fe...)
+		fe = append([]FieldError{{Field: "id", Reason: "must be a Bedrock model id of letters, digits, '.', '-', '_', ':' or '/'"}}, fe...)
 	}
 	if len(fe) == 0 && p.MaxOutputTokens > p.ContextWindow {
 		fe = append(fe, FieldError{Field: "maxOutputTokens", Reason: "must not exceed contextWindow"})
