@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Contract v1.2.0, draft for implementation (2026-11-21); v1.2.0 records the decisions of `-restapi` milestone M0 (CD-1 to CD-10, see §9); v1.1.0 was revised after the `review-prd` pass (root PRD D23 to D57) |
+| **Status** | Contract v1.2.0, draft for implementation (2026-11-21); v1.2.0 records the decisions of `-restapi` milestone M0 (CD-1 to CD-10, see §9) and, as an amendment of 2026-11-22, those of the feature-complete build (CD-7 exemption list, CD-11, CD-12, swarm template secrets, `Me.servicePermissions`; see §9); v1.1.0 was revised after the `review-prd` pass (root PRD D23 to D57) |
 | **Provider** | [enterprise-agent-factory-service-restapi](https://github.com/stainedhead/enterprise-agent-factory-service-restapi) (`afs-api`) |
 | **Consumers** | [-cli](https://github.com/stainedhead/enterprise-agent-factory-service-cli) (`afs`), [-website](https://github.com/stainedhead/enterprise-agent-factory-service-website) (`@afs/sdk`, console) |
 | **Machine-readable form** | `-restapi/api/openapi.yaml` (OpenAPI 3.1). Built from this document; once an operation is in the YAML, the YAML wins and this document is updated to match in the same PR |
@@ -24,7 +24,7 @@ shapes, errors and events. A client never decides access; it reads `GET /v1/me` 
 | Money | Decimal string with up to 6 fraction digits, USD only (`"1234.50"`). Never a JSON number |
 | Pagination | `?maxResults=1..100` (default 50) and `?nextToken=<token>` → `{"items": [...], "nextToken": "<token>"}`. `nextToken` absent on the last page. Tokens are opaque, expire after 24 h and are bound to the operation and the caller that received them: a token replayed by another caller or on another list is refused with `ValidationError` |
 | Filtering | Query parameters named after fields (`?state=active&kind=ephemeral`). Unknown parameters → `ValidationError` |
-| Concurrency | Every mutable resource has `version` (integer) and is returned with `ETag: "<version>"`. `PATCH` and `DELETE` on an existing resource require `If-Match` (absent → `428`); on `PUT` it is optional, because `PUT` is an upsert: with it, a mismatch → `412 PreconditionFailed`; without it, the write applies to the current version (CD-2) |
+| Concurrency | Every mutable resource has `version` (integer) and is returned with `ETag: "<version>"`. `PATCH` and `DELETE` on an existing resource require `If-Match` (absent → `428`); on `PUT` it is optional, because `PUT` is an upsert: with it, a mismatch → `412 PreconditionFailed`; without it, the write applies to the current version (CD-2). One more exception: a workload principal may omit `If-Match` on `UpdateWorkOrderRepo` (§4.10a, CD-12) |
 | Deletes | `DELETE` of a resource that carries a reconcile `status` (`DeleteTeam`, `DeleteAgent`, `DeletePool`, `DeleteLogDestination`, `DeleteNotificationChannel`) answers `202` with the resource body (`status.phase` `Pending`, `state` `deleting` where the resource has one). Every other `DELETE` answers `204` with no body (CD-1) |
 | Body size and unknown routes | A request body over the limit is `400 ValidationError` (`details.fields[0].field = body`), not `413`. An unknown path or an unknown `:verb` is `404 NotFound` in the error envelope, never a bare `404` or a `405` page |
 | Idempotency | `POST` that creates (and `POST …:verb` actions) accepts `Idempotency-Key` (1–255 chars). Keys are scoped to the calling principal and kept for service setting `api.idempotency_key_ttl_seconds` (default 3600, so 1 hour). A repeat with the same key and the same operation and body returns the stored status and body with header `Idempotent-Replayed: true`; the same key with a different body or operation → `409 Conflict` (`details.reason = idempotency_mismatch`); a repeat while the first is still running → `409 Conflict` (`details.reason = idempotency_in_progress`, `Retry-After: 1`). Error responses of 5xx are not stored, so a retry runs again |
@@ -79,6 +79,10 @@ read and write work orders across teams.
 A **workload principal** (`type: workload`, `id` = the agent or pool id, team from the token's namespace)
 holds only `work-orders:report` on work orders assigned to its own team, and may call `GetMe`. Everything
 else returns `403`. Its actions are audited with the agent or pool id and, for pools, the worker pod name.
+Because it holds no read permission, it cannot learn the `version` that `If-Match` needs: on
+`UpdateWorkOrderRepo` it may omit `If-Match`, and the update then applies to the current version under a
+row lock. An `If-Match` it does send is still validated (`400` if malformed) and compared (`412` if
+stale). Every other caller, and every other operation, keeps the `428` rule (CD-12).
 
 `401 Unauthenticated` for a missing, expired or unknown credential; `403 AccessDenied` for a valid
 caller without the permission. A caller bound to no role on a team gets `404 NotFound` on that team's
@@ -91,7 +95,8 @@ to hide (CD-10).
 `cliClientId` (D48). They map to `afs.identity_providers.client_id` (the console client) and
 `cli_client_id` (-db 000017, optional, the public client for the CLI device grant). When
 `cli_client_id` is empty, `ListSignInProviders` omits `cliClientId` and `afs sso login` exits 255 naming
-the provider (CD-9).
+the provider (CD-9). On the wire the two members stay `consoleClientId` and `cliClientId` (the
+OpenAPI document is authoritative); the database column names do not appear in the API.
 
 ## 3. Permission catalog
 
@@ -147,7 +152,7 @@ for security operators `"securityOperator": true` with their column's permission
 
 Columns: **Op** = OpenAPI `operationId`; **Perm** = permission (team-scoped unless marked *svc*);
 **CLI** = `afs <service> <operation>`; **SDK** = `@afs/sdk` method; **Screen** = console screen in the
-root PRD §5.3. Every mutation writes the row and an audit record in one transaction, and, when it has an event type in §7, an outbox event in the same transaction. Mutations with no §7 event type (members, API keys, settings, identities, config values and the like) write no outbox row (CD-7).
+root PRD §5.3. Every mutation writes the row and an audit record in one transaction, and, when it has an event type in §7, an outbox event in the same transaction. Mutations with no §7 event type (members, API keys, settings, identities, config values and the like) write no outbox row (CD-7); §4.12 lists them.
 P = priority from the root PRD. One row per operation; the CLI and SDK columns are the complete lists
 (the CLI adds only `configure`, `sso login`, `sso logout` and `completion`, which call no operation).
 
@@ -359,6 +364,10 @@ Report query parameters: `from`, `to` (or `range=24h|7d|30d|90d|mtd`), `groupBy`
 effect when each record happened (TAG-6); a record missing a currently required key reports
 `"(untagged)"` for that key. Traffic reports carry counts and bytes, never a cost. Response: `{"range": {...}, "groupBy": [...], "rows": [...], "totals": {...},
 "notes": ["Spend with providers other than Bedrock is not included"]}`.
+The cost measures differ by report: `usage` rows carry `costUsd` (the gateway's settled spend), `costs` rows carry
+`estimatedUsd` (the gateway metering) and `billedUsd` (the Cost and Usage Report); a `costs` row never has `costUsd`.
+The `tag.<key>=<value>` filters are accepted on every report operation although the OpenAPI document does not
+declare them as parameters.
 
 ### 4.10 Delivery, notifications, audit and history
 
@@ -393,7 +402,7 @@ Service-level notification channels (for example the outside-contact email chann
 | `UpdateWorkOrder` | `PATCH /v1/work-orders/{workOrderId}` (title, SLA, cap, add repositories) | `work-orders:write` | `work-orders update-work-order` | `workOrders.update()` | P6 | P2 |
 | `CancelWorkOrder` | `POST /v1/work-orders/{workOrderId}:cancel` `{reason}` | `work-orders:write` | `work-orders cancel-work-order` | `workOrders.cancel()` | P6 | P2 |
 | `ListWorkOrderRepos` | `GET /v1/work-orders/{workOrderId}/repos` | `work-orders:read` | `work-orders list-repos` | `workOrders.repos.list()` | P6 | P2 |
-| `UpdateWorkOrderRepo` | `PATCH /v1/work-orders/{workOrderId}/repos/{host}/{owner}/{repo}` `{status, prUrl?, prNumber?, detail?}` | `work-orders:report` (assigned team) or `work-orders:write` | `work-orders update-repo` | `workOrders.repos.update()` | P6 | P2 |
+| `UpdateWorkOrderRepo` | `PATCH /v1/work-orders/{workOrderId}/repos/{host}/{owner}/{repo}` `{status, prUrl?, prNumber?, detail?}` (`If-Match` optional for a workload principal, §2, CD-12) | `work-orders:report` (assigned team) or `work-orders:write` | `work-orders update-repo` | `workOrders.repos.update()` | P6 | P2 |
 | `ListTeamWorkOrders` | `GET /v1/teams/{teamId}/work-orders` (team members; security operators get `403` and use `ListWorkOrders?teamId=`) | `work-orders:read` | `work-orders list-team-work-orders` | `workOrders.listForTeam()` | T1 | P2 |
 | `ListSwarmTemplates` | `GET /v1/admin/swarm-templates` | `swarm-templates:read` *svc* | `swarm-templates list-swarm-templates` | `swarmTemplates.list()` | P5, P3 | P2 |
 | `CreateSwarmTemplate` | `POST /v1/admin/swarm-templates` | `admin:swarm-templates` *svc* | `swarm-templates create-swarm-template` | `swarmTemplates.create()` | P5 | P2 |
@@ -402,6 +411,14 @@ Service-level notification channels (for example the outside-contact email chann
 | `DeleteSwarmTemplate` | `DELETE /v1/admin/swarm-templates/{templateId}` (refused with `409` while an open work order uses it) | `admin:swarm-templates` *svc* | `swarm-templates delete-swarm-template` | `swarmTemplates.delete()` | P5 | P2 |
 | `EnableSwarmTemplate` | `POST /v1/admin/swarm-templates/{templateId}:enable` | `admin:swarm-templates` *svc* | `swarm-templates enable-swarm-template` | `swarmTemplates.enable()` | P5 | P2 |
 | `DisableSwarmTemplate` | `POST /v1/admin/swarm-templates/{templateId}:disable` | `admin:swarm-templates` *svc* | `swarm-templates disable-swarm-template` | `swarmTemplates.disable()` | P5 | P2 |
+
+A swarm template's `spec.secrets` entry is `{pool, name, description?, delivery?, target?}`: `pool` names one pool of the
+template, `name` matches `^[a-z][a-z0-9-]{0,62}$` and is unique in the template, `description` has at most
+1000 characters, `delivery` is `env` (default) or `file`, and `target` is an environment variable name
+(`^[A-Z_][A-Z0-9_]{0,127}$`, default the upper-case name with underscores) or an absolute path, unique per
+pool. A template never holds a value. When the reconciler instantiates the remediation team it creates each
+secret empty in Secrets Manager, at the managed path of a pool secret, and records it (a `scope: pool` secret
+and its binding); the team sets the value with `PutSecretValue`.
 
 `CreateWorkOrder` body: `cveId` (the `externalRef`, one open work order per CVE → `409 Conflict`),
 `severity` (`critical` \| `high` \| `medium` \| `low`), `title`, `slaDueAt`, `templateId`, optional
@@ -434,7 +451,7 @@ All *svc*. Screen S10 unless stated.
 
 | Op | Method and path | Perm | CLI | SDK | Screen | P |
 |---|---|---|---|---|---|---|
-| `GetSettings` | `GET /v1/admin/settings` (every key of root PRD §6.13 with value, default and range) | `admin:settings` | `admin get-settings` | `admin.settings.get()` | S10 | P0 |
+| `GetSettings` | `GET /v1/admin/settings` (every key of root PRD §6.13 with value, default and range; the database-only keys `work_orders.cost_center` and `work_orders.owner_email` are not exposed, CD-8) | `admin:settings` | `admin get-settings` | `admin.settings.get()` | S10 | P0 |
 | `PutSetting` | `PUT /v1/admin/settings/{key}` `{value}` | `admin:settings` | `admin put-setting` | `admin.settings.put()` | S10, S9 | P0 |
 | `ListIdentityProviders` | `GET /v1/admin/identity-providers` | `admin:identity-providers` | `admin list-identity-providers` | `admin.identityProviders.list()` | S10 | P0 |
 | `CreateIdentityProvider` | `POST /v1/admin/identity-providers` | `admin:identity-providers` | `admin create-identity-provider` | `admin.identityProviders.create()` | S10 | P0 |
@@ -481,10 +498,30 @@ All *svc*. Screen S10 unless stated.
 Export and import (D49): `CreateExport` records the request; the reconciler builds the bundle, writes it
 to S3, and stores the checksum and a pre-signed download URL (valid 7 days) on the export row; after that a new
 export is needed. `afs-api` never reads or writes S3. `CreateImport`
-takes the bundle itself as the request body, verifies its checksum and `schemaVersion`, and applies it
+takes `{bundle, accountMap}` as the request body (`accountMap` rewrites account ids, secret ARNs, identity and role-link references from the source environment to the target; a team whose account is not mapped fails alone), verifies its checksum and `schemaVersion`, and applies it
 as ordinary desired-state writes, one transaction per team (each with its audit and outbox records),
 returning a report `{dryRun, teams[{slug, result: created|updated|skipped|failed, changes[], error?}]}`.
 With `dryRun=true` (the default) nothing is written. A bundle over 100 MB → `400 ValidationError`.
+
+### 4.12 Mutations without an outbox event (exemption from the outbox rule)
+
+These mutations have no event type in §7. Each writes the row and one audit record in one transaction and
+no `outbox_events` row (CD-7). Adding an event type for one of them is a contract change (§8) and removes it
+from this list. The `-restapi` test `internal/adapter/httpapi/matrix/outbox_exemptions_test.go` embeds the
+list and fails when the two diverge.
+
+| Category | Operations |
+|---|---|
+| members | `AddMember`, `UpdateMember`, `RemoveMember`, `AddSecurityOperator`, `RemoveSecurityOperator` |
+| api-keys | `CreateApiKey`, `DeleteApiKey`, `CreateServiceApiKey`, `DeleteServiceApiKey` |
+| settings | `PutSetting`, `PutBudget`, `PutServiceTag`, `DeleteServiceTag`, `CreateIdentityProvider`, `UpdateIdentityProvider`, `DeleteIdentityProvider`, `CreateLogDestination`, `UpdateLogDestination`, `DeleteLogDestination`, `CreateNotificationChannel`, `UpdateNotificationChannel`, `DeleteNotificationChannel`, `CreateServiceNotificationChannel`, `UpdateServiceNotificationChannel`, `DeleteServiceNotificationChannel` |
+| catalog | `CreateCatalogSystem`, `UpdateCatalogSystem`, `DeleteCatalogSystem`, `DeclareTeamExternalSystem`, `UpdateTeamExternalSystem`, `DeleteTeamExternalSystem`, `SetTeamExternalSystemState`, `SetAgentExternalSystemState`, `PutPoolExternalSystem`, `CreateModel`, `UpdateModel`, `CreateModelPrice`, `CreateStage`, `UpdateStage`, `DeleteStage`, `PutAgentTemplate`, `DeleteAgentTemplate`, `PutStorageClass`, `DeleteStorageClass` |
+| config | `PutNamespaceConfigValue`, `DeleteNamespaceConfigValue`, `PutAgentConfigValue`, `DeleteAgentConfigValue`, `PutPoolConfigValue`, `DeletePoolConfigValue`, `CreateAgentIdentity`, `DeleteAgentIdentity`, `CreateAgentRoleLink`, `DeleteAgentRoleLink`, `VerifyAgentRoleLink`, `CreatePoolRoleLink`, `DeletePoolRoleLink`, `VerifyPoolRoleLink`, `CreateAgentSnapshot`, `CreateExport`, `UpdateSecret` |
+| schedules | `CreateReportSchedule`, `UpdateReportSchedule`, `DeleteReportSchedule` |
+| swarm-templates | `CreateSwarmTemplate`, `UpdateSwarmTemplate`, `DeleteSwarmTemplate`, `EnableSwarmTemplate`, `DisableSwarmTemplate` |
+
+Secret create, rotate and delete keep their `secret.*` events (§7). `UpdateWorkOrder` emits
+`work_order.repo_updated` only when it adds repositories; a change of title, SLA or budget emits nothing.
 
 ## 5. Resource shapes (wire, abbreviated)
 
@@ -507,11 +544,11 @@ Agent:       {name, description, template, image, modelId, resources{cpu,memory}
               secretBindings[{secretId, delivery: env|file, target}], paused†}
 RoleLink:    {profileName, roleArn, accountId†, maxSessionSeconds, externalId†, status†: pending_trust|verified|failed|disabled,
               lastVerifiedAt†, trustPolicy†}
-Stage:       {name, position, description}
+Stage:       {name, position (1..50), description}
 Pool:        {name, description, stageId?, template, image, persona?, modelId, workers (0..200), resources{cpu,memory},
               scratchSizeGiB (1..500), sharedVolume: none|efs, state†: enabled|paused|deleting|deleted, handoffs†[poolId]}
 PoolRoleLink: {roleName, accountId, profileName, roleArn†, externalId†, maxSessionSeconds, status†, lastVerifiedAt†}
-SwarmTemplate: {name, description, kind: cve_remediation|general, spec{stages[], pools[], handoffs[], secrets[], configValues[]},
+SwarmTemplate: {name, description, kind: cve_remediation|general, spec{stages[], pools[], handoffs[], secrets[{pool, name, description?, delivery?, target?}], configValues[]},
               budgetUsd, ttlHours, teardownRule, enabled}
 WorkOrder:   {kind: cve_remediation|general, cveId?, severity, title, source†: api|eventbridge, templateId, budgetUsd, slaDueAt,
               status†: open|assigned|in_progress|pr_opened|done|failed|cancelled, teamId†?, assignedAt†?, completedAt†?,
@@ -524,7 +561,7 @@ Secret:      {scope: team|agent|pool, agentId?, poolId?, name, description, exte
               versionId†, lastChangedAt†, rotation{enabled, days}, boundTo†[agentId]}               # no value field, ever
 ConfigValue: {name, value?, source: literal|namespace, resolvedValue†, usedBy†[agentId]}
 ExternalSystem: {slug, name, category, description, docsUrl, endpoints[], enabled, builtin†, owner?, purpose?,
-              scope†: service|team, teamState†: on|off, disabledAt†: service|team|agent|null, unmetered†}
+              scope†: service|team, teamState†: on|off, disabledAt†: service|team|agent|pool|null, unmetered†}      # pool only in pool views (CD-11)
 Budget:      {period: monthly|lifetime, amountUsd, thresholds[], onExhaust: block|notify (notify: persistent teams, service admins only), expiresAt?,
               spentUsd†, reservedUsd†, percentUsed†, forecastUsd†, projectedCapAt†}
 ServiceTag:  {key, mode: fixed|required, value?, defaultValue?, allowedValues?[], description}
@@ -545,7 +582,9 @@ AuditEvent:  {id (integer), occurredAt, actorType: user|api_key|system|agent|poo
               resourceKind?, resourceId?, teamId?, requestId?, sourceIp?, userAgent?, workerPod?, before?{}, after?{}}   # no secret values
 Revision:    {revision (integer), resourceKind, resourceId, operation: INSERT|UPDATE|DELETE, version?, changedBy, changedAt, snapshot?{}}
 CostRow:     {day, source: gateway|cur_bedrock|cur_eks|cur_other, agentId?, poolId?, modelId?, costUsd, calls?}
-Me:          {principal{id, type: user|api_key|workload, email?, name?}, serviceAdmin, securityOperator, teams[{teamId, slug, role, permissions[]}]}
+Me:          {principal{id, type: user|api_key|workload, email?, name?}, serviceAdmin, securityOperator, servicePermissions[], teams[{teamId, slug, role, permissions[]}]}
+              # servicePermissions: every service-level permission for a service admin, the security operator column
+              # for a security operator, empty otherwise; clients use it for UX only
 ```
 
 ## 6. Errors
@@ -560,7 +599,7 @@ change; clients branch on `code` only. No error contains a secret value, token o
 | 403 | `AccessDenied` | Valid caller without the permission, including a signed-in caller with no team binding on a route not scoped to one team (CD-10); `details.requiredPermission` | `42501` |
 | 404 | `NotFound` | No such resource, **or** a resource in a team the caller cannot see (never reveals existence), **or** an unknown path or `:verb` (error envelope, not a bare 404) | RLS hides the row |
 | 402 | `BudgetExceeded` | Returned by `afs-gateway` to agents only, never by `afs-api`; not retryable (see [gateway contract](gateway-contract.md)) | `reserve_spend_held` returned NULL |
-| 409 | `Conflict` | Duplicate name, idempotency body mismatch or in progress, dependent objects exist, invalid state transition (for example a suspended team) | `23505`, `23503` (on delete), `55000` |
+| 409 | `Conflict` | Duplicate name, idempotency body mismatch or in progress (these two are `details.reason` values, `idempotency_mismatch` and `idempotency_in_progress`, not separate codes), dependent objects exist, invalid state transition (for example a suspended team) | `23505`, `23503` (on delete), `55000` |
 | 412 | `PreconditionFailed` | `If-Match` does not match `version` | — |
 | 428 | `PreconditionRequired` | `If-Match` missing on `PATCH` or `DELETE` of an existing resource (optional on `PUT`) | — |
 | 429 | `Throttled` | Rate limit; `Retry-After` | — |
@@ -614,7 +653,9 @@ delivers events to each team's notification channels through one EventBridge rul
 | `notification.delivery_failed` | reconciler | A channel's EventBridge target failed (D46) |
 | `notification.test_requested` | api | `TestNotificationChannel`; `data` has `channelId` and `testId`. The reconciler tests the channel and reports the result on the channel's status (condition `DeliveryHealthy`, `lastTestId`), which the API returns (CD-3) |
 
-A mutation with no type in this table (member and API key changes, settings, identities, config values, role links and so on) emits no event; its audit record is its trace (CD-7). A future type is an additive change.
+A mutation with no type in this table (the list is §4.12) emits no event; its audit record is its trace (CD-7).
+
+Events written by database functions use the same envelope (`afs.event_detail`, database contract §4.2): `afs.instantiate_work_order_team` writes `team.created` (`data` `{teamId, kind: ephemeral, workOrderId}`), `pool.created` (`poolId` in the envelope, `data` `{poolId, teamId}`) and `work_order.assigned` (`data` `{workOrderId, teamId}`), and `afs.record_work_order_secret` writes `secret.created` (`data` `{secretId, name, scope: pool}`, `poolId` in the envelope). Rows written before `-db` 000019 hold the older flat payload; the reconciler's outbox publisher wraps them into the envelope (database contract §4.2), so a consumer never sees the flat shape. `PausePool` and `ResumePool` emit `pool.updated`. A future type is an additive change.
 
 ## 8. Change process
 
@@ -629,4 +670,5 @@ A mutation with no type in this table (member and API key changes, settings, ide
 ## 9. Changelog
 
 - **v1.2.0 (2026-11-21), `-restapi` M0 (CD-1 to CD-10):** delete status codes (`202` with body for resources that carry a status, `204` otherwise); `If-Match` optional on `PUT`; `NotificationTestResult` and event `notification.test_requested`; `RestoreResult`, `Snapshot`, `StorageClass`, `AuditEvent`, `Revision` and `CostRow` shapes; `TeamTags.requestMetadataDroppedKeys`; mutations without a §7 event type write no outbox row; identity provider client id mapping recorded as open; `403` for a signed-in caller with no binding on a route not scoped to one team; error notes: oversized body is `400`, unknown path or verb is `404` in the envelope, page tokens bound to operation and caller, CSV formula cells prefixed with `'`.
+- **v1.2.0 amendment (2026-11-22), `-restapi` feature complete (CD-7, CD-9, CD-11, CD-12, CQ-4):** the CD-7 exemption list is now §4.12 (69 operations, checked by a `-restapi` test); a workload principal may omit `If-Match` on `UpdateWorkOrderRepo` (CD-12); `ExternalSystem.disabledAt` adds `pool` for pool views (CD-11); swarm template `spec.secrets` shape and how the reconciler records those secrets; `Me.servicePermissions` and `Stage.position` 1..50 in §5; `CreateImport` body `{bundle, accountMap}`; report cost measures; idempotency conditions named as `details.reason` values; database-function events share the §7 envelope. The two client ids stay `consoleClientId` and `cliClientId` on the wire (CD-9). Not yet reflected in the OpenAPI document and left to `-restapi`: `IfMatchPut` description, the `If-Match` parameter of `DeleteApiKey` and `DeleteServiceApiKey` (an API key has no `version`), duplicate path parameters on `GetTeamReport` and `GetAgentReport`, `info.version`.
 - **v1.1.0:** revised after the `review-prd` pass (root PRD D23 to D57).
