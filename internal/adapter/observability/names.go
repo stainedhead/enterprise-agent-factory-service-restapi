@@ -42,6 +42,12 @@ const (
 	MetricReportRollupRuns        = "afs_report_rollup_runs_total"                     // job, outcome
 	MetricReportRollupLastSuccess = "afs_report_rollup_last_success_timestamp_seconds" // job
 
+	// Collaboration edge (afs-edge).
+	MetricEdgeRequests       = "afs_edge_requests_total"           // surface (web_ui, rest_api), code
+	MetricEdgeRequestSeconds = "afs_edge_request_duration_seconds" // surface (histogram)
+	MetricEdgeRefreshFailed  = "afs_edge_route_refresh_failures_total"
+	MetricEdgeAccessDropped  = "afs_edge_access_counts_dropped_total"
+
 	// Build info, every binary.
 	MetricBuildInfo = "afs_build_info" // service, version
 )
@@ -58,6 +64,7 @@ var (
 func AllMetricNames() []string {
 	return []string{
 		MetricAPIRequests, MetricAPIRequestDuration, MetricAPIInFlight, MetricAPICrossTeamNotFound, MetricAPIOrphanSecrets,
+		MetricEdgeRequests, MetricEdgeRequestSeconds, MetricEdgeRefreshFailed, MetricEdgeAccessDropped,
 		MetricReconcileDuration, MetricReconcileErrors, MetricReconcileLag, MetricDriftCorrected, MetricLeader,
 		MetricGatewayReservationFailures, MetricGatewayAddedLatency, MetricGatewayReservationsExpired,
 		MetricGatewaySettleFailures, MetricGatewayUsageRowsDropped,

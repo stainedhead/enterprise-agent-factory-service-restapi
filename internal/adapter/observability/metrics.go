@@ -46,6 +46,11 @@ type Metrics struct {
 
 	NotificationFailures *prometheus.CounterVec
 	CURVariance          prometheus.Gauge
+
+	EdgeRequests      *prometheus.CounterVec
+	EdgeRequestSecs   *prometheus.HistogramVec
+	EdgeRefreshFailed prometheus.Counter
+	EdgeAccessDropped prometheus.Counter
 }
 
 // NewMetrics registers every AFS collector plus the Go runtime and process collectors, and the
@@ -78,7 +83,11 @@ func NewMetrics(service, version string) *Metrics {
 	m.OutboxFailedTotal = prometheus.NewCounter(prometheus.CounterOpts(f(MetricOutboxFailed, "Failed outbox publish attempts.")))
 	m.NotificationFailures = prometheus.NewCounterVec(prometheus.CounterOpts(f(MetricNotificationFailures, "Notifications that could not be delivered.")), []string{"channel_type"})
 	m.CURVariance = prometheus.NewGauge(prometheus.GaugeOpts(f(MetricCURVariance, "Relative variance between gateway estimates and the CUR for the latest day.")))
-	r.MustRegister(m.APIRequests, m.APIRequestDuration, m.APIInFlight, m.APICrossTeamNotFound, m.APIOrphanSecrets,
+	m.EdgeRequests = prometheus.NewCounterVec(prometheus.CounterOpts(f(MetricEdgeRequests, "Collaboration edge requests by surface and status code.")), []string{"surface", "code"})
+	m.EdgeRequestSecs = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: MetricEdgeRequestSeconds, Help: "Collaboration edge request duration, including the upstream.", Buckets: APIBuckets}, []string{"surface"})
+	m.EdgeRefreshFailed = prometheus.NewCounter(prometheus.CounterOpts(f(MetricEdgeRefreshFailed, "Route table refreshes that failed.")))
+	m.EdgeAccessDropped = prometheus.NewCounter(prometheus.CounterOpts(f(MetricEdgeAccessDropped, "Access counters dropped because the buffer was full.")))
+	r.MustRegister(m.EdgeRequests, m.EdgeRequestSecs, m.EdgeRefreshFailed, m.EdgeAccessDropped, m.APIRequests, m.APIRequestDuration, m.APIInFlight, m.APICrossTeamNotFound, m.APIOrphanSecrets,
 		m.ReconcileDuration, m.ReconcileErrors, m.ReconcileLag, m.DriftCorrected, m.Leader,
 		m.GatewayReservationFailures, m.GatewayAddedLatency, m.GatewayReservationsExpired,
 		m.GatewaySettleFailures, m.GatewayUsageRowsDropped,
