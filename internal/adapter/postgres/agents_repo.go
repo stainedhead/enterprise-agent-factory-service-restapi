@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"time"
 
@@ -270,7 +271,7 @@ func (*AgentRepo) Template(ctx context.Context, tx port.Tx, name string) (agents
 	var t agents.TemplateInfo
 	err = pt.QueryRow(ctx, `SELECT id, name, enabled, allowed_image_digests FROM afs.agent_templates WHERE name=$1`, name).
 		Scan(&t.ID, &t.Name, &t.Enabled, &t.AllowedDigests)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return agents.TemplateInfo{}, false, nil
 	}
 	return t, err == nil, MapError(err, OpRead, "agent template")

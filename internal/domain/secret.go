@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -167,7 +168,7 @@ func (p NewSecretParams) Validate() error {
 		}
 	}
 	if err := p.Rotation.Validate(); err != nil {
-		fe = append(fe, err.(*Error).Fields...) //nolint:errcheck,forcetypeassert // Validate returns *Error
+		fe = append(fe, fieldErrorsOf(err)...)
 	}
 	if p.Value.IsZero() {
 		add("value", "is required")
@@ -209,7 +210,7 @@ func (p SecretPatch) Validate() error {
 	}
 	if p.Rotation != nil {
 		if err := p.Rotation.Validate(); err != nil {
-			fe = append(fe, err.(*Error).Fields...) //nolint:errcheck,forcetypeassert // Validate returns *Error
+			fe = append(fe, fieldErrorsOf(err)...)
 		}
 	}
 	if len(fe) > 0 {
@@ -240,4 +241,13 @@ func (p SecretPatch) Apply(s Secret) Secret {
 func SecretBound(agentIDs []string) *Error {
 	return Conflict("secret_bound", "the secret is bound to agents; remove the bindings first",
 		map[string]any{"agentIds": agentIDs})
+}
+
+// fieldErrorsOf returns the field errors of a validation error, or none.
+func fieldErrorsOf(err error) []FieldError {
+	var e *Error
+	if errors.As(err, &e) {
+		return e.Fields
+	}
+	return nil
 }

@@ -215,11 +215,7 @@ type NewAgentParams struct {
 // NewAgent validates p and returns the agent in state enabled, generation 1.
 func NewAgent(id, teamID string, p NewAgentParams, now time.Time) (Agent, error) {
 	var fe []FieldError
-	collect := func(err error) {
-		if e, ok := err.(*Error); ok { //nolint:errorlint // Validation returns *Error directly
-			fe = append(fe, e.Fields...)
-		}
-	}
+	collect := func(err error) { fe = append(fe, fieldErrorsOf(err)...) }
 	name, err := ParseName("name", p.Name)
 	collect(err)
 	image, err := ParseImageRef("image", p.Image)
@@ -269,11 +265,7 @@ type AgentPatch struct {
 // shrink and its storage class cannot change (RA-US-4.2).
 func (a Agent) Apply(p AgentPatch, now time.Time) (Agent, error) {
 	var fe []FieldError
-	collect := func(err error) {
-		if e, ok := err.(*Error); ok { //nolint:errorlint // Validation returns *Error directly
-			fe = append(fe, e.Fields...)
-		}
-	}
+	collect := func(err error) { fe = append(fe, fieldErrorsOf(err)...) }
 	if a.State == AgentDeleting || a.State == AgentDeleted {
 		return a, Conflict("invalid_state", "an agent in state "+string(a.State)+" cannot be changed", nil)
 	}

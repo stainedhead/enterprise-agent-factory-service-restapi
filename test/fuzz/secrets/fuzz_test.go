@@ -236,8 +236,6 @@ func (r *rig) leaks(value string) []string {
 	return out
 }
 
-var traceOnce sync.Once
-
 func run(t *testing.T, fuzzed string) {
 	t.Helper()
 	if !utf8.ValidString(fuzzed) {

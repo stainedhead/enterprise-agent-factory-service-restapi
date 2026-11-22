@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -54,8 +55,8 @@ func TestNewAgent(t *testing.T) {
 			p := okParams()
 			tt.mod(&p)
 			_, err := NewAgent("agt_1", "team_x", p, now)
-			e, ok := err.(*Error)
-			if !ok || e.Kind != KindValidation {
+			var e *Error
+			if !errors.As(err, &e) || e.Kind != KindValidation {
 				t.Fatalf("err = %v", err)
 			}
 			found := false
@@ -95,8 +96,8 @@ func TestAgentApply(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := base.Apply(tt.p, now)
-			e, ok := err.(*Error)
-			if !ok || e.Kind != KindValidation || e.Fields[0].Field != tt.field {
+			var e *Error
+			if !errors.As(err, &e) || e.Kind != KindValidation || e.Fields[0].Field != tt.field {
 				t.Fatalf("err = %v", err)
 			}
 		})

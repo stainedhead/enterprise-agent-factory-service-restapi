@@ -19,7 +19,7 @@ import (
 )
 
 // metricOrphanSecrets counts secrets whose compensating delete failed (M2-C2).
-const metricOrphanSecrets = "afs_api_orphan_secrets_total"
+const metricOrphanSecrets = "afs_api_orphan_secrets_total" //nolint:gosec // a metric name, not a credential
 
 // newSecretsWriter builds the Secrets Manager writer; tests replace it with a fake so no test
 // reaches AWS.

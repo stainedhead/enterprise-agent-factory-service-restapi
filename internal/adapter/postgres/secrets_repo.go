@@ -20,6 +20,7 @@ func NewSecretRepo() *SecretRepo { return &SecretRepo{} }
 
 var _ secrets.Repository = (*SecretRepo)(nil)
 
+//nolint:gosec // a SELECT of column names, no credential
 const secretSelect = `SELECT s.id, s.team_id, coalesce(s.agent_id, ''), coalesce(s.pool_id, ''), s.name, s.description,
   coalesce(s.external_system_id, ''), s.path, s.secrets_manager_arn, coalesce(s.current_version_id, ''), s.last_changed_at,
   s.rotation_days, s.version, s.created_at, s.created_by, s.updated_at,
