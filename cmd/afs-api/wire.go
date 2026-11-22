@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -70,6 +71,10 @@ type settings struct {
 	// (AFS_IDEMPOTENCY_HMAC_KEY, at least 32 bytes, the same on every replica). Empty with one
 	// replica: wire draws a random per-process key.
 	IdempotencyHMACKey []byte
+	// AWSCredentials signs the RDS IAM tokens; nil loads the default AWS chain. Migrate applies the
+	// startup migrations; nil uses postgres.Migrate. Both are seams for tests.
+	AWSCredentials awssdk.CredentialsProvider
+	Migrate        func(ctx context.Context, ownerURL string, lockTimeout time.Duration, password func(context.Context) (string, error)) (int, error)
 	// HTTPReadTimeout bounds reading a whole request, body included (AFS_HTTP_READ_TIMEOUT, default
 	// 60s); HTTPIdleTimeout bounds an idle keep-alive connection (AFS_HTTP_IDLE_TIMEOUT, default 120s).
 	// CreateImport extends its own read deadline.
@@ -172,24 +177,40 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 		IdempotencyHMACKey: s.IdempotencyHMACKey,
 	}
 	if s.DatabaseURL != "" {
+		dbCfg := postgres.Config{URL: s.DatabaseURL, Service: "afs-api", StatementTimeout: 30 * time.Second}
+		var ownerPassword func(context.Context) (string, error)
+		if s.DBIAMAuth {
+			// Plain SDK configuration, not adapter/aws: afs-api builds no AWS service client but
+			// Secrets Manager, and signs the RDS token locally. The same credentials sign the app
+			// login's token for the pool and the owner login's token for the migration (FR-R10).
+			creds := s.AWSCredentials
+			if creds == nil {
+				awsCfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(s.AWSRegion))
+				if err != nil {
+					return nil, fmt.Errorf("load AWS configuration: %w", err)
+				}
+				creds = awsCfg.Credentials
+			}
+			var err error
+			if dbCfg.Password, err = postgres.IAMPassword(s.DatabaseURL, s.AWSRegion, creds); err != nil {
+				return nil, err
+			}
+			if s.OwnerURL != "" {
+				if ownerPassword, err = postgres.IAMPassword(s.OwnerURL, s.AWSRegion, creds); err != nil {
+					return nil, err
+				}
+			}
+		}
 		if s.OwnerURL != "" {
-			n, err := postgres.Migrate(ctx, s.OwnerURL, s.MigrationTimeout, nil)
+			migrate := s.Migrate
+			if migrate == nil {
+				migrate = postgres.Migrate
+			}
+			n, err := migrate(ctx, s.OwnerURL, s.MigrationTimeout, ownerPassword)
 			if err != nil {
 				return nil, err
 			}
 			log.Info("migrations applied", "count", n)
-		}
-		dbCfg := postgres.Config{URL: s.DatabaseURL, Service: "afs-api", StatementTimeout: 30 * time.Second}
-		if s.DBIAMAuth {
-			// Plain SDK configuration, not adapter/aws: afs-api builds no AWS service client but
-			// Secrets Manager, and signs the RDS token locally.
-			awsCfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(s.AWSRegion))
-			if err != nil {
-				return nil, fmt.Errorf("load AWS configuration: %w", err)
-			}
-			if dbCfg.Password, err = postgres.IAMPassword(s.DatabaseURL, s.AWSRegion, awsCfg.Credentials); err != nil {
-				return nil, err
-			}
 		}
 		pool, err := postgres.OpenPool(ctx, dbCfg)
 		if err != nil {

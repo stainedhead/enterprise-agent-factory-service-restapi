@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"errors"
+	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	"io"
 	"log/slog"
 	"net/http"
@@ -207,5 +210,48 @@ func TestSettingsHTTPTimeouts(t *testing.T) {
 		if _, err := settingsFrom(env(bad)); err == nil {
 			t.Errorf("%v accepted", bad)
 		}
+	}
+}
+
+// D-7 (FR-R10): under AFS_DB_IAM_AUTH the startup migration signs an RDS IAM token for the owner login,
+// like the pool does for the app login.
+func TestMigrateUsesIAMPasswordWhenIAMAuthIsOn(t *testing.T) {
+	creds := awssdk.CredentialsProviderFunc(func(context.Context) (awssdk.Credentials, error) {
+		return awssdk.Credentials{AccessKeyID: "test-key-id", SecretAccessKey: "test-secret", Source: "test"}, nil
+	})
+	errStop := errors.New("stop after migrate")
+	run := func(iam bool, ownerURL string) (called bool, pw string, pwErr error) {
+		mig := func(ctx context.Context, url string, _ time.Duration, password func(context.Context) (string, error)) (int, error) {
+			called = true
+			if url != ownerURL {
+				t.Errorf("migrated %q, want the owner URL", url)
+			}
+			if password != nil {
+				pw, pwErr = password(ctx)
+			}
+			return 0, errStop
+		}
+		_, err := wire(t.Context(), quiet, settings{
+			DatabaseURL: "postgres://afs_app@db.example.internal:5432/afs", OwnerURL: ownerURL,
+			DBIAMAuth: iam, AWSRegion: "us-east-1", AWSCredentials: creds, Migrate: mig,
+		})
+		if !errors.Is(err, errStop) {
+			t.Fatalf("wire err = %v", err)
+		}
+		return called, pw, pwErr
+	}
+
+	owner := "postgres://afs_owner@db.example.internal:5432/afs"
+	called, pw, err := run(true, owner)
+	if !called || err != nil {
+		t.Fatalf("migrate called=%v err=%v", called, err)
+	}
+	if !strings.Contains(pw, "X-Amz-Signature") || !strings.Contains(pw, "DBUser=afs_owner") {
+		t.Fatalf("migration password is not an IAM token for the owner login: %q", pw)
+	}
+	// Without IAM auth the owner URL's own credentials are used: no password function.
+	called, pw, _ = run(false, owner)
+	if !called || pw != "" {
+		t.Fatalf("IAM off: called=%v password=%q", called, pw)
 	}
 }
