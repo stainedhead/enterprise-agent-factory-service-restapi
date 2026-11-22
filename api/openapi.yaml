@@ -5202,12 +5202,12 @@ paths:
             application/json:
               example:
                 checks:
-                  database: connection refused
+                  database: unavailable
                   schema: ok
                 status: not ready
               schema:
                 $ref: '#/components/schemas/HealthStatus'
-          description: A dependency is not ready
+          description: A dependency is not ready. Each failing check reports only the word unavailable; the cause is logged with the request id
           headers:
             X-Afs-Contract-Version:
               $ref: '#/components/headers/XAfsContractVersion'

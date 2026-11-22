@@ -4,8 +4,8 @@ package httpapi
 
 import (
 	"context"
-	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"time"
@@ -154,7 +154,9 @@ func readiness(checks map[string]ReadinessCheck) http.Handler {
 		code := http.StatusOK
 		for _, n := range names {
 			if err := checks[n](r); err != nil {
-				out.Checks[n] = fmt.Sprint(err)
+				// The cause (driver text can name the login role and host) goes to the log only.
+				slog.ErrorContext(r.Context(), "readiness check failed", "check", n, "request_id", RequestIDFrom(r.Context()), "err", err)
+				out.Checks[n] = "unavailable"
 				out.Status, code = "not ready", http.StatusServiceUnavailable
 				continue
 			}
