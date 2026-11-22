@@ -4,7 +4,6 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/aws"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/httpapi"
@@ -47,7 +46,7 @@ func wireIdentity(c *components, s settings, log *slog.Logger) {
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
 	httpapi.BindIdentity(&httpapi.IdentityAPI{
 		Identity: &identity.Service{Deps: deps, Repo: postgres.NewIdentityRepo(), Entropy: crand.Reader,
-			Roles: roleARNs(s.AWSRegion, os.Getenv("AFS_AWS_ACCOUNT_ID"))},
+			Roles: roleARNs(s.AWSRegion, s.AWSAccountID)},
 		Accounts: &accounts.Service{Deps: deps, Repo: postgres.NewAccountsRepo()},
 		Pages:    httpapi.NewPageTokens(pageTokenKey(log), nil),
 	})

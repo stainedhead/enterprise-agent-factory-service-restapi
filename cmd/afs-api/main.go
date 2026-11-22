@@ -19,7 +19,7 @@ import (
 )
 
 func main() {
-	addr := flag.String("addr", envOr("AFS_API_ADDR", ":8080"), "listen address")
+	addr := flag.String("addr", "", "listen address (default AFS_API_ADDR, then :8080)")
 	version := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 	if *version {
@@ -38,6 +38,9 @@ func main() {
 	if err != nil {
 		log.Error("afs-api configuration", "err", err)
 		os.Exit(2)
+	}
+	if *addr == "" {
+		*addr = s.Addr
 	}
 	c, err := wire(ctx, log, s)
 	if err != nil {
@@ -72,13 +75,6 @@ func main() {
 		log.Error("afs-api stopped", "err", err)
 		os.Exit(1)
 	}
-}
-
-func envOr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
 }
 
 // newServer is the public listener: header, whole-request and idle timeouts bound slow clients

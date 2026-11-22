@@ -71,6 +71,12 @@ type settings struct {
 	// (AFS_IDEMPOTENCY_HMAC_KEY, at least 32 bytes, the same on every replica). Empty with one
 	// replica: wire draws a random per-process key.
 	IdempotencyHMACKey []byte
+	// Addr is the public listen address (AFS_API_ADDR, default :8080; the -addr flag wins).
+	Addr string
+	// AWSAccountID is the platform account (AFS_AWS_ACCOUNT_ID, 12 digits) that names dedicated agent
+	// roles. ClusterName, ClusterEndpoint and ClusterCAData (AFS_CLUSTER_NAME, AFS_CLUSTER_ENDPOINT,
+	// AFS_CLUSTER_CA_DATA) describe the EKS cluster for GetTeamKubeconfig; any of them empty answers 503.
+	AWSAccountID, ClusterName, ClusterEndpoint, ClusterCAData string
 	// AWSCredentials signs the RDS IAM tokens; nil loads the default AWS chain. Migrate applies the
 	// startup migrations; nil uses postgres.Migrate. Both are seams for tests.
 	AWSCredentials awssdk.CredentialsProvider
@@ -151,6 +157,13 @@ func settingsFrom(env func(string) string) (settings, error) {
 	}
 	if s.OwnerURL != "" && s.DatabaseURL == "" {
 		return s, fmt.Errorf("AFS_DATABASE_OWNER_URL is set without AFS_DATABASE_URL")
+	}
+	s.Addr = ":8080"
+	if v := env("AFS_API_ADDR"); v != "" {
+		s.Addr = v
+	}
+	if err := platformSettings(env, &s); err != nil {
+		return s, err
 	}
 	if err := workloadSettings(env, &s); err != nil {
 		return s, err
