@@ -13,10 +13,13 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reports"
 )
 
-// ReportsRepo implements reports.Repository (M3-H2). It reads the per-call and 5-minute tables for
-// ranges of two days or less and the daily views and rollups above that; a report grouped or filtered
-// by tag reads the 5-minute table even for a long range, because the daily views carry no tag set.
-// Every statement runs in the caller's transaction, so row-level security limits what is read.
+// ReportsRepo implements reports.Repository (M3-H2). Usage and cost reports read the per-call table
+// for ranges of two days or less and the daily rollup (cost_daily) above that. Activity and traffic
+// reports read the 5-minute tables at every range: afs.agent_activity_daily and
+// afs.external_traffic_daily are plain views over those tables, carry no tag set, and nest a second
+// aggregation, so one aggregation over the base table gives the same sums (RA-US-7.1) in a fraction of
+// the time (M3-H4: the view took 0.95 s p99 for a 10-agent team over 90 days). Every statement runs in
+// the caller's transaction, so row-level security limits what is read.
 type ReportsRepo struct{}
 
 // NewReportsRepo returns a ReportsRepo.
@@ -101,15 +104,11 @@ func bigint(e string) string { return `(` + e + `)::bigint` }
 // sourceFor picks the table for a query.
 func sourceFor(q domain.ReportQuery) (reportSource, bool) {
 	daily := q.Granularity == domain.Daily
-	tags := len(q.Filters.Tags) > 0
-	for _, g := range q.GroupBy {
-		tags = tags || g.Dim == domain.DimTag
-	}
 	// baseRange is the time condition of a 5-minute table: the range itself for a short range, every
-	// day touched for a long one that must read the 5-minute table (tags).
+	// day touched for a long one.
 	baseRange := func(col string) (string, bool) {
 		if daily {
-			return col + ` >= {fromDay}::date AND ` + col + ` < ({toDay}::date + 1)`, true
+			return col + ` >= {fromDay}::timestamptz AND ` + col + ` < {toDay}::timestamptz + interval '24 hours'`, true
 		}
 		return col + ` >= {from} AND ` + col + ` < {to}`, false
 	}
@@ -144,16 +143,6 @@ func sourceFor(q domain.ReportQuery) (reportSource, bool) {
 		return s, true
 	case domain.ReportKindActivity:
 		w, i := `count(*) FILTER (WHERE x.state = 'working') * 300`, `count(*) FILTER (WHERE x.state = 'idle') * 300`
-		if daily && !tags {
-			return reportSource{from: `afs.agent_activity_daily x`, timeCond: `x.day >= {fromDay}::date AND x.day <= {toDay}::date`,
-				dims: map[domain.ReportDim]string{
-					domain.DimTeam: `x.team_id`, domain.DimAgent: fmt.Sprintf(`coalesce(x.agent_id, %s)`, none), domain.DimPool: fmt.Sprintf(`coalesce(x.pool_id, %s)`, none),
-					domain.DimDay: fmt.Sprintf(dayText, `x.day`)},
-				team: `x.team_id`, agent: `x.agent_id`, pool: `x.pool_id`,
-				measures: []string{bigint(`coalesce(sum(x.working_seconds), 0)`), bigint(`coalesce(sum(x.idle_seconds), 0)`), bigint(`coalesce(sum(x.off_seconds), 0)`),
-					bigint(`coalesce(sum(x.impaired_seconds), 0)`), bigint(`coalesce(sum(x.model_calls), 0)`),
-					fmt.Sprintf(utilExpr, `x.working_seconds`, `x.idle_seconds`)}}, true
-		}
 		cond, _ := baseRange(`x.bucket_start`)
 		return reportSource{from: `afs.agent_activity x`, timeCond: cond,
 			dims:   fiveMinuteDims(`x.bucket_start`, `x.team_id`, `x.agent_id`, `x.pool_id`),
@@ -163,15 +152,6 @@ func sourceFor(q domain.ReportQuery) (reportSource, bool) {
 				`round(100.0 * count(*) FILTER (WHERE x.state = 'working') / nullif(count(*) FILTER (WHERE x.state IN ('working', 'idle')), 0), 1)::float8`}}, true
 	case domain.ReportKindTraffic:
 		sysDim := fmt.Sprintf(`coalesce(x.system_id, %s)`, none)
-		if daily && !tags {
-			return reportSource{from: `afs.external_traffic_daily x`, timeCond: `x.day >= {fromDay}::date AND x.day <= {toDay}::date`,
-				dims: map[domain.ReportDim]string{
-					domain.DimTeam: `x.team_id`, domain.DimAgent: fmt.Sprintf(`coalesce(x.agent_id, %s)`, none), domain.DimPool: fmt.Sprintf(`coalesce(x.pool_id, %s)`, none),
-					domain.DimDay: fmt.Sprintf(dayText, `x.day`), domain.DimSystem: sysDim},
-				team: `x.team_id`, agent: `x.agent_id`, pool: `x.pool_id`, system: `x.system_id`,
-				measures: []string{bigint(`coalesce(sum(x.connections), 0)`), bigint(`coalesce(sum(x.denied_connections), 0)`), `sum(x.requests)::bigint`,
-					`sum(x.errors)::bigint`, bigint(`coalesce(sum(x.bytes_out), 0)`), bigint(`coalesce(sum(x.bytes_in), 0)`)}}, true
-		}
 		cond, _ := baseRange(`x.bucket_start`)
 		return reportSource{from: `afs.external_traffic x`, timeCond: cond,
 			dims:   withDims(fiveMinuteDims(`x.bucket_start`, `x.team_id`, `x.agent_id`, `x.pool_id`), map[domain.ReportDim]string{domain.DimSystem: sysDim}),

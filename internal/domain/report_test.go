@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -52,8 +53,8 @@ func TestParseReportQuery(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			q, err := ParseReportQuery(tc.kind, tc.raw, reportNow)
 			if tc.bad != "" {
-				e, ok := err.(*Error)
-				if !ok || KindOf(err) != KindValidation || len(e.Fields) == 0 || e.Fields[0].Field != tc.bad {
+				var e *Error
+				if !errors.As(err, &e) || KindOf(err) != KindValidation || len(e.Fields) == 0 || e.Fields[0].Field != tc.bad {
 					t.Fatalf("err = %v, want validation on %s", err, tc.bad)
 				}
 				return
@@ -93,7 +94,8 @@ func TestReportDaysAndKind(t *testing.T) {
 	a := ReportQuery{Kind: ReportKindUsage, From: q.From, To: q.To, Filters: ReportFilters{Tags: map[string]string{"a": "1", "b": "2"}}}
 	b := a
 	b.Filters.AgentID = "agt_x"
-	if a.Fingerprint() == b.Fingerprint() || a.Fingerprint() != a.Fingerprint() {
+	c := a
+	if a.Fingerprint() == b.Fingerprint() || a.Fingerprint() != c.Fingerprint() {
 		t.Error("fingerprint")
 	}
 }
