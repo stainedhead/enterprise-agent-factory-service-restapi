@@ -243,6 +243,7 @@ func TestRegistry(t *testing.T) {
 		Route{Table: "team_models", Targets: []Target{{Kind: KindTeam}, {Kind: KindAgent, Self: true}}},
 		Route{Table: "models", FanOut: []Kind{KindTeam, KindAgent}},
 		Route{Table: "other"},
+		Route{Table: "agent_secret_bindings", Targets: []Target{{Kind: KindAgent, Children: true}}},
 	)
 	fan := func(_ context.Context, kinds []Kind) ([]Ref, error) {
 		var out []Ref
@@ -263,6 +264,8 @@ func TestRegistry(t *testing.T) {
 		{"service level without fan-out", Change{"teams", "", "x"}, nil},
 		{"unrouted table", Change{"nothing", "team_A", "x"}, nil},
 		{"no targets", Change{"other", "team_A", "x"}, nil},
+		{"children of the team", Change{"agent_secret_bindings", "team_Z", ""}, []Ref{NewRef(KindAgent, "x_agent", "team_Z")}},
+		{"children of another team", Change{"agent_secret_bindings", "team_A", ""}, nil},
 	}
 	for _, tt := range tests {
 		got, err := reg.Resolve(t.Context(), tt.c, fan)

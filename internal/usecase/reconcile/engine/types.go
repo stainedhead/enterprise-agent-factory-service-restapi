@@ -67,6 +67,10 @@ type Target struct {
 	// Self is true when the changed row is the resource (kind, change.ID). False means the change
 	// belongs to the team resource named by the payload's team part, whatever the changed row is.
 	Self bool
+	// Children is true when the change concerns every live resource of Kind owned by the team named
+	// in the payload (a row of a table below the resource that carries no resource id, such as an agent's
+	// secret bindings or a team's tags). The resources are found with the same fan-out lister.
+	Children bool
 }
 
 // Route maps one table to the resources to reconcile when a row of it changes.
@@ -133,6 +137,16 @@ func (r *Registry) Resolve(ctx context.Context, c Change, fan func(context.Conte
 	var out []Ref
 	for _, t := range rt.Targets {
 		switch {
+		case t.Children:
+			all, err := fan(ctx, []Kind{t.Kind})
+			if err != nil {
+				return nil, err
+			}
+			for _, ref := range all {
+				if ref.TeamID == c.TeamID {
+					out = append(out, ref)
+				}
+			}
 		case t.Self && c.ID != "":
 			out = append(out, NewRef(t.Kind, c.ID, c.TeamID))
 		case !t.Self:
