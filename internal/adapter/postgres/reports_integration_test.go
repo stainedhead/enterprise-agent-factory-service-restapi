@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"context"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"testing"
 	"time"
 
@@ -24,12 +25,13 @@ type rptFixture struct {
 	tagged2  string // business-unit=bank
 	repo     *postgres.ReportsRepo
 	runner   *postgres.TxRunner
+	admin    *pgx.Conn
 	otherAgt string
 }
 
 func (f *rptFixture) exec(t *testing.T, sql string, args ...any) {
 	t.Helper()
-	if _, err := f.db.Admin(t).Exec(t.Context(), sql, args...); err != nil {
+	if _, err := f.admin.Exec(t.Context(), sql, args...); err != nil {
 		t.Fatalf("%s: %v", sql, err)
 	}
 }
@@ -37,7 +39,7 @@ func (f *rptFixture) exec(t *testing.T, sql string, args ...any) {
 func (f *rptFixture) tagSet(t *testing.T, team, bu string) string {
 	t.Helper()
 	var id string
-	if err := f.db.Admin(t).QueryRow(t.Context(), `SELECT afs.tag_set_for($1, jsonb_build_object('business-unit', $2::text))`, team, bu).Scan(&id); err != nil {
+	if err := f.admin.QueryRow(t.Context(), `SELECT afs.tag_set_for($1, jsonb_build_object('business-unit', $2::text))`, team, bu).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	return id
@@ -46,7 +48,7 @@ func (f *rptFixture) tagSet(t *testing.T, team, bu string) string {
 func newRptFixture(t *testing.T) *rptFixture {
 	t.Helper()
 	db := pgtest.Get(t)
-	f := &rptFixture{db: db, repo: postgres.NewReportsRepo(), runner: postgres.NewTxRunner(appPool(t, db))}
+	f := &rptFixture{db: db, repo: postgres.NewReportsRepo(), runner: postgres.NewTxRunner(appPool(t, db)), admin: db.Admin(t)}
 	f.a, f.b = db.SeedTeam(t), db.SeedTeam(t)
 	f.agt1, f.agt2, f.otherAgt = pgtest.NewID("agt"), pgtest.NewID("agt"), pgtest.NewID("agt")
 	f.tagged, f.tagged2 = f.tagSet(t, f.a.ID, "retail"), f.tagSet(t, f.a.ID, "bank")

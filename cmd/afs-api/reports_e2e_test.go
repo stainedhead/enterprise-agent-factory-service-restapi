@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"strings"
@@ -116,6 +117,9 @@ VALUES ($1, $2, $3, 'model-x', $4, 'ok', 1, 1, 7)`, now.Add(-time.Hour), w.TeamB
 	if code != 200 || len(rep.Rows) != 1 || rep.Totals["costUsd"] != "7.00" {
 		t.Fatalf("service: %d %s", code, body)
 	}
+	t.Cleanup(func() {
+		_, _ = w.Admin.Exec(context.Background(), `UPDATE afs.teams SET state = 'active', deleted_at = NULL WHERE id = $1`, w.TeamB.ID)
+	})
 	exec(`UPDATE afs.teams SET state = 'deleted', deleted_at = now() WHERE id = $1`, w.TeamB.ID)
 	code, body, _ = ldCall(t, c.Handler, "GET", "/v1/teams/"+w.TeamB.ID+"/reports/usage?range=24h", svc, "")
 	_ = json.Unmarshal([]byte(body), &rep)

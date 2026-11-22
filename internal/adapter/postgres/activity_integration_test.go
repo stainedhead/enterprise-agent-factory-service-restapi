@@ -1,6 +1,7 @@
 package postgres_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -47,6 +48,11 @@ ON CONFLICT (resource_kind, resource_id) DO UPDATE SET conditions = EXCLUDED.con
 		t.Errorf("blocked = %+v", x)
 	}
 	// A suspended team's agents are paused; a deleted agent and its team's agents are left out.
+	// The database is shared by the package's tests: put the team back afterwards.
+	t.Cleanup(func() {
+		_, _ = admin.Exec(context.Background(), `UPDATE afs.teams SET state = 'active' WHERE id = $1`, a.ID)
+		_, _ = admin.Exec(context.Background(), `DELETE FROM afs.resource_status WHERE resource_kind = 'team' AND resource_id = $1`, b.ID)
+	})
 	exec(`UPDATE afs.teams SET state = 'suspended' WHERE id = $1`, a.ID)
 	exec(`UPDATE afs.agents SET state = 'deleting' WHERE id = $1`, paused)
 	roster, _ = postgres.NewActivityRoster(runner).Roster(ctx)
