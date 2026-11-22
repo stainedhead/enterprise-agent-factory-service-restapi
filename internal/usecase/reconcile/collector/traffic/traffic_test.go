@@ -493,7 +493,7 @@ func TestRunFlushesPeriodically(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	cancel()
-	<-done
+	<-done //nolint:errcheck // the job result is irrelevant here
 	if len(st.rows) != 1 {
 		t.Fatalf("rows = %+v", st.rows)
 	}

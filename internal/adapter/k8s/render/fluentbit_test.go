@@ -20,15 +20,15 @@ import (
 
 func logOutputs() []logs.Destination {
 	return []logs.Destination{
-		{ID: "log_01JD0000000000000000000005", Name: "dd", Kind: domain.LogDatadog, Enabled: true, SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x/dd-AbCdEf",
+		{ID: "log_01JD0000000000000000000005", Name: "dd", Kind: domain.LogDatadog, Enabled: true, SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x/dd-AbCdEf", //nolint:gosec // a fixture id or ARN, not a credential
 			Config: map[string]string{"site": "datadoghq.com", "service": "payments"}},
 		{ID: "log_01JD0000000000000000000001", Name: "cw", Kind: domain.LogCloudWatch, Enabled: true,
 			Config: map[string]string{"logGroup": "/afs/payments", "region": "us-east-1"}},
 		{ID: "log_01JD0000000000000000000002", Name: "s3", Kind: domain.LogS3, Enabled: true,
 			Config: map[string]string{"bucket": "team-logs", "region": "us-east-1", "prefix": "afs/"}},
-		{ID: "log_01JD0000000000000000000003", Name: "otel", Kind: domain.LogOTLP, Enabled: true, SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x/otel-AbCdEf",
+		{ID: "log_01JD0000000000000000000003", Name: "otel", Kind: domain.LogOTLP, Enabled: true, SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x/otel-AbCdEf", //nolint:gosec // a fixture id or ARN, not a credential
 			Config: map[string]string{"endpoint": "https://otel.example.com:4318"}},
-		{ID: "log_01JD0000000000000000000004", Name: "hec", Kind: domain.LogSplunkHEC, Enabled: true, SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x/hec-AbCdEf",
+		{ID: "log_01JD0000000000000000000004", Name: "hec", Kind: domain.LogSplunkHEC, Enabled: true, SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x/hec-AbCdEf", //nolint:gosec // a fixture id or ARN, not a credential
 			Config: map[string]string{"endpoint": "https://splunk.example.com:8088", "index": "afs"}},
 	}
 }
@@ -89,7 +89,7 @@ func TestLogAggregatorObjects(t *testing.T) {
 		if !render.IsManaged(o) {
 			t.Errorf("%s/%s not managed", o.GetKind(), o.GetName())
 		}
-		if o.GetNamespace() != "afs-t-x" && !(o.GetKind() == "ConfigMap" && o.GetNamespace() == render.DefaultLogRouteNamespace) {
+		if o.GetNamespace() != "afs-t-x" && (o.GetKind() != "ConfigMap" || o.GetNamespace() != render.DefaultLogRouteNamespace) {
 			t.Errorf("%s/%s in %s", o.GetKind(), o.GetName(), o.GetNamespace())
 		}
 		byKind[o.GetKind()+"/"+o.GetName()] = o
@@ -262,7 +262,7 @@ for line in io.open(arg[4], "rb"):lines() do
   print(enc(R.redact_string(R.b64decode(line), key, lits)))
 end
 `))
-	cmd := exec.Command(lua, driver, script, write("key", key), write("values", []byte(vals)), write("in", []byte(in.String())))
+	cmd := exec.CommandContext(t.Context(), lua, driver, script, write("key", key), write("values", []byte(vals)), write("in", []byte(in.String()))) //nolint:gosec // the interpreter is found on PATH by this test only
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {

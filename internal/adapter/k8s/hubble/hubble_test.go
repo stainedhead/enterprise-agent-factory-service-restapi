@@ -28,7 +28,7 @@ func recorded(t *testing.T) map[string][]byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	out := map[string][]byte{}
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
@@ -150,7 +150,7 @@ type hubbleServer struct {
 
 func (h *hubbleServer) start(t *testing.T) string {
 	t.Helper()
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	lis, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,18 +295,18 @@ func TestSignInRecord(t *testing.T) {
 // The sink dials the aggregator of the sign-in's own namespace only, sends one message, and drops the
 // record when there is no aggregator.
 func TestSignInSinkDelivers(t *testing.T) {
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	lis, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer lis.Close()
+	defer func() { _ = lis.Close() }()
 	received := make(chan []byte, 1)
 	go func() {
 		c, err := lis.Accept()
 		if err != nil {
 			return
 		}
-		defer c.Close()
+		defer func() { _ = c.Close() }()
 		buf := make([]byte, 4096)
 		n, _ := c.Read(buf)
 		received <- buf[:n]
@@ -343,7 +343,9 @@ func TestSignInSinkDelivers(t *testing.T) {
 		t.Fatal("nothing delivered")
 	}
 	cancel()
-	<-done
+	if err := <-done; err != nil {
+		t.Error(err)
+	}
 	for _, a := range dialed {
 		if !strings.HasSuffix(a, ".svc:24224") {
 			t.Errorf("dialed %q", a)

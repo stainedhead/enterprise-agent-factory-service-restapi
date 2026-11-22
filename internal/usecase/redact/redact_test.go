@@ -126,7 +126,8 @@ func TestBoundSecretsAreRedactedDeterministically(t *testing.T) {
 // 8 hex characters of HMAC-SHA-256 (it cannot be reversed or compared across teams).
 func TestTokenIsPerTeam(t *testing.T) {
 	a, b := mustNew(t, keyA), mustNew(t, keyB)
-	if a.Token("value-123456") == b.Token("value-123456") || a.Token("value-123456") != a.Token("value-123456") {
+	first := a.Token("value-123456")
+	if first == b.Token("value-123456") || first != a.Token("value-123456") {
 		t.Fatal("token not per-team and deterministic")
 	}
 	if !tok.MatchString(a.Token("x")) {

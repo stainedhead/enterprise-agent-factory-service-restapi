@@ -82,7 +82,7 @@ func TestLogDestinationsEndToEnd(t *testing.T) {
 	}
 
 	// A credential is a reference, never inline.
-	for name, body := range map[string]string{
+	for name, body := range map[string]string{ //nolint:gosec // request bodies with fake credentials, to prove they are refused
 		"top-level token":     `{"name":"sp","kind":"splunk_hec","config":{"endpoint":"https://splunk.example.com:8088"},"token":"abc123"}`,
 		"top-level value":     `{"name":"sp","kind":"splunk_hec","config":{"endpoint":"https://splunk.example.com:8088"},"value":"abc123"}`,
 		"config token":        `{"name":"sp","kind":"splunk_hec","config":{"endpoint":"https://splunk.example.com:8088","hecToken":"abc123"},"secretId":"` + secretID + `"}`,

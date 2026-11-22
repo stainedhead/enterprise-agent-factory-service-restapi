@@ -1,7 +1,9 @@
 package logdest_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -17,7 +19,7 @@ import (
 const (
 	team   = "team_01JD2Q3R4S5T6V7W8X9Y0Z0001"
 	other  = "team_01JD2Q3R4S5T6V7W8X9Y0Z0002"
-	secret = "sec_01JD2Q3R4S5T6V7W8X9Y0Z0001"
+	secret = "sec_01JD2Q3R4S5T6V7W8X9Y0Z0001" //nolint:gosec // a fixture id or ARN, not a credential
 )
 
 type rig struct {
@@ -63,7 +65,7 @@ func TestCreateListGetUpdateDelete(t *testing.T) {
 	if _, err := r.svc.Create(t.Context(), admin, team, bad, nil); domain.KindOf(err) != domain.KindValidation {
 		t.Fatalf("inline credential: %v", err)
 	}
-	dd := domain.NewLogDestinationParams{Name: "dd", Kind: domain.LogDatadog, Config: map[string]string{"site": "datadoghq.com"}, SecretID: "sec_01JD2Q3R4S5T6V7W8X9Y0Z0009"}
+	dd := domain.NewLogDestinationParams{Name: "dd", Kind: domain.LogDatadog, Config: map[string]string{"site": "datadoghq.com"}, SecretID: "sec_01JD2Q3R4S5T6V7W8X9Y0Z0009"} //nolint:gosec // a fixture id or ARN, not a credential
 	if _, err := r.svc.Create(t.Context(), admin, team, dd, nil); domain.KindOf(err) != domain.KindValidation {
 		t.Fatalf("unknown secret: %v", err)
 	}
@@ -167,5 +169,147 @@ func TestCreateReplay(t *testing.T) {
 	res, err := r.svc.Create(t.Context(), admin, team, cw("cw"), idem())
 	if err != nil || res.Replay == nil || len(r.repo.Rows) != 1 || len(r.audit.Entries) != 1 {
 		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+var errBoom = errors.New("boom")
+
+// failingRepo fails the named methods; the others run on the fake.
+type failingRepo struct {
+	*logdesttest.Repo
+	fail map[string]bool
+}
+
+func (f failingRepo) List(ctx context.Context, tx port.Tx, teamID, after string, limit int) ([]domain.LogDestination, error) {
+	if f.fail["List"] {
+		return nil, errBoom
+	}
+	return f.Repo.List(ctx, tx, teamID, after, limit)
+}
+
+func (f failingRepo) Get(ctx context.Context, tx port.Tx, teamID, id string, forUpdate bool) (domain.LogDestination, error) {
+	if f.fail["Get"] {
+		return domain.LogDestination{}, errBoom
+	}
+	return f.Repo.Get(ctx, tx, teamID, id, forUpdate)
+}
+
+func (f failingRepo) SecretExists(ctx context.Context, tx port.Tx, teamID, secretID string) (bool, error) {
+	if f.fail["SecretExists"] {
+		return false, errBoom
+	}
+	return f.Repo.SecretExists(ctx, tx, teamID, secretID)
+}
+
+func (f failingRepo) Insert(ctx context.Context, tx port.Tx, d domain.LogDestination) error {
+	if f.fail["Insert"] {
+		return errBoom
+	}
+	return f.Repo.Insert(ctx, tx, d)
+}
+
+func (f failingRepo) Update(ctx context.Context, tx port.Tx, d domain.LogDestination, expect domain.Version) (domain.LogDestination, error) {
+	if f.fail["Update"] {
+		return domain.LogDestination{}, errBoom
+	}
+	return f.Repo.Update(ctx, tx, d, expect)
+}
+
+func (f failingRepo) Delete(ctx context.Context, tx port.Tx, teamID, id string, expect domain.Version) error {
+	if f.fail["Delete"] {
+		return errBoom
+	}
+	return f.Repo.Delete(ctx, tx, teamID, id, expect)
+}
+
+// failingAudit fails every write.
+type failingAudit struct{ *fakes.Audit }
+
+func (failingAudit) Write(context.Context, port.Tx, port.AuditRecord) error { return errBoom }
+
+// A failure of the store or of the audit write fails the operation with that error and records
+// nothing: the mutation and its audit record commit together or not at all.
+func TestStoreAndAuditFailuresFailTheOperation(t *testing.T) {
+	admin := caller(authz.RoleTeamAdmin, team)
+	hec := domain.NewLogDestinationParams{Name: "hec", Kind: domain.LogSplunkHEC, Enabled: true, SecretID: secret,
+		Config: map[string]string{"endpoint": "https://splunk.example.com:8088"}}
+	seed := func() (*rig, string) {
+		r := newRig()
+		res, err := r.svc.Create(t.Context(), admin, team, cw("cw"), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r, res.Destination.ID
+	}
+	for _, tc := range []struct {
+		name string
+		fail string
+		run  func(r *rig, id string) error
+	}{
+		{"list", "List", func(r *rig, _ string) error {
+			_, _, err := r.svc.List(t.Context(), admin, team, acting.Page{})
+			return err
+		}},
+		{"get", "Get", func(r *rig, id string) error { _, err := r.svc.Get(t.Context(), admin, team, id); return err }},
+		{"create insert", "Insert", func(r *rig, _ string) error {
+			_, err := r.svc.Create(t.Context(), admin, team, cw("two"), nil)
+			return err
+		}},
+		{"create secret lookup", "SecretExists", func(r *rig, _ string) error { _, err := r.svc.Create(t.Context(), admin, team, hec, nil); return err }},
+		{"create read-back", "Get", func(r *rig, _ string) error {
+			_, err := r.svc.Create(t.Context(), admin, team, cw("two"), nil)
+			return err
+		}},
+		{"update read", "Get", func(r *rig, id string) error {
+			off := false
+			_, err := r.svc.Update(t.Context(), admin, team, id, domain.LogDestinationPatch{Enabled: &off}, 1)
+			return err
+		}},
+		{"update write", "Update", func(r *rig, id string) error {
+			off := false
+			_, err := r.svc.Update(t.Context(), admin, team, id, domain.LogDestinationPatch{Enabled: &off}, 1)
+			return err
+		}},
+		{"delete read", "Get", func(r *rig, id string) error { _, err := r.svc.Delete(t.Context(), admin, team, id, 1); return err }},
+		{"delete write", "Delete", func(r *rig, id string) error { _, err := r.svc.Delete(t.Context(), admin, team, id, 1); return err }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, id := seed()
+			r.svc.Repo = failingRepo{Repo: r.repo, fail: map[string]bool{tc.fail: true}}
+			if err := tc.run(r, id); !errors.Is(err, errBoom) {
+				t.Fatalf("err = %v, want the store's error", err)
+			}
+		})
+	}
+	t.Run("update to a secret that is not the team's", func(t *testing.T) {
+		r, _ := seed()
+		res, err := r.svc.Create(t.Context(), admin, team, hec, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.svc.Repo = failingRepo{Repo: r.repo, fail: map[string]bool{"SecretExists": true}}
+		s := "sec_01JD2Q3R4S5T6V7W8X9Y0Z0007" //nolint:gosec // a fixture id, not a credential
+		if _, err := r.svc.Update(t.Context(), admin, team, res.Destination.ID, domain.LogDestinationPatch{SecretID: &s}, 1); !errors.Is(err, errBoom) {
+			t.Fatalf("err = %v", err)
+		}
+	})
+	for _, name := range []string{"create", "update", "delete"} {
+		t.Run("audit failure on "+name, func(t *testing.T) {
+			r, id := seed()
+			r.svc.Audit = failingAudit{r.audit}
+			var err error
+			off := false
+			switch name {
+			case "create":
+				_, err = r.svc.Create(t.Context(), admin, team, cw("two"), nil)
+			case "update":
+				_, err = r.svc.Update(t.Context(), admin, team, id, domain.LogDestinationPatch{Enabled: &off}, 1)
+			case "delete":
+				_, err = r.svc.Delete(t.Context(), admin, team, id, 1)
+			}
+			if !errors.Is(err, errBoom) {
+				t.Fatalf("err = %v, want the audit error", err)
+			}
+		})
 	}
 }

@@ -65,8 +65,9 @@ func TestLogAggregatorFollowsDestinations(t *testing.T) {
 	ref := engine.NewRef(logs.Kind, logTeam, logTeam)
 	cw := logs.Destination{ID: "log_01JD0000000000000000000041", Name: "cw", Kind: domain.LogCloudWatch, Enabled: true, Version: 1,
 		Config: map[string]string{"logGroup": "/afs/lg", "region": "us-east-1"}}
-	hec := logs.Destination{ID: "log_01JD0000000000000000000042", Name: "hec", Kind: domain.LogSplunkHEC, Enabled: true, Version: 1,
-		SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/lg/hec-AbCdEf", Config: map[string]string{"endpoint": "https://splunk.example.com:8088"}}
+	hec := logs.Destination{ID: "log_01JD0000000000000000000042", Name: "hec", Kind: domain.LogSplunkHEC, Enabled: true, Version: 1, //nolint:gosec // a fixture id or ARN, not a credential
+		SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/lg/hec-AbCdEf", //nolint:gosec // a fixture ARN
+		Config:    map[string]string{"endpoint": "https://splunk.example.com:8088"}}
 
 	conf := func() string {
 		cm, err := c.Get(ctx, gvkConfigMap, "afs-t-lg", render.LogAggregatorName)
@@ -143,7 +144,8 @@ func TestLogAggregatorFollowsDestinations(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, cm := range all {
-		for k, v := range cm.Object["data"].(map[string]any) {
+		data, _ := cm.Object["data"].(map[string]any) // some managed ConfigMaps (other tests') carry none
+		for k, v := range data {
 			if s, _ := v.(string); strings.Contains(s, "arn:aws:secretsmanager") && strings.Contains(cm.GetName(), "log") {
 				t.Errorf("%s/%s key %s carries a secret ARN", cm.GetNamespace(), cm.GetName(), k)
 			}

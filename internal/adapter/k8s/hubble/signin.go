@@ -89,7 +89,7 @@ func (s *SignInSink) deliver(ctx context.Context, si traffic.SignIn) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	_ = conn.SetWriteDeadline(time.Now().Add(s.Timeout))
 	_, err = conn.Write(EncodeForward(SignInTag, si.At, SignInRecord(si)))
 	return err
@@ -117,7 +117,7 @@ func EncodeForward(tag string, at time.Time, record map[string]string) []byte {
 	b := []byte{0x93}
 	b = appendStr(b, tag)
 	b = append(b, 0xce)
-	b = binary.BigEndian.AppendUint32(b, uint32(at.Unix()))
+	b = binary.BigEndian.AppendUint32(b, uint32(at.Unix())) //nolint:gosec // seconds since 1970 fit until 2106, the width of the protocol field
 	keys := make([]string, 0, len(record))
 	for k := range record {
 		keys = append(keys, k)
@@ -128,7 +128,7 @@ func EncodeForward(tag string, at time.Time, record map[string]string) []byte {
 		b = append(b, 0x80|byte(n))
 	default:
 		b = append(b, 0xde)
-		b = binary.BigEndian.AppendUint16(b, uint16(n))
+		b = binary.BigEndian.AppendUint16(b, uint16(n)) //nolint:gosec // bounded by the few keys of a record
 	}
 	for _, k := range keys {
 		b = appendStr(b, k)
@@ -145,7 +145,7 @@ func appendStr(b []byte, s string) []byte {
 		b = append(b, 0xd9, byte(n))
 	case n < 65536:
 		b = append(b, 0xda)
-		b = binary.BigEndian.AppendUint16(b, uint16(n))
+		b = binary.BigEndian.AppendUint16(b, uint16(n)) //nolint:gosec // bounded by the few keys of a record
 	default:
 		// Values are host names and ids, far below this; a longer one is cut rather than refused.
 		s = s[:65535]

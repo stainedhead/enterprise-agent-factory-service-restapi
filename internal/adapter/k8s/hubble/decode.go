@@ -127,9 +127,9 @@ func decodeTimestamp(b []byte) (time.Time, error) {
 		}
 		switch num {
 		case 1:
-			sec = int64(v.varint)
+			sec = int64(v.varint) //nolint:gosec // an int64 field is the two's complement of its varint
 		case 2:
-			nsec = int64(v.varint)
+			nsec = int64(v.varint) //nolint:gosec // an int32 field is the two's complement of its varint //nolint:gosec // an int64 field is the two's complement of its varint
 		}
 		return nil
 	})
@@ -155,7 +155,7 @@ func decodeL4(b []byte, f *traffic.Flow) error {
 		return walk(v.bytes, func(n protowire.Number, t protowire.Type, x value) error {
 			switch {
 			case n == portDestination && t == protowire.VarintType:
-				f.DstPort = int(x.varint)
+				f.DstPort = int(x.varint & 0xffff)
 			case num == l4TCP && n == tcpFlags && t == protowire.BytesType:
 				return walk(x.bytes, func(fn protowire.Number, ft protowire.Type, fv value) error {
 					if ft != protowire.VarintType {
@@ -204,7 +204,7 @@ func walk(b []byte, fn func(protowire.Number, protowire.Type, value) error) erro
 	for len(b) > 0 {
 		num, typ, n := protowire.ConsumeTag(b)
 		if n < 0 {
-			return fmt.Errorf("%w: %v", errMalformed, protowire.ParseError(n))
+			return fmt.Errorf("%w: %w", errMalformed, protowire.ParseError(n))
 		}
 		b = b[n:]
 		var v value
@@ -212,19 +212,19 @@ func walk(b []byte, fn func(protowire.Number, protowire.Type, value) error) erro
 		case protowire.VarintType:
 			x, m := protowire.ConsumeVarint(b)
 			if m < 0 {
-				return fmt.Errorf("%w: %v", errMalformed, protowire.ParseError(m))
+				return fmt.Errorf("%w: %w", errMalformed, protowire.ParseError(m))
 			}
 			v.varint, n = x, m
 		case protowire.BytesType:
 			x, m := protowire.ConsumeBytes(b)
 			if m < 0 {
-				return fmt.Errorf("%w: %v", errMalformed, protowire.ParseError(m))
+				return fmt.Errorf("%w: %w", errMalformed, protowire.ParseError(m))
 			}
 			v.bytes, n = x, m
 		default:
 			m := protowire.ConsumeFieldValue(num, typ, b)
 			if m < 0 {
-				return fmt.Errorf("%w: %v", errMalformed, protowire.ParseError(m))
+				return fmt.Errorf("%w: %w", errMalformed, protowire.ParseError(m))
 			}
 			n = m
 		}

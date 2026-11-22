@@ -53,7 +53,7 @@ func cw(id, name string, enabled bool) logs.Destination {
 }
 
 func hec(id string) logs.Destination {
-	return logs.Destination{ID: id, Name: "hec", Kind: domain.LogSplunkHEC, Enabled: true, Version: 1, SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/t/hec-AbCdEf",
+	return logs.Destination{ID: id, Name: "hec", Kind: domain.LogSplunkHEC, Enabled: true, Version: 1, SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/t/hec-AbCdEf", //nolint:gosec // a fixture ARN
 		Config: map[string]string{"endpoint": "https://splunk.example.com:8088"}}
 }
 

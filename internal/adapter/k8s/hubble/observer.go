@@ -97,7 +97,7 @@ func (o *Observer) Stream(ctx context.Context, handle func(traffic.Flow)) error 
 	if err != nil {
 		return fmt.Errorf("hubble: dial %s: %w", o.cfg.Address, err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, getFlowsMethod)

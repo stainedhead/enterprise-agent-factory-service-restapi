@@ -22,7 +22,7 @@ const (
 	LogAggregatorName      = "afs-log-aggregator"
 	LogRedactionKeyName    = "afs-log-redaction-key"
 	LogRedactionValuesName = "afs-log-redaction-values"
-	LogCredentialsName     = "afs-log-credentials"
+	LogCredentialsName     = "afs-log-credentials" //nolint:gosec // the name of the Secret, not a credential
 	// LogForwardPort is the Fluent Bit forward port the node collector sends to.
 	LogForwardPort = 24224
 	// DefaultLogRouteNamespace holds the per-team route ConfigMaps the node collector assembles its

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const logSecretID = "sec_01JD2Q3R4S5T6V7W8X9Y0Z0001"
+const logSecretID = "sec_01JD2Q3R4S5T6V7W8X9Y0Z0001" //nolint:gosec // a fixture id, not a credential
 
 func logFields(t *testing.T, err error) []string {
 	t.Helper()
@@ -24,7 +24,7 @@ func logFields(t *testing.T, err error) []string {
 func TestLogDestinationValidate(t *testing.T) {
 	cfg := func(kv ...string) map[string]string {
 		m := map[string]string{}
-		for i := 0; i < len(kv); i += 2 {
+		for i := 0; i+1 < len(kv); i += 2 {
 			m[kv[i]] = kv[i+1]
 		}
 		return m
@@ -52,7 +52,7 @@ func TestLogDestinationValidate(t *testing.T) {
 		{"inline api key", NewLogDestinationParams{Name: "dd", Kind: LogDatadog, Config: cfg("site", "datadoghq.com", "api_key", "abc"), SecretID: logSecretID}, []string{"config.api_key"}},
 		{"inline header", NewLogDestinationParams{Name: "o", Kind: LogOTLP, Config: cfg("endpoint", "https://otel.example.com", "headers", "x")}, []string{"config.headers"}},
 		{"unknown key", NewLogDestinationParams{Name: "o", Kind: LogOTLP, Config: cfg("endpoint", "https://otel.example.com", "extra", "x")}, []string{"config.extra"}},
-		{"bad secret id", NewLogDestinationParams{Name: "o", Kind: LogOTLP, Config: cfg("endpoint", "https://otel.example.com"), SecretID: "agt_01JD2Q3R4S5T6V7W8X9Y0Z0001"}, []string{"secretId"}},
+		{"bad secret id", NewLogDestinationParams{Name: "o", Kind: LogOTLP, Config: cfg("endpoint", "https://otel.example.com"), SecretID: "agt_01JD2Q3R4S5T6V7W8X9Y0Z0001"}, []string{"secretId"}}, //nolint:gosec // a fixture id
 		{"unknown kind", NewLogDestinationParams{Name: "o", Kind: "syslog", Config: cfg()}, []string{"kind"}},
 		{"empty name", NewLogDestinationParams{Name: "", Kind: LogOTLP, Config: cfg("endpoint", "https://otel.example.com")}, []string{"name"}},
 		{"long name", NewLogDestinationParams{Name: strings.Repeat("n", 101), Kind: LogOTLP, Config: cfg("endpoint", "https://otel.example.com")}, []string{"name"}},
