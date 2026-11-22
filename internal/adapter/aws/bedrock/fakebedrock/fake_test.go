@@ -3,7 +3,6 @@ package fakebedrock_test
 import (
 	"context"
 	"errors"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -74,8 +73,8 @@ func TestConverseStreamEndsWithMetadata(t *testing.T) {
 		}
 	}
 	// Once the metadata event (the last frame) has arrived the SDK may close the connection before its decoder
-	// goroutine reads the end of the body; on a loaded runner that surfaces as net.ErrClosed. It is not a stream failure.
-	if err := out.GetStream().Err(); err != nil && (meta == nil || !errors.Is(err, net.ErrClosed)) {
+	// goroutine reads the end of the body; on a loaded runner that surfaces as "use of closed network connection" (the SDK wraps it, so errors.Is does not match). It is not a stream failure.
+	if err := out.GetStream().Err(); err != nil && (meta == nil || !strings.Contains(err.Error(), "use of closed network connection")) {
 		t.Fatal(err)
 	}
 	if text.String() != "Hello from the fake Bedrock runtime" || meta == nil || *meta.Usage.OutputTokens != 11 {
