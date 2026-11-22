@@ -3,9 +3,16 @@ package gateway
 import (
 	"context"
 	"errors"
+	"net/netip"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 )
+
+// Authenticate identifies the caller only. The HTTP adapter calls it before it reads a request body, so
+// an unknown address costs a map lookup and not a 20 MB read; Do identifies again, which is cheap.
+func (s *Service) Authenticate(ctx context.Context, ip netip.Addr, token string) (Caller, error) {
+	return s.identify(ctx, Request{SourceIP: ip, Token: token})
+}
 
 // identify maps the request's source IP to the calling pod (gateway contract §3). The SigV4
 // Authorization header and x-api-key the SDKs send never reach this package: the adapter drops them.

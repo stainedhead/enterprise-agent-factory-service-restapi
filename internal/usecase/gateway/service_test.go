@@ -482,3 +482,21 @@ func TestMetadataIsBuiltAndPassedOn(t *testing.T) {
 		}
 	}
 }
+
+func TestAsyncSettleAnswersBeforeTheBooksCloseAndWaitDrains(t *testing.T) {
+	r := newRig(t)
+	r.svc = gateway.NewService(gateway.Deps{Pods: r.dir, Tokens: r.tokens, Store: r.store, Spend: r.spend, Thresholds: r.thr, Usage: r.usage},
+		gateway.Config{Partition: "aws", AccountID: "111122223333", AsyncSettle: true, Now: func() time.Time { return now }})
+	if err := r.svc.Do(t.Context(), req("10.0.0.1"), r.invoke(ok(100, 50), nil)); err != nil {
+		t.Fatal(err)
+	}
+	r.svc.Wait()
+	if len(r.spend.Settlements) != 1 || len(r.usage.All()) != 1 || r.spend.Held() != 0 {
+		t.Errorf("settlements %d usage %d held %d", len(r.spend.Settlements), len(r.usage.All()), r.spend.Held())
+	}
+	err := r.svc.Do(t.Context(), req("10.0.0.1"), r.invoke(gateway.Result{}, &domain.Error{Kind: domain.KindUpstream, Message: "boom"}))
+	r.svc.Wait()
+	if kind(err) != domain.KindUpstream || len(r.spend.Settlements) != 2 {
+		t.Errorf("err %v settlements %d", err, len(r.spend.Settlements))
+	}
+}

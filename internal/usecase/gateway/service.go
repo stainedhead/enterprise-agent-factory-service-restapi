@@ -30,8 +30,12 @@ type Config struct {
 	// SettleTimeout bounds settlement after the call, which does not depend on the client staying
 	// connected. Default 10 s.
 	SettleTimeout time.Duration
-	Now           func() time.Time
-	Log           *slog.Logger
+	// AsyncSettle moves settlement, the usage row and the threshold check off the response path: the agent
+	// gets its answer first and the books are closed right behind it (GW-8 added latency). The books are
+	// the same either way; Wait drains them.
+	AsyncSettle bool
+	Now         func() time.Time
+	Log         *slog.Logger
 }
 
 // Service runs one model call from identification to settlement.
@@ -140,24 +144,33 @@ func (s *Service) Do(ctx context.Context, req Request, invoke InvokeFunc) error 
 	res, callErr := invoke(ctx, Authorized{Caller: caller, ModelID: req.ModelID, ProfileARN: access.ProfileARN, RoleARN: roleARN,
 		MaxOutputTokens: cap, Metadata: meta, DroppedTags: dropped, RequestID: req.RequestID})
 
-	actual := SettleAmount(res, callErr, price, amount)
-	ctr := s.settle(ctx, caller, budget, period, hold, actual)
-	outcome := OutcomeOK
-	if callErr != nil {
-		outcome = OutcomeError
-	}
-	cost := actual
-	if callErr != nil && !res.Started {
-		cost = domain.MoneyFromMicros(0)
-	}
-	rec(outcome, res.Usage, cost, tagSet)
-	if ctr != nil {
-		s.wg.Go(func() {
+	closeBooks := func() {
+		sctx := ctx
+		if s.cfg.AsyncSettle {
+			sctx = context.WithoutCancel(ctx)
+		}
+		actual := SettleAmount(res, callErr, price, amount)
+		ctr := s.settle(sctx, caller, budget, period, hold, actual)
+		outcome := OutcomeOK
+		if callErr != nil {
+			outcome = OutcomeError
+		}
+		cost := actual
+		if callErr != nil && !res.Started {
+			cost = domain.MoneyFromMicros(0)
+		}
+		rec(outcome, res.Usage, cost, tagSet)
+		if ctr != nil {
 			tctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.cfg.SettleTimeout)
 			defer cancel()
 			s.recordThresholds(tctx, caller, budget, period, *ctr)
-		})
+		}
 	}
+	if s.cfg.AsyncSettle {
+		s.wg.Go(closeBooks)
+		return asCallError(callErr)
+	}
+	closeBooks()
 	return asCallError(callErr)
 }
 
