@@ -308,6 +308,9 @@ func TestGuard(t *testing.T) {
 	if ev.of(domain.EventCollaborationUnmanagedAgentsFound) != 2 {
 		t.Error("announced again")
 	}
+	if ev.of(domain.EventCollaborationSecretDetected) != 1 {
+		t.Error("the same item version was reported twice")
+	}
 	_ = n
 	// The names clear when gone.
 	g.Paper = fakePaper{roster: []RosterAgent{{ID: "1", Name: "ceo", Orchestrator: true}}}

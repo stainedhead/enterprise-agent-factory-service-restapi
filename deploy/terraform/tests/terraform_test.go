@@ -358,6 +358,13 @@ func TestIAMLeastPrivilege(t *testing.T) {
 	if k := byID["DecryptBoardKeys"]; !k.hasCond || len(k.actions) != 1 {
 		t.Errorf("board key decrypt = %+v", k)
 	}
+	// COL-12: managed registration writes only the workers' own paperclip-agent-api-key secrets.
+	if w := byID["WriteWorkerPaperclipKeys"]; w.effect != "Allow" || slices.Contains(w.actions, "secretsmanager:GetSecretValue") || !slices.Contains(w.actions, "secretsmanager:CreateSecret") {
+		t.Errorf("worker key write = %+v", w)
+	}
+	if k := byID["EncryptWorkerPaperclipKeys"]; !k.hasCond || slices.Contains(k.actions, "kms:Decrypt") {
+		t.Errorf("worker key encrypt = %+v", k)
+	}
 	if w := byID["SyncCollaborationAllowList"]; len(w.actions) != 2 || w.actions[0] != "wafv2:GetIPSet" || w.actions[1] != "wafv2:UpdateIPSet" {
 		t.Errorf("WAF sync = %+v", w)
 	}
@@ -365,6 +372,7 @@ func TestIAMLeastPrivilege(t *testing.T) {
 	src := sources(t)[f]
 	for _, must := range []string{
 		`secret:${var.secrets_path_prefix}/*/paperclip-board-api-key-??????"]`,
+		`secret:${var.secrets_path_prefix}/*/paperclip-agent-api-key-??????"]`,
 		`resources = var.collab_waf_ip_set_arns`,
 		`secret:${var.collab_client_secret_name_pattern}"]`,
 	} {

@@ -7,7 +7,10 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/aws/secretsmanager"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/aws/ses"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/aws/wafv2"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/paperclip"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 	rcollab "github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/collab"
@@ -18,16 +21,25 @@ import (
 // EndpointReady controller, the link sync, the denied-spike detector, the board key bootstrap and the
 // partition and session housekeeping.
 //
-// The managed-mode roster guard needs a Paperclip API client, which is an upstream dependency (RC-25 is
-// parked), so it is not registered here; the board key finder is likewise absent, which keeps managed
-// bootstrap pending. Both are listed under Parked in the spec.
+// The managed-mode jobs (registration, roster guard and content scan, PaperclipReady probe, member sync)
+// are in wireCollabManaged; they call a team's Paperclip with its board key and do nothing for teams in manual
+// mode.
 func wireCollab(e jobs, runner *postgres.TxRunner, status engine.StatusWriter, outbox port.OutboxWriter, ids port.IDGen, clock port.Clock,
 	awsCfg awssdk.Config, env func(string) string, now func() time.Time, log *slog.Logger) {
-	db := postgres.NewCollabReconcile(runner, outbox, ids, clock, nil)
+	finder := &boardKeyFinder{finder: secretsmanager.NewFinder(awsCfg)}
+	db := postgres.NewCollabReconcile(runner, outbox, ids, clock, finder)
+	finder.paths = db
 	ctl := &rcollab.Controller{Source: db, Status: status, Events: db, Now: now, Log: log}
 	ls := &rcollab.LinkSync{Source: db, Events: db, Now: now, Log: log}
 	sp := &rcollab.SpikeDetector{Source: db, Events: db, Now: now}
-	bs := &rcollab.Bootstrap{Keys: db, Events: db, Log: log}
+	pc := paperclip.New(newPaperclipTargets(db, secretsmanager.NewReader(awsCfg), now))
+	bs := &rcollab.Bootstrap{Keys: db, Events: db, Paper: pc, Admins: db, Log: log}
+	if from := env(envNotifyEmailFrom); from != "" {
+		bs.Mail = ses.New(awsCfg, from)
+	} else {
+		log.Warn("the first Paperclip admin invite and member sync invites are not sent: " + envNotifyEmailFrom + " is not set")
+	}
+	wireCollabManaged(e, db, pc, bs.Mail, status, secretsmanager.NewKeyStore(awsCfg), now, log)
 	e.AddJob(engine.Job{Name: "collab-endpoint", Every: 30 * time.Second, Immediate: true, Fn: ctl.Sync})
 	e.AddJob(engine.Job{Name: "collab-links", Every: 30 * time.Second, Immediate: true, Fn: ls.Sync})
 	e.AddJob(engine.Job{Name: "collab-denied-spike", Every: time.Minute, Immediate: false, Fn: sp.Run})

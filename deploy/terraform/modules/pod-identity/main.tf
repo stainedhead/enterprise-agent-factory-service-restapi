@@ -427,6 +427,32 @@ data "aws_iam_policy_document" "reconciler_collab" {
     resources = ["arn:${var.partition}:secretsmanager:${var.region}:${var.account_id}:secret:${var.secrets_path_prefix}/*/paperclip-board-api-key-??????"]
   }
 
+  # Managed registration (COL-12) writes a connected worker's Paperclip key straight to Secrets Manager at the
+  # worker's own path, and schedules it for deletion on disconnect (DeleteSecret is in the reconciler statement
+  # above). Nothing else under the prefix is writable through this statement.
+  statement {
+    sid = "WriteWorkerPaperclipKeys"
+    actions = [
+      "secretsmanager:CreateSecret",
+      "secretsmanager:PutSecretValue",
+      "secretsmanager:TagResource",
+      "secretsmanager:DescribeSecret",
+    ]
+    resources = ["arn:${var.partition}:secretsmanager:${var.region}:${var.account_id}:secret:${var.secrets_path_prefix}/*/paperclip-agent-api-key-??????"]
+  }
+
+  statement {
+    sid       = "EncryptWorkerPaperclipKeys"
+    actions   = ["kms:GenerateDataKey", "kms:Encrypt", "kms:DescribeKey"]
+    resources = [var.secrets_kms_key_arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["secretsmanager.${var.region}.amazonaws.com"]
+    }
+  }
+
   statement {
     sid       = "DecryptBoardKeys"
     actions   = ["kms:Decrypt"]

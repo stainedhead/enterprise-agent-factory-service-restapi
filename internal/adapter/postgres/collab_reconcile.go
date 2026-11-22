@@ -284,13 +284,19 @@ func (c *CollabReconcile) Publish(ctx context.Context, typ domain.EventType, tea
 	})
 }
 
-// Pending implements collab.BoardKeys.
+// Pending implements collab.BoardKeys: every collaboration agent in managed mode, with whether its board key
+// is recorded and whether its pod is ready.
 func (c *CollabReconcile) Pending(ctx context.Context) ([]rcollab.BoardKeyCandidate, error) {
 	var out []rcollab.BoardKeyCandidate
 	err := c.read(ctx, "board keys", func(ctx context.Context, t *Tx) error {
-		rows, err := t.Query(ctx, `SELECT c.team_id, c.agent_id, c.registration_mode FROM afs.team_collaboration c
-WHERE c.registration_mode = 'managed' AND NOT EXISTS (SELECT 1 FROM afs.secrets s WHERE s.team_id = c.team_id AND s.agent_id = c.agent_id
-  AND s.name = '`+domain.SecretPaperclipBoardAPIKey+`')`)
+		rows, err := t.Query(ctx, `SELECT c.team_id, c.agent_id, c.registration_mode,
+  EXISTS (SELECT 1 FROM afs.secrets s WHERE s.team_id = c.team_id AND s.agent_id = c.agent_id AND s.name = '`+domain.SecretPaperclipBoardAPIKey+`'),
+  coalesce(ars.phase = 'Ready', false)
+FROM afs.team_collaboration c
+JOIN afs.teams t ON t.id = c.team_id AND t.deleted_at IS NULL AND t.state NOT IN ('deleting', 'deleted')
+JOIN afs.agents a ON a.team_id = c.team_id AND a.id = c.agent_id AND a.deleted_at IS NULL
+LEFT JOIN afs.resource_status ars ON ars.resource_kind = 'agent' AND ars.resource_id = c.agent_id
+WHERE c.registration_mode = 'managed' ORDER BY c.team_id`)
 		if err != nil {
 			return err
 		}
@@ -298,7 +304,7 @@ WHERE c.registration_mode = 'managed' AND NOT EXISTS (SELECT 1 FROM afs.secrets 
 		for rows.Next() {
 			var b rcollab.BoardKeyCandidate
 			var mode string
-			if err := rows.Scan(&b.TeamID, &b.AgentID, &mode); err != nil {
+			if err := rows.Scan(&b.TeamID, &b.AgentID, &mode, &b.Recorded, &b.PodReady); err != nil {
 				return err
 			}
 			b.Mode = domain.RegistrationMode(mode)

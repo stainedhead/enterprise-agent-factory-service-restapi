@@ -17,29 +17,6 @@ import (
 // GuardInterval is how often the roster guard and the scan run (RC-26).
 const GuardInterval = 10 * time.Minute
 
-// RosterAgent is an agent in Paperclip's roster.
-type RosterAgent struct {
-	ID, Name         string
-	Orchestrator     bool
-	LocalAdapter     bool
-	LinkedAFSAgentID string
-}
-
-// Item is an issue or comment of Paperclip with its text. The text exists only while it is scanned.
-type Item struct {
-	ID, AuthorAgentID string
-	UpdatedAt         time.Time
-	Text              string
-}
-
-// Paperclip is the read side of Paperclip's API the guard uses (managed mode only). The adapter that talks
-// to a real Paperclip is a recorded upstream dependency (AFS_PAPERCLIP_BOOTSTRAP image).
-type Paperclip interface {
-	Roster(ctx context.Context, teamID string) ([]RosterAgent, error)
-	// Changed returns the issues and comments created or changed after since, oldest first.
-	Changed(ctx context.Context, teamID string, since time.Time) ([]Item, error)
-}
-
 // Unmanaged lists the roster agents that break the managed-mode rule, by reason: not linked to an AFS
 // agent, or on a local adapter (other than the orchestrator).
 func Unmanaged(roster []RosterAgent) map[string]string {
@@ -77,7 +54,7 @@ func SanitizeNames(names []string) string {
 // Guard is the roster guard and content scan of a team in managed mode (RC-26).
 type Guard struct {
 	Source Source
-	Paper  Paperclip
+	Paper  Reader
 	Status engine.StatusWriter
 	Events Events
 	Now    func() time.Time
@@ -86,6 +63,7 @@ type Guard struct {
 	mu     sync.Mutex
 	known  map[string]map[string]bool // team to names already announced
 	cursor map[string]time.Time
+	seen   map[string]bool // team|item|updatedAt already scanned, so a changed-since overlap is not reported twice
 }
 
 // Run checks every managed team once.
@@ -125,7 +103,7 @@ func (g *Guard) team(ctx context.Context, s TeamState) error {
 	bad := Unmanaged(roster)
 	g.mu.Lock()
 	if g.known == nil {
-		g.known, g.cursor = map[string]map[string]bool{}, map[string]time.Time{}
+		g.known, g.cursor, g.seen = map[string]map[string]bool{}, map[string]time.Time{}, map[string]bool{}
 	}
 	prev, seeded := g.known[s.TeamID]
 	if !seeded {
@@ -185,7 +163,7 @@ func (g *Guard) scan(ctx context.Context, s TeamState) error {
 	since, ok := g.cursor[s.TeamID]
 	g.mu.Unlock()
 	if !ok {
-		since = g.Now().Add(-24 * time.Hour)
+		since = g.Now().Add(-2 * GuardInterval) // a new leader looks back two intervals, not a day: no flood of repeats
 	}
 	items, err := g.Paper.Changed(ctx, s.TeamID, since)
 	if err != nil {
@@ -193,6 +171,17 @@ func (g *Guard) scan(ctx context.Context, s TeamState) error {
 	}
 	last := since
 	for _, it := range items {
+		key := s.TeamID + "|" + it.ID + "|" + it.UpdatedAt.UTC().Format(time.RFC3339Nano)
+		g.mu.Lock()
+		dup := g.seen[key]
+		g.seen[key] = true
+		if len(g.seen) > 50000 { // bounded: drop the memory, the cursor still limits the overlap
+			g.seen = map[string]bool{key: true}
+		}
+		g.mu.Unlock()
+		if dup {
+			continue
+		}
 		for _, m := range dc.Scan([]byte(it.Text)) {
 			err := g.Events.Publish(ctx, domain.EventCollaborationSecretDetected, s.TeamID, string(KindTeamCollaboration), s.TeamID, s.AgentID,
 				map[string]any{"teamId": s.TeamID, "source": "reconciler", "pattern": m.Pattern, "action": "detected", "count": m.Count,
