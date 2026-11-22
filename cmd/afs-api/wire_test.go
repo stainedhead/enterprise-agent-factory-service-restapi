@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	"io"
 	"log/slog"
 	"net/http"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres/pgtest"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/authz"

@@ -17,27 +17,27 @@ import (
 
 // trickle sends a request whose body arrives in two parts, pause apart, and returns the response (or the
 // error that ended the exchange) and how long it took.
-func trickle(t *testing.T, addr, path, token, body string, pause time.Duration) (code int, out string, err error, took time.Duration) {
+func trickle(t *testing.T, addr, path, token, body string, pause time.Duration) (code int, out string, took time.Duration, err error) {
 	t.Helper()
-	conn, err := net.Dial("tcp", addr)
+	conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", addr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	start := time.Now()
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	half := len(body) / 2
-	fmt.Fprintf(conn, "POST %s HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s",
+	_, _ = fmt.Fprintf(conn, "POST %s HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s",
 		path, token, len(body), body[:half])
 	time.Sleep(pause)
 	_, _ = io.WriteString(conn, body[half:]) // may fail once the server has closed the connection
 	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
 	if err != nil {
-		return 0, "", err, time.Since(start)
+		return 0, "", time.Since(start), err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
-	return resp.StatusCode, string(b), nil, time.Since(start)
+	return resp.StatusCode, string(b), time.Since(start), nil
 }
 
 // D-6 (FR-R09): a body that trickles in slower than AFS_HTTP_READ_TIMEOUT is cut off, except on
@@ -66,7 +66,7 @@ func TestSlowBodyIsBoundedExceptImport(t *testing.T) {
 	body := `{"bundle":{"kind":"` + strings.Repeat("x", 40) + `"},"accountMap":{}}`
 
 	// Any other route: the connection is closed (no response, or a refusal of the unreadable body).
-	code, out, err, took := trickle(t, addr, "/v1/teams", tok, body, time.Second)
+	code, out, took, err := trickle(t, addr, "/v1/teams", tok, body, time.Second)
 	if err == nil && code == http.StatusCreated {
 		t.Fatalf("a slow body was accepted: %d %s", code, out)
 	}
@@ -75,7 +75,7 @@ func TestSlowBodyIsBoundedExceptImport(t *testing.T) {
 	}
 
 	// CreateImport reads for as long as 10 minutes, so the same pause is served and the body is read whole.
-	code, out, err, _ = trickle(t, addr, "/v1/imports", tok, body, time.Second)
+	code, out, _, err = trickle(t, addr, "/v1/imports", tok, body, time.Second)
 	if err != nil {
 		t.Fatalf("CreateImport slow body: %v", err)
 	}

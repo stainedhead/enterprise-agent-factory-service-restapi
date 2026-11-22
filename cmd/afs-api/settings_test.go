@@ -60,7 +60,7 @@ func TestEnvironmentIsReadOnlyInMainAndSettingsFrom(t *testing.T) {
 		if strings.HasSuffix(name, "_test.go") || name == "main.go" {
 			continue
 		}
-		src, err := os.ReadFile(name)
+		src, err := os.ReadFile(name) //nolint:gosec // names come from Glob("*.go") in the package directory
 		if err != nil {
 			t.Fatal(err)
 		}
