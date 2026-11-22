@@ -253,6 +253,68 @@ rules:
         - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+    labels:
+        app.kubernetes.io/component: reconciler
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-reconciler
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-reconciler-viewer-kubectl
+rules:
+    - apiGroups:
+        - rbac.authorization.k8s.io
+      resources:
+        - roles
+        - rolebindings
+      verbs:
+        - get
+        - list
+        - watch
+        - create
+        - update
+        - patch
+        - delete
+    - apiGroups:
+        - ""
+      resources:
+        - pods/log
+        - events
+        - endpoints
+      verbs:
+        - get
+        - list
+        - watch
+    - apiGroups:
+        - apps
+      resources:
+        - replicasets
+        - daemonsets
+      verbs:
+        - get
+        - list
+        - watch
+    - apiGroups:
+        - batch
+      resources:
+        - jobs
+        - cronjobs
+      verbs:
+        - get
+        - list
+        - watch
+    - apiGroups:
+        - events.k8s.io
+      resources:
+        - events
+      verbs:
+        - get
+        - list
+        - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
     labels:
@@ -287,6 +349,26 @@ roleRef:
     apiGroup: rbac.authorization.k8s.io
     kind: ClusterRole
     name: afs-reconciler
+subjects:
+    - kind: ServiceAccount
+      name: afs-reconciler
+      namespace: afs-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+    labels:
+        app.kubernetes.io/component: reconciler
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-reconciler
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-reconciler-viewer-kubectl
+roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: afs-reconciler-viewer-kubectl
 subjects:
     - kind: ServiceAccount
       name: afs-reconciler

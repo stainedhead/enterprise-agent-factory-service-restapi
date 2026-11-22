@@ -45,6 +45,33 @@ is in `resource_status` with the conditions `NamespaceReady`, `IamReady` and `Re
 | `AFS_METRICS_ADDR` | no | Probe and metrics address; default `:9090` |
 | `POD_NAME` | no | Leader election identity; the hostname if unset |
 
+### Viewer kubectl
+
+A service admin can turn on `viewerKubectl` for a team. Its viewers then get a kubeconfig from
+`GetTeamKubeconfig` and can run read-only `kubectl` in the team's namespace. Which IAM role the team's people
+arrive with is configuration, because it depends on how your identity provider federates into AWS:
+
+| Variable | Required | Meaning |
+|---|---|---|
+| `AFS_VIEWER_KUBECTL_ROLES` | to enable | JSON object from an identity provider id (`idp_...`), or `default` for the default provider, to the ARN of the IAM role that provider federates to for kubectl: `{"default":"arn:aws:iam::111122223333:role/afs-viewers"}`. Unset: no access entry is created for anyone |
+
+For each team with the flag on, the reconciler keeps a `Role` named `afs-viewer` in the team namespace that
+can `get`, `list` and `watch` pods, pod logs, events, services, workloads and the agents' custom resources,
+and nothing else (no secrets, no `exec`, `attach` or `port-forward`, no write), and a `RoleBinding` to a group
+that is specific to the federated role. It also keeps one EKS access entry per role, tagged
+`afs-managed-by=viewer-kubectl`, mapped to that group with no access policy. Turning the flag off deletes the
+`RoleBinding` and `Role` on the next pass (within seconds) and removes the access entry when no other team
+uses the role. An access entry for the same role that AFS did not create is never changed: the team shows an
+`AccessEntryNotManaged` error until you remove it or use another role.
+
+An access entry belongs to a role, not to a person, so everyone who signs in through a role can reach every
+team namespace whose `RoleBinding` names that role's group. Give teams that must not see each other
+different identity providers and roles. The EKS access entry takes the role ARN without an IAM path (for an
+SSO permission set, the real role ARN under `aws-reserved/sso.amazonaws.com`, minus that path). The
+reconciler needs `eks:CreateAccessEntry`, `UpdateAccessEntry`, `DeleteAccessEntry`, `DescribeAccessEntry`,
+`ListAccessEntries` and `eks:TagResource`, and the chart's `afs-reconciler-viewer-kubectl` ClusterRole
+(`reconciler.viewerKubectl.enabled`, on by default).
+
 ### Notification channels
 
 Each notification channel becomes one EventBridge rule on `AFS_EVENT_BUS_NAME`, filtered on the channel's team and event types. Delivery is off, with a warning, until `AFS_NOTIFY_TARGET_ROLE_ARN` is set.

@@ -22,3 +22,9 @@ env:
 # AFS_EXPORT_BUCKET set without AFS_EXPORT_KMS_KEY_ID refuses to start: bundles are always SSE-KMS.
 leaderLease:
   namespace: ""           # defaults to the release namespace (AFS_LEADER_LEASE_NAMESPACE)
+# Viewer kubectl (RC-13): AFS_VIEWER_KUBECTL_ROLES is a JSON object from an identity provider id (idp_...), or
+# "default" for the default provider, to the ARN of the IAM role that provider federates to for kubectl, for
+# example {"default":"arn:aws:iam::111122223333:role/afs-viewers"}. Unset: no access entry is ever created.
+# The EKS access entry takes the role ARN without an IAM path (an SSO permission set role needs its real ARN).
+viewerKubectl:
+  enabled: true           # the ClusterRole that lets the reconciler manage the viewer Role and RoleBinding
