@@ -3,9 +3,10 @@ package postgres_test
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres/pgtest"
