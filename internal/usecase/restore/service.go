@@ -9,6 +9,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/authz"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/agents"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 )
 
@@ -43,6 +44,9 @@ type Repository interface {
 type Service struct {
 	acting.Deps
 	Repo Repository
+	// Guards is the catalog the agent guardrails read (agents.Guard). Required: a restore without it
+	// fails closed instead of skipping the checks.
+	Guards agents.GuardSource
 }
 
 // Result is the outcome of a restore or its dry run.
@@ -106,7 +110,11 @@ func (s *Service) Run(ctx context.Context, c acting.Caller, teamID string, rev i
 			return err
 		}
 		res.Changes, res.Skipped = []domain.RestoreChange{}, []domain.RestoreChange{}
-		for _, step := range domain.PlanRestore(target, current) {
+		plan, err := guardSteps(ctx, tx, s.Guards, teamID, domain.PlanRestore(target, current))
+		if err != nil {
+			return err
+		}
+		for _, step := range plan {
 			if step.Change.Action == domain.RestoreSkip {
 				res.Skipped = append(res.Skipped, step.Change)
 				continue

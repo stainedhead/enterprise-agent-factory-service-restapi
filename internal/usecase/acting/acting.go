@@ -6,6 +6,7 @@ package acting
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/authz"
@@ -39,6 +40,9 @@ type Deps struct {
 	Idem   port.IdempotencyStore
 	Clock  port.Clock
 	IDs    port.IDGen
+	// Logger receives failures that cannot be returned to the caller (a denied-audit write). Optional:
+	// nil falls back to slog.Default() (RD-5).
+	Logger *slog.Logger
 }
 
 // Emit publishes an API contract §7 event in tx.
@@ -54,10 +58,20 @@ func (d Deps) Emit(ctx context.Context, tx port.Tx, c Caller, typ domain.EventTy
 	return d.Outbox.Publish(ctx, tx, ev)
 }
 
-// Denied records a refused request in its own transaction and returns the AccessDenied error.
+// Denied records a refused request in its own transaction and returns the AccessDenied error. The
+// write is detached from the request's cancellation so a client that disconnects cannot drop the
+// record; a failed write is logged with the operation and request id (never returned: the caller
+// still gets AccessDenied).
 func (d Deps) Denied(ctx context.Context, c Caller, action, teamID string, perm authz.Permission) error {
-	_ = d.Audit.WriteDenied(ctx, c.Session(), port.AuditRecord{Action: action, TeamID: teamID, SourceIP: c.SourceIP,
+	err := d.Audit.WriteDenied(context.WithoutCancel(ctx), c.Session(), port.AuditRecord{Action: action, TeamID: teamID, SourceIP: c.SourceIP,
 		UserAgent: c.UserAgent, After: map[string]any{"requiredPermission": string(perm)}})
+	if err != nil {
+		l := d.Logger
+		if l == nil {
+			l = slog.Default()
+		}
+		l.ErrorContext(ctx, "denied-request audit write failed", "operation", action, "requestId", c.RequestID, "error", err)
+	}
 	return domain.AccessDenied(string(perm))
 }
 

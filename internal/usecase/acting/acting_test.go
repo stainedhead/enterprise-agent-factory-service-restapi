@@ -1,9 +1,13 @@
 package acting_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -143,5 +147,55 @@ func TestIdemBeginCompleteAndNow(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// failingAudit is an audit writer whose denied write fails and which records the context it was given.
+type failingAudit struct {
+	fakes.Audit
+	ctxErr error
+	called bool
+}
+
+func (f *failingAudit) WriteDenied(ctx context.Context, _ port.Session, _ port.AuditRecord) error {
+	f.called, f.ctxErr = true, ctx.Err()
+	return domain.AccessDenied("audit unavailable")
+}
+
+func TestDeniedLogsAFailedAuditWriteAndStillReturnsAccessDenied(t *testing.T) {
+	var buf bytes.Buffer
+	a := &failingAudit{}
+	d := acting.Deps{Audit: a, Logger: slog.New(slog.NewTextHandler(&buf, nil))}
+	err := d.Denied(t.Context(), acting.Caller{RequestID: "req_77"}, "PutSetting", "", authz.AdminSettings)
+	if domain.KindOf(err) != domain.KindAccessDenied || !a.called {
+		t.Fatalf("err = %v, called = %v", err, a.called)
+	}
+	if out := buf.String(); !strings.Contains(out, "PutSetting") || !strings.Contains(out, "req_77") {
+		t.Errorf("log does not name the operation and request id: %q", out)
+	}
+}
+
+func TestDeniedNilLoggerFallsBackToTheDefault(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	defer slog.SetDefault(prev)
+	d := acting.Deps{Audit: &failingAudit{}}
+	if err := d.Denied(t.Context(), acting.Caller{RequestID: "req_1"}, "PutSetting", "", authz.AdminSettings); domain.KindOf(err) != domain.KindAccessDenied {
+		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(buf.String(), "req_1") {
+		t.Errorf("default logger not used: %q", buf.String())
+	}
+}
+
+func TestDeniedWritesEvenWhenTheRequestIsCancelled(t *testing.T) {
+	a := &failingAudit{}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	d := acting.Deps{Audit: a, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	_ = d.Denied(ctx, acting.Caller{}, "PutSetting", "", authz.AdminSettings)
+	if !a.called || a.ctxErr != nil {
+		t.Fatalf("called = %v, the audit write saw ctx error %v", a.called, a.ctxErr)
 	}
 }

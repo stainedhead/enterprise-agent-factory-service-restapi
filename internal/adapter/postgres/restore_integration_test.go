@@ -15,7 +15,7 @@ import (
 // TestRestoreRevision covers M4-G: dry run, apply, audit, generation, If-Match, and the role check.
 func TestRestoreRevision(t *testing.T) {
 	r := newExportRig(t)
-	svc := &restore.Service{Deps: r.deps, Repo: postgres.NewRestoreRepo()}
+	svc := &restore.Service{Deps: r.deps, Repo: postgres.NewRestoreRepo(), Guards: postgres.NewAgentRepo()}
 	tm := r.team.team.ID
 	admin := acting.Caller{Principal: authz.Principal{ID: user, Type: authz.PrincipalUser,
 		Bindings: []authz.Binding{{Role: authz.RoleTeamAdmin, TeamID: tm}}}, RequestID: "req_restore"}
@@ -119,7 +119,7 @@ func TestRestoreRevision(t *testing.T) {
 // generation goes up so the reconciler renders its pod again.
 func TestRestoreRebuildsSecretBindings(t *testing.T) {
 	r := newExportRig(t)
-	svc := &restore.Service{Deps: r.deps, Repo: postgres.NewRestoreRepo()}
+	svc := &restore.Service{Deps: r.deps, Repo: postgres.NewRestoreRepo(), Guards: postgres.NewAgentRepo()}
 	tm, agent := r.team.team.ID, r.team.agentID
 	admin := acting.Caller{Principal: authz.Principal{ID: user, Type: authz.PrincipalUser,
 		Bindings: []authz.Binding{{Role: authz.RoleTeamAdmin, TeamID: tm}}}, RequestID: "req_restore_bindings"}
