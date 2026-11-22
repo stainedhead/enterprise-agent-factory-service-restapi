@@ -26,6 +26,28 @@ orchestrator to apply in Step 11, and follow-ups.
 
 ## Stream B: Gateway spend integrity
 
+### FR-R05 (B-5 to B-7)
+
+- Decision (Q2): `usecase/gateway/settle_queue.go`. After the three inline attempts fail, `Service.settle`
+  queues `(holdID, budgetID, period, actual)` in memory: 10,000 entries, backoff 1 s doubling to 1 minute
+  (`Config.SettleRetryBase/Max`), 10 minute window from the first failure (`SettleRetryWindow`). Retried only
+  after an error; a success removes the entry. One goroutine runs while the queue is not empty and is not
+  part of `Wait` (shutdown must not wait for a 10 minute window).
+- Decision (RD-4): `SettleRecorder.SettleFailed(teamID, budgetID, amount, reason)` in `usecase`, optional
+  `Deps.SettleRecorder`. Reasons: `queued` (every fallback), `queue_full` (also a call after `Close`),
+  `window_expired`. A settlement that is queued and later expires is reported twice; the counter is a rate
+  signal. Drops log team, budget and amount only.
+- Decision: the retry context is `context.WithoutCancel` of the settle context (values kept, the inline
+  deadline dropped; a test with a fake that refuses a dead context pins it). No `context.Background()` in
+  the use case; `Close(ctx)` takes the caller's context and bounds the final attempt by `SettleTimeout`.
+- `Service.Close(ctx)`: `Wait`, stop the loop, one more attempt per pending entry in one `SettleTimeout`
+  window; failures are logged, the hold falls back to expiry. `cmd/afs-gateway` must call `Close` instead of
+  `Wait` (B-10).
+- Response path: with `AsyncSettle` the fallback happens inside the background books-closing goroutine; a
+  test shows `Do` returns in under 100 ms while every settlement fails.
+- Design review: no secret in logs (ids and amount only); dependency rule holds (no adapter imports);
+  errors wrapped as before; race detector green.
+
 ### FR-R04 (B-1 to B-4)
 
 - Decision: the output limit is written by `parsed.upstreamBody` whenever the request sent none, an unusable
