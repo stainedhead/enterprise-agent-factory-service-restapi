@@ -118,4 +118,23 @@ spec:
           labels: {severity: warning}
           annotations:
             summary: {{ `billing job {{ $labels.job_name }} failed` }}
+    - name: afs-edge
+      rules:
+        - alert: AFSEdgeErrorRatioHigh
+          expr: |
+            sum(rate(afs_edge_requests_total{code=~"5.."}[5m])) / sum(rate(afs_edge_requests_total[5m])) > {{ $t.edgeErrorRatio }}
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: the collaboration edge answers more than {{ mulf $t.edgeErrorRatio 100 }} percent 5xx
+        - alert: AFSEdgeRouteRefreshFailing
+          expr: sum(increase(afs_edge_route_refresh_failures_total[10m])) > 3
+          labels: {severity: critical}
+          annotations:
+            summary: the collaboration edge cannot reload its route table; it stops serving after 5 minutes
+        - alert: AFSEdgeAccessCountsDropped
+          expr: sum(increase(afs_edge_access_counts_dropped_total[15m])) > 0
+          labels: {severity: warning}
+          annotations:
+            summary: the collaboration edge dropped access counts because the database did not take them
 {{- end }}

@@ -1,6 +1,6 @@
 apiVersion: v2
 name: afs
-description: Enterprise Agent Factory Service control plane - afs-api, afs-reconciler, afs-gateway and the afs-billing jobs
+description: Enterprise Agent Factory Service control plane - afs-api, afs-reconciler, afs-gateway, afs-edge and the afs-billing jobs
 type: application
 version: 1.0.1
 appVersion: "1.0.1"

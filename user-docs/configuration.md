@@ -103,6 +103,16 @@ Run one job per CronJob: `afs-billing --job <name>`.
 
 See [Costs, reconciliation and prices](billing.md).
 
+## afs-edge
+
+The collaboration edge. Every variable, the sealing keys and the `collab.*` settings are in
+[Paperclip collaboration: the edge](collaboration-edge.md). It needs `AFS_DATABASE_URL` (the `afs_edge` login),
+`AFS_EDGE_TLS_CERT`, `AFS_EDGE_TLS_KEY` and `AFS_EDGE_STATE_KEY`.
+
+The reconciler's collaboration jobs read `AFS_EDGE_NAMESPACE` (default `afs-system`), `AFS_EDGE_NAME` (default `afs-edge`),
+`AFS_KMS_KEY_ARN` (the environment key, for the collaboration agent's role policy) and, for the WAF allow-list sync,
+`AFS_COLLAB_WAF_IPSET_V4_ARN` and `AFS_COLLAB_WAF_IPSET_V6_ARN`.
+
 ## Service settings
 
 Service administrators change these with the settings operations; they are cached for 30 seconds. Examples:

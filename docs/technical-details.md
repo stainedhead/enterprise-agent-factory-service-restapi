@@ -199,3 +199,23 @@ The billing role reads `service_settings` and `team_models`; no env fallback rem
 - **Not covered here.** Checks that need a cluster or an account (end-to-end run, restore drill, full-scale load,
   the ASVS checklist, `govulncheck` where the toolchain cannot be downloaded) run in CI and on the development
   cluster. `-db` is pinned to a pseudo-version until it is tagged.
+
+## Collaboration edge (`afs-edge`, Paperclip)
+
+- **Shape.** `cmd/afs-edge` is the composition root. `internal/usecase/edge` decides one request at a time (`Service.Handle`
+  returns Forward, Respond or Redirect); `adapter/edgehttp` forwards, answers and tunnels WebSockets; `adapter/edgedb` calls
+  the ten `afs_edge` functions; `adapter/edgesession` seals the sign-in state; `adapter/oidc.CodeFlow` runs code + PKCE and
+  validates ID tokens and bearer tokens with the same key sets as `afs-api`; `adapter/edgelog` writes the records.
+- **Decision order** (API contract 4.4c): host (apex or team, else 404) -> reserved paths -> class (cookie = web, header =
+  API, both = 400) -> surface effective -> identify (session, API key, bearer token) -> `collab.Decide` over an `authz`
+  principal -> limiter (20 rps, burst 40) -> body limits and scan. Positive decisions are cached 60 s, negative 10 s.
+- **Route table.** Loaded from `afs.collab_routes()` and `afs.collab_settings()` at start, every 30 s and on each database
+  notification; a table older than 5 minutes answers `503 upstream_unavailable` for every host.
+- **Access counts.** Five-minute buckets keyed by team, surface, principal kind and id, outcome and service-admin entry are
+  held in memory (at most 100,000 keys) and flushed every 30 s and at shutdown, 1,000 rows per call.
+- **Reconciler side.** Jobs `collab-endpoint`, `collab-links`, `collab-denied-spike`, `collab-bootstrap`, `collab-partitions`,
+  `collab-sessions` and `collab-waf` (`cmd/afs-reconciler/wire_collab.go`); the collaboration pod gets a Service named
+  `paperclip` on 3100, ingress and egress policies keyed by the label `afs.stainedhead.io/paperclip-connected`, and a role
+  policy limited to its own `/paperclip/` path plus one exact board key name. Admission policy
+  `afs-protect-paperclip-service` keeps teams from publishing that port themselves.
+

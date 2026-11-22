@@ -122,7 +122,7 @@ func podSpec(d obj) obj { return path(d, "spec", "template", "spec") }
 
 func TestAvailabilityAndSpread(t *testing.T) {
 	docs := render(t, "")
-	for _, name := range []string{"afs-api", "afs-gateway"} {
+	for _, name := range []string{"afs-api", "afs-gateway", "afs-edge"} {
 		d := find(t, docs, "Deployment", name)
 		if n, _ := path(d, "spec")["replicas"].(int); n < 3 {
 			t.Errorf("%s replicas = %v, want >= 3", name, path(d, "spec")["replicas"])
@@ -151,7 +151,7 @@ func TestAvailabilityAndSpread(t *testing.T) {
 
 func TestContainersAreHardenedAndProbed(t *testing.T) {
 	docs := render(t, "")
-	for _, name := range []string{"afs-api", "afs-gateway", "afs-reconciler"} {
+	for _, name := range []string{"afs-api", "afs-gateway", "afs-reconciler", "afs-edge"} {
 		ps := podSpec(find(t, docs, "Deployment", name))
 		if path(ps, "securityContext")["runAsNonRoot"] != true {
 			t.Errorf("%s does not run as non-root", name)
@@ -177,7 +177,7 @@ func TestContainersAreHardenedAndProbed(t *testing.T) {
 
 func TestEachBinaryHasItsOwnServiceAccountAndDatabaseRole(t *testing.T) {
 	docs := render(t, "")
-	want := map[string]string{"afs-api": "afs_app", "afs-gateway": "afs_gateway", "afs-reconciler": "afs_reconciler"}
+	want := map[string]string{"afs-api": "afs_app", "afs-gateway": "afs_gateway", "afs-reconciler": "afs_reconciler", "afs-edge": "afs_edge"}
 	for dep, role := range want {
 		find(t, docs, "ServiceAccount", dep)
 		ps := podSpec(find(t, docs, "Deployment", dep))
@@ -259,8 +259,8 @@ func TestBillingCronJobs(t *testing.T) {
 }
 
 func TestServiceMonitorsOptional(t *testing.T) {
-	if n := count(render(t, ""), "ServiceMonitor"); n != 3 {
-		t.Errorf("ServiceMonitors = %d, want 3", n)
+	if n := count(render(t, ""), "ServiceMonitor"); n != 4 {
+		t.Errorf("ServiceMonitors = %d, want 4", n)
 	}
 	if n := count(render(t, "serviceMonitor:\n  enabled: false\n"), "ServiceMonitor"); n != 0 {
 		t.Errorf("ServiceMonitors with the switch off = %d", n)

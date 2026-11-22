@@ -16,6 +16,10 @@ gateway:
   tls:
     issuerRef:
       name: afs-ca
+edge:
+  tls:
+    issuerRef:
+      name: afs-ca
 reconciler:
   env:
     AFS_EVENT_BUS_NAME: afs-events

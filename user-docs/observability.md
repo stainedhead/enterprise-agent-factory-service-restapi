@@ -39,3 +39,8 @@ settlements that failed after the model call (alert `AFSGatewaySettleFailures`, 
 `afs_gateway_usage_rows_dropped_total{reason}` counts usage rows dropped from the write queue. Both are on the dashboard
 panel "Gateway settle failures and dropped usage rows". Reconcile duration, errors, lag and drift, and notification
 failures, are recorded for every kind. Condition messages shown by the API have ARNs and account ids replaced.
+
+The collaboration edge adds `afs_edge_requests_total{surface,code}`, `afs_edge_request_duration_seconds{surface}`,
+`afs_edge_route_refresh_failures_total` and `afs_edge_access_counts_dropped_total`, with the alerts
+`AFSEdgeErrorRatioHigh`, `AFSEdgeRouteRefreshFailing` and `AFSEdgeAccessCountsDropped`. Its sign-in, sign-out and denied-request
+records are JSON lines carrying `afs.team_id` (see [Paperclip collaboration: the edge](collaboration-edge.md)).

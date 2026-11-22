@@ -11,3 +11,9 @@ cur_bucket_arn                     = "arn:aws:s3:::example-cur-bucket"
 cur_glue_database                  = "cur"
 athena_workgroup                   = "afs"
 athena_results_bucket_arn          = "arn:aws:s3:::example-athena-results"
+
+# Paperclip collaboration (optional): leave collab_base_domain out to deploy no public entry.
+# collab_base_domain             = "collab.example.com"
+# collab_route53_zone_id         = "Z0123456789ABCDEFGHIJ"
+# collab_public_subnet_ids       = ["subnet-0aaaaaaaaaaaaaaaa", "subnet-0bbbbbbbbbbbbbbbb"]
+# collab_edge_security_group_ids = ["sg-0123456789abcdef0"]

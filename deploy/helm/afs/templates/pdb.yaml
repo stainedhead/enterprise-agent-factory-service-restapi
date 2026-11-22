@@ -1,4 +1,4 @@
-{{- range $name := list "api" "gateway" "reconciler" }}
+{{- range $name := list "api" "gateway" "reconciler" "edge" }}
 {{- $c := include "afs.component" (dict "root" $ "name" $name) | fromYaml }}
 {{- if $c.enabled }}
 ---

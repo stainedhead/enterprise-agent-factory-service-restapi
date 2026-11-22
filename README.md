@@ -23,6 +23,7 @@ the billing job that reconciles against the AWS Cost and Usage Report. It owns t
 | `afs-api` | REST API: authentication, RBAC on every route, audit, idempotency, optimistic concurrency | [getting started](user-docs/getting-started.md) |
 | `afs-reconciler` | Applies desired state to EKS and AWS, reverts drift, tags resources, publishes events, housekeeping | [reconciler](user-docs/reconciler.md) |
 | `afs-gateway` | Bedrock-compatible and Anthropic-compatible proxy: per-team metering and hard caps, fails closed | [gateway contract](https://github.com/stainedhead/enterprise-agent-factory-service/blob/main/docs/contracts/gateway-contract.md) |
+| `afs-edge` | The public entry of the Paperclip collaboration feature: sign-in, role checks, credential scan, access counts, forwarding to a team's Paperclip | [collaboration edge](user-docs/collaboration-edge.md) |
 | `afs-billing` | CUR ingest and reconciliation, price proposals, scheduled reports, showback | [billing](user-docs/billing.md), [reports](user-docs/reports.md) |
 
 ![Binaries and layers](docs/images/restapi-components.svg)

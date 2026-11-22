@@ -46,3 +46,33 @@ output "role_arns" {
 output "backup_vault_arn" {
   value = module.backup.vault_arn
 }
+
+output "edge_role_arn" {
+  description = "Pod Identity role of afs-edge."
+  value       = module.pod_identity.role_arns["edge"]
+}
+
+output "collab_target_group_arn" {
+  description = "The Helm chart's edge.targetGroupArn; empty when the collaboration edge is not deployed."
+  value       = one(module.collab_edge[*].target_group_arn)
+}
+
+output "collab_alb_security_group_id" {
+  description = "Allow this group to reach the afs-edge pods on 8443 and the health check port."
+  value       = one(module.collab_edge[*].alb_security_group_id)
+}
+
+output "collab_waf_ip_set_v4_arn" {
+  description = "AFS_COLLAB_WAF_IPSET_V4_ARN."
+  value       = one(module.collab_edge[*].waf_ip_set_v4_arn)
+}
+
+output "collab_waf_ip_set_v6_arn" {
+  description = "AFS_COLLAB_WAF_IPSET_V6_ARN."
+  value       = one(module.collab_edge[*].waf_ip_set_v6_arn)
+}
+
+output "collab_state_key_secret_arn" {
+  description = "Secret holding the edge's sign-in state sealing keys (written by the operator)."
+  value       = one(module.collab_edge[*].state_key_secret_arn)
+}

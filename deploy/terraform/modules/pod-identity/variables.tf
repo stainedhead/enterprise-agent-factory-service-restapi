@@ -13,6 +13,7 @@ variable "service_accounts" {
     reconciler = "afs-reconciler"
     gateway    = "afs-gateway"
     billing    = "afs-billing"
+    edge       = "afs-edge"
   }
 }
 
@@ -29,6 +30,7 @@ variable "db_users" {
     reconciler = "afs_reconciler"
     gateway    = "afs_gateway"
     billing    = "afs_billing"
+    edge       = "afs_edge"
   }
 }
 
@@ -44,3 +46,14 @@ variable "cur_bucket_arn" { type = string }
 variable "cur_glue_database" { type = string }
 variable "athena_workgroup" { type = string }
 variable "athena_results_bucket_arn" { type = string }
+
+variable "collab_client_secret_name_pattern" {
+  description = "Secrets Manager name pattern (below the secret path prefix) of the collaboration sign-in client secrets the edge may read."
+  type        = string
+}
+
+variable "collab_waf_ip_set_arns" {
+  description = "ARNs of the two WAF IP sets the reconciler syncs collab.allowed_source_cidrs into; empty when the collaboration edge is not deployed."
+  type        = list(string)
+  default     = []
+}

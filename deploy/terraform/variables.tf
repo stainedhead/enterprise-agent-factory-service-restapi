@@ -109,3 +109,33 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "collab_base_domain" {
+  description = "collab.base_domain: the apex of the collaboration hostnames. Empty leaves the collaboration edge (ALB, certificate, WAF, DNS) out."
+  type        = string
+  default     = ""
+}
+
+variable "collab_route53_zone_id" {
+  description = "Hosted zone of collab_base_domain. Required when collab_base_domain is set."
+  type        = string
+  default     = ""
+}
+
+variable "collab_public_subnet_ids" {
+  description = "Public subnets (at least two availability zones) of the collaboration ALB. Required when collab_base_domain is set."
+  type        = list(string)
+  default     = []
+}
+
+variable "collab_edge_security_group_ids" {
+  description = "Security groups of the afs-edge pods; the ALB's only egress. Required when collab_base_domain is set."
+  type        = list(string)
+  default     = []
+}
+
+variable "collab_client_secret_name_pattern" {
+  description = "Secrets Manager name pattern, below secrets_path_prefix, of the collaboration sign-in client secrets afs-edge may read. Empty means idp/*."
+  type        = string
+  default     = ""
+}
