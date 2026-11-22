@@ -11,7 +11,7 @@ import (
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/billing/schedules"
-	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/billing/schedules/schedtest"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/billing/schedules/schedulestest"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/billing/showback"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/billing/showback/showbacktest"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port/fakes"
@@ -28,16 +28,16 @@ func TestNewReportJobsNeedsABucketAndARegion(t *testing.T) {
 	}
 }
 
-func fakeJobs(t *testing.T, now time.Time) (*reportJobSet, *fakes.ObjectStore, *schedtest.Store) {
+func fakeJobs(t *testing.T, now time.Time) (*reportJobSet, *fakes.ObjectStore, *schedulestest.Store) {
 	t.Helper()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	clock := &fakes.Clock{T: now}
 	objs := &fakes.ObjectStore{Clock: clock}
 	tx := &fakes.TxRunner{}
 	src := &showbacktest.Source{Tags: map[string][]showback.Line{}}
-	store := schedtest.NewStore()
+	store := schedulestest.NewStore()
 	return &reportJobSet{
-		Schedules: &schedules.Runner{Tx: tx, Store: store, Reports: &schedtest.Reports{}, Objects: objs, Outbox: &fakes.Outbox{}, Clock: clock,
+		Schedules: &schedules.Runner{Tx: tx, Store: store, Reports: &schedulestest.Reports{}, Objects: objs, Outbox: &fakes.Outbox{}, Clock: clock,
 			IDs: &fakes.IDGen{}, Render: func(domain.Report) ([]byte, error) { return []byte("x\n"), nil }, Log: log},
 		Showback:       &showback.Generator{Tx: tx, Source: src, Objects: objs, Clock: clock},
 		ShowbackTagKey: "", Clock: clock, Log: log,

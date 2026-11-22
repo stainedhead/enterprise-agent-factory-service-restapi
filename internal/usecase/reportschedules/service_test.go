@@ -12,7 +12,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port/fakes"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reportschedules"
-	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reportschedules/schedtest"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reportschedules/reportschedulestest"
 )
 
 const (
@@ -26,13 +26,13 @@ const (
 
 type rig struct {
 	svc    *reportschedules.Service
-	repo   *schedtest.Repo
+	repo   *reportschedulestest.Repo
 	audit  *fakes.Audit
 	outbox *fakes.Outbox
 }
 
 func newRig() *rig {
-	r := &rig{repo: schedtest.New(), audit: &fakes.Audit{}, outbox: &fakes.Outbox{}}
+	r := &rig{repo: reportschedulestest.New(), audit: &fakes.Audit{}, outbox: &fakes.Outbox{}}
 	r.svc = &reportschedules.Service{Deps: acting.Deps{Tx: &fakes.TxRunner{}, Audit: r.audit, Outbox: r.outbox, Idem: &fakes.Idempotency{},
 		Clock: &fakes.Clock{T: time.Date(2026, 11, 22, 9, 0, 0, 0, time.UTC)}, IDs: &fakes.IDGen{}}, Repo: r.repo}
 	r.repo.Teams[team], r.repo.Teams[other] = true, true

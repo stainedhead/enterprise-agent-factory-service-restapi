@@ -15,7 +15,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/billing/schedules"
-	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/billing/schedules/schedtest"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/billing/schedules/schedulestest"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port/fakes"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reports"
 )
@@ -31,8 +31,8 @@ var now = time.Date(2026, 11, 23, 6, 5, 0, 0, time.UTC)
 
 type rig struct {
 	run    *schedules.Runner
-	store  *schedtest.Store
-	rep    *schedtest.Reports
+	store  *schedulestest.Store
+	rep    *schedulestest.Reports
 	objs   *fakes.ObjectStore
 	outbox *fakes.Outbox
 	txr    *fakes.TxRunner
@@ -64,7 +64,7 @@ func renderCSV(r domain.Report) ([]byte, error) {
 }
 
 func newRig() *rig {
-	r := &rig{store: schedtest.NewStore(), rep: &schedtest.Reports{}, outbox: &fakes.Outbox{}, txr: &fakes.TxRunner{}, clock: &fakes.Clock{T: now}}
+	r := &rig{store: schedulestest.NewStore(), rep: &schedulestest.Reports{}, outbox: &fakes.Outbox{}, txr: &fakes.TxRunner{}, clock: &fakes.Clock{T: now}}
 	r.objs = &fakes.ObjectStore{Clock: r.clock}
 	r.rep.Rows = []domain.ReportRow{
 		{Group: []string{"agt_1"}, Measures: []any{int64(3), int64(100), int64(50), "1.25"}},

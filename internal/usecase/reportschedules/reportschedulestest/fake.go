@@ -1,5 +1,5 @@
-// Package schedtest is an in-memory reportschedules.Repository.
-package schedtest
+// Package reportschedulestest is an in-memory reportschedules.Repository.
+package reportschedulestest
 
 import (
 	"context"

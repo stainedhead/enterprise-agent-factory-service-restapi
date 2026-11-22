@@ -1,5 +1,5 @@
-// Package schedtest holds the in-memory store and report source of the schedule runner's tests.
-package schedtest
+// Package schedulestest holds the in-memory store and report source of the schedule runner's tests.
+package schedulestest
 
 import (
 	"context"
