@@ -3,6 +3,7 @@ package swarmtemplates_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sort"
 	"strings"
 	"testing"
@@ -253,5 +254,80 @@ func TestPaging(t *testing.T) {
 	p2, next, _ := s.List(t.Context(), svcAdmin, acting.Page{Limit: 2, Cursor: next})
 	if len(p2) != 1 || next != "" {
 		t.Errorf("%v %q", p2, next)
+	}
+}
+
+// flaky fails one named repository method so each storage error path is exercised.
+type flaky struct {
+	swarmtemplates.Repository
+	fail string
+}
+
+var errStore = errors.New("store down")
+
+func (f flaky) Get(ctx context.Context, tx port.Tx, id string, up bool) (domain.SwarmTemplate, error) {
+	if f.fail == "Get" {
+		return domain.SwarmTemplate{}, errStore
+	}
+	return f.Repository.Get(ctx, tx, id, up)
+}
+func (f flaky) Insert(ctx context.Context, tx port.Tx, t domain.SwarmTemplate) error {
+	if f.fail == "Insert" {
+		return errStore
+	}
+	return f.Repository.Insert(ctx, tx, t)
+}
+func (f flaky) Update(ctx context.Context, tx port.Tx, t domain.SwarmTemplate, e domain.Version) (domain.SwarmTemplate, error) {
+	if f.fail == "Update" {
+		return t, errStore
+	}
+	return f.Repository.Update(ctx, tx, t, e)
+}
+func (f flaky) Delete(ctx context.Context, tx port.Tx, id string, e domain.Version) error {
+	if f.fail == "Delete" {
+		return errStore
+	}
+	return f.Repository.Delete(ctx, tx, id, e)
+}
+func (f flaky) OpenWorkOrders(ctx context.Context, tx port.Tx, id string) (int, error) {
+	if f.fail == "OpenWorkOrders" {
+		return 0, errStore
+	}
+	return f.Repository.OpenWorkOrders(ctx, tx, id)
+}
+
+func TestStorageErrorsSurface(t *testing.T) {
+	d := "x"
+	ops := map[string]func(s *swarmtemplates.Service, id string) error{
+		"get": func(s *swarmtemplates.Service, id string) error { _, err := s.Get(t.Context(), secOp, id); return err },
+		"create": func(s *swarmtemplates.Service, _ string) error {
+			_, err := s.Create(t.Context(), svcAdmin, params("new-one"), nil)
+			return err
+		},
+		"update": func(s *swarmtemplates.Service, id string) error {
+			_, err := s.Update(t.Context(), svcAdmin, id, 1, domain.SwarmTemplatePatch{Description: &d})
+			return err
+		},
+		"disable": func(s *swarmtemplates.Service, id string) error {
+			_, err := s.Disable(t.Context(), svcAdmin, id, nil)
+			return err
+		},
+		"delete": func(s *swarmtemplates.Service, id string) error { return s.Delete(t.Context(), svcAdmin, id, 1) },
+	}
+	for _, m := range []string{"Get", "Insert", "Update", "Delete", "OpenWorkOrders"} {
+		for name, op := range ops {
+			t.Run(m+"/"+name, func(t *testing.T) {
+				s, r, _, _ := rig()
+				got, err := s.Create(t.Context(), svcAdmin, params("cve-fix"), nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_ = r
+				s.Repo = flaky{Repository: s.Repo, fail: m}
+				if err := op(s, got.Template.ID); err != nil && !errors.Is(err, errStore) && domain.KindOf(err) == "" {
+					t.Errorf("%v", err)
+				}
+			})
+		}
 	}
 }
