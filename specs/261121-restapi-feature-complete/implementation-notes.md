@@ -364,3 +364,10 @@ GRANT EXECUTE ON FUNCTION afs.attach_work_order_secrets(text, jsonb) TO afs_reco
 ```
 
   The reconciler should code against a port (`WorkOrderSecrets.Attach(ctx, teamID, []{Name, ARN})`) so the call can be swapped in once the -db release exists.
+## M6-E decisions (worker w3, m6/w3)
+
+- X-DB-4 is already in the pinned -db (000016), so M6-E6 needed no bump. Its outbox payloads lack the contract envelope (id, occurredAt, data); worth a -db follow-up.
+- Template secrets: `afs.instantiate_work_order_team` does not create them. The reconciler creates each secret empty in Secrets Manager (never a value; tags afs-team-id, afs-pool-id, afs-work-order-id) and records it via a proposed -db function `afs.record_work_order_secret` (SQL in `postgres.ProposedRecordWorkOrderSecretSQL`). Without it (`Supported()` false) the job logs a warning and skips. The `spec.secrets` entry shape `{pool, name, description, delivery, target}` is assumed.
+- Rate limits block the whole installation scope `host/org`; last known DB state is kept. Per-installation budget 4500/hour counts every call.
+- Notifications derive from state each pass; the uniqueness of `work_order_notifications` gives once-only. Email is at-least-once, team delivery exactly-once. Sentinel recipient `afs` records the work order's own SLA events.
+- Env: AFS_WORK_ORDER_QUEUE_URL (intake off if unset), AFS_GITHUB_APPS_FILE (GitHub off if unset).

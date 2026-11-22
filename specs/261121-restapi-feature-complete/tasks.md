@@ -803,12 +803,12 @@ Owns: `internal/usecase/reconcile/workorder/`, `internal/adapter/github/`, `inte
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M6-E1 | Intake: drain the EventBridge intake queue, one work order per `source_event_id` even when delivered twice [adapter] | RC-US-10.1 | — |
-| [ ] | M6-E2 | Remediation team from the template within 2 minutes: lifetime budget = cap, expiry = TTL, rule `at_work_complete`, stages, pools, handoffs, secrets and config from the template; `work_order.assigned` [envtest] | RC-US-10.2 | M6-E6 |
-| [ ] | M6-E6 | Adopt the `-db` release with X-DB-4 (bump the module) | RC-12 (part) | X-DB-4 |
-| [ ] | M6-E3 | GitHub adapter (OQ-5, OQ-S4): App JWT, installation token, PR state with conditional requests; 500 repositories every 10 minutes stay under 5,000 requests per hour per installation; a rate-limit `403`/`429` or a 5xx backs off until the reset time and keeps the last known state [adapter with recorded GitHub] | RC-US-10.4 | — |
-| [ ] | M6-E4 | Tracking: repositories to `pr_opened` and `merged`; all merged, not affected or skipped → work order done and team torn down; failed and cancelled; `work_order.merged`, `completed`, `failed`, `cancelled` | RC-US-10.3 | M6-E3, M6-E2 |
-| [ ] | M6-E5 | Owners notified once per event and recipient through RC-15 (assigned, PR opened, merged, SLA warning `work_orders.sla_warning_hours` before due, SLA breached, completed); outside contacts emailed through `work_orders.notification_channel_id`, nothing when unset | RC-US-10.5, RC-12 | M6-E4 |
+| [x] | M6-E1 | Intake: drain the EventBridge intake queue, one work order per `source_event_id` even when delivered twice [adapter] | RC-US-10.1 | — |
+| [x] | M6-E2 | Remediation team from the template within 2 minutes: lifetime budget = cap, expiry = TTL, rule `at_work_complete`, stages, pools, handoffs, secrets and config from the template; `work_order.assigned` [envtest] | RC-US-10.2 | M6-E6 |
+| [x] | M6-E6 | Adopt the `-db` release with X-DB-4 (bump the module) | RC-12 (part) | X-DB-4 |
+| [x] | M6-E3 | GitHub adapter (OQ-5, OQ-S4): App JWT, installation token, PR state with conditional requests; 500 repositories every 10 minutes stay under 5,000 requests per hour per installation; a rate-limit `403`/`429` or a 5xx backs off until the reset time and keeps the last known state [adapter with recorded GitHub] | RC-US-10.4 | — |
+| [x] | M6-E4 | Tracking: repositories to `pr_opened` and `merged`; all merged, not affected or skipped → work order done and team torn down; failed and cancelled; `work_order.merged`, `completed`, `failed`, `cancelled` | RC-US-10.3 | M6-E3, M6-E2 |
+| [x] | M6-E5 | Owners notified once per event and recipient through RC-15 (assigned, PR opened, merged, SLA warning `work_orders.sla_warning_hours` before due, SLA breached, completed); outside contacts emailed through `work_orders.notification_channel_id`, nothing when unset | RC-US-10.5, RC-12 | M6-E4 |
 
 ### M6-F · Feature-complete verification (last)
 
