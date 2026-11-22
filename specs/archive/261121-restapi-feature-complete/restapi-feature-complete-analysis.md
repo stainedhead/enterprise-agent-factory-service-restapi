@@ -19,7 +19,7 @@ transaction). `afs-reconciler` applies desired state to EKS and AWS and reverts 
 Bedrock spend and fails closed, and `afs-billing` reconciles the Cost and Usage Report. All 182 operations of the API
 contract are implemented across milestones M0 to M6, followed by a review pass that fixed 17 findings in 5 streams.
 
-**Total runtime:** 14 h 0 min (first spec commit 2026-11-21T20:47:19Z to the last commit 2026-11-22T10:46:54Z; the dashboard started the clock at 20:31:38Z, before the first commit).
+**Total runtime:** 13 h 51 min (first spec commit 2026-11-21T20:47:19Z to the last pre-PR commit 2026-11-22T10:38:03Z; the dashboard started the clock at 20:31:38Z, before the first commit).
 **Overall assessment:** the build ran in parallel milestone streams with integrator commits at each milestone boundary and
 held its quality gate. The review pass found one real P0 (restore bypassing the agents guardrails) and was cheap relative
 to the build. Five tasks needing real infrastructure stayed open by decision. Integration cost was concentrated in a few
@@ -44,9 +44,9 @@ Start and end are from the dashboard, cross-checked against the nearest commits.
 | 9 | Implement review fixes | 08:11:00Z | 10:09:15Z (commit 648dff1) | 118 | 5 streams A to E, integrator, contract check repaired |
 | 10 | Archive fixes spec | 10:09:15Z | 10:10:10Z (commit 8cedd96) | 1 | review spec nested in the archive |
 | 11 | Final quality pass | 10:10:10Z | 10:37:37Z | 27 | docs updates, ADR-017 to 022, full suite |
-| 12 | Process analysis | 10:37:37Z | 10:40:54Z | 3 | this file |
-| 13 | Archive layout check | 10:40:54Z | 10:42:54Z | 2 | layout confirmed |
-| 14 | Pull request | 10:42:54Z | 10:46:54Z (PR opened) | 4 | PR, checks, merge |
+| 12 | Process analysis | 10:37:37Z | 10:37:54Z | 1 | this file |
+| 13 | Archive layout check | 10:37:54Z | 10:38:03Z | 1 | layout confirmed |
+| 14 | Pull request | 10:38:03Z | 10:38:03Z (commit; PR opened right after) | 1 | PR, checks, merge |
 
 **Notable observations:**
 - Step 3 is 80 percent of the elapsed time. Milestone gaps (M0 21:50, M1 00:11, M2 01:10, M3 04:59, M4 05:50, M5 06:42, M6 07:49 UTC)
@@ -193,7 +193,7 @@ integrator and an independent verifier). Context was the limiting resource for t
 **Estimated manual duration:** about 6 to 9 person-weeks (assumes a senior Go developer familiar with the stack, 182
 operations with tests, a reconciler, a metering gateway, billing jobs, 22 ADRs and user docs; excludes meetings and
 external reviews).
-**Actual automated runtime:** 14 h 0 min elapsed, from git timestamps.
+**Actual automated runtime:** 13 h 51 min elapsed, from git timestamps.
 **Efficiency gain:** roughly 10 to 15 times in elapsed time. The estimate is rough: the automated run left five
 infrastructure-bound tasks open and needs human review of 200 thousand added lines.
 
