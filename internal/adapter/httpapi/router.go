@@ -200,7 +200,7 @@ func mount(mux *http.ServeMux, ops map[string]*operation, wrap func(*operation) 
 func checkQuery(op *operation, r *http.Request) error {
 	var unknown []domain.FieldError
 	for name := range r.URL.Query() {
-		if !op.query[name] {
+		if !op.query[name] && !tagFilterAllowed(op, name) {
 			unknown = append(unknown, domain.FieldError{Field: name, Reason: "unknown query parameter"})
 		}
 	}
@@ -214,4 +214,14 @@ func checkQuery(op *operation, r *http.Request) error {
 // requirement returns the authz requirement of a route.
 func (rt Route) requirement() authz.Requirement {
 	return authz.Requirement{Permission: rt.Permission, AnyOf: rt.AnyOf, Condition: rt.Condition}
+}
+
+// tagFilterAllowed accepts the tag.<key>=<value> filters of the report operations; OpenAPI cannot
+// declare a parameter by prefix, so they are not in the document's parameter list.
+func tagFilterAllowed(op *operation, name string) bool {
+	switch op.OperationID {
+	case "GetTeamReport", "GetAgentReport", "GetServiceReport":
+		return strings.HasPrefix(name, "tag.") && len(name) > len("tag.")
+	}
+	return false
 }

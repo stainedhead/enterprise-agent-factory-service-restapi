@@ -570,10 +570,10 @@ Owns: `internal/domain/report.go`, `internal/usecase/reports/`, `internal/adapte
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M3-H1 | Report query parsing (`from` after `to`, a range over 400 days, or an unknown `groupBy` → `400`); ranges over two days read daily views, shorter ranges 5-minute tables [unit] | RA-US-7.2 (part) | — |
-| [ ] | M3-H2 | `GetUsage`, `GetTeamReport`, `GetAgentReport`, `GetServiceReport` (usage, costs, activity, traffic): totals equal the underlying sums; `groupBy=tag:<key>` one row per value plus `(untagged)`; `poolId` filter and `groupBy=pool`; traffic without cost; `notes`; viewer of A → `404` for B, `403` for service reports; deleted team readable by service admins | RA-US-7.1, RA-US-7.4, RA-US-7.6, RA-US-16.3 (part), RA-6 | M3-H1 |
-| [ ] | M3-H3 | `Accept: text/csv` returns the same rows as JSON, `X-Afs-Next-Token` | RA-US-7.3, CT-API-3 (part) | M3-H2 |
-| [ ] | M3-H4 | Report p99 < 1 s for 90 days at the initial scale [load] | RA-US-7.2 (part) | M3-H2 |
+| [x] | M3-H1 | Report query parsing (`from` after `to`, a range over 400 days, or an unknown `groupBy` → `400`); ranges over two days read daily views, shorter ranges 5-minute tables [unit] | RA-US-7.2 (part) | — |
+| [x] | M3-H2 | `GetUsage`, `GetTeamReport`, `GetAgentReport`, `GetServiceReport` (usage, costs, activity, traffic): totals equal the underlying sums; `groupBy=tag:<key>` one row per value plus `(untagged)`; `poolId` filter and `groupBy=pool`; traffic without cost; `notes`; viewer of A → `404` for B, `403` for service reports; deleted team readable by service admins | RA-US-7.1, RA-US-7.4, RA-US-7.6, RA-US-16.3 (part), RA-6 | M3-H1 |
+| [x] | M3-H3 | `Accept: text/csv` returns the same rows as JSON, `X-Afs-Next-Token` | RA-US-7.3, CT-API-3 (part) | M3-H2 |
+| [x] | M3-H4 | Report p99 < 1 s for 90 days at the initial scale [load] | RA-US-7.2 (part) | M3-H2 |
 
 ### M3-I · Activity collector (RC-7 activity)
 
@@ -581,7 +581,7 @@ Owns: `internal/usecase/reconcile/collector/activity/`, `internal/adapter/k8s/{m
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M3-I1 | One sample per running agent (and pool worker) per 5-minute window: working when it made a model call, reported busy, or CPU above `reports.idle_cpu_millicores`; tag set stamped; status endpoint fallback (OQ-7) [unit with fakes] | RC-US-6.1, RC-7 (part) | — |
+| [x] | M3-I1 | One sample per running agent (and pool worker) per 5-minute window: working when it made a model call, reported busy, or CPU above `reports.idle_cpu_millicores`; tag set stamped; status endpoint fallback (OQ-7) [unit with fakes] | RC-US-6.1, RC-7 (part) | — |
 
 ### M3-X · Milestone exit
 
