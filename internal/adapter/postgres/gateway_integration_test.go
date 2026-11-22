@@ -103,9 +103,14 @@ func TestGatewayStoreReads(t *testing.T) {
 		t.Fatal(err)
 	}
 	svcKey := "sv-" + strings.ToLower(w.team[len(w.team)-8:])
-	if _, err := w.db.Admin(t).Exec(ctx, `INSERT INTO afs.service_tags (key, mode, default_value) VALUES ($1, 'required', 'dflt')`, svcKey); err != nil {
+	adm := w.db.Admin(t)
+	if _, err := adm.Exec(ctx, `INSERT INTO afs.service_tags (key, mode, default_value) VALUES ($1, 'required', 'dflt')`, svcKey); err != nil {
 		t.Fatal(err)
 	}
+	// service_tags is global: leave it as found for the tests that share the database.
+	t.Cleanup(func() {
+		_, _ = adm.Exec(context.WithoutCancel(ctx), `DELETE FROM afs.service_tags WHERE key = $1`, svcKey)
+	})
 	tags, err := st.Tags(ctx, w.team)
 	if err != nil {
 		t.Fatal(err)

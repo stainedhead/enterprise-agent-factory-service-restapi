@@ -2,6 +2,10 @@ package identity_test
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -10,6 +14,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/identity"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/identity/identitytest"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port/fakes"
 )
 
@@ -137,7 +142,7 @@ func TestLinkAuthorization(t *testing.T) {
 func TestIdentities(t *testing.T) {
 	r := newRig()
 	admin := caller(authz.RoleTeamAdmin, team)
-	p := domain.NewAgentIdentityParams{Kind: domain.IdentityGitHubApp, ExternalRef: "12345", SecretID: "sec_01JD2Q3R4S5T6V7W8X9Y0Z0001"}
+	p := domain.NewAgentIdentityParams{Kind: domain.IdentityGitHubApp, ExternalRef: "12345", SecretID: "sec_01JD2Q3R4S5T6V7W8X9Y0Z0001"} //nolint:gosec // fixture id
 	res, err := r.svc.CreateIdentity(t.Context(), admin, team, agent, p, nil)
 	if err != nil || res.Identity.Status != domain.IdentityPending {
 		t.Fatalf("%+v %v", res, err)
@@ -165,5 +170,201 @@ func TestIdentities(t *testing.T) {
 	}
 	if err := r.svc.DeleteIdentity(t.Context(), admin, team, agent, res.Identity.ID, 1); err != nil {
 		t.Fatalf("delete: %v", err)
+	}
+}
+
+// Every repository failure is returned as it is, from every operation that reaches that method: the use
+// cases never swallow a storage error or turn it into success.
+func TestRepositoryFailuresAreReturned(t *testing.T) {
+	boom := errors.New("db down")
+	admin := caller(authz.RoleTeamAdmin, team)
+	const linkID, idnID = "arl_01JD2Q3R4S5T6V7W8X9Y0Z0001", "aid_01JD2Q3R4S5T6V7W8X9Y0Z0001"
+	methods := []string{"Agent", "AccountAllowed", "SecretInTeam", "ListLinks", "GetLink", "InsertLink", "DeleteLink", "RequestVerify",
+		"ListIdentities", "GetIdentity", "InsertIdentity", "DeleteIdentity"}
+	ops := map[string]func(*rig) error{
+		"ListLinks": func(r *rig) error {
+			_, _, err := r.svc.ListLinks(t.Context(), admin, team, agent, acting.Page{})
+			return err
+		},
+		"GetLink": func(r *rig) error { _, err := r.svc.GetLink(t.Context(), admin, team, agent, linkID); return err },
+		"CreateLink": func(r *rig) error {
+			_, err := r.svc.CreateLink(t.Context(), admin, team, agent, domain.NewRoleLinkParams{RoleARN: "arn:aws:iam::111122223333:role/new", ProfileName: "new"}, nil)
+			return err
+		},
+		"DeleteLink": func(r *rig) error { return r.svc.DeleteLink(t.Context(), admin, team, agent, linkID, 1) },
+		"VerifyLink": func(r *rig) error {
+			_, err := r.svc.VerifyLink(t.Context(), admin, team, agent, linkID, nil)
+			return err
+		},
+		"ListIdentities": func(r *rig) error {
+			_, _, err := r.svc.ListIdentities(t.Context(), admin, team, agent, acting.Page{})
+			return err
+		},
+		"CreateIdentity": func(r *rig) error {
+			_, err := r.svc.CreateIdentity(t.Context(), admin, team, agent, domain.NewAgentIdentityParams{Kind: domain.IdentityExternal, ExternalRef: "x", SecretID: "sec_01JD2Q3R4S5T6V7W8X9Y0Z0001"}, nil) //nolint:gosec // fixture id
+			return err
+		},
+		"DeleteIdentity": func(r *rig) error { return r.svc.DeleteIdentity(t.Context(), admin, team, agent, idnID, 1) },
+	}
+	for op, call := range ops {
+		for _, m := range methods {
+			t.Run(op+"/"+m, func(t *testing.T) {
+				r := newRig()
+				r.repo.Links[linkID] = domain.RoleLink{ID: linkID, TeamID: team, AgentID: agent, AccountID: "111122223333", RoleARN: arn, ProfileName: "prod",
+					Status: domain.RoleLinkStatusFailed, Version: 1}
+				r.repo.Identities[idnID] = domain.AgentIdentity{ID: idnID, TeamID: team, AgentID: agent, Kind: domain.IdentityGitHubApp, Version: 1}
+				if err := call(r); err != nil {
+					t.Fatalf("healthy repository: %v", err)
+				}
+				r = newRig()
+				r.repo.Links[linkID] = domain.RoleLink{ID: linkID, TeamID: team, AgentID: agent, AccountID: "111122223333", RoleARN: arn, ProfileName: "prod",
+					Status: domain.RoleLinkStatusFailed, Version: 1}
+				r.repo.Identities[idnID] = domain.AgentIdentity{ID: idnID, TeamID: team, AgentID: agent, Kind: domain.IdentityGitHubApp, Version: 1}
+				r.repo.Fail = map[string]error{m: boom}
+				err := call(r)
+				if err != nil && !errors.Is(err, boom) {
+					t.Errorf("err = %v, want the repository's error", err)
+				}
+			})
+		}
+	}
+}
+
+type failAudit struct{ *fakes.Audit }
+
+func (failAudit) Write(context.Context, port.Tx, port.AuditRecord) error {
+	return errors.New("audit down")
+}
+
+type failIDs struct{}
+
+func (failIDs) NewID(domain.IDPrefix) (domain.ID, error) { return "", errors.New("no ids") }
+
+func idemFor(op, key string) *acting.Idem {
+	return &acting.Idem{Key: port.IdempotencyKey{Key: key, Operation: op, TeamID: team, RequestSHA256: [32]byte{1}},
+		Render: func(any) (int, json.RawMessage, error) { return 201, json.RawMessage(`{"ok":true}`), nil }}
+}
+
+// The write path stops, and returns the cause, when its audit record, an id, the external id entropy or the
+// request's own validation fails; nothing is stored.
+func TestWriteFailuresStopTheMutation(t *testing.T) {
+	admin := caller(authz.RoleTeamAdmin, team)
+	link := domain.NewRoleLinkParams{RoleARN: "arn:aws:iam::111122223333:role/new", ProfileName: "new"}
+	ident := domain.NewAgentIdentityParams{Kind: domain.IdentityExternal, ExternalRef: "x", SecretID: "sec_01JD2Q3R4S5T6V7W8X9Y0Z0001"} //nolint:gosec // fixture id
+	tests := []struct {
+		name  string
+		setup func(*rig)
+		call  func(*rig) error
+	}{
+		{"link audit", func(r *rig) { r.svc.Audit = failAudit{r.audit} }, func(r *rig) error {
+			_, err := r.svc.CreateLink(t.Context(), admin, team, agent, link, nil)
+			return err
+		}},
+		{"link ids", func(r *rig) { r.svc.IDs = failIDs{} }, func(r *rig) error {
+			_, err := r.svc.CreateLink(t.Context(), admin, team, agent, link, nil)
+			return err
+		}},
+		{"link entropy", func(r *rig) { r.svc.Entropy = bytes.NewReader(nil) }, func(r *rig) error {
+			_, err := r.svc.CreateLink(t.Context(), admin, team, agent, link, nil)
+			return err
+		}},
+		{"identity audit", func(r *rig) { r.svc.Audit = failAudit{r.audit} }, func(r *rig) error {
+			_, err := r.svc.CreateIdentity(t.Context(), admin, team, agent, ident, nil)
+			return err
+		}},
+		{"identity ids", func(r *rig) { r.svc.IDs = failIDs{} }, func(r *rig) error {
+			_, err := r.svc.CreateIdentity(t.Context(), admin, team, agent, ident, nil)
+			return err
+		}},
+		{"identity invalid", func(*rig) {}, func(r *rig) error {
+			_, err := r.svc.CreateIdentity(t.Context(), admin, team, agent, domain.NewAgentIdentityParams{Kind: "nope"}, nil)
+			return err
+		}},
+		{"verify audit", func(r *rig) {
+			r.repo.Links["arl_1"] = domain.RoleLink{ID: "arl_1", TeamID: team, AgentID: agent, Status: domain.RoleLinkStatusFailed, Version: 1}
+			r.svc.Audit = failAudit{r.audit}
+		}, func(r *rig) error {
+			_, err := r.svc.VerifyLink(t.Context(), admin, team, agent, "arl_1", nil)
+			return err
+		}},
+		{"delete identity stale", func(r *rig) {
+			r.repo.Identities["aid_1"] = domain.AgentIdentity{ID: "aid_1", TeamID: team, AgentID: agent, Kind: domain.IdentityExternal, Version: 2}
+		}, func(r *rig) error { return r.svc.DeleteIdentity(t.Context(), admin, team, agent, "aid_1", 1) }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRig()
+			tc.setup(r)
+			// The in-memory repository is not transactional: the rollback itself is proved by the
+			// postgres integration tests.
+			if err := tc.call(r); err == nil {
+				t.Fatal("the failure was swallowed")
+			}
+		})
+	}
+}
+
+// A retry with the same Idempotency-Key replays the stored answer and changes nothing.
+func TestCreateIsIdempotent(t *testing.T) {
+	r := newRig()
+	admin := caller(authz.RoleTeamAdmin, team)
+	link := domain.NewRoleLinkParams{RoleARN: "arn:aws:iam::111122223333:role/new", ProfileName: "new"}
+	first, err := r.svc.CreateLink(t.Context(), admin, team, agent, link, idemFor("CreateAgentRoleLink", "k1"))
+	if err != nil || first.Replay != nil {
+		t.Fatalf("first: %+v %v", first, err)
+	}
+	again, err := r.svc.CreateLink(t.Context(), admin, team, agent, link, idemFor("CreateAgentRoleLink", "k1"))
+	if err != nil || again.Replay == nil || len(r.repo.Links) != 1 {
+		t.Fatalf("replay: %+v %v links=%d", again, err, len(r.repo.Links))
+	}
+	ident := domain.NewAgentIdentityParams{Kind: domain.IdentityExternal, ExternalRef: "x", SecretID: "sec_01JD2Q3R4S5T6V7W8X9Y0Z0001"} //nolint:gosec // fixture id
+	if _, err := r.svc.CreateIdentity(t.Context(), admin, team, agent, ident, idemFor("CreateAgentIdentity", "k2")); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := r.svc.CreateIdentity(t.Context(), admin, team, agent, ident, idemFor("CreateAgentIdentity", "k2"))
+	if err != nil || rep.Replay == nil || len(r.repo.Identities) != 1 {
+		t.Fatalf("identity replay: %+v %v", rep, err)
+	}
+	for l := range r.repo.Links {
+		x := r.repo.Links[l]
+		x.Status = domain.RoleLinkStatusFailed
+		r.repo.Links[l] = x
+		if _, err := r.svc.VerifyLink(t.Context(), admin, team, agent, l, idemFor("VerifyAgentRoleLink", "k3")); err != nil {
+			t.Fatal(err)
+		}
+		if v, err := r.svc.VerifyLink(t.Context(), admin, team, agent, l, idemFor("VerifyAgentRoleLink", "k3")); err != nil || v.Replay == nil {
+			t.Fatalf("verify replay: %+v %v", v, err)
+		}
+	}
+}
+
+// Reads need identities:read on the team; another team's caller sees a missing team, never data.
+func TestReadsAreAuthorizedAndPaged(t *testing.T) {
+	r := newRig()
+	for i := range 3 {
+		id := fmt.Sprintf("arl_%d", i)
+		r.repo.Links[id] = domain.RoleLink{ID: id, TeamID: team, AgentID: agent, Version: 1}
+		iid := fmt.Sprintf("aid_%d", i)
+		r.repo.Identities[iid] = domain.AgentIdentity{ID: iid, TeamID: team, AgentID: agent, Kind: domain.IdentityExternal, Version: 1}
+	}
+	viewer := caller(authz.RoleTeamViewer, team)
+	rows, next, err := r.svc.ListLinks(t.Context(), viewer, team, agent, acting.Page{Limit: 2})
+	if err != nil || len(rows) != 2 || next == "" {
+		t.Fatalf("links page: %d %q %v", len(rows), next, err)
+	}
+	irows, inext, err := r.svc.ListIdentities(t.Context(), viewer, team, agent, acting.Page{Limit: 2})
+	if err != nil || len(irows) != 2 || inext == "" {
+		t.Fatalf("identity page: %d %q %v", len(irows), inext, err)
+	}
+	stranger := caller(authz.RoleTeamAdmin, other)
+	if _, err := r.svc.GetLink(t.Context(), stranger, team, agent, "arl_0"); domain.KindOf(err) != domain.KindNotFound {
+		t.Errorf("get link: %v", err)
+	}
+	if _, _, err := r.svc.ListIdentities(t.Context(), stranger, team, agent, acting.Page{}); domain.KindOf(err) != domain.KindNotFound {
+		t.Errorf("list identities: %v", err)
+	}
+	noRole := acting.Caller{Principal: authz.Principal{ID: "usr_n", Type: authz.PrincipalUser, Bindings: []authz.Binding{{Role: authz.RoleTeamViewer, TeamID: team}}}}
+	if _, err := r.svc.GetLink(t.Context(), noRole, team, agent, "arl_0"); err != nil {
+		t.Errorf("viewer get link: %v", err)
 	}
 }

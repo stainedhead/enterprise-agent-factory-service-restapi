@@ -20,6 +20,15 @@ type Repo struct {
 	Secrets    map[string]string             // secret id -> team id
 	Links      map[string]domain.RoleLink
 	Identities map[string]domain.AgentIdentity
+	// Fail makes the named method return the error (tests of the failure paths).
+	Fail map[string]error
+}
+
+// fail returns the error injected for method, if any.
+func (r *Repo) fail(method string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.Fail[method]
 }
 
 var _ identity.Repository = (*Repo)(nil)
@@ -32,6 +41,10 @@ func New() *Repo {
 
 // Agent implements identity.Repository.
 func (r *Repo) Agent(_ context.Context, _ port.Tx, teamID, agentID string) (identity.AgentInfo, error) {
+	if err := r.fail("Agent"); err != nil {
+		var zero identity.AgentInfo
+		return zero, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	a, ok := r.Agents[agentID]
@@ -43,6 +56,10 @@ func (r *Repo) Agent(_ context.Context, _ port.Tx, teamID, agentID string) (iden
 
 // AccountAllowed implements identity.Repository.
 func (r *Repo) AccountAllowed(_ context.Context, _ port.Tx, teamID, account string) (bool, error) {
+	if err := r.fail("AccountAllowed"); err != nil {
+		var zero bool
+		return zero, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.Allowed[teamID+"|"+account], nil
@@ -50,6 +67,10 @@ func (r *Repo) AccountAllowed(_ context.Context, _ port.Tx, teamID, account stri
 
 // SecretInTeam implements identity.Repository.
 func (r *Repo) SecretInTeam(_ context.Context, _ port.Tx, teamID, secretID string) (bool, error) {
+	if err := r.fail("SecretInTeam"); err != nil {
+		var zero bool
+		return zero, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.Secrets[secretID] == teamID, nil
@@ -57,6 +78,10 @@ func (r *Repo) SecretInTeam(_ context.Context, _ port.Tx, teamID, secretID strin
 
 // ListLinks implements identity.Repository.
 func (r *Repo) ListLinks(_ context.Context, _ port.Tx, teamID, agentID, after string, limit int) ([]domain.RoleLink, error) {
+	if err := r.fail("ListLinks"); err != nil {
+		var zero []domain.RoleLink
+		return zero, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []domain.RoleLink
@@ -74,6 +99,10 @@ func (r *Repo) ListLinks(_ context.Context, _ port.Tx, teamID, agentID, after st
 
 // GetLink implements identity.Repository.
 func (r *Repo) GetLink(_ context.Context, _ port.Tx, teamID, agentID, id string, _ bool) (domain.RoleLink, error) {
+	if err := r.fail("GetLink"); err != nil {
+		var zero domain.RoleLink
+		return zero, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	l, ok := r.Links[id]
@@ -85,6 +114,9 @@ func (r *Repo) GetLink(_ context.Context, _ port.Tx, teamID, agentID, id string,
 
 // InsertLink implements identity.Repository.
 func (r *Repo) InsertLink(_ context.Context, _ port.Tx, l domain.RoleLink) error {
+	if err := r.fail("InsertLink"); err != nil {
+		return err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, o := range r.Links {
@@ -98,6 +130,9 @@ func (r *Repo) InsertLink(_ context.Context, _ port.Tx, l domain.RoleLink) error
 
 // DeleteLink implements identity.Repository.
 func (r *Repo) DeleteLink(_ context.Context, _ port.Tx, _, _, id string, expect domain.Version) error {
+	if err := r.fail("DeleteLink"); err != nil {
+		return err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.Links[id].Version != expect {
@@ -109,6 +144,10 @@ func (r *Repo) DeleteLink(_ context.Context, _ port.Tx, _, _, id string, expect 
 
 // RequestVerify implements identity.Repository.
 func (r *Repo) RequestVerify(_ context.Context, _ port.Tx, _, _, id string) (domain.RoleLink, error) {
+	if err := r.fail("RequestVerify"); err != nil {
+		var zero domain.RoleLink
+		return zero, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	l := r.Links[id]
@@ -119,6 +158,10 @@ func (r *Repo) RequestVerify(_ context.Context, _ port.Tx, _, _, id string) (dom
 
 // ListIdentities implements identity.Repository.
 func (r *Repo) ListIdentities(_ context.Context, _ port.Tx, teamID, agentID, after string, limit int) ([]domain.AgentIdentity, error) {
+	if err := r.fail("ListIdentities"); err != nil {
+		var zero []domain.AgentIdentity
+		return zero, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []domain.AgentIdentity
@@ -136,6 +179,10 @@ func (r *Repo) ListIdentities(_ context.Context, _ port.Tx, teamID, agentID, aft
 
 // GetIdentity implements identity.Repository.
 func (r *Repo) GetIdentity(_ context.Context, _ port.Tx, teamID, agentID, id string, _ bool) (domain.AgentIdentity, error) {
+	if err := r.fail("GetIdentity"); err != nil {
+		var zero domain.AgentIdentity
+		return zero, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	i, ok := r.Identities[id]
@@ -147,6 +194,9 @@ func (r *Repo) GetIdentity(_ context.Context, _ port.Tx, teamID, agentID, id str
 
 // InsertIdentity implements identity.Repository.
 func (r *Repo) InsertIdentity(_ context.Context, _ port.Tx, i domain.AgentIdentity) error {
+	if err := r.fail("InsertIdentity"); err != nil {
+		return err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, o := range r.Identities {
@@ -160,6 +210,9 @@ func (r *Repo) InsertIdentity(_ context.Context, _ port.Tx, i domain.AgentIdenti
 
 // DeleteIdentity implements identity.Repository.
 func (r *Repo) DeleteIdentity(_ context.Context, _ port.Tx, _, _, id string, expect domain.Version) error {
+	if err := r.fail("DeleteIdentity"); err != nil {
+		return err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.Identities[id].Version != expect {

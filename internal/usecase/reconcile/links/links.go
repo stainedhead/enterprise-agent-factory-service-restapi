@@ -249,13 +249,12 @@ func (c *Controller) reconcileLink(ctx context.Context, d Desired, l Link, now t
 	ch := base
 	ch.VerifiedAt = &now
 	err := c.verify(ctx, d, l)
-	switch {
-	case err == nil:
+	if err == nil {
 		ch.To = domain.RoleLinkStatusVerified
 		if l.Status != domain.RoleLinkStatusVerified {
 			ch.Event = domain.EventRoleLinkVerified
 		}
-	default:
+	} else {
 		ch.To, ch.VerifiedAt, ch.Error = domain.RoleLinkStatusFailed, nil, describe(err)
 		if l.Status != domain.RoleLinkStatusFailed {
 			ch.Event = domain.EventRoleLinkFailed
