@@ -45,6 +45,21 @@ is in `resource_status` with the conditions `NamespaceReady`, `IamReady` and `Re
 | `AFS_METRICS_ADDR` | no | Probe and metrics address; default `:9090` |
 | `POD_NAME` | no | Leader election identity; the hostname if unset |
 
+### Notification channels
+
+Each notification channel becomes one EventBridge rule on `AFS_EVENT_BUS_NAME`, filtered on the channel's team and event types. Delivery is off, with a warning, until `AFS_NOTIFY_TARGET_ROLE_ARN` is set.
+
+| Variable | Required | Meaning |
+|---|---|---|
+| `AFS_NOTIFY_TARGET_ROLE_ARN` | to enable | Role EventBridge assumes to invoke the API destinations (Slack, webhook, Jira) and event bus targets |
+| `AFS_NOTIFY_EMAIL_QUEUE_ARN` | for email channels | FIFO queue (content-based deduplication on) that email rules target; the reconciler drains it and sends with SES once per event id. Its policy must let `events.amazonaws.com` send |
+| `AFS_NOTIFY_DLQ_ARN` | recommended | Dead-letter queue of the rule targets; failed deliveries after EventBridge's retries (20 attempts or 2 hours) show on the channel as `DeliveryHealthy=False` and raise `notification.delivery_failed` |
+| `AFS_NOTIFY_EMAIL_FROM` | for email channels | Verified SES sender address; also used by *Send test* on an email channel |
+
+The reconciler's role needs `events:PutRule`, `PutTargets`, `RemoveTargets`, `DeleteRule`, `ListRules`, `ListTargetsByRule`, the connection and API destination actions on `afs-nch_*` objects, `sqs:ReceiveMessage` and `DeleteMessage` on the two queues, `ses:SendEmail`, and `secretsmanager:GetSecretValue` on the team secret path only: it reads a channel's credential into memory to build the connection and to run a test, and never logs or stores it. A Slack webhook URL is that credential; it is handed to EventBridge as the API destination endpoint and is never stored in the database.
+
+A channel with no event types receives every event family of its team except `notification.*`; `report.*` events reach only the channel a schedule addresses. A service-level channel with no event types has no rule (it is an address book entry, for example for work order mail).
+
 The service refuses to start on a database whose schema is older than the build expects.
 
 ## Probes and metrics

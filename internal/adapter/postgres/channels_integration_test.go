@@ -173,6 +173,10 @@ func TestChannelReconcilerSide(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Other tests of this package count unpublished outbox rows: leave none behind.
+	t.Cleanup(func() {
+		_, _ = admin.Exec(context.Background(), `DELETE FROM afs.outbox_events WHERE team_id = $1`, tm.ID)
+	})
 	rr := reconcilerPool(t, db)
 	src := postgres.NewChannelSource(rr)
 	ch, err := src.LoadChannel(t.Context(), slackID)
@@ -361,7 +365,7 @@ func TestChannelRuleLifecycleThroughTheEngine(t *testing.T) {
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	e, err := engine.New(engine.Config{
-		Feed: postgres.NewChangeFeed(postgres.Config{URL: db.URLs["afs_reconciler"], Service: "afs-reconciler", SystemActor: true}, log),
+		Feed:   postgres.NewChangeFeed(postgres.Config{URL: db.URLs["afs_reconciler"], Service: "afs-reconciler", SystemActor: true}, log),
 		Lister: postgres.NewChannelLister(emptyLister{}, pool), Registry: reg, Controllers: []engine.Controller{ctl}, Status: status,
 		PollInterval: 200 * time.Millisecond, ResyncInterval: time.Minute, Now: now, Log: log,
 	})

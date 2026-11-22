@@ -559,10 +559,10 @@ Owns: `internal/domain/delivery_channel.go`, `internal/usecase/notify/`, `intern
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M3-G1 | Team channels API: list, create (Slack, email, webhook, Jira, EventBridge; credentials as secret reference), get (with delivery status), update, delete; viewer create → `403` + denied audit, list and describe allowed | RA-US-17.2 (part), OPS-3 | — |
-| [ ] | M3-G2 | Service channels API (`admin:settings`): list, create, update, delete; deleting the channel named in `work_orders.notification_channel_id` → `409` | RA-US-15.6 (part) | M3-G1 |
-| [ ] | M3-G3 | Reconciler: each channel → one EventBridge rule filtered on team id and event types (plus `report.*` events addressed to the channel, OQ-S2) with an API destination and connection (credential read in memory only, OQ-S3), or for email an SQS target drained and sent with SES once per event id; removed within 60 s of delete; a team's rule never matches another team's events | RC-US-13.1, RC-US-13.2, RC-US-13.4, RC-15 | M3-G1 |
-| [ ] | M3-G4 | Delivery failures retried and shown on the channel status (`DeliveryHealthy`), `notification.delivery_failed`; `TestNotificationChannel` per OQ-S1 returns the failure and records it [adapter with fake Slack] | RC-US-13.3, RA-US-17.3 | M3-G3 |
+| [x] | M3-G1 | Team channels API: list, create (Slack, email, webhook, Jira, EventBridge; credentials as secret reference), get (with delivery status), update, delete; viewer create → `403` + denied audit, list and describe allowed | RA-US-17.2 (part), OPS-3 | — |
+| [x] | M3-G2 | Service channels API (`admin:settings`): list, create, update, delete; deleting the channel named in `work_orders.notification_channel_id` → `409` | RA-US-15.6 (part) | M3-G1 |
+| [x] | M3-G3 | Reconciler: each channel → one EventBridge rule filtered on team id and event types (plus `report.*` events addressed to the channel, OQ-S2) with an API destination and connection (credential read in memory only, OQ-S3), or for email an SQS target drained and sent with SES once per event id; removed within 60 s of delete; a team's rule never matches another team's events | RC-US-13.1, RC-US-13.2, RC-US-13.4, RC-15 | M3-G1 |
+| [x] | M3-G4 | Delivery failures retried and shown on the channel status (`DeliveryHealthy`), `notification.delivery_failed`; `TestNotificationChannel` per OQ-S1 returns the failure and records it [adapter with fake Slack] | RC-US-13.3, RA-US-17.3 | M3-G3 |
 
 ### M3-H · Reports (RA-6)
 

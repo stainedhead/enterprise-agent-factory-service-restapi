@@ -122,6 +122,7 @@ func (e *fakeEvents) DeliveryFailed(_ context.Context, ch notify.Channel, text, 
 }
 
 func slackChan() notify.Channel {
+	//nolint:gosec // a fixture ARN, not a credential
 	return notify.Channel{ID: chID, TeamID: teamA, Name: "s", Kind: domain.ChannelSlack, Config: map[string]any{"channel": "#alerts"},
 		SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x", EventTypes: []string{"budget.*"}, Enabled: true, Version: 3, TeamState: "active"}
 }

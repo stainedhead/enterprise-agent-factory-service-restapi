@@ -65,8 +65,10 @@ func TestRefusesUnsafeTargets(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("must not be called") }))
 	defer srv.Close()
 	s := notifyhttp.New(notifyhttp.Options{}) // production settings
-	wh := func(u string) notify.Channel { return notify.Channel{Kind: domain.ChannelWebhook, Config: map[string]any{"url": u}} }
-	for name, u := range map[string]string{
+	wh := func(u string) notify.Channel {
+		return notify.Channel{Kind: domain.ChannelWebhook, Config: map[string]any{"url": u}}
+	}
+	for name, u := range map[string]string{ //nolint:gosec // fixture URLs, one with fake credentials, to prove they are refused
 		"plain http":       srv.URL,
 		"loopback https":   strings.Replace(srv.URL, "http://", "https://", 1),
 		"metadata address": "https://169.254.169.254/latest/meta-data",

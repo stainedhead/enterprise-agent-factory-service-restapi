@@ -134,7 +134,7 @@ func (s *Sender) do(ctx context.Context, kind domain.ChannelKind, r request) err
 		}
 		return fmt.Errorf("%s: request failed: %s", kind, notify.RedactURLs(err.Error()))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
 	if resp.StatusCode/100 == 2 {
 		return nil
