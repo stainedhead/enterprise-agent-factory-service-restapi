@@ -10,6 +10,9 @@ global:
 database:
   host: afs.cluster-abc123.us-east-1.rds.amazonaws.com
 gateway:
+  env:
+    AFS_GATEWAY_ROLE_ARN: arn:aws:iam::111122223333:role/afs-gateway
+    AFS_BEDROCK_VPCE_URL: https://vpce-0123456789abcdef0.bedrock-runtime.us-east-1.vpce.amazonaws.com
   tls:
     issuerRef:
       name: afs-ca

@@ -622,3 +622,28 @@ func TestOnRouteReportsTheMatchedOperation(t *testing.T) {
 		t.Errorf("OnRoute calls = %v, want [GetMe] (an unmatched path reports nothing)", got)
 	}
 }
+
+// M3-X1: the report operations accept tag.<key> filters (M3-H2) next to the verb split of M2: a
+// ":verb" path keeps its base pattern, and an unknown query parameter is still refused everywhere else.
+func TestTagFiltersAreOnlyForReportOperations(t *testing.T) {
+	report := &operation{Route: Route{OperationID: "GetTeamReport"}, query: map[string]bool{"from": true}}
+	other := &operation{Route: Route{OperationID: "ListAgents"}, query: map[string]bool{"maxResults": true}}
+	q := func(raw string) *http.Request {
+		return httptest.NewRequestWithContext(t.Context(), "GET", "/v1/x?"+raw, nil)
+	}
+	if err := checkQuery(report, q("from=2026-11-01T00:00:00Z&tag.costCenter=CC1")); err != nil {
+		t.Errorf("tag filter on a report: %v", err)
+	}
+	if err := checkQuery(report, q("tag.=x")); err == nil {
+		t.Error("an empty tag key must be refused")
+	}
+	if err := checkQuery(report, q("bogus=1")); err == nil {
+		t.Error("an unknown parameter on a report must be refused")
+	}
+	if err := checkQuery(other, q("tag.costCenter=CC1")); err == nil {
+		t.Error("a tag filter on a non-report operation must be refused")
+	}
+	if b, v, _ := splitVerb("/v1/teams/{teamId}/agents/{agentId}:pause"); b != "/v1/teams/{teamId}/agents/{agentId}" || v != "pause" {
+		t.Errorf("verb split = %s %s", b, v)
+	}
+}

@@ -1,11 +1,13 @@
 package gatewayhttp_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -469,5 +471,39 @@ func TestRequestIDIsEchoed(t *testing.T) {
 	resp = post(t, r, modelPath("converse"), `[`, map[string]string{"X-Request-Id": "bad id with spaces"}) //nolint:bodyclose // closed by post's cleanup
 	if id, _ := errBody(t, resp)["requestId"].(string); !strings.HasPrefix(id, "gw-") {
 		t.Errorf("id %q", id)
+	}
+}
+
+// M3-X1 design review: whatever the outcome, no prompt, completion, credential or gateway token reaches the
+// log. The default logger is swapped for the test (the rig builds its server and service with it), so
+// this test does not run in parallel.
+func TestNoPromptCredentialOrTokenIsLogged(t *testing.T) {
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(old) })
+
+	r := gwtest.New(t)
+	secrets := []string{"TOPSECRET-PROMPT-TEXT", "AKIALOGLEAKCHECK", "sk-ant-logleak", "gw-token-logleak"}
+	body := `{"messages":[{"role":"user","content":[{"text":"` + secrets[0] + `"}]}],"inferenceConfig":{"maxTokens":100}}`
+	hdr := map[string]string{
+		"Authorization":         "AWS4-HMAC-SHA256 Credential=" + secrets[1] + "/20261122/us-east-1/bedrock/aws4_request, Signature=00",
+		"X-Api-Key":             secrets[2],
+		"X-Afs-Gateway-Token":   secrets[3],
+		"X-Amzn-Bedrock-Accept": "application/json",
+	}
+	for _, mode := range []fakebedrock.Mode{fakebedrock.ModeOK, fakebedrock.ModeServerError, fakebedrock.ModeThrottle} {
+		r.Fake.SetMode(mode)
+		resp := post(t, r, modelPath("converse"), body, hdr) //nolint:bodyclose // closed by post's cleanup
+		_, _ = io.Copy(io.Discard, resp.Body)
+	}
+	// An unknown caller, a malformed body and an unsupported path.
+	post(t, r, "/nope", body, hdr)                         //nolint:bodyclose // closed by post's cleanup
+	post(t, r, modelPath("converse"), `{`+secrets[0], hdr) //nolint:bodyclose // closed by post's cleanup
+	r.Svc.Wait()
+	for _, s := range secrets {
+		if strings.Contains(buf.String(), s) {
+			t.Errorf("the log contains %q:\n%s", s, buf.String())
+		}
 	}
 }

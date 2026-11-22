@@ -31,6 +31,62 @@ spec:
     usages:
         - server auth
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+    labels:
+        app.kubernetes.io/component: gateway
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-gateway
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-gateway
+rules:
+    - apiGroups:
+        - ""
+      resources:
+        - pods
+        - namespaces
+      verbs:
+        - get
+        - list
+        - watch
+    - apiGroups:
+        - cilium.io
+      resources:
+        - ciliumendpoints
+      verbs:
+        - get
+        - list
+        - watch
+    - apiGroups:
+        - authentication.k8s.io
+      resources:
+        - tokenreviews
+      verbs:
+        - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+    labels:
+        app.kubernetes.io/component: gateway
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-gateway
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-0.1.0
+    name: afs-gateway
+roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: afs-gateway
+subjects:
+    - kind: ServiceAccount
+      name: afs-gateway
+      namespace: afs-system
+---
 apiVersion: v1
 data:
     afs-slis.json: |-
@@ -1043,10 +1099,18 @@ spec:
                       value: info
                     - name: AFS_OTLP_ENDPOINT
                       value: http://otel-collector.observability:4318
+                    - name: AFS_BEDROCK_VPCE_URL
+                      value: https://vpce-0123456789abcdef0.bedrock-runtime.us-east-1.vpce.amazonaws.com
                     - name: AFS_GATEWAY_ADDR
                       value: :8443
+                    - name: AFS_GATEWAY_CACHE_TTL
+                      value: 60s
+                    - name: AFS_GATEWAY_CILIUM_CHECK
+                      value: "true"
                     - name: AFS_GATEWAY_MAX_BODY
                       value: "20971520"
+                    - name: AFS_GATEWAY_ROLE_ARN
+                      value: arn:aws:iam::111122223333:role/afs-gateway
                     - name: AFS_GATEWAY_TLS_CERT
                       value: /tls/tls.crt
                     - name: AFS_GATEWAY_TLS_KEY

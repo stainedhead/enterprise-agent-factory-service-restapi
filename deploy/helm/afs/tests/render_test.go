@@ -376,3 +376,44 @@ func TestObservabilityResources(t *testing.T) {
 		t.Error("PrometheusRule rendered with the switch off")
 	}
 }
+
+// M3-A2/A3: the gateway reads pods, namespaces and Cilium endpoints and creates token reviews, and is
+// granted nothing else; its binding names its own ServiceAccount.
+func TestGatewayRBACIsReadOnlyPlusTokenReview(t *testing.T) {
+	docs := render(t, "")
+	role := find(t, docs, "ClusterRole", "afs-gateway")
+	got := map[string]string{}
+	rules, _ := role["rules"].([]any)
+	for _, r := range rules {
+		m, _ := r.(obj)
+		groups, _ := m["apiGroups"].([]any)
+		resources, _ := m["resources"].([]any)
+		verbs, _ := m["verbs"].([]any)
+		for _, res := range resources {
+			vs := make([]string, 0, len(verbs))
+			for _, v := range verbs {
+				vs = append(vs, v.(string))
+			}
+			got[groups[0].(string)+"/"+res.(string)] = strings.Join(vs, ",")
+		}
+	}
+	want := map[string]string{"/pods": "get,list,watch", "/namespaces": "get,list,watch",
+		"cilium.io/ciliumendpoints": "get,list,watch", "authentication.k8s.io/tokenreviews": "create"}
+	if len(got) != len(want) {
+		t.Fatalf("rules = %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s verbs = %q, want %q", k, got[k], v)
+		}
+	}
+	b := find(t, docs, "ClusterRoleBinding", "afs-gateway")
+	subs, _ := b["subjects"].([]any)
+	s, _ := subs[0].(obj)
+	if str(s, "name") != "afs-gateway" || str(s, "namespace") != "afs-system" {
+		t.Errorf("subject = %v", s)
+	}
+	if env := envOf(podSpec(find(t, docs, "Deployment", "afs-gateway"))["containers"].([]any)[0].(obj)); env["AFS_GATEWAY_ROLE_ARN"] == "" {
+		t.Error("the gateway has no AFS_GATEWAY_ROLE_ARN")
+	}
+}

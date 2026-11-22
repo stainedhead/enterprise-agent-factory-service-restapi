@@ -23,7 +23,11 @@ env:
   AFS_GATEWAY_MAX_BODY: "20971520"
   AFS_GATEWAY_TLS_CERT: /tls/tls.crt
   AFS_GATEWAY_TLS_KEY: /tls/tls.key
-# AFS_BEDROCK_VPCE_URL is supplied per environment.
+  AFS_GATEWAY_CILIUM_CHECK: "true"   # cross-check a pod's IP against its Cilium endpoint identity
+  AFS_GATEWAY_CACHE_TTL: 60s         # team, model, price, budget and tag caches (also invalidated by LISTEN)
+# Per environment:
+#   AFS_GATEWAY_ROLE_ARN  required: the gateway's own role (terraform output); names the account for the team role ARNs
+#   AFS_BEDROCK_VPCE_URL  the Bedrock runtime VPC endpoint (https); empty means the regional endpoint
 tls:
   # cert-manager issues the server certificate; issuerRef is required.
   issuerRef:
