@@ -146,3 +146,20 @@ func TestCollaborationAgentMissingAndGenerate(t *testing.T) {
 		t.Error("short source accepted")
 	}
 }
+
+func TestValidateCollabSetting(t *testing.T) {
+	ok := []string{`[]`, `["10.0.0.0/8","2001:db8::/32"]`}
+	for _, v := range ok {
+		if err := ValidateCollabSetting(SettingCollabAllowedSourceCidrs, []byte(v)); err != nil {
+			t.Errorf("%s: %v", v, err)
+		}
+	}
+	for _, v := range []string{`["999.1.1.1/99"]`, `["10.0.0.0"]`, `{}`} {
+		if ValidateCollabSetting(SettingCollabAllowedSourceCidrs, []byte(v)) == nil {
+			t.Errorf("accepted %s", v)
+		}
+	}
+	if ValidateCollabSetting(SettingCollabBaseDomain, []byte(`"x"`)) != nil {
+		t.Error("another key was checked")
+	}
+}

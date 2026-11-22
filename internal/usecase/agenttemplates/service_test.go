@@ -20,8 +20,13 @@ const (
 )
 
 type repo struct {
-	rows  map[string]domain.AgentTemplate
-	inUse map[string]bool
+	rows     map[string]domain.AgentTemplate
+	inUse    map[string]bool
+	swarmRef map[string]bool
+}
+
+func (r *repo) ReferencedBySwarm(_ context.Context, _ port.Tx, id string) (bool, error) {
+	return r.swarmRef[id], nil
 }
 
 func (r *repo) List(_ context.Context, _ port.Tx, enabledOnly bool, capability, after string, limit int) ([]domain.AgentTemplate, error) {
@@ -77,7 +82,7 @@ var (
 
 func rig() (*agenttemplates.Service, *repo, *fakes.Audit) {
 	a := &fakes.Audit{}
-	r := &repo{rows: map[string]domain.AgentTemplate{}, inUse: map[string]bool{}}
+	r := &repo{rows: map[string]domain.AgentTemplate{}, inUse: map[string]bool{}, swarmRef: map[string]bool{}}
 	return &agenttemplates.Service{Deps: acting.Deps{Tx: &fakes.TxRunner{}, Audit: a, Outbox: &fakes.Outbox{}, Clock: &fakes.Clock{T: time.Now()}, IDs: &fakes.IDGen{}}, Repo: r}, r, a
 }
 
@@ -232,3 +237,40 @@ func TestRepositoryFailures(t *testing.T) {
 		}
 	}
 }
+
+// RA-22: a template a swarm template names as its collaboration agent cannot be disabled, lose the
+// paperclip capability or be deleted.
+func TestSwarmReferencedTemplateIsProtected(t *testing.T) {
+	s, r, _ := rig()
+	ctx := t.Context()
+	p := params("pcl")
+	p.Capabilities = []string{domain.CapabilityPaperclip}
+	got, err := s.Put(ctx, svcAdmin, p, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.swarmRef[got.ID] = true
+	off := p
+	off.Enabled = ptrBool(false)
+	noCap := params("pcl")
+	for name, in := range map[string]domain.PutAgentTemplateParams{"disable": off, "drop capability": noCap} {
+		if _, err := s.Put(ctx, svcAdmin, in, nil); domain.KindOf(err) != domain.KindConflict {
+			t.Errorf("%s = %v", name, err)
+		}
+	}
+	if err := s.Delete(ctx, svcAdmin, "pcl", 1); domain.KindOf(err) != domain.KindConflict {
+		t.Errorf("delete = %v", err)
+	}
+	// An ordinary update that keeps both stays allowed.
+	same := p
+	same.Description = "changed"
+	if _, err := s.Put(ctx, svcAdmin, same, nil); err != nil {
+		t.Errorf("harmless update = %v", err)
+	}
+	r.swarmRef[got.ID] = false
+	if _, err := s.Put(ctx, svcAdmin, off, nil); err != nil {
+		t.Errorf("disable once unreferenced = %v", err)
+	}
+}
+
+func ptrBool(b bool) *bool { return &b }

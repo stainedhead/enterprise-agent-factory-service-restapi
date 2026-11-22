@@ -25,6 +25,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.80.0
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.53.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.53.0
+	github.com/aws/aws-sdk-go-v2/service/wafv2 v1.87.0
 	github.com/aws/smithy-go v1.28.9
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/jackc/pgx/v5 v5.13.0

@@ -136,6 +136,49 @@ type Desired struct {
 	TemplateRetired bool
 	// TemplateReason says why, for the condition message.
 	TemplateReason string
+	// Role is worker or collaboration (RC-21): the collaboration agent also gets the Service `paperclip`,
+	// the Paperclip environment and its network policies.
+	Role string
+	// Collab is set for the collaboration agent only.
+	Collab *Collab
+	// Link is set for a worker that is connected to the team's Paperclip (connect and link_state not
+	// disabled), nil otherwise (RC-22).
+	Link *CollabLink
+}
+
+// RoleCollaboration is the Role of a team's Paperclip agent.
+const RoleCollaboration = "collaboration"
+
+// CollabPort is the port Paperclip listens on and the Service `paperclip` exposes (RC-21).
+const CollabPort = 3100
+
+// Collab is what the collaboration agent's pod and Service are built from beyond the agent row.
+type Collab struct {
+	// Mode is manual or managed registration.
+	Mode string
+	// Host is <slug>.<collab.base_domain>, empty while the base domain is unset.
+	Host string
+	// SecretsPrefix is the Secrets Manager path of Paperclip's own secrets: <service>/<namespace>/<agent name>/paperclip/
+	// (filled by the controller from the service prefix).
+	SecretsPrefix string
+}
+
+// CollabLink is a worker's connection to Paperclip.
+type CollabLink struct {
+	// PaperclipAgentID is the agent's id inside Paperclip, empty until registered.
+	PaperclipAgentID string
+}
+
+// IsCollaboration reports whether this is the team's collaboration agent.
+func (d Desired) IsCollaboration() bool { return d.Role == RoleCollaboration }
+
+// EdgeRef locates afs-edge, the only pod allowed to reach the collaboration agent from outside the team
+// namespace (RC-23).
+type EdgeRef struct {
+	Namespace string
+	Name      string
+	// ReconcilerName is the reconciler's pod name label in the same namespace (it also reaches Paperclip).
+	ReconcilerName string
 }
 
 // Replicas is the replica count the pod must have: 1, or 0 when the agent is paused or the team is
@@ -183,6 +226,8 @@ type Environment struct {
 	RoleARN string
 	Region  string
 	Gateway Gateway
+	// Edge locates afs-edge for the collaboration agent's ingress policy.
+	Edge EdgeRef
 	// Replicas is Agent.Replicas().
 	Replicas int32
 	// Hash is the pod-template hash of the referenced versions (PodTemplateHash).

@@ -27,7 +27,7 @@ var _ agent.Source = (*AgentSource)(nil)
 // the value changes on each restart and never otherwise.
 const loadAgentSQL = `
 SELECT a.id, a.name, a.description, a.template, a.image, a.persona, a.model_id, a.state, a.generation,
-       a.resources, a.iam_identity,
+       a.resources, a.iam_identity, a.role,
        a.storage_size_gib, a.storage_class, a.storage_on_delete, a.snapshot_schedule, a.snapshot_retain_count,
        t.id, t.slug, t.namespace, t.state, t.isolation_tier,
        EXISTS (SELECT 1 FROM afs.work_orders w WHERE w.team_id = t.id AND w.status IN ('assigned', 'in_progress', 'pr_opened')),
@@ -63,7 +63,7 @@ func (s *AgentSource) LoadAgent(ctx context.Context, id string) (agent.Desired, 
 		var resources []byte
 		var reason *string
 		err = t.QueryRow(ctx, loadAgentSQL, id).Scan(&d.ID, &d.Name, &d.Description, &d.Template, &d.Image, &d.Persona, &d.ModelID, &d.State, &d.Generation,
-			&resources, &d.IAMIdentity,
+			&resources, &d.IAMIdentity, &d.Role,
 			&d.Volume.SizeGiB, &d.Volume.StorageClass, &d.Volume.OnDelete, &d.Volume.SnapshotSchedule, &d.Volume.SnapshotRetain,
 			&d.Team.ID, &d.Team.Slug, &d.Team.Namespace, &d.Team.State, &d.Team.IsolationTier, &d.Team.WorkOrderAssigned,
 			&reason, &d.RestartNonce)
@@ -85,6 +85,31 @@ func (s *AgentSource) LoadAgent(ctx context.Context, id string) (agent.Desired, 
 }
 
 func (s *AgentSource) loadChildren(ctx context.Context, t *Tx, d *agent.Desired) error {
+	if !d.IsCollaboration() {
+		var id string
+		err := t.QueryRow(ctx, `SELECT coalesce(paperclip_agent_id, '') FROM afs.agent_collaboration
+WHERE team_id = $1 AND agent_id = $2 AND connect AND link_state <> 'disabled'`, d.Team.ID, d.ID).Scan(&id)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+		case err != nil:
+			return MapError(err, OpRead, "collaboration link")
+		default:
+			d.Link = &agent.CollabLink{PaperclipAgentID: id}
+		}
+	}
+	if d.IsCollaboration() {
+		var mode string
+		var base *string
+		err := t.QueryRow(ctx, `SELECT coalesce((SELECT registration_mode FROM afs.team_collaboration WHERE team_id = $1 AND agent_id = $2), 'manual'),
+  (SELECT value #>> '{}' FROM afs.service_settings WHERE key = 'collab.base_domain')`, d.Team.ID, d.ID).Scan(&mode, &base)
+		if err != nil {
+			return MapError(err, OpRead, "collaboration")
+		}
+		d.Collab = &agent.Collab{Mode: mode}
+		if base != nil && *base != "" {
+			d.Collab.Host = d.Team.Slug + "." + *base
+		}
+	}
 	rows, err := t.Query(ctx, loadBindingsSQL, d.ID)
 	if err != nil {
 		return MapError(err, OpRead, "agent bindings")

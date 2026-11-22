@@ -137,3 +137,14 @@ func nonNilStrings(s []string) []string {
 	}
 	return s
 }
+
+// ReferencedBySwarm implements agenttemplates.Repository.
+func (*AgentTemplateRepo) ReferencedBySwarm(ctx context.Context, tx port.Tx, id string) (bool, error) {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return false, err
+	}
+	var used bool
+	err = pt.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM afs.swarm_templates WHERE spec #>> '{collaboration,templateId}' = $1)`, id).Scan(&used)
+	return used, MapError(err, OpRead, "swarm template")
+}

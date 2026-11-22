@@ -327,3 +327,34 @@ func TestVolumeErrorsNameVolumeReady(t *testing.T) {
 		t.Error("snapshot lookup error swallowed")
 	}
 }
+
+// RC-21, RC-28: the collaboration agent's own role carries the Paperclip policy, its environment gets the
+// secrets path of Paperclip's own secrets, and the edge reference reaches the cluster adapter.
+func TestCollaborationAgent(t *testing.T) {
+	d := desired()
+	d.IAMIdentity = agent.IdentityDedicated
+	d.Role = agent.RoleCollaboration
+	d.Collab = &agent.Collab{Mode: "manual", Host: "alpha.collab.example.com"}
+	r := newRig(t, d, agent.Hooks{})
+	if _, err := r.ctl.Reconcile(t.Context(), ref()); err != nil {
+		t.Fatal(err)
+	}
+	spec, ok := r.iam.Role("afs-01JD0000000000000000000021")
+	if !ok || !strings.Contains(spec.Policies["collaboration"], "paperclip-board-api-key") {
+		t.Fatalf("collaboration policy missing: %v", spec.Policies)
+	}
+	env := r.cl.Last()
+	if env.Agent.Collab == nil || env.Agent.Collab.SecretsPrefix != "afs/afs-t-alpha/reviewer/paperclip/" || !env.Agent.IsCollaboration() {
+		t.Errorf("collab = %+v", env.Agent.Collab)
+	}
+	// A worker's role has no Paperclip policy.
+	w := desired()
+	w.IAMIdentity = agent.IdentityDedicated
+	rw := newRig(t, w, agent.Hooks{})
+	if _, err := rw.ctl.Reconcile(t.Context(), ref()); err != nil {
+		t.Fatal(err)
+	}
+	if ws, _ := rw.iam.Role("afs-01JD0000000000000000000021"); ws.Policies["collaboration"] != "" {
+		t.Error("a worker got the collaboration policy")
+	}
+}

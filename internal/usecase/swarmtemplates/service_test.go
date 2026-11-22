@@ -18,8 +18,13 @@ import (
 )
 
 type repo struct {
-	rows map[string]domain.SwarmTemplate
-	open map[string]int
+	rows   map[string]domain.SwarmTemplate
+	open   map[string]int
+	collab map[string]bool
+}
+
+func (r *repo) CollaborationTemplateOK(_ context.Context, _ port.Tx, id string) (bool, error) {
+	return r.collab[id], nil
 }
 
 func (r *repo) List(_ context.Context, _ port.Tx, after string, limit int) ([]domain.SwarmTemplate, error) {
@@ -80,7 +85,7 @@ var (
 
 func rig() (*swarmtemplates.Service, *repo, *fakes.Audit, *fakes.Outbox) {
 	a, o := &fakes.Audit{}, &fakes.Outbox{}
-	r := &repo{rows: map[string]domain.SwarmTemplate{}, open: map[string]int{}}
+	r := &repo{rows: map[string]domain.SwarmTemplate{}, open: map[string]int{}, collab: map[string]bool{}}
 	return &swarmtemplates.Service{Deps: acting.Deps{Tx: &fakes.TxRunner{}, Audit: a, Outbox: o, Idem: &fakes.Idempotency{},
 		Clock: &fakes.Clock{T: time.Now()}, IDs: &fakes.IDGen{}}, Repo: r}, r, a, o
 }
@@ -329,5 +334,45 @@ func TestStorageErrorsSurface(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+const collabTpl = "tpl_01JD2Q3R4S5T6V7W8X9Y0Z0001"
+
+// RA-22: spec.collaboration must name an enabled agent template with capability paperclip.
+func TestCollaborationTemplate(t *testing.T) {
+	s, r, _, _ := rig()
+	ctx := t.Context()
+	p := params("with-collab")
+	p.Spec["collaboration"] = map[string]any{"templateId": collabTpl}
+	if _, err := s.Create(ctx, svcAdmin, p, nil); domain.KindOf(err) != domain.KindValidation {
+		t.Fatalf("unknown template = %v", err)
+	}
+	r.collab[collabTpl] = true
+	got, err := s.Create(ctx, svcAdmin, p, nil)
+	if err != nil || domain.SwarmCollaborationTemplateID(got.Template.Spec) != collabTpl {
+		t.Fatalf("create = %+v %v", got, err)
+	}
+	// A malformed collaboration object is refused before the store is asked.
+	for name, v := range map[string]any{"not an object": "x", "bad id": map[string]any{"templateId": "tpl_nope"}, "no id": map[string]any{}} {
+		bad := params("bad-" + strings.ReplaceAll(name, " ", "-"))
+		bad.Spec["collaboration"] = v
+		if _, err := s.Create(ctx, svcAdmin, bad, nil); domain.KindOf(err) != domain.KindValidation {
+			t.Errorf("%s = %v", name, err)
+		}
+	}
+	// An update that switches to a template without the capability is refused.
+	delete(r.collab, collabTpl)
+	spec := params("x").Spec
+	spec["collaboration"] = map[string]any{"templateId": collabTpl}
+	if _, err := s.Update(ctx, svcAdmin, got.Template.ID, got.Template.Version, domain.SwarmTemplatePatch{Spec: spec}); domain.KindOf(err) != domain.KindValidation {
+		t.Errorf("update = %v", err)
+	}
+	r.collab[collabTpl] = true
+	if _, err := s.Update(ctx, svcAdmin, got.Template.ID, got.Template.Version, domain.SwarmTemplatePatch{Spec: spec}); err != nil {
+		t.Errorf("update with a valid template = %v", err)
+	}
+	if domain.SwarmCollaborationTemplateID(map[string]any{}) != "" {
+		t.Error("a spec without collaboration has a template id")
 	}
 }

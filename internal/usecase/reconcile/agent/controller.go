@@ -34,7 +34,9 @@ type Config struct {
 	Snapshots   Snapshots
 	AWS         team.AWSConfig
 	Gateway     Gateway
-	Hooks       Hooks
+	// Edge locates afs-edge (collaboration agent ingress).
+	Edge  EdgeRef
+	Hooks Hooks
 	// LinkVerifierARN is the reconciler's role, which the dedicated agent roles trust so that role links
 	// can be verified (M4-A4, links.TrustWithVerifier). Empty: links cannot be verified.
 	LinkVerifierARN string
@@ -110,8 +112,13 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 		conds = append(conds, ok(domain.CondIamReady, "Reconciled"), ok(tags.Condition, "Applied"))
 	}
 
+	if d.Collab != nil {
+		cc := *d.Collab
+		cc.SecretsPrefix = c.cfg.AWS.SecretsPrefix + "/" + d.Team.Namespace + "/" + d.Name + "/paperclip/"
+		d.Collab = &cc
+	}
 	env := Environment{
-		Agent: d, RoleARN: roleARN, Region: c.cfg.AWS.Region, Gateway: c.cfg.Gateway,
+		Agent: d, RoleARN: roleARN, Region: c.cfg.AWS.Region, Gateway: c.cfg.Gateway, Edge: c.cfg.Edge,
 		Replicas: d.Replicas(), Hash: PodTemplateHash(d),
 		NodePool: nodePool(d),
 	}
@@ -188,11 +195,19 @@ func (c *Controller) reconcileIdentity(ctx context.Context, d Desired) (string, 
 		if policy, err = links.WithAssumeStatements(policy, targets); err != nil {
 			return "", err
 		}
+		policies := map[string]string{"agent": policy}
+		if d.IsCollaboration() {
+			cp, err := team.CollaborationRolePolicy(a.SecretsPrefix, d.Team.Namespace, d.Name, d.Team.ID, a.KMSKeyARN)
+			if err != nil {
+				return "", err
+			}
+			policies["collaboration"] = cp
+		}
 		roleTags := cloneTags(podTags)
 		if roleARN, err = c.cfg.IAM.EnsureRole(ctx, team.RoleSpec{
 			Name: name, Path: path, Description: "AFS agent " + d.Name + " of team " + d.Team.Slug,
 			TrustPolicy: trust, PermissionsBoundaryARN: a.PermissionsBoundaryARN, Tags: roleTags,
-			Policies: map[string]string{"agent": policy},
+			Policies: policies,
 		}); err != nil {
 			return "", fmt.Errorf("agent role: %w", err)
 		}

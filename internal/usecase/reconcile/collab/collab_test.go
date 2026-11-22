@@ -456,3 +456,65 @@ func TestFailuresAreCountedAndReturned(t *testing.T) {
 		t.Error("default logger")
 	}
 }
+
+type fakeCIDRs struct {
+	list []string
+	err  error
+}
+
+func (f fakeCIDRs) AllowedCIDRs(context.Context) ([]string, error) { return f.list, f.err }
+
+type fakeSets struct {
+	have    map[string][]string
+	updated map[string][]string
+	err     error
+}
+
+func (f *fakeSets) Addresses(_ context.Context, r IPSetRef) ([]string, error) {
+	return append([]string(nil), f.have[r.ARN]...), f.err
+}
+
+func (f *fakeSets) Update(_ context.Context, r IPSetRef, a []string) error {
+	if f.updated == nil {
+		f.updated = map[string][]string{}
+	}
+	f.updated[r.ARN] = a
+	return f.err
+}
+
+// RC-28: the IP sets follow collab.allowed_source_cidrs; an empty list is the whole internet.
+func TestWAFSync(t *testing.T) {
+	v4, v6 := IPSetRef{ARN: "v4"}, IPSetRef{ARN: "v6", IPv6: true}
+	run := func(cidrs []string, have map[string][]string) (*fakeSets, error) {
+		s := &fakeSets{have: have}
+		return s, (&WAFSync{CIDRs: fakeCIDRs{list: cidrs}, Sets: s, V4: v4, V6: v6}).Run(t.Context())
+	}
+	s, err := run(nil, map[string][]string{})
+	if err != nil || len(s.updated["v4"]) != 1 || s.updated["v4"][0] != "0.0.0.0/0" || s.updated["v6"][0] != "::/0" {
+		t.Fatalf("empty list: %v %v", s.updated, err)
+	}
+	s, err = run([]string{"203.0.113.9/24", "2001:db8::/32", "203.0.113.0/24"}, map[string][]string{"v4": {"203.0.113.0/24"}, "v6": {"::/0"}})
+	if err != nil || s.updated["v4"] != nil || len(s.updated["v6"]) != 1 || s.updated["v6"][0] != "2001:db8::/32" {
+		t.Fatalf("masked and compacted: %v %v", s.updated, err)
+	}
+	s, err = run([]string{"198.51.100.0/24"}, map[string][]string{"v4": {"0.0.0.0/0"}, "v6": {"::/0"}})
+	if _, written := s.updated["v6"]; err != nil || !written || len(s.updated["v6"]) != 0 {
+		t.Errorf("a list of only IPv4 must close IPv6: %v %v", s.updated, err)
+	}
+	if _, err := run([]string{"not-a-cidr"}, nil); err == nil {
+		t.Error("bad CIDR accepted")
+	}
+	if err := (&WAFSync{CIDRs: fakeCIDRs{err: errors.New("db")}, Sets: &fakeSets{}}).Run(t.Context()); err == nil {
+		t.Error("settings failure swallowed")
+	}
+	if err := (&WAFSync{CIDRs: fakeCIDRs{}, Sets: &fakeSets{err: errors.New("waf")}, V4: v4}).Run(t.Context()); err == nil {
+		t.Error("WAF failure swallowed")
+	}
+	// An unset IP set ARN is skipped.
+	if s, err := run(nil, nil); err != nil || s == nil {
+		t.Fatal(err)
+	}
+	if err := (&WAFSync{CIDRs: fakeCIDRs{}, Sets: &fakeSets{err: errors.New("x")}}).Run(t.Context()); err != nil {
+		t.Errorf("no sets configured: %v", err)
+	}
+}

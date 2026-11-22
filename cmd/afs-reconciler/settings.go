@@ -22,11 +22,14 @@ type settings struct {
 	GatewayRoleARN         string   // AFS_GATEWAY_ROLE_ARN
 	PermissionsBoundaryARN string   // AFS_PERMISSIONS_BOUNDARY_ARN
 	ESORoleARN             string   // AFS_ESO_ROLE_ARN (optional)
+	KMSKeyARN              string   // AFS_KMS_KEY_ARN (optional): the Secrets Manager key, for the collaboration agent's role
 	SecretsPrefix          string   // AFS_SECRETS_PREFIX, default afs
 	ReconcilerUsers        []string // AFS_RECONCILER_USERS: Kubernetes usernames of this service
 	GatewayNamespace       string   // AFS_GATEWAY_NAMESPACE, default afs-system
 	GatewayName            string   // AFS_GATEWAY_NAME, default afs-gateway
 	GatewayCAConfigMap     string   // AFS_GATEWAY_CA_CONFIGMAP, default afs-gateway-ca (in the gateway namespace)
+	EdgeNamespace          string   // AFS_EDGE_NAMESPACE, default afs-system: where afs-edge runs (collaboration ingress)
+	EdgeName               string   // AFS_EDGE_NAME, default afs-edge
 	PollInterval           time.Duration
 	ResyncInterval         time.Duration
 }
@@ -36,8 +39,9 @@ func settingsFrom(env func(string) string, hostname func() (string, error)) (set
 		DatabaseURL: env("AFS_DATABASE_URL"), MetricsAddr: env("AFS_METRICS_ADDR"), LeaseNamespace: env("AFS_LEADER_LEASE_NAMESPACE"),
 		PodName: env("POD_NAME"), Kubeconfig: env("AFS_KUBECONFIG"), ClusterName: env("AFS_CLUSTER_NAME"), EventBusName: env("AFS_EVENT_BUS_NAME"),
 		GatewayRoleARN: env("AFS_GATEWAY_ROLE_ARN"), PermissionsBoundaryARN: env("AFS_PERMISSIONS_BOUNDARY_ARN"),
-		ESORoleARN: env("AFS_ESO_ROLE_ARN"), SecretsPrefix: env("AFS_SECRETS_PREFIX"),
+		ESORoleARN: env("AFS_ESO_ROLE_ARN"), KMSKeyARN: env("AFS_KMS_KEY_ARN"), SecretsPrefix: env("AFS_SECRETS_PREFIX"),
 		GatewayNamespace: env("AFS_GATEWAY_NAMESPACE"), GatewayName: env("AFS_GATEWAY_NAME"), GatewayCAConfigMap: env("AFS_GATEWAY_CA_CONFIGMAP"),
+		EdgeNamespace: env("AFS_EDGE_NAMESPACE"), EdgeName: env("AFS_EDGE_NAME"),
 	}
 	def := func(p *string, v string) {
 		if *p == "" {
@@ -50,6 +54,8 @@ func settingsFrom(env func(string) string, hostname func() (string, error)) (set
 	def(&s.GatewayNamespace, "afs-system")
 	def(&s.GatewayName, "afs-gateway")
 	def(&s.GatewayCAConfigMap, "afs-gateway-ca")
+	def(&s.EdgeNamespace, "afs-system")
+	def(&s.EdgeName, "afs-edge")
 	if s.PodName == "" {
 		h, err := hostname()
 		if err != nil || h == "" {

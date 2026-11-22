@@ -2,7 +2,9 @@ package domain
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"io"
+	"net/netip"
 	"regexp"
 	"strings"
 	"time"
@@ -335,4 +337,22 @@ func GenerateSecretValue(r io.Reader, n int) (SecretValue, error) {
 		return SecretValue{}, err
 	}
 	return SecretValue{v: hex.EncodeToString(b)}, nil
+}
+
+// ValidateCollabSetting checks what a setting's pattern cannot: every entry of collab.allowed_source_cidrs
+// must parse as an IPv4 or IPv6 prefix (the pattern admits strings such as 999.1.1.1/99). Other keys pass.
+func ValidateCollabSetting(key string, raw json.RawMessage) error {
+	if key != SettingCollabAllowedSourceCidrs {
+		return nil
+	}
+	var list []string
+	if err := json.Unmarshal(raw, &list); err != nil {
+		return Validation(FieldError{Field: "value", Reason: key + " must be an array of CIDRs"})
+	}
+	for _, c := range list {
+		if _, err := netip.ParsePrefix(c); err != nil {
+			return Validation(FieldError{Field: "value", Reason: c + " is not a valid CIDR"})
+		}
+	}
+	return nil
 }

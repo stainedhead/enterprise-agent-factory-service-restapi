@@ -147,3 +147,14 @@ func (*SwarmTemplateRepo) OpenWorkOrders(ctx context.Context, tx port.Tx, id str
 	err = pt.QueryRow(ctx, `SELECT count(*) FROM afs.work_orders WHERE template_id = $1 AND status NOT IN ('done', 'failed', 'cancelled')`, id).Scan(&n)
 	return n, MapError(err, OpRead, "work order")
 }
+
+// CollaborationTemplateOK implements swarmtemplates.Repository.
+func (*SwarmTemplateRepo) CollaborationTemplateOK(ctx context.Context, tx port.Tx, id string) (bool, error) {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return false, err
+	}
+	var ok bool
+	err = pt.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM afs.agent_templates WHERE id = $1 AND enabled AND 'paperclip' = ANY (capabilities))`, id).Scan(&ok)
+	return ok, MapError(err, OpRead, "agent template")
+}
