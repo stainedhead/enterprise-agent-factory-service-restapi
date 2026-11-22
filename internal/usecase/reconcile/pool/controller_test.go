@@ -41,15 +41,14 @@ func desired(id, name string) pool.Desired {
 }
 
 type rig struct {
-	src  *pooltest.Source
-	cl   *pooltest.Cluster
-	iam  *teamtest.IAM
-	pi   *agenttest.PodIdentities
-	q    *pooltest.Queues
-	rec  *pooltest.Recorder
-	prb  *pooltest.Probe
-	ctl  *pool.Controller
-	pods []pool.Desired
+	src *pooltest.Source
+	cl  *pooltest.Cluster
+	iam *teamtest.IAM
+	pi  *agenttest.PodIdentities
+	q   *pooltest.Queues
+	rec *pooltest.Recorder
+	prb *pooltest.Probe
+	ctl *pool.Controller
 }
 
 func awsCfg() team.AWSConfig {
