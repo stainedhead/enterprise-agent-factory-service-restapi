@@ -89,6 +89,14 @@ Agent:
     name:
       $ref: '#/components/schemas/Name'
       readOnly: true
+    role:
+      type: string
+      enum:
+      - worker
+      - collaboration
+      description: worker or collaboration; set on create, immutable
+    collaboration:
+      $ref: '#/components/schemas/AgentCollaboration'
     description:
       type: string
       maxLength: 1000
@@ -141,6 +149,14 @@ CreateAgentRequest:
   properties:
     name:
       $ref: '#/components/schemas/Name'
+    role:
+      type: string
+      enum:
+      - worker
+      - collaboration
+      description: Set on create; immutable
+    collaboration:
+      $ref: '#/components/schemas/AgentCollaborationInput'
     description:
       type: string
       maxLength: 1000
@@ -167,6 +183,8 @@ CreateAgentRequest:
 UpdateAgentRequest:
   type: object
   properties:
+    collaboration:
+      $ref: '#/components/schemas/AgentCollaborationInput'
     description:
       type: string
       maxLength: 1000
@@ -332,6 +350,12 @@ AgentTemplate:
     currentDigest:
       type: string
       pattern: ^sha256:[0-9a-f]{64}$
+    capabilities:
+      type: array
+      items:
+        type: string
+        enum:
+        - paperclip
     enabled:
       type: boolean
     version:
@@ -356,3 +380,45 @@ AgentTemplateList:
     nextToken:
       type: string
       description: Absent on the last page
+AgentCollaboration:
+  type: object
+  description: A worker agent's connection to the team's Paperclip (absent on the collaboration agent)
+  required:
+  - connect
+  - linkState
+  properties:
+    connect:
+      type: boolean
+    paperclipAgentId:
+      type:
+      - string
+      - 'null'
+      pattern: ^[A-Za-z0-9._:-]{1,128}$
+    linkState:
+      type: string
+      enum:
+      - pending
+      - linked
+      - failed
+      - disabled
+      readOnly: true
+    lastSyncedAt:
+      type:
+      - string
+      - 'null'
+      format: date-time
+      readOnly: true
+    lastError:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+AgentCollaborationInput:
+  type: object
+  properties:
+    connect:
+      type: boolean
+    paperclipAgentId:
+      type: string
+      pattern: ^[A-Za-z0-9._:-]{1,128}$
+      description: Accepted only while registrationMode is manual

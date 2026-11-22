@@ -43,9 +43,12 @@ type Patch struct {
 	ConsoleClientID *string
 	CLIClientID     *string
 	ClientSecretARN *domain.OptionalString
-	GroupsClaim     *string
-	IsDefault       *bool
-	Enabled         *bool
+	// CollabClientID and CollabClientSecretARN set (or, with null, clear) the collaboration client.
+	CollabClientID        *domain.OptionalString
+	CollabClientSecretARN *domain.OptionalString
+	GroupsClaim           *string
+	IsDefault             *bool
+	Enabled               *bool
 }
 
 func (s *Service) check(ctx context.Context, c acting.Caller, action string) error {
@@ -57,7 +60,7 @@ func (s *Service) check(ctx context.Context, c acting.Caller, action string) err
 
 func audit(p domain.IdentityProvider) map[string]any {
 	return map[string]any{"kind": p.Kind, "name": p.Name, "issuerUrl": p.IssuerURL, "consoleClientId": p.ConsoleClientID,
-		"cliClientId": p.CLIClientID, "clientSecretArn": p.ClientSecretARN, "groupsClaim": p.GroupsClaim,
+		"cliClientId": p.CLIClientID, "clientSecretArn": p.ClientSecretARN, "collabClientId": p.CollabClientID, "collabClientSecretArn": p.CollabClientSecretARN, "groupsClaim": p.GroupsClaim,
 		"isDefault": p.IsDefault, "enabled": p.Enabled}
 }
 
@@ -173,6 +176,18 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, id string, expect
 			n.ClientSecretARN = ""
 			if patch.ClientSecretARN.Value != nil {
 				n.ClientSecretARN = *patch.ClientSecretARN.Value
+			}
+		}
+		if patch.CollabClientID != nil {
+			n.CollabClientID = ""
+			if patch.CollabClientID.Value != nil {
+				n.CollabClientID = *patch.CollabClientID.Value
+			}
+		}
+		if patch.CollabClientSecretARN != nil {
+			n.CollabClientSecretARN = ""
+			if patch.CollabClientSecretARN.Value != nil {
+				n.CollabClientSecretARN = *patch.CollabClientSecretARN.Value
 			}
 		}
 		if patch.GroupsClaim != nil {

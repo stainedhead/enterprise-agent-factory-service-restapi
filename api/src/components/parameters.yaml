@@ -83,9 +83,9 @@ parameters:
     in: query
     schema:
       type: string
-      pattern: ^(team|agent|model|system|day|hour|pool|tag:[A-Za-z0-9_.:/=+@-]+)(,(team|agent|model|system|day|hour|pool|tag:[A-Za-z0-9_.:/=+@-]+))*$
-    description: 'Comma-separated: team, agent, model, system, day, hour, tag:<key>, and pool in ephemeral teams. Filters
-      tag.<key>=<value> are also accepted'
+      pattern: ^(team|agent|model|system|day|hour|pool|surface|reason|person|tag:[A-Za-z0-9_.:/=+@-]+)(,(team|agent|model|system|day|hour|pool|surface|reason|person|tag:[A-Za-z0-9_.:/=+@-]+))*$
+    description: 'Comma-separated: team, agent, model, system, day, hour, tag:<key>, and pool in ephemeral teams. The collaboration
+      report takes team (service report), day, surface, reason and person. Filters tag.<key>=<value> are also accepted'
   UsageGroupBy:
     name: groupBy
     in: query

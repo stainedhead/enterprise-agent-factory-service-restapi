@@ -1,5 +1,5 @@
 {{- /* Public Services of afs-api and afs-gateway; the reconciler gets a headless metrics Service. */}}
-{{- range $name := list "api" "gateway" "reconciler" }}
+{{- range $name := list "api" "gateway" "reconciler" "edge" }}
 {{- $c := include "afs.component" (dict "root" $ "name" $name) | fromYaml }}
 {{- if $c.enabled }}
 ---
@@ -22,6 +22,8 @@ spec:
     {{- if eq $name "api" }}
     - {name: http, port: {{ $c.service.port }}, targetPort: http}
     {{- else if eq $name "gateway" }}
+    - {name: https, port: {{ $c.service.port }}, targetPort: https}
+    {{- else if eq $name "edge" }}
     - {name: https, port: {{ $c.service.port }}, targetPort: https}
     {{- end }}
     - {name: metrics, port: {{ $c.ports.metrics }}, targetPort: metrics}

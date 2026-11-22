@@ -38,12 +38,12 @@ func rollback(tx port.Tx, fn func()) {
 }
 
 // List implements secrets.Repository.
-func (r *Repo) List(_ context.Context, _ port.Tx, teamID, after string, limit int) ([]domain.Secret, error) {
+func (r *Repo) List(_ context.Context, _ port.Tx, teamID, after string, managedBy domain.SecretManagedBy, limit int) ([]domain.Secret, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []domain.Secret
 	for _, s := range r.Rows {
-		if s.TeamID == teamID && s.ID > after {
+		if s.TeamID == teamID && s.ID > after && (managedBy == "" || s.ManagedBy == managedBy || (managedBy == domain.ManagedByUser && s.ManagedBy == "")) {
 			out = append(out, s)
 		}
 	}

@@ -97,11 +97,11 @@ func TestListSecretsPaged(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	page, next, err := r.svc.List(t.Context(), admin, team, acting.Page{Limit: 2})
+	page, next, err := r.svc.List(t.Context(), admin, team, "", acting.Page{Limit: 2})
 	if err != nil || len(page) != 2 || next == "" {
 		t.Fatalf("page 1: %d %q %v", len(page), next, err)
 	}
-	rest, next, err := r.svc.List(t.Context(), admin, team, acting.Page{Limit: 2, Cursor: next})
+	rest, next, err := r.svc.List(t.Context(), admin, team, "", acting.Page{Limit: 2, Cursor: next})
 	if err != nil || len(rest) != 1 || next != "" {
 		t.Fatalf("page 2: %d %q %v", len(rest), next, err)
 	}

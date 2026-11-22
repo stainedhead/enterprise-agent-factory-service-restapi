@@ -22,7 +22,7 @@ import (
 )
 
 // ContractVersion is the API contract version the extract is built from.
-const contractVersion = "1.2.0"
+const contractVersion = "1.3.1"
 
 const (
 	contractPath = "docs/contracts/api-contract.md"
@@ -119,6 +119,7 @@ func extract(contract, prd []byte) (*Extract, error) {
 	if ex.Settings, err = parseSettings(pl); err != nil {
 		return nil, err
 	}
+	ex.Settings = append(ex.Settings, collabSettings()...)
 	if err := validate(ex); err != nil {
 		return nil, err
 	}

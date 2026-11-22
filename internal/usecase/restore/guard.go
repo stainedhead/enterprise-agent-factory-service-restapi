@@ -157,7 +157,7 @@ func refusal(ctx context.Context, tx port.Tx, g agents.Guard, teamID string, st 
 			return slices.ContainsFunc(st.Change.Fields, func(c domain.FieldChange) bool { return c.Field == f })
 		}
 		if changed("template") || changed("image") {
-			_, err = g.CheckTemplate(ctx, tx, str(st.Row, "template"), domain.ImageRef(str(st.Row, "image")))
+			_, err = g.CheckTemplate(ctx, tx, str(st.Row, "template"), domain.ImageRef(str(st.Row, "image")), domain.AgentRole(str(st.Row, "role")))
 		}
 		if err == nil && changed("model_id") {
 			err = g.CheckModel(ctx, tx, teamID, str(st.Row, "model_id"))

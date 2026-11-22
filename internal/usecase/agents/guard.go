@@ -32,7 +32,7 @@ type Guard struct{ Src GuardSource }
 
 // CheckTemplate refuses a template that is unknown, disabled or does not list the image's digest
 // (RA-US-4.1, RA-US-4.3). It returns the template's id.
-func (g Guard) CheckTemplate(ctx context.Context, tx port.Tx, name string, image domain.ImageRef) (string, error) {
+func (g Guard) CheckTemplate(ctx context.Context, tx port.Tx, name string, image domain.ImageRef, role domain.AgentRole) (string, error) {
 	t, ok, err := g.Src.Template(ctx, tx, name)
 	if err != nil {
 		return "", err
@@ -42,6 +42,14 @@ func (g Guard) CheckTemplate(ctx context.Context, tx port.Tx, name string, image
 		return "", domain.Validation(domain.FieldError{Field: "template", Reason: "no agent template named " + name})
 	case !t.Enabled:
 		return "", domain.Validation(domain.FieldError{Field: "template", Reason: "agent template " + name + " is disabled"})
+	}
+	// A collaboration agent needs a template with the paperclip capability and a worker may not use one.
+	has := slices.Contains(t.Capabilities, domain.CapabilityPaperclip)
+	switch {
+	case role == domain.AgentRoleCollaboration && !has:
+		return "", domain.Validation(domain.FieldError{Field: "template", Reason: "agent template " + name + " does not have the paperclip capability"})
+	case role != domain.AgentRoleCollaboration && has:
+		return "", domain.Validation(domain.FieldError{Field: "template", Reason: "agent template " + name + " is a collaboration template; a worker cannot use it"})
 	}
 	digest := string(image)[strings.LastIndex(string(image), "@")+1:]
 	if !slices.Contains(t.AllowedDigests, digest) {
@@ -95,6 +103,8 @@ func (g Guard) CheckBindings(ctx context.Context, tx port.Tx, teamID, agentID st
 		switch {
 		case !ok:
 			fe = append(fe, domain.FieldError{Field: f, Reason: "no such secret in the team"})
+		case info.ManagedBy == string(domain.ManagedByPaperclip):
+			fe = append(fe, domain.FieldError{Field: f, Reason: "a secret Paperclip manages cannot be bound"})
 		case info.PoolID != "" || (info.AgentID != "" && info.AgentID != agentID):
 			fe = append(fe, domain.FieldError{Field: f, Reason: "the secret belongs to another agent or a pool and cannot be bound here"})
 		}

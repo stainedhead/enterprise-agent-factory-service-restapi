@@ -60,7 +60,7 @@ func TestSecretRepo(t *testing.T) {
 		if err != nil || g2.Scope != domain.SecretScopeAgent || g2.AgentID != agent || g2.Rotation.Enabled {
 			t.Errorf("agent secret: %+v %v", g2, err)
 		}
-		rows, err := repo.List(ctx, tx, tm.ID, "", 10)
+		rows, err := repo.List(ctx, tx, tm.ID, "", "", 10)
 		if err != nil || len(rows) != 2 {
 			t.Errorf("list: %v %v", rows, err)
 		}
@@ -99,7 +99,7 @@ func TestSecretRepo(t *testing.T) {
 	_ = inTx(t, db, teamSession(other.ID), func(ctx context.Context, tx port.Tx) error {
 		_, err := repo.Get(ctx, tx, tm.ID, teamSec.ID, false)
 		wantKind(t, err, domain.KindNotFound)
-		rows, _ := repo.List(ctx, tx, tm.ID, "", 10)
+		rows, _ := repo.List(ctx, tx, tm.ID, "", "", 10)
 		if len(rows) != 0 {
 			t.Errorf("cross-team list: %v", rows)
 		}

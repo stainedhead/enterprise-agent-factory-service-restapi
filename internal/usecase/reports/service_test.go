@@ -116,6 +116,22 @@ func TestAuthorization(t *testing.T) {
 			_, err := r.svc.AgentReport(ctx, viewer(team), team, "agt_01JD2Q3R4S5T6V7W8X9Y0Z0009", domain.ReportKindUsage, none, acting.Page{})
 			return err
 		}, domain.KindNotFound},
+		{"collaboration is not an agent report", func(r *rig) error {
+			_, err := r.svc.AgentReport(ctx, viewer(team), team, agent, domain.ReportKindCollaboration, none, acting.Page{})
+			return err
+		}, domain.KindNotFound},
+		{"collaboration team report", func(r *rig) error {
+			_, err := r.svc.TeamReport(ctx, viewer(team), team, domain.ReportKindCollaboration, none, acting.Page{})
+			return err
+		}, ""},
+		{"collaboration service report", func(r *rig) error {
+			_, err := r.svc.ServiceReport(ctx, svcAdmin(), domain.ReportKindCollaboration, none, acting.Page{})
+			return err
+		}, ""},
+		{"collaboration service report denied to a team viewer", func(r *rig) error {
+			_, err := r.svc.ServiceReport(ctx, viewer(team), domain.ReportKindCollaboration, none, acting.Page{})
+			return err
+		}, domain.KindAccessDenied},
 		{"agent report", func(r *rig) error {
 			_, err := r.svc.AgentReport(ctx, viewer(team), team, agent, domain.ReportKindActivity, none, acting.Page{})
 			return err

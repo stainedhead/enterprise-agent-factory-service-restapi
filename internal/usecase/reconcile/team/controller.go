@@ -35,6 +35,10 @@ type AWSConfig struct {
 	ESORoleARN string
 	// SecretsPrefix is the Secrets Manager path prefix (service setting secrets.path_prefix).
 	SecretsPrefix string
+	// KMSKeyARN is the environment key that encrypts Secrets Manager secrets (AFS_KMS_KEY_ARN). Optional: when
+	// empty the collaboration agent's role gets no kms statement and Paperclip's own secrets use the account's
+	// Secrets Manager default key through its own grant.
+	KMSKeyARN string
 }
 
 func (c AWSConfig) validate() error {

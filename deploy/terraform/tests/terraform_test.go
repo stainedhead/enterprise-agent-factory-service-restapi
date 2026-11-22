@@ -343,8 +343,43 @@ func TestIAMLeastPrivilege(t *testing.T) {
 			t.Errorf("the reconciler's pool queue statement grants %s", a)
 		}
 	}
+	// DP-4: the edge reads client secrets and nothing else; the reconciler reads only the exact board key name and
+	// touches only the two IP sets.
+	e := byID["ReadCollaborationClientSecrets"]
+	if e.effect != "Allow" || len(e.actions) != 1 || e.actions[0] != "secretsmanager:GetSecretValue" {
+		t.Errorf("edge secret read = %+v", e)
+	}
+	if k := byID["DecryptCollaborationClientSecrets"]; !k.hasCond || len(k.actions) != 1 || k.actions[0] != "kms:Decrypt" {
+		t.Errorf("edge key use must be Decrypt only, through Secrets Manager: %+v", k)
+	}
+	if b := byID["ReadBoardKeys"]; len(b.actions) != 2 || b.effect != "Allow" {
+		t.Errorf("board key read = %+v", b)
+	}
+	if k := byID["DecryptBoardKeys"]; !k.hasCond || len(k.actions) != 1 {
+		t.Errorf("board key decrypt = %+v", k)
+	}
+	// COL-12: managed registration writes only the workers' own paperclip-agent-api-key secrets.
+	if w := byID["WriteWorkerPaperclipKeys"]; w.effect != "Allow" || slices.Contains(w.actions, "secretsmanager:GetSecretValue") || !slices.Contains(w.actions, "secretsmanager:CreateSecret") {
+		t.Errorf("worker key write = %+v", w)
+	}
+	if k := byID["EncryptWorkerPaperclipKeys"]; !k.hasCond || slices.Contains(k.actions, "kms:Decrypt") {
+		t.Errorf("worker key encrypt = %+v", k)
+	}
+	if w := byID["SyncCollaborationAllowList"]; len(w.actions) != 2 || w.actions[0] != "wafv2:GetIPSet" || w.actions[1] != "wafv2:UpdateIPSet" {
+		t.Errorf("WAF sync = %+v", w)
+	}
 	// trust is Pod Identity only
 	src := sources(t)[f]
+	for _, must := range []string{
+		`secret:${var.secrets_path_prefix}/*/paperclip-board-api-key-??????"]`,
+		`secret:${var.secrets_path_prefix}/*/paperclip-agent-api-key-??????"]`,
+		`resources = var.collab_waf_ip_set_arns`,
+		`secret:${var.collab_client_secret_name_pattern}"]`,
+	} {
+		if !strings.Contains(string(src), must) {
+			t.Errorf("pod-identity does not contain %q", must)
+		}
+	}
 	if !strings.Contains(string(src), `:sqs:${var.region}:${var.account_id}:afs-*"]`) {
 		t.Error("the reconciler's pool queue statement is not limited to queues named afs-*")
 	}
@@ -354,7 +389,7 @@ func TestIAMLeastPrivilege(t *testing.T) {
 	if !strings.Contains(string(src), `identifiers = ["pods.eks.amazonaws.com"]`) {
 		t.Error("roles are not trusted by Pod Identity")
 	}
-	for _, role := range []string{"api", "reconciler", "gateway", "billing"} {
+	for _, role := range []string{"api", "reconciler", "gateway", "billing", "edge"} {
 		if !strings.Contains(string(src), `"`+role+`"`) {
 			t.Errorf("role %s missing", role)
 		}
@@ -395,7 +430,7 @@ func TestRootWiresTheModules(t *testing.T) {
 	for _, m := range blocks(files["main.tf"], "module") {
 		got[m.Labels[0]] = true
 	}
-	for _, want := range []string{"rds", "backup", "buckets", "boundary", "pod_identity"} {
+	for _, want := range []string{"rds", "backup", "buckets", "boundary", "pod_identity", "collab_edge"} {
 		if !got[want] {
 			t.Errorf("root does not instantiate module %s", want)
 		}
@@ -432,6 +467,71 @@ func TestModuleVariablesAreDeclared(t *testing.T) {
 			if !declared[dir][m[1]] {
 				t.Errorf("%s uses var.%s, which %s does not declare", f, m[1], dir)
 			}
+		}
+	}
+}
+
+// DP-3: the public entry. These are properties of the configuration text, since there is no terraform binary
+// here; `terraform validate` and `tflint` run in CI on top of this.
+func TestCollabEdgeModule(t *testing.T) {
+	files := parsed(t)
+	src := sources(t)
+	f := "modules/collab-edge/main.tf"
+	text := string(src[f])
+	if len(files[f].Blocks) < 20 {
+		t.Fatalf("collab-edge has only %d blocks", len(files[f].Blocks))
+	}
+	for _, must := range []string{
+		`ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"`,
+		`subject_alternative_names = ["*.${var.base_domain}"]`,
+		`internal                   = false`,
+		`drop_invalid_header_fields = true`,
+		`status_code  = "404"`,
+		`status_code = "HTTP_301"`,
+		`target_type = "ip"`,
+		`protocol    = "HTTPS"`,
+		`path                = "/readyz"`,
+		`values = local.hosts`,
+		`hosts = [var.base_domain, "*.${var.base_domain}"]`,
+		`AWSManagedRulesCommonRuleSet`, `AWSManagedRulesKnownBadInputsRuleSet`, `AWSManagedRulesAmazonIpReputationList`, `AWSManagedRulesAnonymousIpList`,
+		`aggregate_key_type = "IP"`,
+		`limit              = var.rate_limit_per_5_minutes`,
+		`addresses          = ["0.0.0.0/0"]`, `addresses          = ["::/0"]`,
+		`retention_in_days = var.log_retention_days`,
+		`aws-waf-logs-`,
+	} {
+		if !strings.Contains(text, must) {
+			t.Errorf("%s lacks %q", f, must)
+		}
+	}
+	if n := strings.Count(text, "ignore_changes = [addresses]"); n != 2 {
+		t.Errorf("both IP sets must leave their addresses to the reconciler: %d ignore_changes", n)
+	}
+	// the ALB reaches the afs-edge pods only: no egress rule to a CIDR
+	for _, bl := range blocks(files[f], "resource", "aws_vpc_security_group_egress_rule") {
+		if _, bad := bl.Body.Attributes["cidr_ipv4"]; bad {
+			t.Errorf("egress rule %s opens a CIDR", bl.Labels[1])
+		}
+		if _, ok := bl.Body.Attributes["referenced_security_group_id"]; !ok {
+			t.Errorf("egress rule %s is not limited to a security group", bl.Labels[1])
+		}
+	}
+	// no state-key value is created: Terraform holds the container only
+	if strings.Contains(text, "aws_secretsmanager_secret_version") || strings.Contains(text, "random_password") {
+		t.Error("the sealing keys must not pass through Terraform state")
+	}
+	// the module exists only when a base domain is set
+	root := string(src["main.tf"])
+	if !strings.Contains(root, `count  = var.collab_base_domain == "" ? 0 : 1`) {
+		t.Error("collab_edge is not gated on collab_base_domain")
+	}
+	for _, out := range []string{"target_group_arn", "waf_ip_set_arns", "alb_security_group_id"} {
+		found := false
+		for _, o := range blocks(files["modules/collab-edge/outputs.tf"], "output") {
+			found = found || o.Labels[0] == out
+		}
+		if !found {
+			t.Errorf("collab-edge output %s missing", out)
 		}
 	}
 }

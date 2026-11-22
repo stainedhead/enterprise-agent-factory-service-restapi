@@ -6,6 +6,7 @@ package agenttemplates
 
 import (
 	"context"
+	"slices"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/authz"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
@@ -18,7 +19,7 @@ const kind = "agent_templates"
 // Repository is the agent_templates store.
 type Repository interface {
 	// List returns templates with name greater than after, in name order; enabledOnly hides disabled ones.
-	List(ctx context.Context, tx port.Tx, enabledOnly bool, after string, limit int) ([]domain.AgentTemplate, error)
+	List(ctx context.Context, tx port.Tx, enabledOnly bool, capability, after string, limit int) ([]domain.AgentTemplate, error)
 	// Get returns one template by name, forUpdate locking it; NotFound when absent.
 	Get(ctx context.Context, tx port.Tx, name string, forUpdate bool) (domain.AgentTemplate, error)
 	Insert(ctx context.Context, tx port.Tx, t domain.AgentTemplate) error
@@ -26,6 +27,8 @@ type Repository interface {
 	Update(ctx context.Context, tx port.Tx, t domain.AgentTemplate, expect domain.Version) (domain.AgentTemplate, error)
 	// Delete removes the template; one an agent or pool uses is a Conflict (dependents_exist).
 	Delete(ctx context.Context, tx port.Tx, name string, expect domain.Version) error
+	// ReferencedBySwarm reports whether a swarm template names the template as its collaboration agent.
+	ReferencedBySwarm(ctx context.Context, tx port.Tx, id string) (bool, error)
 }
 
 // Service is the agent template use case set.
@@ -43,15 +46,15 @@ func (s *Service) check(ctx context.Context, c acting.Caller, action string, per
 
 func audit(t domain.AgentTemplate) map[string]any {
 	return map[string]any{"id": t.ID, "name": t.Name, "description": t.Description, "harness": t.Harness,
-		"defaultResources": t.DefaultResources, "allowedDigests": t.AllowedDigests, "currentDigest": t.CurrentDigest, "enabled": t.Enabled}
+		"defaultResources": t.DefaultResources, "allowedDigests": t.AllowedDigests, "currentDigest": t.CurrentDigest, "enabled": t.Enabled, "capabilities": t.Capabilities}
 }
 
-func (s *Service) list(ctx context.Context, c acting.Caller, enabledOnly bool, p acting.Page) ([]domain.AgentTemplate, string, error) {
+func (s *Service) list(ctx context.Context, c acting.Caller, enabledOnly bool, capability string, p acting.Page) ([]domain.AgentTemplate, string, error) {
 	p = p.Normalized()
 	var rows []domain.AgentTemplate
 	err := s.Tx.ReadTx(ctx, c.Session(), func(ctx context.Context, tx port.Tx) error {
 		var err error
-		rows, err = s.Repo.List(ctx, tx, enabledOnly, p.Cursor, p.Limit+1)
+		rows, err = s.Repo.List(ctx, tx, enabledOnly, capability, p.Cursor, p.Limit+1)
 		return err
 	})
 	if err != nil {
@@ -63,19 +66,25 @@ func (s *Service) list(ctx context.Context, c acting.Caller, enabledOnly bool, p
 
 // ListEnabled implements ListAgentTemplates: enabled templates with their allowed digests
 // (models:read).
-func (s *Service) ListEnabled(ctx context.Context, c acting.Caller, p acting.Page) ([]domain.AgentTemplate, string, error) {
+func (s *Service) ListEnabled(ctx context.Context, c acting.Caller, capability string, p acting.Page) ([]domain.AgentTemplate, string, error) {
 	if err := s.check(ctx, c, "ListAgentTemplates", authz.ModelsRead, authz.ScopeAny); err != nil {
 		return nil, "", err
 	}
-	return s.list(ctx, c, true, p)
+	if err := domain.ValidateCapabilityFilter(capability); err != nil {
+		return nil, "", err
+	}
+	return s.list(ctx, c, true, capability, p)
 }
 
 // ListAll implements ListAdminAgentTemplates (admin:agent-templates).
-func (s *Service) ListAll(ctx context.Context, c acting.Caller, p acting.Page) ([]domain.AgentTemplate, string, error) {
+func (s *Service) ListAll(ctx context.Context, c acting.Caller, capability string, p acting.Page) ([]domain.AgentTemplate, string, error) {
 	if err := s.check(ctx, c, "ListAdminAgentTemplates", authz.AdminAgentTemplates, authz.ScopeService); err != nil {
 		return nil, "", err
 	}
-	return s.list(ctx, c, false, p)
+	if err := domain.ValidateCapabilityFilter(capability); err != nil {
+		return nil, "", err
+	}
+	return s.list(ctx, c, false, capability, p)
 }
 
 // Put implements PutAgentTemplate: an upsert by name. A change to an existing template may carry
@@ -117,12 +126,29 @@ func (s *Service) Put(ctx context.Context, c acting.Caller, in domain.PutAgentTe
 			}
 		}
 		t.ID = cur.ID
+		if cur.Enabled && !t.Enabled || slices.Contains(cur.Capabilities, domain.CapabilityPaperclip) && !slices.Contains(t.Capabilities, domain.CapabilityPaperclip) {
+			if err := s.notReferenced(ctx, tx, cur.ID); err != nil {
+				return err
+			}
+		}
 		if out, err = s.Repo.Update(ctx, tx, t, cur.Version); err != nil {
 			return err
 		}
 		return s.Audit.Write(ctx, tx, c.Record("PutAgentTemplate", kind, out.ID, "", audit(cur), audit(out)))
 	})
 	return out, err
+}
+
+// notReferenced is the 409 for a template a swarm template uses as its collaboration agent (RA-22).
+func (s *Service) notReferenced(ctx context.Context, tx port.Tx, id string) error {
+	used, err := s.Repo.ReferencedBySwarm(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	if used {
+		return domain.Conflict(domain.ReasonReferencedBySwarm, "a swarm template names this agent template as its collaboration agent", nil)
+	}
+	return nil
 }
 
 // Delete implements DeleteAgentTemplate (If-Match required). A template an agent or pool uses is a
@@ -137,6 +163,9 @@ func (s *Service) Delete(ctx context.Context, c acting.Caller, name string, expe
 			return err
 		}
 		if err := domain.CheckVersion(cur.Version, expect); err != nil {
+			return err
+		}
+		if err := s.notReferenced(ctx, tx, cur.ID); err != nil {
 			return err
 		}
 		if err := s.Repo.Delete(ctx, tx, name, expect); err != nil {

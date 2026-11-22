@@ -10,11 +10,16 @@ import (
 // ParseReportKind validates the {kind} path value of a report operation.
 func ParseReportKind(s string) (ReportKind, error) {
 	switch k := ReportKind(s); k {
-	case ReportKindUsage, ReportKindCosts, ReportKindActivity, ReportKindTraffic:
+	case ReportKindUsage, ReportKindCosts, ReportKindActivity, ReportKindTraffic, ReportKindCollaboration:
 		return k, nil
 	}
 	return "", NotFound("report")
 }
+
+// ReportKindCollaboration is the collaboration usage report (RA-21, COL-36). It is not part of the generated
+// ReportKind enumeration on purpose: that enumeration also types a report schedule's report, and the collaboration
+// report is not schedulable (PC-D13).
+const ReportKindCollaboration ReportKind = "collaboration"
 
 // Report limits.
 const (
@@ -55,6 +60,10 @@ const (
 	DimHour   ReportDim = "hour"
 	DimPool   ReportDim = "pool"
 	DimTag    ReportDim = "tag"
+	// DimSurface, DimReason and DimPerson group the collaboration report.
+	DimSurface ReportDim = "surface"
+	DimReason  ReportDim = "reason"
+	DimPerson  ReportDim = "person"
 )
 
 // ReportGroup is one groupBy element: a dimension and, for a tag, its key.
@@ -74,6 +83,9 @@ func (g ReportGroup) String() string {
 // dimsOf lists the dimensions that make sense for a kind: a usage report has models, a traffic report
 // has external systems, an activity report has neither.
 func dimsOf(k ReportKind) map[ReportDim]bool {
+	if k == ReportKindCollaboration {
+		return map[ReportDim]bool{DimTeam: true, DimDay: true, DimSurface: true, DimReason: true, DimPerson: true}
+	}
 	d := map[ReportDim]bool{DimTeam: true, DimAgent: true, DimDay: true, DimHour: true, DimPool: true, DimTag: true}
 	switch k {
 	case ReportKindUsage, ReportKindCosts:
@@ -199,7 +211,7 @@ func ParseReportGroupBy(kind ReportKind, s string) ([]ReportGroup, error) {
 
 func isKnownDim(d ReportDim) bool {
 	switch d {
-	case DimTeam, DimAgent, DimModel, DimSystem, DimDay, DimHour, DimPool:
+	case DimTeam, DimAgent, DimModel, DimSystem, DimDay, DimHour, DimPool, DimSurface, DimReason, DimPerson:
 		return true
 	}
 	return false
@@ -265,7 +277,8 @@ func ParseReportQuery(kind ReportKind, raw RawReportQuery, now time.Time) (Repor
 		return q, err
 	}
 	q.Granularity = FiveMinute
-	if q.To.Sub(q.From) > DailyAbove {
+	// The collaboration report reads one table of five-minute counts whatever the range.
+	if q.To.Sub(q.From) > DailyAbove && kind != ReportKindCollaboration {
 		q.Granularity = Daily
 	}
 	if raw.GroupBy != "" {
@@ -304,6 +317,16 @@ func ParseReportQuery(kind ReportKind, raw RawReportQuery, now time.Time) (Repor
 			return q, reportBad("systemId", "must be an ext_ identifier")
 		}
 	}
+	if kind == ReportKindCollaboration {
+		switch {
+		case raw.AgentID != "":
+			return q, reportBad("agentId", "collaboration reports have no agent")
+		case raw.PoolID != "":
+			return q, reportBad("poolId", "collaboration reports have no pool")
+		case len(raw.Tags) > 0:
+			return q, reportBad("tag", "collaboration reports have no tags")
+		}
+	}
 	if raw.ModelID != "" && kind != ReportKindUsage && kind != ReportKindCosts {
 		return q, reportBad("modelId", fmt.Sprintf("%s reports have no model", kind))
 	}
@@ -335,6 +358,8 @@ type ReportRange struct {
 type ReportRow struct {
 	Group    []string
 	Measures []any
+	// ServiceAdminEntry is true on a collaboration row that includes access held only as a service admin.
+	ServiceAdminEntry bool
 }
 
 // Report is a computed report: groupBy columns, measure columns, one row per group and the totals
@@ -387,6 +412,9 @@ func ReportMeasures(k ReportKind) []Measure {
 	case ReportKindTraffic:
 		return []Measure{{"connections", MeasureInt}, {"deniedConnections", MeasureInt}, {"requests", MeasureInt},
 			{"errors", MeasureInt}, {"bytesOut", MeasureInt}, {"bytesIn", MeasureInt}}
+	case ReportKindCollaboration:
+		return []Measure{{"signIns", MeasureInt}, {"uniquePeople", MeasureInt}, {"requests", MeasureInt},
+			{"deniedRequests", MeasureInt}, {"secretDetections", MeasureInt}}
 	}
 	return nil
 }
@@ -401,6 +429,10 @@ func ReportNotes(q ReportQuery) []string {
 		n = append(n, BedrockOnlyNote, "estimatedUsd is the gateway's metering; billedUsd comes from the AWS Cost and Usage Report and is present for daily ranges once reconciled")
 	case ReportKindTraffic:
 		n = append(n, "Traffic reports carry counts and bytes, never a cost", "requests and errors are empty where no egress proxy sees HTTP")
+	case ReportKindCollaboration:
+		n = append(n, "Collaboration reports count access to a team's Paperclip: usage only, never content",
+			"uniquePeople counts people and API keys, anonymous callers excluded; deniedRequests are unauthenticated, forbidden, surface_disabled and secret_detected",
+			"bad_request and throttled are separate reasons and are not counted as denied")
 	case ReportKindActivity:
 		n = append(n, "utilizationPct is the working share of working and idle time")
 	}

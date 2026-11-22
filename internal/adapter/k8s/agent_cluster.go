@@ -22,6 +22,7 @@ var (
 	gvkServiceAcct    = schema.GroupVersionKind{Version: "v1", Kind: "ServiceAccount"}
 	gvkPVC            = schema.GroupVersionKind{Version: "v1", Kind: "PersistentVolumeClaim"}
 	gvkNodePool       = schema.GroupVersionKind{Group: "karpenter.sh", Version: "v1", Kind: "NodePool"}
+	gvkService        = schema.GroupVersionKind{Version: "v1", Kind: "Service"}
 	gvkNodeClass      = schema.GroupVersionKind{Group: "karpenter.k8s.aws", Version: "v1", Kind: "EC2NodeClass"}
 	gvkSnapshot       = schema.GroupVersionKind{Group: "snapshot.storage.k8s.io", Version: "v1", Kind: "VolumeSnapshot"}
 	gvkSnapContent    = schema.GroupVersionKind{Group: "snapshot.storage.k8s.io", Version: "v1", Kind: "VolumeSnapshotContent"}
@@ -35,6 +36,7 @@ func AgentOwnedKinds() []schema.GroupVersionKind {
 	return []schema.GroupVersionKind{
 		gvkServiceAcct,
 		gvkExternalSecret,
+		gvkService,
 		agentictm.GVK(),
 	}
 }
@@ -89,6 +91,14 @@ func (c *AgentCluster) ApplyAgent(ctx context.Context, env agent.Environment) (a
 	}
 	if firstErr != nil {
 		return res, firstErr
+	}
+	if d.IsCollaboration() {
+		apply(render.PaperclipService(d))
+		apply(render.PaperclipIngress(d, env.Edge))
+		apply(render.PaperclipEgress(d))
+		if firstErr != nil {
+			return res, firstErr
+		}
 	}
 	tm, err := render.Teammate(env)
 	if err != nil {
@@ -166,6 +176,11 @@ func (c *AgentCluster) DeleteAgent(ctx context.Context, d agent.Desired) error {
 	del(gvkConfigMap, agent.ConfigMapName(d.Name))
 	del(gvkConfigMap, agent.AWSConfigMapName(d.Name))
 	del(gvkServiceAcct, agent.ServiceAccountName(d.Name))
+	if d.IsCollaboration() {
+		del(gvkService, render.PaperclipServiceName)
+		del(gvkCiliumNetworkPolicy, render.PaperclipIngressPolicyName)
+		del(gvkCiliumNetworkPolicy, render.PaperclipEgressPolicyName)
+	}
 	return errors.Join(errs...)
 }
 

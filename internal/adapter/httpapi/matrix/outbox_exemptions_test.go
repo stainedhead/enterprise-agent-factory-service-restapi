@@ -12,6 +12,7 @@ import (
 var contractOutboxExempt = map[string]string{
 	"AddMember":                        "members",
 	"AddSecurityOperator":              "members",
+	"ConnectAgentToCollaboration":      "collaboration",
 	"CreateAgentIdentity":              "config",
 	"CreateAgentRoleLink":              "config",
 	"CreateAgentSnapshot":              "config",
@@ -31,6 +32,7 @@ var contractOutboxExempt = map[string]string{
 	"CreateSwarmTemplate":              "swarm-templates",
 	"DeclareTeamExternalSystem":        "catalog",
 	"DeleteAgentConfigValue":           "config",
+	"DisconnectAgentFromCollaboration": "collaboration",
 	"DeleteAgentIdentity":              "config",
 	"DeleteAgentRoleLink":              "config",
 	"DeleteAgentTemplate":              "catalog",

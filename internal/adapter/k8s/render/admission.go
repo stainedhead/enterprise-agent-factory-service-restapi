@@ -26,6 +26,8 @@ var AdmissionPolicyNames = []string{
 	"afs-deny-host-access",
 	"afs-protect-afs-labels",
 	"afs-own-team-nodes-only",
+	"afs-deny-external-routes",
+	"afs-protect-paperclip-service",
 }
 
 // OwnerAdmission is the owner of the admission objects.
@@ -93,8 +95,13 @@ func policyDefs(s admission.Spec) []policyDef {
 		{
 			name:  AdmissionPolicyNames[1],
 			rules: []map[string]any{rule(all, []any{""}, []any{"*"}, []any{"services"})},
-			validation: []map[string]any{validation("!has(object.spec.type) || !(object.spec.type in ['LoadBalancer', 'NodePort'])",
-				"Services of type LoadBalancer and NodePort are not allowed in team namespaces")},
+			validation: []map[string]any{
+				validation("!has(object.spec.type) || !(object.spec.type in ['LoadBalancer', 'NodePort'])",
+					"Services of type LoadBalancer and NodePort are not allowed in team namespaces"),
+				validation("!has(object.spec.externalIPs) || size(object.spec.externalIPs) == 0", "Services with externalIPs are not allowed in team namespaces"),
+				validation("!has(object.spec.loadBalancerSourceRanges) || size(object.spec.loadBalancerSourceRanges) == 0",
+					"Services with loadBalancerSourceRanges are not allowed in team namespaces"),
+			},
 		},
 		{
 			name: AdmissionPolicyNames[2],
@@ -131,6 +138,25 @@ func policyDefs(s admission.Spec) []policyDef {
 			},
 			variables:  []map[string]any{{"name": "podSpec", "expression": "object.kind == 'Pod' ? object.spec : object.spec.template.spec"}},
 			validation: nodeChecks("variables.podSpec"),
+		},
+		{
+			// Public ingress exists nowhere in a team namespace (COL-22, RC-23): the only way in is afs-edge.
+			name: AdmissionPolicyNames[5],
+			rules: []map[string]any{
+				rule(all, []any{"networking.k8s.io"}, []any{"*"}, []any{"ingresses"}),
+				rule(all, []any{"gateway.networking.k8s.io"}, []any{"*"}, []any{"*"}),
+			},
+			validation: []map[string]any{validation("false", "Ingress and Gateway API routes are not allowed in team namespaces")},
+		},
+		{
+			// A Service named paperclip, or one whose selector reaches the collaboration pod's
+			// labels, belongs (a Service with no selector selects no pod) to the reconciler (RD-9): otherwise a team could publish Paperclip's port itself.
+			name:  AdmissionPolicyNames[6],
+			rules: []map[string]any{rule(all, []any{""}, []any{"*"}, []any{"services"})},
+			validation: []map[string]any{validation(
+				"request.userInfo.username in "+users+" || (object.metadata.name != '"+PaperclipServiceName+"' && (!has(object.spec.selector) || size(object.spec.selector) == 0 || "+
+					"!(['app.kubernetes.io/name', '"+LabelTeamID+"', '"+LabelAgentID+"'].exists(k, k in object.spec.selector))))",
+				"a Service named paperclip, or one that selects the collaboration pod, is managed by the AFS reconciler only")},
 		},
 	}
 }

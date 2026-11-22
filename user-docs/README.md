@@ -21,6 +21,7 @@ Guides:
 | [Reports and usage](reports.md) | Callers: report kinds, grouping, CSV, activity samples |
 | [Costs, reconciliation and prices](billing.md) | Callers and operators: cost reads, billing jobs, price proposals |
 | [Work orders and swarm templates](work-orders.md) | Callers and operators: swarm templates, work orders, security operators, service keys, worker tokens |
+| [Paperclip collaboration: the edge](collaboration-edge.md) | Operators: deploying `afs-edge`, the ALB and WAF, settings, sealing keys, troubleshooting |
 | [Export, import and restore](export-import-restore.md) | Operators: bundles, dry-run imports with an account map, restoring a team revision |
 
 ## The rest of the product

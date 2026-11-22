@@ -1,6 +1,6 @@
 // Package pgtest gives integration tests a fresh, migrated PostgreSQL database per test package,
 // with one LOGIN user per service role (afs_owner, afs_app, afs_reconciler, afs_gateway,
-// afs_billing). Tests skip when AFS_TEST_DATABASE_URL is unset.
+// afs_billing, afs_edge). Tests skip when AFS_TEST_DATABASE_URL is unset.
 //
 // Use it from TestMain:
 //
@@ -31,7 +31,7 @@ import (
 const EnvURL = "AFS_TEST_DATABASE_URL"
 
 // Roles are the service roles that get a LOGIN user, in order.
-var Roles = []string{"afs_owner", "afs_app", "afs_reconciler", "afs_gateway", "afs_billing"}
+var Roles = []string{"afs_owner", "afs_app", "afs_reconciler", "afs_gateway", "afs_billing", "afs_edge"}
 
 // DB is one package's test database.
 type DB struct {

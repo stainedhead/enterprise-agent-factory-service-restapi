@@ -3,7 +3,7 @@
 global:
   image:
     registry: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs
-    tag: v0.1.0
+    tag: v1.0.1
   clusterName: afs-dev
   region: us-east-1
   otlpEndpoint: http://otel-collector.observability:4318
@@ -13,6 +13,10 @@ gateway:
   env:
     AFS_GATEWAY_ROLE_ARN: arn:aws:iam::111122223333:role/afs-gateway
     AFS_BEDROCK_VPCE_URL: https://vpce-0123456789abcdef0.bedrock-runtime.us-east-1.vpce.amazonaws.com
+  tls:
+    issuerRef:
+      name: afs-ca
+edge:
   tls:
     issuerRef:
       name: afs-ca

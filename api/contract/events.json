@@ -385,6 +385,63 @@
     "when": "CFG-5"
   },
   {
+    "type": "collaboration.updated",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "`PutTeamCollaboration`; `data` `{teamId, agentId, changes: {webUiEnabled?: {from, to}, restApiEnabled?: {from, to}, registrationMode?: {from, to}}}`"
+  },
+  {
+    "type": "collaboration.endpoint_state_changed",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "`EndpointReady` changed; `data` `{teamId, agentId, hostname, ready, previousReady, reason: Ready|Starting|Paused|TeamSuspended|ServiceOff|GuardrailOff|BaseDomainUnset|RouteNotPublished, effective: {webUi, restApi}}`"
+  },
+  {
+    "type": "collaboration.secret_detected",
+    "emittedBy": [
+      "edge",
+      "reconciler"
+    ],
+    "when": "A credential pattern was found. No value or fragment ever. `data` `{teamId, source: edge|reconciler, pattern, action: blocked|warned|detected, count, surface?: web_ui|rest_api, principal?: {id, type: user|api_key}, paperclipItemId?, authorAgentId?}` (`surface` and `principal` from the edge; `paperclipItemId` and `authorAgentId` from the reconciler's scan of agent writes, COL-25). The edge emits at most one per team, person and pattern per 5 minutes"
+  },
+  {
+    "type": "collaboration.denied_spike",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "More than `collab.denied_spike_threshold` denied requests (`401`, `403`, `422`) on one team in 5 minutes, read from `collaboration_access`; `data` `{teamId, windowStart, windowEnd, denied, threshold, byReason: {unauthenticated, forbidden, surface_disabled, secret_detected}}`; delivered to the team's channels and the service admins' channels; at most one per team per 15 minutes"
+  },
+  {
+    "type": "collaboration.unmanaged_agents_found",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "COL-13, once per new name; `data` `{teamId, agentId, paperclipAgentName, paperclipAgentId, reason: not_linked|local_adapter}`"
+  },
+  {
+    "type": "collaboration.bootstrap_completed",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "Paperclip's first-admin bootstrap finished; `data` `{teamId, agentId, mode: manual|managed}`. Never the invite URL: the invite is a credential and goes only as a direct notification to the creating team-admin's email through the reconciler's notification delivery, never into events, audit or logs (G8)"
+  },
+  {
+    "type": "agent.collaboration_linked",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "An agent's `linkState` became `linked`, or left `linked`; `data` `{agentId, linkState, paperclipAgentId?, registrationMode}` (`unlinked` adds `reason`: `disconnected`, `agent_deleted`, `collaboration_agent_deleted`, `failed`)"
+  },
+  {
+    "type": "agent.collaboration_unlinked",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "An agent's `linkState` became `linked`, or left `linked`; `data` `{agentId, linkState, paperclipAgentId?, registrationMode}` (`unlinked` adds `reason`: `disconnected`, `agent_deleted`, `collaboration_agent_deleted`, `failed`)"
+  },
+  {
     "type": "notification.delivery_failed",
     "emittedBy": [
       "reconciler"

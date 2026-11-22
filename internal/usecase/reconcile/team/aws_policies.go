@@ -91,6 +91,44 @@ func TeamRolePolicy(secretsPrefix, namespace, teamID string) (string, error) {
 	}}.json()
 }
 
+// CollaborationRolePolicy is the extra inline policy of the collaboration agent's own role (RC-28, SEC-7,
+// COL-3): Paperclip manages its own secrets below "<prefix>/<namespace>/<agent name>/paperclip/" and writes
+// its board key to the one exact name "<prefix>/<namespace>/<agent name>/paperclip-board-api-key". Nothing
+// outside the agent's own path is reachable, and bedrock stays denied by the agent policy. kmsKeyARN is the
+// environment key; without it there is no kms statement.
+func CollaborationRolePolicy(secretsPrefix, namespace, agentName, teamID, kmsKeyARN string) (string, error) {
+	if secretsPrefix == "" || namespace == "" || agentName == "" || teamID == "" {
+		return "", fmt.Errorf("team: secrets prefix, namespace, agent name and team id are required")
+	}
+	base := secretsPrefix + "/" + namespace + "/" + agentName
+	st := []statement{
+		{
+			Sid: "PaperclipOwnSecrets", Effect: "Allow",
+			Action: []string{"secretsmanager:CreateSecret", "secretsmanager:PutSecretValue", "secretsmanager:UpdateSecret", "secretsmanager:DeleteSecret",
+				"secretsmanager:TagResource", "secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"},
+			Resource:  []string{"arn:*:secretsmanager:*:*:secret:" + base + "/paperclip/*"},
+			Condition: ConditionTeamTag(teamID),
+		},
+		{
+			// The six characters are the random suffix Secrets Manager appends to every secret ARN.
+			Sid: "PaperclipBoardKey", Effect: "Allow",
+			Action:    []string{"secretsmanager:PutSecretValue"},
+			Resource:  []string{"arn:*:secretsmanager:*:*:secret:" + base + "/paperclip-board-api-key-??????"},
+			Condition: ConditionTeamTag(teamID),
+		},
+	}
+	if kmsKeyARN != "" {
+		st = append(st, statement{
+			Sid: "PaperclipSecretsKey", Effect: "Allow",
+			Action:   []string{"kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"},
+			Resource: []string{kmsKeyARN},
+			Condition: map[string]any{"StringLike": map[string]any{"kms:ViaService": "secretsmanager.*.amazonaws.com"},
+				"StringEquals": map[string]any{"aws:PrincipalTag/" + TagTeamID: teamID}},
+		})
+	}
+	return policyDoc{Version: policyVersion, Statement: st}.json()
+}
+
 // BedrockRoleTrust is the trust policy of the team's Bedrock role: only the gateway's role.
 func BedrockRoleTrust(gatewayRoleARN string) (string, error) {
 	if gatewayRoleARN == "" {

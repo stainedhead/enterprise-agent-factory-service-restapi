@@ -121,7 +121,8 @@ func (a *AgentsAPI) create(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := a.Svc.Create(r.Context(), c, teamID, domain.NewAgentParams{Name: req.Name, Description: req.Description,
 		Template: req.Template, Image: req.Image, ModelID: req.ModelID, Resources: req.Resources,
-		IAMIdentity: domain.IAMIdentity(req.IAMIdentity), Volume: vol, Bindings: bindingsOf(req.SecretBinds)}, idem)
+		IAMIdentity: domain.IAMIdentity(req.IAMIdentity), Volume: vol, Bindings: bindingsOf(req.SecretBinds),
+		Role: domain.AgentRole(req.Role), Collaboration: req.Collaboration.input()}, idem)
 	if err != nil {
 		WriteError(w, r, err)
 		return
@@ -152,7 +153,11 @@ func (a *AgentsAPI) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := domain.AgentPatch{Description: req.Description, Template: req.Template, Image: req.Image, ModelID: req.ModelID,
-		Resources: req.Resources}
+		Resources: req.Resources, Collaboration: req.Collaboration.input()}
+	if req.Role != nil {
+		role := domain.AgentRole(*req.Role)
+		p.Role = &role
+	}
 	if req.IAMIdentity != nil {
 		v := domain.IAMIdentity(*req.IAMIdentity)
 		p.IAMIdentity = &v

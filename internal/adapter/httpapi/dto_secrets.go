@@ -34,6 +34,7 @@ type secretBody struct {
 	LastChangedAt      *string        `json:"lastChangedAt"`
 	Rotation           secretRotation `json:"rotation"`
 	BoundTo            []string       `json:"boundTo"`
+	ManagedBy          string         `json:"managedBy"`
 }
 
 type secretRotation struct {
@@ -46,7 +47,10 @@ func toSecretBody(s domain.Secret) secretBody {
 		UpdatedAt: w2Time(s.UpdatedAt), Scope: string(s.Scope), AgentID: s.AgentID, PoolID: s.PoolID, Name: s.Name,
 		Description: s.Description, SecretsManagerPath: s.Path, SecretsManagerArn: s.ARN, VersionID: s.VersionID,
 		LastChangedAt: w2TimePtr(s.LastChangedAt), Rotation: secretRotation{Enabled: s.Rotation.Enabled, Days: s.Rotation.Days},
-		BoundTo: s.BoundTo}
+		BoundTo: s.BoundTo, ManagedBy: string(domain.ManagedByUser)}
+	if s.ManagedBy != "" {
+		b.ManagedBy = string(s.ManagedBy)
+	}
 	if s.ExternalSystemID != "" {
 		x := s.ExternalSystemID
 		b.ExternalSystemID = &x

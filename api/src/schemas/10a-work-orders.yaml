@@ -364,6 +364,15 @@ SwarmTemplateSpec:
   - stages
   - pools
   properties:
+    collaboration:
+      type: object
+      description: Optional collaboration agent of the remediation team (PC-D29); the template must be enabled and carry capability paperclip
+      required:
+      - templateId
+      properties:
+        templateId:
+          type: string
+          pattern: ^tpl_[0-9A-HJKMNP-TV-Z]{26}$
     stages:
       type: array
       items:

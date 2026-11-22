@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -215,6 +216,17 @@ func ValidateSwarmSpec(field string, spec map[string]any) []FieldError {
 			if s, isStr := tv.(string); !isStr || k == "" || len(k) > 128 || len(s) > 256 {
 				bad(".tags."+k, "keys and values must be non-empty strings (key at most 128, value at most 256 characters)")
 			}
+		}
+	}
+
+	if v, ok := spec["collaboration"]; ok && v != nil {
+		c, isMap := v.(map[string]any)
+		id, _ := c["templateId"].(string)
+		switch {
+		case !isMap:
+			bad(".collaboration", "must be an object {templateId}")
+		case !agentTemplateIDRE.MatchString(id):
+			bad(".collaboration.templateId", "must be an agent template id (tpl_...)")
 		}
 	}
 
@@ -470,3 +482,20 @@ func TemplateSecretBinding(name, delivery, target string) (string, string) {
 	}
 	return delivery, target
 }
+
+var agentTemplateIDRE = regexp.MustCompile(`^tpl_[0-9A-HJKMNP-TV-Z]{26}$`)
+
+// SwarmCollaborationTemplateID returns the agent template id of a swarm spec's collaboration agent (PC-D29),
+// or "" when the spec has none.
+func SwarmCollaborationTemplateID(spec map[string]any) string {
+	c, _ := spec["collaboration"].(map[string]any)
+	id, _ := c["templateId"].(string)
+	return id
+}
+
+// ReasonCollaborationTemplate is details.reason when a swarm collaboration template is not usable.
+const ReasonCollaborationTemplate = "swarm_collaboration_template"
+
+// ReasonReferencedBySwarm is details.reason when an agent template cannot change because a swarm template
+// names it as its collaboration agent.
+const ReasonReferencedBySwarm = "referenced_by_swarm_template"

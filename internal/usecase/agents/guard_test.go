@@ -22,13 +22,19 @@ func TestGuardRefusals(t *testing.T) {
 		check func() error
 		field string // empty: allowed
 	}{
-		{"template unknown", func() error { _, err := g.CheckTemplate(ctx, nil, "nope", image); return err }, "template"},
-		{"template disabled", func() error { _, err := g.CheckTemplate(ctx, nil, "retired", image); return err }, "template"},
+		{"template unknown", func() error { _, err := g.CheckTemplate(ctx, nil, "nope", image, domain.AgentRoleWorker); return err }, "template"},
+		{"template disabled", func() error {
+			_, err := g.CheckTemplate(ctx, nil, "retired", image, domain.AgentRoleWorker)
+			return err
+		}, "template"},
 		{"digest not allowed", func() error {
-			_, err := g.CheckTemplate(ctx, nil, "claude-code", "registry.example.com/agents/coder@"+otherDigest)
+			_, err := g.CheckTemplate(ctx, nil, "claude-code", "registry.example.com/agents/coder@"+otherDigest, domain.AgentRoleWorker)
 			return err
 		}, "image"},
-		{"template and digest ok", func() error { _, err := g.CheckTemplate(ctx, nil, "claude-code", image); return err }, ""},
+		{"template and digest ok", func() error {
+			_, err := g.CheckTemplate(ctx, nil, "claude-code", image, domain.AgentRoleWorker)
+			return err
+		}, ""},
 		{"model not enabled for the team", func() error { return g.CheckModel(ctx, nil, team, "other.model") }, "modelId"},
 		{"model enabled", func() error { return g.CheckModel(ctx, nil, team, model) }, ""},
 		{"storage class not offered", func() error { return g.CheckStorageClass(ctx, nil, "io9") }, "volume.storageClass"},
@@ -67,7 +73,7 @@ func TestGuardPassesSourceErrorsThrough(t *testing.T) {
 	boom := errors.New("db down")
 	r.repo.Err = map[string]error{"Template": boom, "ModelEnabled": boom, "StorageClassEnabled": boom, "Secrets": boom}
 	g := agents.Guard{Src: r.repo}
-	if _, err := g.CheckTemplate(t.Context(), nil, "claude-code", image); !errors.Is(err, boom) {
+	if _, err := g.CheckTemplate(t.Context(), nil, "claude-code", image, domain.AgentRoleWorker); !errors.Is(err, boom) {
 		t.Errorf("template: %v", err)
 	}
 	if err := g.CheckModel(t.Context(), nil, team, model); !errors.Is(err, boom) {

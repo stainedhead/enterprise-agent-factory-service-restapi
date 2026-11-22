@@ -82,7 +82,9 @@ func TestBindingDelivered(t *testing.T) {
 		{agent.Binding{}, true},
 		{agent.Binding{ExternalSystemID: "ext_1"}, true},
 		{agent.Binding{ExternalSystemID: "ext_1", SystemOff: true}, false},
-		{agent.Binding{SystemOff: true}, true}, // names no system, so nothing switches it off
+		{agent.Binding{SystemOff: true}, true},                // names no system, so nothing switches it off
+		{agent.Binding{Target: agent.CollabKeyTarget}, false}, // the Paperclip key without a value yet
+		{agent.Binding{Target: agent.CollabKeyTarget, VersionID: "v1"}, true},
 	}
 	for _, tt := range tests {
 		if tt.b.Delivered() != tt.want {
@@ -106,5 +108,24 @@ func TestNames(t *testing.T) {
 	}
 	if agent.SnapshotClassName("agt_01JD0000000000000000000021") != "afs-01jd0000000000000000000021" {
 		t.Error("snapshot class name")
+	}
+}
+
+// RC-21, RC-22: collaboration facts roll the pod when they change, and only for the agents they concern.
+func TestPodTemplateHashCollaboration(t *testing.T) {
+	base := desired()
+	h0 := agent.PodTemplateHash(base)
+	for name, mod := range map[string]func(*agent.Desired){
+		"collab mode":  func(d *agent.Desired) { d.Collab = &agent.Collab{Mode: "managed"} },
+		"collab host":  func(d *agent.Desired) { d.Collab = &agent.Collab{Mode: "manual", Host: "a.example.com"} },
+		"link":         func(d *agent.Desired) { d.Link = &agent.CollabLink{} },
+		"paperclip id": func(d *agent.Desired) { d.Link = &agent.CollabLink{PaperclipAgentID: "pc-1"} },
+		"secrets path": func(d *agent.Desired) { d.Collab = &agent.Collab{Mode: "manual", SecretsPrefix: "afs/x/"} },
+	} {
+		d := base
+		mod(&d)
+		if agent.PodTemplateHash(d) == h0 {
+			t.Errorf("%s does not change the hash", name)
+		}
 	}
 }

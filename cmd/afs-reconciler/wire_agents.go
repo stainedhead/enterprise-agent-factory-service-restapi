@@ -40,6 +40,7 @@ type agentStreamDeps struct {
 	IAM     team.IAM
 	AWS     team.AWSConfig
 	Gateway agent.Gateway
+	Edge    agent.EdgeRef
 	// Cluster is the EKS cluster name.
 	Cluster string
 	AWSCfg  awssdk.Config
@@ -69,7 +70,7 @@ func buildAgentStream(d agentStreamDeps, log *slog.Logger) (*agentStream, error)
 	}, d.Status, alc)
 	ctl, err := agent.NewController(agent.Config{
 		Source: src, Cluster: cluster, IAM: d.IAM, PodIdentity: pods, Volumes: cluster,
-		Snapshots: snapshot.Latest{Store: store}, AWS: d.AWS, Gateway: d.Gateway,
+		Snapshots: snapshot.Latest{Store: store}, AWS: d.AWS, Gateway: d.Gateway, Edge: d.Edge,
 		Hooks: agent.Hooks{Deleting: lifecycle.AgentDeleting(fin)}, LinkVerifierARN: d.LinkVerifierARN,
 	})
 	if err != nil {

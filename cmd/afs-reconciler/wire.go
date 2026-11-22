@@ -156,8 +156,9 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	agents, err := buildAgentStream(agentStreamDeps{
 		Client: kc, Runner: runner, Audit: audit, Status: cstatus, IAM: iamClient,
 		AWS: team.AWSConfig{Partition: as.Partition, Region: as.Region, AccountID: account, GatewayRoleARN: s.GatewayRoleARN,
-			PermissionsBoundaryARN: s.PermissionsBoundaryARN, ClusterARN: clusterARN, ESORoleARN: s.ESORoleARN, SecretsPrefix: s.SecretsPrefix},
+			PermissionsBoundaryARN: s.PermissionsBoundaryARN, ClusterARN: clusterARN, ESORoleARN: s.ESORoleARN, SecretsPrefix: s.SecretsPrefix, KMSKeyARN: s.KMSKeyARN},
 		Gateway: agent.Gateway{Namespace: s.GatewayNamespace, Name: s.GatewayName},
+		Edge:    agent.EdgeRef{Namespace: s.EdgeNamespace, Name: s.EdgeName, ReconcilerName: "afs-reconciler"},
 		Cluster: s.ClusterName, AWSCfg: awsCfg, NodeClassJSON: env("AFS_NODECLASS_JSON"), LinkVerifierARN: env("AFS_RECONCILER_ROLE_ARN"),
 	}, log)
 	if err != nil {
@@ -166,7 +167,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	pools, err := buildPoolStream(agentStreamDeps{
 		Client: kc, Runner: runner, Audit: audit, Status: cstatus, IAM: iamClient,
 		AWS: team.AWSConfig{Partition: as.Partition, Region: as.Region, AccountID: account, GatewayRoleARN: s.GatewayRoleARN,
-			PermissionsBoundaryARN: s.PermissionsBoundaryARN, ClusterARN: clusterARN, ESORoleARN: s.ESORoleARN, SecretsPrefix: s.SecretsPrefix},
+			PermissionsBoundaryARN: s.PermissionsBoundaryARN, ClusterARN: clusterARN, ESORoleARN: s.ESORoleARN, SecretsPrefix: s.SecretsPrefix, KMSKeyARN: s.KMSKeyARN},
 		Gateway: agent.Gateway{Namespace: s.GatewayNamespace, Name: s.GatewayName},
 		Cluster: s.ClusterName, AWSCfg: awsCfg, NodeClassJSON: env("AFS_NODECLASS_JSON"), LinkVerifierARN: env("AFS_RECONCILER_ROLE_ARN"),
 	}, env("AFS_EFS_STORAGE_CLASS"))
@@ -258,6 +259,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	if err := wireTraffic(r.Engine, runner, outbox, ids, env, clock.Now, log); err != nil {
 		return fail(err)
 	}
+	wireCollab(r.Engine, runner, status, outbox, ids, clock, awsCfg, env, clock.Now, log)
 	wireTeardown(r.Engine, runner, audit, outbox, ids, clock.Now, log)
 	if err := wireWorkOrders(r.Engine, awsCfg, runner, audit, outbox, ids, env, clock.Now, log); err != nil {
 		return fail(err)

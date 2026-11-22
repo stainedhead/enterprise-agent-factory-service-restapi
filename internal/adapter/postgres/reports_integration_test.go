@@ -432,3 +432,72 @@ func TestReportsRollupPathEqualsTheFiveMinutePath(t *testing.T) {
 		})
 	}
 }
+
+// RA-21, COL-36: the collaboration report counts the edge's five-minute facts: sign-ins, people, requests,
+// denied requests and secret detections, by surface, reason, person and day, for the caller's own team only.
+func TestReportsCollaboration(t *testing.T) {
+	f := newRptFixture(t)
+	f.exec(t, `SELECT afs.ensure_collaboration_access_partition('2026-11-01'::date)`)
+	bucket := rptNow.Add(-3 * time.Hour).Truncate(5 * time.Minute)
+	usr1, usr2, key := pgtest.NewID("usr"), pgtest.NewID("usr"), "afs_pk_ab12"
+	acc := func(team, surface, kind, id, outcome string, n int, admin bool, at time.Time) {
+		f.exec(t, `INSERT INTO afs.collaboration_access (bucket_start, team_id, surface, principal_kind, principal_id, outcome, service_admin_entry, requests)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, at, team, surface, kind, id, outcome, admin, n)
+	}
+	acc(f.a.ID, "web_ui", "user", usr1, "signed_in", 2, false, bucket)
+	acc(f.a.ID, "web_ui", "user", usr1, "allowed", 30, false, bucket)
+	acc(f.a.ID, "web_ui", "user", usr2, "signed_in", 1, true, bucket)
+	acc(f.a.ID, "web_ui", "user", usr2, "allowed", 5, true, bucket)
+	acc(f.a.ID, "rest_api", "api_key", key, "allowed", 50, false, bucket)
+	acc(f.a.ID, "rest_api", "api_key", key, "secret_warned", 4, false, bucket)
+	acc(f.a.ID, "rest_api", "anonymous", "", "denied_unauthenticated", 7, false, bucket)
+	acc(f.a.ID, "rest_api", "user", usr1, "denied_forbidden", 3, false, bucket)
+	acc(f.a.ID, "rest_api", "user", usr1, "denied_secret_detected", 2, false, bucket)
+	acc(f.a.ID, "rest_api", "user", usr1, "throttled", 9, false, bucket)
+	acc(f.a.ID, "rest_api", "user", usr1, "denied_bad_request", 1, false, bucket.Add(-48*time.Hour))
+	acc(f.b.ID, "web_ui", "user", pgtest.NewID("usr"), "allowed", 999, false, bucket)
+	m := domain.ReportMeasures(domain.ReportKindCollaboration)
+	sess := sessOf(f.a.ID)
+
+	// Totals over the range (signIns, uniquePeople, requests, deniedRequests, secretDetections).
+	tot := f.run(t, sess, domain.ReportKindCollaboration, domain.RawReportQuery{Range: "7d", GroupBy: "day"})
+	want := []any{int64(3), int64(3), int64(89), int64(12), int64(6)}
+	if !reflect.DeepEqual(tot.Totals, want) {
+		t.Errorf("totals = %v, want %v", tot.Totals, want)
+	}
+	bySurface := f.run(t, sess, domain.ReportKindCollaboration, domain.RawReportQuery{Range: "7d", GroupBy: "surface"})
+	got := map[string]map[string]any{}
+	for _, r := range bySurface.Rows {
+		got[r.Group[0]] = rowMap(r, m)
+	}
+	if got["web_ui"]["requests"] != int64(35) || got["web_ui"]["signIns"] != int64(3) || got["rest_api"]["requests"] != int64(54) || got["rest_api"]["deniedRequests"] != int64(12) {
+		t.Errorf("by surface: %v", got)
+	}
+	// By reason: only outcomes that carry a reason; bad_request and throttled are reasons but not denied.
+	byReason := f.run(t, sess, domain.ReportKindCollaboration, domain.RawReportQuery{Range: "7d", GroupBy: "reason"})
+	reasons := map[string]any{}
+	for _, r := range byReason.Rows {
+		reasons[r.Group[0]] = rowMap(r, m)["deniedRequests"]
+	}
+	if len(reasons) != 5 || reasons["unauthenticated"] != int64(7) || reasons["forbidden"] != int64(3) || reasons["secret_detected"] != int64(2) || reasons["throttled"] != int64(0) || reasons["bad_request"] != int64(0) {
+		t.Errorf("by reason: %v", reasons)
+	}
+	// By person: people and keys, anonymous as its own group, the service-admin entry flagged.
+	byPerson := f.run(t, sess, domain.ReportKindCollaboration, domain.RawReportQuery{Range: "7d", GroupBy: "person"})
+	flags := map[string]bool{}
+	for _, r := range byPerson.Rows {
+		flags[r.Group[0]] = r.ServiceAdminEntry
+	}
+	if len(flags) != 4 || !flags[usr2] || flags[usr1] || flags[key] {
+		t.Errorf("by person: %v", flags)
+	}
+	if _, ok := flags["(anonymous)"]; !ok {
+		t.Error("anonymous group missing")
+	}
+	// The other team's facts never show: RLS, and the team filter of a service report.
+	svc := port.Session{Actor: user, ActorType: port.ActorUser, ServiceAdmin: true, RequestID: "req_svc"}
+	byTeam := f.run(t, svc, domain.ReportKindCollaboration, domain.RawReportQuery{Range: "7d", GroupBy: "team", TeamID: f.b.ID})
+	if len(byTeam.Rows) != 1 || byTeam.Rows[0].Measures[2] != int64(999) {
+		t.Errorf("service report by team: %+v", byTeam.Rows)
+	}
+}

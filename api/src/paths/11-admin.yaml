@@ -170,6 +170,13 @@
         - egress.denied_spike_threshold
         - gateway.reservation_ttl_seconds
         - api.cors_origins
+        - collab.base_domain
+        - collab.public_endpoints
+        - collab.allowed_source_cidrs
+        - collab.session_ttl_minutes
+        - collab.content_scan
+        - collab.max_body_mb
+        - collab.denied_spike_threshold
     - $ref: '#/components/parameters/XRequestId'
     - $ref: '#/components/parameters/IfMatchPut'
     requestBody:

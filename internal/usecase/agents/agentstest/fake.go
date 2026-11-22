@@ -23,6 +23,14 @@ type Repo struct {
 	Classes   map[string]bool
 	SecretsBy map[string]agents.SecretInfo
 	Snaps     []domain.Snapshot
+	// Collab is the registration mode of teams that have a collaboration agent (by team id).
+	Collab map[string]domain.RegistrationMode
+	// Links records SetCollaboration calls by agent id.
+	Links map[string]domain.AgentCollaboration
+	// Boot records the boot secrets stored by InsertBootSecret (secret id to env name).
+	Boot map[string]domain.Secret
+	// BootEnv maps a stored boot secret id to the environment variable it was bound as.
+	BootEnv map[string]string
 	// TemplateWrites counts Update calls that wrote the template columns.
 	TemplateWrites int
 	// Err makes the named method fail: List, Get, Insert, Update, Template, ModelEnabled,
@@ -35,7 +43,8 @@ func (r *Repo) fail(m string) error { return r.Err[m] }
 // NewRepo returns a Repo with the gp3 class offered.
 func NewRepo() *Repo {
 	return &Repo{Rows: map[string]domain.Agent{}, Templates: map[string]agents.TemplateInfo{}, Models: map[string][]string{},
-		Classes: map[string]bool{"gp3": true}, SecretsBy: map[string]agents.SecretInfo{}}
+		Classes: map[string]bool{"gp3": true}, SecretsBy: map[string]agents.SecretInfo{},
+		Collab: map[string]domain.RegistrationMode{}, Links: map[string]domain.AgentCollaboration{}, Boot: map[string]domain.Secret{}, BootEnv: map[string]string{}}
 }
 
 // List implements agents.Repository.
@@ -183,5 +192,114 @@ func (r *Repo) InsertSnapshot(_ context.Context, _ port.Tx, _ string, s domain.S
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.Snaps = append(r.Snaps, s)
+	return nil
+}
+
+// InsertCollaboration implements agents.Repository.
+func (r *Repo) InsertCollaboration(_ context.Context, _ port.Tx, teamID, _ string) error {
+	if err := r.fail("InsertCollaboration"); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.Collab[teamID] = domain.RegistrationManual
+	return nil
+}
+
+// CollaborationMode implements agents.Repository.
+func (r *Repo) CollaborationMode(_ context.Context, _ port.Tx, teamID string) (domain.RegistrationMode, bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	m, ok := r.Collab[teamID]
+	return m, ok, nil
+}
+
+// SetCollaboration implements agents.Repository.
+func (r *Repo) SetCollaboration(_ context.Context, _ port.Tx, _, agentID string, connect bool, pc *string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	l := domain.AgentCollaboration{Connect: connect, LinkState: domain.LinkDisabled}
+	if connect {
+		l.LinkState = domain.LinkPending
+	}
+	if pc != nil {
+		l.PaperclipAgentID = *pc
+	}
+	r.Links[agentID] = l
+	return nil
+}
+
+// SecretPath implements agents.Repository.
+func (r *Repo) SecretPath(_ context.Context, _ port.Tx, _, agentID, name string) (string, error) {
+	return "afs/ns/" + agentID + "/" + name, nil
+}
+
+// InsertBootSecret implements agents.Repository.
+func (r *Repo) InsertBootSecret(_ context.Context, _ port.Tx, s domain.Secret, env string) error {
+	if err := r.fail("InsertBootSecret"); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.Boot[s.ID] = s
+	r.BootEnv[s.ID] = env
+	return nil
+}
+
+// ManagedBindings implements agents.Repository.
+func (r *Repo) ManagedBindings(_ context.Context, _ port.Tx, _, agentID string) ([]domain.SecretBinding, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []domain.SecretBinding
+	for id, s := range r.Boot {
+		if s.AgentID == agentID {
+			out = append(out, domain.SecretBinding{SecretID: id, Delivery: "env", Target: r.BootEnv[id]})
+		}
+	}
+	return out, nil
+}
+
+// BootWriter implements agents.BootWriter in memory.
+type BootWriter struct {
+	mu        sync.Mutex
+	Created   []string
+	Deleted   []string
+	Orphaned  []string
+	CreateErr error
+	// FailAt makes the Nth Create (1-based) fail with CreateErr; 0 fails every call when CreateErr is set.
+	FailAt    int
+	DeleteErr error
+	n         int
+}
+
+// Create implements agents.BootWriter.
+func (w *BootWriter) Create(_ context.Context, name string, _ domain.SecretValue, _ string, _ map[string]string) (agents.BootCreated, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.n++
+	if w.CreateErr != nil && (w.FailAt == 0 || w.FailAt == w.n) {
+		return agents.BootCreated{}, w.CreateErr
+	}
+	arn := "arn:aws:secretsmanager:us-east-1:111122223333:secret:" + name + "-AbCdEf"
+	w.Created = append(w.Created, arn)
+	return agents.BootCreated{ARN: arn, VersionID: "v1"}, nil
+}
+
+// ForceDelete implements agents.BootWriter.
+func (w *BootWriter) ForceDelete(_ context.Context, arn string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.DeleteErr != nil {
+		return w.DeleteErr
+	}
+	w.Deleted = append(w.Deleted, arn)
+	return nil
+}
+
+// TagOrphan implements agents.BootWriter.
+func (w *BootWriter) TagOrphan(_ context.Context, arn string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.Orphaned = append(w.Orphaned, arn)
 	return nil
 }

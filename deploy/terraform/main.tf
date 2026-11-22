@@ -56,6 +56,19 @@ module "boundary" {
   name = var.name
 }
 
+module "collab_edge" {
+  count  = var.collab_base_domain == "" ? 0 : 1
+  source = "./modules/collab-edge"
+
+  name                    = var.name
+  vpc_id                  = var.vpc_id
+  public_subnet_ids       = var.collab_public_subnet_ids
+  base_domain             = var.collab_base_domain
+  route53_zone_id         = var.collab_route53_zone_id
+  edge_security_group_ids = var.collab_edge_security_group_ids
+  kms_key_arn             = module.buckets.kms_key_arn
+}
+
 module "pod_identity" {
   source = "./modules/pod-identity"
 
@@ -78,4 +91,7 @@ module "pod_identity" {
   cur_glue_database         = var.cur_glue_database
   athena_workgroup          = var.athena_workgroup
   athena_results_bucket_arn = var.athena_results_bucket_arn
+
+  collab_client_secret_name_pattern = var.collab_client_secret_name_pattern == "" ? "${var.secrets_path_prefix}/idp/*" : "${var.secrets_path_prefix}/${var.collab_client_secret_name_pattern}"
+  collab_waf_ip_set_arns            = flatten(module.collab_edge[*].waf_ip_set_arns)
 }

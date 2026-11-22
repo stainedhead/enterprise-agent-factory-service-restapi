@@ -89,9 +89,11 @@ type AgentTemplate struct {
 	AllowedDigests   []string
 	CurrentDigest    string
 	Enabled          bool
-	Version          Version
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// Capabilities are the known capabilities of the image; paperclip marks a collaboration template.
+	Capabilities []string
+	Version      Version
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // PutAgentTemplateParams are the fields of PutAgentTemplate. Enabled defaults to true.
@@ -103,6 +105,7 @@ type PutAgentTemplateParams struct {
 	AllowedDigests   []string
 	CurrentDigest    string
 	Enabled          *bool
+	Capabilities     []string
 }
 
 // NewAgentTemplate validates p; the id is set by the caller on create.
@@ -140,10 +143,24 @@ func NewAgentTemplate(p PutAgentTemplateParams) (AgentTemplate, error) {
 			fe = append(fe, FieldError{Field: "currentDigest", Reason: "must be one of allowedDigests"})
 		}
 	}
+	if len(p.Capabilities) > 8 {
+		fe = append(fe, FieldError{Field: "capabilities", Reason: "at most 8"})
+	}
+	seenCap := map[string]bool{}
+	for _, cp := range p.Capabilities {
+		switch {
+		case cp != CapabilityPaperclip:
+			fe = append(fe, FieldError{Field: "capabilities", Reason: "unknown capability " + cp + " (known: paperclip)"})
+		case seenCap[cp]:
+			fe = append(fe, FieldError{Field: "capabilities", Reason: "must not repeat " + cp})
+		}
+		seenCap[cp] = true
+	}
 	if len(fe) > 0 {
 		return AgentTemplate{}, Validation(fe...)
 	}
-	t := AgentTemplate{Name: p.Name, Description: strings.TrimSpace(p.Description), Harness: p.Harness, DefaultResources: p.DefaultResources,
+	caps := append([]string{}, p.Capabilities...)
+	t := AgentTemplate{Capabilities: caps, Name: p.Name, Description: strings.TrimSpace(p.Description), Harness: p.Harness, DefaultResources: p.DefaultResources,
 		AllowedDigests: append([]string(nil), p.AllowedDigests...), CurrentDigest: p.CurrentDigest, Enabled: true}
 	if p.Enabled != nil {
 		t.Enabled = *p.Enabled
@@ -159,4 +176,12 @@ func (t AgentTemplate) AllowsDigest(digest string) bool {
 		}
 	}
 	return false
+}
+
+// ValidateCapabilityFilter checks the ?capability= filter of the agent template lists.
+func ValidateCapabilityFilter(v string) error {
+	if v != "" && v != CapabilityPaperclip {
+		return Validation(FieldError{Field: "capability", Reason: "must be paperclip"})
+	}
+	return nil
 }

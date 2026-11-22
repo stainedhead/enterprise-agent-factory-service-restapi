@@ -28,7 +28,7 @@ const teamSelect = `SELECT t.id, t.slug, t.display_name, t.description, t.kind, 
   t.owner_email, t.max_budget_usd::text, t.ceiling_override_usd::text, t.ceiling_override_expires_at, t.quotas,
   t.isolation_tier, t.viewer_kubectl, t.expires_at, coalesce(t.teardown_rule, ''), t.torn_down_at,
   coalesce(t.teardown_reason, ''), coalesce(t.identity_provider_id, ''), t.allowed_aws_accounts,
-  t.may_manage_aws_accounts, t.may_add_external_systems, t.version, t.generation, t.created_at, t.created_by,
+  t.may_manage_aws_accounts, t.may_add_external_systems, t.may_expose_collaboration, t.version, t.generation, t.created_at, t.created_by,
   t.updated_at, rs.phase, rs.observed_generation, rs.conditions, rs.last_reconciled_at
 FROM afs.teams t
 LEFT JOIN afs.resource_status rs ON rs.resource_kind = '` + teamStatusKind + `' AND rs.resource_id = t.id`
@@ -50,7 +50,7 @@ func scanTeam(row pgx.Row) (domain.Team, error) {
 		&t.OwnerEmail, &maxB, &ceil, &t.CeilingOverrideExpiresAt, &quotas,
 		&tier, &t.ViewerKubectl, &t.ExpiresAt, &rule, &t.TornDownAt,
 		&reason, &t.IdentityProviderID, &t.AllowedAwsAccounts,
-		&t.MayManageAwsAccounts, &t.MayAddExternalSystems, &version, &generation, &t.CreatedAt, &t.CreatedBy,
+		&t.MayManageAwsAccounts, &t.MayAddExternalSystems, &t.MayExposeCollaboration, &version, &generation, &t.CreatedAt, &t.CreatedBy,
 		&t.UpdatedAt, &phase, &obs, &conds, &lastRec)
 	if err != nil {
 		return domain.Team{}, err
@@ -125,11 +125,11 @@ func (*TeamRepo) Insert(ctx context.Context, tx port.Tx, t domain.Team) error {
 	}
 	_, err = pt.Exec(ctx, `INSERT INTO afs.teams (id, slug, display_name, description, kind, state, cost_center, owner_email,
   max_budget_usd, quotas, isolation_tier, viewer_kubectl, expires_at, teardown_rule, identity_provider_id,
-  allowed_aws_accounts, may_manage_aws_accounts, may_add_external_systems, generation)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::numeric,$10::jsonb,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+  allowed_aws_accounts, may_manage_aws_accounts, may_add_external_systems, generation, may_expose_collaboration)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::numeric,$10::jsonb,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
 		t.ID, string(t.Slug), t.DisplayName, t.Description, string(t.Kind), string(t.State), t.CostCenter, t.OwnerEmail,
 		t.MaxBudget.String(), q, string(t.IsolationTier), t.ViewerKubectl, t.ExpiresAt, nullable(string(t.TeardownRule)),
-		nullable(t.IdentityProviderID), accounts, t.MayManageAwsAccounts, t.MayAddExternalSystems, int64(t.Generation))
+		nullable(t.IdentityProviderID), accounts, t.MayManageAwsAccounts, t.MayAddExternalSystems, int64(t.Generation), t.MayExposeCollaboration)
 	if err != nil {
 		return MapError(err, OpWrite, "team")
 	}
@@ -191,13 +191,13 @@ func (*TeamRepo) Update(ctx context.Context, tx port.Tx, t domain.Team, expect d
 	tag, err := pt.Exec(ctx, `UPDATE afs.teams SET display_name=$3, description=$4, state=$5, cost_center=$6, owner_email=$7,
   max_budget_usd=$8::numeric, ceiling_override_usd=$9::numeric, ceiling_override_expires_at=$10, quotas=$11::jsonb,
   isolation_tier=$12, viewer_kubectl=$13, expires_at=$14, identity_provider_id=$15, allowed_aws_accounts=$16,
-  may_manage_aws_accounts=$17, may_add_external_systems=$18, generation=$19,
+  may_manage_aws_accounts=$17, may_add_external_systems=$18, generation=$19, may_expose_collaboration=$20,
   deleted_at = CASE WHEN $5 = 'deleted' THEN coalesce(deleted_at, now()) ELSE NULL END
 WHERE id=$1 AND version=$2`,
 		t.ID, int64(expect), t.DisplayName, t.Description, string(t.State), t.CostCenter, t.OwnerEmail,
 		t.MaxBudget.String(), moneyPtr(t.CeilingOverride), t.CeilingOverrideExpiresAt, q,
 		string(t.IsolationTier), t.ViewerKubectl, t.ExpiresAt, nullable(t.IdentityProviderID), accounts,
-		t.MayManageAwsAccounts, t.MayAddExternalSystems, int64(t.Generation))
+		t.MayManageAwsAccounts, t.MayAddExternalSystems, int64(t.Generation), t.MayExposeCollaboration)
 	if err != nil {
 		return domain.Team{}, MapError(err, OpWrite, "team")
 	}

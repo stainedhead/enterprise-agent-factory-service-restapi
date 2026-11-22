@@ -232,11 +232,17 @@ WHERE o.team_id = $1 AND o.agent_id IS NULL AND o.pool_id IS NULL ORDER BY s.slu
 	if tb.Secrets, err = s.rows(ctx, `SELECT jsonb_build_object('name', s.name, 'description', s.description,
   'secrets_manager_arn', s.secrets_manager_arn, 'rotation_days', s.rotation_days, 'agent_name', a.name, 'path', s.path)
 FROM afs.secrets s LEFT JOIN afs.agents a ON a.id = s.agent_id
-WHERE s.team_id = $1 AND s.pool_id IS NULL AND (s.agent_id IS NULL OR a.deleted_at IS NULL) ORDER BY s.path`, id); err != nil {
+WHERE s.team_id = $1 AND s.pool_id IS NULL AND s.managed_by = 'user' AND (s.agent_id IS NULL OR a.deleted_at IS NULL) ORDER BY s.path`, id); err != nil {
+		return tb, err
+	}
+	// Collaboration settings and the collaboration agent's name (COL-26): choices only.
+	if tb.Collaboration, err = s.one(ctx, `SELECT jsonb_build_object('agent_name', a.name, 'web_ui_enabled', c.web_ui_enabled,
+  'rest_api_enabled', c.rest_api_enabled, 'registration_mode', c.registration_mode)
+FROM afs.team_collaboration c JOIN afs.agents a ON a.team_id = c.team_id AND a.id = c.agent_id WHERE c.team_id = $1`, id); err != nil {
 		return tb, err
 	}
 	tb.Agents = []domain.AgentBundle{}
-	rs, err := s.t.Query(ctx, `SELECT a.id, `+obj("a", bundleAgentCols)+` FROM afs.agents a
+	rs, err := s.t.Query(ctx, `SELECT a.id, `+obj("a", bundleAgentCols, "'role', a.role")+` FROM afs.agents a
 WHERE a.team_id = $1 AND a.deleted_at IS NULL AND a.state IN ('enabled', 'paused') ORDER BY a.name`, id)
 	if err != nil {
 		return tb, err
@@ -277,9 +283,14 @@ func (s bundleSource) agent(ctx context.Context, id string, raw []byte) (domain.
 	if ab.ConfigValues, err = s.rows(ctx, `SELECT `+obj("c", bundleAgentConfigCols)+` FROM afs.agent_config_values c WHERE c.agent_id = $1 ORDER BY c.name`, id); err != nil {
 		return ab, err
 	}
+	// Bindings to secrets the service manages (the Paperclip agent key) are not exported: they are made again
+	// when the link is registered.
 	if ab.SecretBindings, err = s.rows(ctx, `SELECT jsonb_build_object('secret_path', s.path, 'delivery', b.delivery, 'target', b.target)
 FROM afs.agent_secret_bindings b JOIN afs.secrets s ON s.id = b.secret_id AND s.team_id = b.team_id
-WHERE b.agent_id = $1 ORDER BY b.target`, id); err != nil {
+WHERE b.agent_id = $1 AND s.managed_by = 'user' ORDER BY b.target`, id); err != nil {
+		return ab, err
+	}
+	if ab.Collaboration, err = s.one(ctx, `SELECT jsonb_build_object('connect', c.connect) FROM afs.agent_collaboration c WHERE c.agent_id = $1`, id); err != nil {
 		return ab, err
 	}
 	if ab.Identities, err = s.rows(ctx, `SELECT jsonb_build_object('kind', i.kind, 'external_ref', i.external_ref, 'secret_path', s.path)

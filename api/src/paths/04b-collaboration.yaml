@@ -1,0 +1,511 @@
+# OpenAPI fragment (API contract §4.4b). Bundled into api/openapi.yaml by make openapi.
+/v1/teams/{teamId}/collaboration:
+  get:
+    operationId: GetTeamCollaboration
+    summary: Get team collaboration
+    tags:
+    - collaboration
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamCollaboration'
+            example:
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              agentId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              hostname: payments-factory.collab.example.com
+              webUiUrl: https://payments-factory.collab.example.com/
+              restApiUrl: https://payments-factory.collab.example.com/api
+              webUiEnabled: true
+              restApiEnabled: false
+              registrationMode: manual
+              effective:
+                webUi: true
+                restApi: false
+                reasons: []
+              unmanagedPaperclipAgents: []
+              version: 4
+              generation: 4
+              createdAt: '2026-11-22T09:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-22T09:00:00Z'
+              status:
+                phase: Ready
+                observedGeneration: 4
+                conditions:
+                - type: EndpointReady
+                  status: 'True'
+                  reason: Ready
+                  message: Endpoint is serving
+                  lastTransitionTime: '2026-11-22T09:00:00Z'
+                updatedAt: '2026-11-22T09:05:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: collaboration:read
+    x-afs-scope: team
+    x-afs-cli: collaboration describe-collaboration
+    x-afs-sdk: collaboration.get()
+    x-afs-screen: "T16, V3, T1"
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  put:
+    operationId: PutTeamCollaboration
+    summary: Put team collaboration
+    tags:
+    - collaboration
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutTeamCollaborationRequest'
+          example:
+            webUiEnabled: true
+            restApiEnabled: false
+            registrationMode: manual
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamCollaboration'
+            example:
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              agentId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              hostname: payments-factory.collab.example.com
+              webUiUrl: https://payments-factory.collab.example.com/
+              restApiUrl: https://payments-factory.collab.example.com/api
+              webUiEnabled: true
+              restApiEnabled: false
+              registrationMode: manual
+              effective:
+                webUi: true
+                restApi: false
+                reasons: []
+              unmanagedPaperclipAgents: []
+              version: 4
+              generation: 4
+              createdAt: '2026-11-22T09:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-22T09:00:00Z'
+              status:
+                phase: Ready
+                observedGeneration: 4
+                conditions:
+                - type: EndpointReady
+                  status: 'True'
+                  reason: Ready
+                  message: Endpoint is serving
+                  lastTransitionTime: '2026-11-22T09:00:00Z'
+                updatedAt: '2026-11-22T09:05:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: collaboration:manage
+    x-afs-scope: team
+    x-afs-cli: collaboration put-collaboration
+    x-afs-sdk: collaboration.put()
+    x-afs-screen: T16
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - collaboration.updated
+/v1/teams/{teamId}/collaboration/links:
+  get:
+    operationId: ListCollaborationLinks
+    summary: List collaboration links
+    tags:
+    - collaboration
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: linkState
+      in: query
+      schema:
+        type: string
+        enum:
+        - pending
+        - linked
+        - failed
+        - disabled
+    - name: connect
+      in: query
+      schema:
+        type: boolean
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollaborationLinkList'
+            example:
+              items:
+              - agentId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                agentName: reviewer-bot
+                connect: true
+                paperclipAgentId: ag_8f2
+                linkState: linked
+                lastSyncedAt: '2026-11-22T10:00:00Z'
+                lastError: null
+                version: 2
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: collaboration:read
+    x-afs-scope: team
+    x-afs-cli: collaboration list-collaboration-links
+    x-afs-sdk: collaboration.links.list()
+    x-afs-screen: T16
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/collaboration/links/{agentId}:connect:
+  post:
+    operationId: ConnectAgentToCollaboration
+    summary: Connect agent to collaboration
+    tags:
+    - collaboration
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ConnectAgentRequest'
+          example:
+            paperclipAgentId: ag_8f2
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollaborationLink'
+            example:
+              agentId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              agentName: reviewer-bot
+              connect: true
+              paperclipAgentId: ag_8f2
+              linkState: linked
+              lastSyncedAt: '2026-11-22T10:00:00Z'
+              lastError: null
+              version: 2
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: collaboration:manage
+    x-afs-scope: team
+    x-afs-cli: collaboration connect-agent
+    x-afs-sdk: collaboration.connectAgent()
+    x-afs-screen: T16
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/collaboration/links/{agentId}:disconnect:
+  post:
+    operationId: DisconnectAgentFromCollaboration
+    summary: Disconnect agent from collaboration
+    tags:
+    - collaboration
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollaborationLink'
+            example:
+              agentId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              agentName: reviewer-bot
+              connect: true
+              paperclipAgentId: ag_8f2
+              linkState: linked
+              lastSyncedAt: '2026-11-22T10:00:00Z'
+              lastError: null
+              version: 2
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: collaboration:manage
+    x-afs-scope: team
+    x-afs-cli: collaboration disconnect-agent
+    x-afs-sdk: collaboration.disconnectAgent()
+    x-afs-screen: T16
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/collaboration:rotate-keys:
+  post:
+    operationId: RotateCollaborationKeys
+    summary: Rotate collaboration keys
+    tags:
+    - collaboration
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RotateCollaborationKeysRequest'
+          example:
+            names:
+            - paperclip-better-auth-secret
+            - paperclip-tool-action-signing-secret
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RotateCollaborationKeysResult'
+            example:
+              rotated:
+              - secretId: sec_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                name: paperclip-better-auth-secret
+                versionId: 3b2c9f1e-0000-4000-8000-000000000001
+              signsOutEveryone: true
+              agentRolloutPending: true
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: collaboration:manage
+    x-afs-scope: team
+    x-afs-cli: collaboration rotate-collaboration-keys
+    x-afs-sdk: collaboration.rotateKeys()
+    x-afs-screen: T16
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - secret.rotated
+/v1/admin/collaboration-endpoints:
+  get:
+    operationId: ListCollaborationEndpoints
+    summary: List collaboration endpoints
+    tags:
+    - collaboration
+    parameters:
+    - name: teamId
+      in: query
+      schema:
+        type: string
+        pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+    - name: state
+      in: query
+      schema:
+        type: string
+        enum:
+        - Ready
+        - Degraded
+        - Failed
+        - Pending
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollaborationEndpointList'
+            example:
+              items:
+              - teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                slug: payments-factory
+                teamState: active
+                hostname: payments-factory.collab.example.com
+                agentId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                webUiEnabled: true
+                restApiEnabled: false
+                effective:
+                  webUi: true
+                  restApi: false
+                mayExposeCollaboration: true
+                phase: Ready
+                lastAccessAt: '2026-11-22T09:41:00Z'
+          text/csv:
+            schema:
+              type: string
+            example: "teamId,slug,teamState,hostname,agentId,webUiEnabled,restApiEnabled,mayExposeCollaboration,phase,lastAccessAt\r\nteam_01JD2Q3R4S5T6V7W8X9Y0Z0001,payments-factory,active,payments-factory.collab.example.com,agt_01JD2Q3R4S5T6V7W8X9Y0Z0001,true,false,true,Ready,2026-11-22T09:41:00Z\r\n"
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:settings
+    x-afs-scope: service
+    x-afs-cli: admin list-collaboration-endpoints
+    x-afs-sdk: admin.collaborationEndpoints.list()
+    x-afs-screen: S10
+    x-afs-priority: P0
+    x-afs-csv: true
+    x-afs-events: []

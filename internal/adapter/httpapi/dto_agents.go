@@ -6,24 +6,47 @@ import (
 
 // agentBody is the wire shape of Agent (API contract §4.4). It has no replica count.
 type agentBody struct {
-	ID          string                `json:"id"`
-	Version     int64                 `json:"version"`
-	Generation  int64                 `json:"generation"`
-	CreatedAt   string                `json:"createdAt"`
-	CreatedBy   string                `json:"createdBy"`
-	UpdatedAt   string                `json:"updatedAt"`
-	Name        string                `json:"name"`
-	Description string                `json:"description"`
-	Template    string                `json:"template"`
-	Image       string                `json:"image"`
-	ModelID     string                `json:"modelId"`
-	Resources   domain.AgentResources `json:"resources"`
-	IAMIdentity string                `json:"iamIdentity"`
-	IAMRoleArn  string                `json:"iamRoleArn,omitempty"`
-	Paused      bool                  `json:"paused"`
-	Volume      agentVolumeBody       `json:"volume"`
-	Bindings    []secretBindingBody   `json:"secretBindings"`
-	Status      domain.Status         `json:"status"`
+	ID            string                  `json:"id"`
+	Version       int64                   `json:"version"`
+	Generation    int64                   `json:"generation"`
+	CreatedAt     string                  `json:"createdAt"`
+	CreatedBy     string                  `json:"createdBy"`
+	UpdatedAt     string                  `json:"updatedAt"`
+	Name          string                  `json:"name"`
+	Description   string                  `json:"description"`
+	Template      string                  `json:"template"`
+	Image         string                  `json:"image"`
+	ModelID       string                  `json:"modelId"`
+	Resources     domain.AgentResources   `json:"resources"`
+	IAMIdentity   string                  `json:"iamIdentity"`
+	IAMRoleArn    string                  `json:"iamRoleArn,omitempty"`
+	Paused        bool                    `json:"paused"`
+	Volume        agentVolumeBody         `json:"volume"`
+	Bindings      []secretBindingBody     `json:"secretBindings"`
+	Status        domain.Status           `json:"status"`
+	Role          string                  `json:"role"`
+	Collaboration *agentCollaborationBody `json:"collaboration,omitempty"`
+}
+
+type agentCollaborationBody struct {
+	Connect          bool    `json:"connect"`
+	PaperclipAgentID *string `json:"paperclipAgentId"`
+	LinkState        string  `json:"linkState"`
+	LastSyncedAt     *string `json:"lastSyncedAt"`
+	LastError        *string `json:"lastError"`
+}
+
+// collaborationRequest is the collaboration object of the agent create and update bodies.
+type collaborationRequest struct {
+	Connect          *bool  `json:"connect"`
+	PaperclipAgentID string `json:"paperclipAgentId"`
+}
+
+func (q *collaborationRequest) input() *domain.CollaborationInput {
+	if q == nil {
+		return nil
+	}
+	return &domain.CollaborationInput{Connect: q.Connect, PaperclipAgentID: q.PaperclipAgentID}
 }
 
 type agentVolumeBody struct {
@@ -53,6 +76,20 @@ func toAgentBody(a domain.Agent) agentBody {
 	}
 	if b.Status.Conditions == nil {
 		b.Status.Conditions = []domain.Condition{}
+	}
+	b.Role = string(domain.AgentRoleWorker)
+	if a.Role != "" {
+		b.Role = string(a.Role)
+	}
+	if c := a.Collaboration; c != nil && !a.IsCollaboration() {
+		cb := &agentCollaborationBody{Connect: c.Connect, LinkState: string(c.LinkState), LastSyncedAt: w2TimePtr(c.LastSyncedAt)}
+		if c.PaperclipAgentID != "" {
+			cb.PaperclipAgentID = &c.PaperclipAgentID
+		}
+		if c.LastError != "" {
+			cb.LastError = &c.LastError
+		}
+		b.Collaboration = cb
 	}
 	return b
 }
@@ -111,26 +148,30 @@ func bindingsOf(in []bindingRequest) []domain.SecretBinding {
 }
 
 type createAgentRequest struct {
-	Name        string                `json:"name"`
-	Description string                `json:"description"`
-	Template    string                `json:"template"`
-	Image       string                `json:"image"`
-	ModelID     string                `json:"modelId"`
-	Resources   domain.AgentResources `json:"resources"`
-	IAMIdentity string                `json:"iamIdentity"`
-	Volume      *volumeRequest        `json:"volume"`
-	SecretBinds []bindingRequest      `json:"secretBindings"`
+	Name          string                `json:"name"`
+	Description   string                `json:"description"`
+	Template      string                `json:"template"`
+	Image         string                `json:"image"`
+	ModelID       string                `json:"modelId"`
+	Resources     domain.AgentResources `json:"resources"`
+	IAMIdentity   string                `json:"iamIdentity"`
+	Volume        *volumeRequest        `json:"volume"`
+	SecretBinds   []bindingRequest      `json:"secretBindings"`
+	Role          string                `json:"role"`
+	Collaboration *collaborationRequest `json:"collaboration"`
 }
 
 type updateAgentRequest struct {
-	Description *string                `json:"description"`
-	Template    *string                `json:"template"`
-	Image       *string                `json:"image"`
-	ModelID     *string                `json:"modelId"`
-	Resources   *domain.AgentResources `json:"resources"`
-	IAMIdentity *string                `json:"iamIdentity"`
-	Volume      *volumeRequest         `json:"volume"`
-	SecretBinds *[]bindingRequest      `json:"secretBindings"`
+	Description   *string                `json:"description"`
+	Template      *string                `json:"template"`
+	Image         *string                `json:"image"`
+	ModelID       *string                `json:"modelId"`
+	Resources     *domain.AgentResources `json:"resources"`
+	IAMIdentity   *string                `json:"iamIdentity"`
+	Volume        *volumeRequest         `json:"volume"`
+	SecretBinds   *[]bindingRequest      `json:"secretBindings"`
+	Role          *string                `json:"role"`
+	Collaboration *collaborationRequest  `json:"collaboration"`
 }
 
 type snapshotBody struct {

@@ -5,7 +5,9 @@ package secrets
 
 import (
 	"context"
+	crand "crypto/rand"
 	"errors"
+	"io"
 	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
@@ -44,8 +46,9 @@ type Writer interface {
 
 // Repository is the secret metadata store.
 type Repository interface {
-	// List returns the team's secrets with id greater than after, in id order, with BoundTo set.
-	List(ctx context.Context, tx port.Tx, teamID, after string, limit int) ([]domain.Secret, error)
+	// List returns the team's secrets with id greater than after, in id order, with BoundTo set; managedBy
+	// filters when it is not empty.
+	List(ctx context.Context, tx port.Tx, teamID, after string, managedBy domain.SecretManagedBy, limit int) ([]domain.Secret, error)
 	// Get returns one secret of the team with BoundTo set; NotFound otherwise. forUpdate locks it.
 	Get(ctx context.Context, tx port.Tx, teamID, id string, forUpdate bool) (domain.Secret, error)
 	// NameTaken reports whether the team already has a secret called name.
@@ -68,6 +71,8 @@ type Service struct {
 	acting.Deps
 	Repo   Repository
 	Writer Writer
+	// Rand is the source of generated values for AFS-managed secrets (crypto/rand.Reader when nil).
+	Rand io.Reader
 	// OnOrphan is called when a compensating delete failed and the secret was left for the sweep
 	// (afs_api_orphan_secrets_total). Optional.
 	OnOrphan func()
@@ -92,12 +97,15 @@ func unavailable(err error) error {
 }
 
 // List implements ListSecrets.
-func (s *Service) List(ctx context.Context, c acting.Caller, teamID string, p acting.Page) ([]domain.Secret, string, error) {
+func (s *Service) List(ctx context.Context, c acting.Caller, teamID string, managedBy domain.SecretManagedBy, p acting.Page) ([]domain.Secret, string, error) {
+	if managedBy != "" && !managedBy.Valid() {
+		return nil, "", domain.Validation(domain.FieldError{Field: "managedBy", Reason: "must be user, afs or paperclip"})
+	}
 	p = p.Normalized()
 	var rows []domain.Secret
 	err := s.Tx.ReadTx(ctx, c.Session(), func(ctx context.Context, tx port.Tx) error {
 		var err error
-		rows, err = s.Repo.List(ctx, tx, teamID, p.Cursor, p.Limit+1)
+		rows, err = s.Repo.List(ctx, tx, teamID, p.Cursor, managedBy, p.Limit+1)
 		return err
 	})
 	if err != nil {
@@ -217,6 +225,9 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, teamID, id string
 		if err != nil {
 			return err
 		}
+		if cur.Managed() {
+			return domain.ManagedSecret(cur.ManagedBy)
+		}
 		if err := domain.CheckVersion(cur.Version, expect); err != nil {
 			return err
 		}
@@ -243,6 +254,9 @@ func (s *Service) Delete(ctx context.Context, c acting.Caller, teamID, id string
 		if err != nil {
 			return err
 		}
+		if cur.Managed() {
+			return domain.ManagedSecret(cur.ManagedBy)
+		}
 		if err := domain.CheckVersion(cur.Version, expect); err != nil {
 			return err
 		}
@@ -268,19 +282,21 @@ func (s *Service) Delete(ctx context.Context, c acting.Caller, teamID, id string
 // PutValue implements PutSecretValue: a new Secrets Manager version, then the version id and
 // secret.rotated. expect is nil when If-Match is absent (PUT upsert, CD-2).
 func (s *Service) PutValue(ctx context.Context, c acting.Caller, teamID, id string, expect *domain.Version, value domain.SecretValue) error {
+	if value.IsZero() {
+		return domain.Validation(domain.FieldError{Field: "value", Reason: "is required"})
+	}
 	_, err := s.newVersion(ctx, c, teamID, id, expect, value, "PutSecretValue", nil)
 	return err
 }
 
-// Rotate implements RotateSecret: it writes a new version with value and returns the secret.
+// Rotate implements RotateSecret: it writes a new version with value and returns the secret. An
+// AFS-managed secret takes no value (AFS generates it; the master key is refused); a Paperclip secret is
+// refused. value is required for a user's secret.
 func (s *Service) Rotate(ctx context.Context, c acting.Caller, teamID, id string, value domain.SecretValue, idem *acting.Idem) (Result, error) {
 	return s.newVersion(ctx, c, teamID, id, nil, value, "RotateSecret", idem)
 }
 
 func (s *Service) newVersion(ctx context.Context, c acting.Caller, teamID, id string, expect *domain.Version, value domain.SecretValue, action string, idem *acting.Idem) (Result, error) {
-	if value.IsZero() {
-		return Result{}, domain.Validation(domain.FieldError{Field: "value", Reason: "is required"})
-	}
 	var res Result
 	err := s.Tx.InTx(ctx, c.Session(), func(ctx context.Context, tx port.Tx) error {
 		res = Result{}
@@ -298,7 +314,26 @@ func (s *Service) newVersion(ctx context.Context, c acting.Caller, teamID, id st
 				return err
 			}
 		}
-		vid, err := s.Writer.PutValue(ctx, cur.ARN, value, secretToken(c, idem, action, teamID, id))
+		val := value
+		switch cur.ManagedBy {
+		case domain.ManagedByPaperclip:
+			return domain.ManagedSecret(cur.ManagedBy)
+		case domain.ManagedByAFS:
+			if action != "RotateSecret" {
+				return domain.ManagedSecret(cur.ManagedBy)
+			}
+			if cur.Name == domain.SecretPaperclipMasterKey {
+				return domain.Validation(domain.FieldError{Field: "secretId", Reason: domain.ReasonMasterKeyNotRotatable})
+			}
+			if val, err = domain.GenerateSecretValue(s.rand(), 32); err != nil {
+				return err
+			}
+		default:
+			if val.IsZero() {
+				return domain.Validation(domain.FieldError{Field: "value", Reason: "is required"})
+			}
+		}
+		vid, err := s.Writer.PutValue(ctx, cur.ARN, val, secretToken(c, idem, action, teamID, id))
 		if err != nil {
 			return unavailable(err)
 		}
@@ -320,4 +355,11 @@ func (s *Service) newVersion(ctx context.Context, c acting.Caller, teamID, id st
 		return idem.Complete(ctx, s.Idem, tx, res.Secret)
 	})
 	return res, err
+}
+
+func (s *Service) rand() io.Reader {
+	if s.Rand != nil {
+		return s.Rand
+	}
+	return crand.Reader
 }

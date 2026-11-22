@@ -22,13 +22,13 @@ func NewAgentTemplateRepo() *AgentTemplateRepo { return &AgentTemplateRepo{} }
 var _ agenttemplates.Repository = (*AgentTemplateRepo)(nil)
 
 const templateSelect = `SELECT id, name, description, harness, default_resources, allowed_image_digests, current_image_digest, enabled,
-  version, created_at, updated_at FROM afs.agent_templates`
+  version, created_at, updated_at, capabilities FROM afs.agent_templates`
 
 func scanTemplate(row pgx.Row) (domain.AgentTemplate, error) {
 	var t domain.AgentTemplate
 	var res []byte
 	var v int64
-	if err := row.Scan(&t.ID, &t.Name, &t.Description, &t.Harness, &res, &t.AllowedDigests, &t.CurrentDigest, &t.Enabled, &v, &t.CreatedAt, &t.UpdatedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.Name, &t.Description, &t.Harness, &res, &t.AllowedDigests, &t.CurrentDigest, &t.Enabled, &v, &t.CreatedAt, &t.UpdatedAt, &t.Capabilities); err != nil {
 		return t, err
 	}
 	t.Version = domain.Version(v)
@@ -39,12 +39,12 @@ func scanTemplate(row pgx.Row) (domain.AgentTemplate, error) {
 }
 
 // List implements agenttemplates.Repository.
-func (*AgentTemplateRepo) List(ctx context.Context, tx port.Tx, enabledOnly bool, after string, limit int) ([]domain.AgentTemplate, error) {
+func (*AgentTemplateRepo) List(ctx context.Context, tx port.Tx, enabledOnly bool, capability, after string, limit int) ([]domain.AgentTemplate, error) {
 	pt, err := Unwrap(tx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := pt.Query(ctx, templateSelect+` WHERE name > $1 AND (enabled OR NOT $2) ORDER BY name LIMIT $3`, after, enabledOnly, limit)
+	rows, err := pt.Query(ctx, templateSelect+` WHERE name > $1 AND (enabled OR NOT $2) AND ($4 = '' OR $4 = ANY(capabilities)) ORDER BY name LIMIT $3`, after, enabledOnly, limit, capability)
 	if err != nil {
 		return nil, MapError(err, OpRead, "agent template")
 	}
@@ -86,8 +86,8 @@ func (*AgentTemplateRepo) Insert(ctx context.Context, tx port.Tx, t domain.Agent
 	if err != nil {
 		return err
 	}
-	_, err = pt.Exec(ctx, `INSERT INTO afs.agent_templates (id, name, description, harness, default_resources, allowed_image_digests, current_image_digest, enabled)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, t.ID, t.Name, t.Description, t.Harness, res, t.AllowedDigests, t.CurrentDigest, t.Enabled)
+	_, err = pt.Exec(ctx, `INSERT INTO afs.agent_templates (id, name, description, harness, default_resources, allowed_image_digests, current_image_digest, enabled, capabilities)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, t.ID, t.Name, t.Description, t.Harness, res, t.AllowedDigests, t.CurrentDigest, t.Enabled, nonNilStrings(t.Capabilities))
 	return MapError(err, OpWrite, "agent template")
 }
 
@@ -102,8 +102,8 @@ func (r *AgentTemplateRepo) Update(ctx context.Context, tx port.Tx, t domain.Age
 		return domain.AgentTemplate{}, err
 	}
 	tag, err := pt.Exec(ctx, `UPDATE afs.agent_templates SET description = $2, harness = $3, default_resources = $4, allowed_image_digests = $5,
-  current_image_digest = $6, enabled = $7 WHERE id = $1 AND version = $8`,
-		t.ID, t.Description, t.Harness, res, t.AllowedDigests, t.CurrentDigest, t.Enabled, int64(expect))
+  current_image_digest = $6, enabled = $7, capabilities = $9 WHERE id = $1 AND version = $8`,
+		t.ID, t.Description, t.Harness, res, t.AllowedDigests, t.CurrentDigest, t.Enabled, int64(expect), nonNilStrings(t.Capabilities))
 	if err != nil {
 		return domain.AgentTemplate{}, MapError(err, OpWrite, "agent template")
 	}
@@ -128,4 +128,23 @@ func (*AgentTemplateRepo) Delete(ctx context.Context, tx port.Tx, name string, e
 		return catalogMissOrStale(ctx, pt, "agent template", `SELECT 1 FROM afs.agent_templates WHERE name = $1`, name)
 	}
 	return nil
+}
+
+// nonNilStrings returns s, or an empty slice for nil (a NULL would break NOT NULL columns).
+func nonNilStrings(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
+
+// ReferencedBySwarm implements agenttemplates.Repository.
+func (*AgentTemplateRepo) ReferencedBySwarm(ctx context.Context, tx port.Tx, id string) (bool, error) {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return false, err
+	}
+	var used bool
+	err = pt.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM afs.swarm_templates WHERE spec #>> '{collaboration,templateId}' = $1)`, id).Scan(&used)
+	return used, MapError(err, OpRead, "swarm template")
 }

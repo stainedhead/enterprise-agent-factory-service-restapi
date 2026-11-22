@@ -106,6 +106,16 @@ IdentityProvider:
       type: string
     cliClientId:
       type: string
+    collabClientId:
+      type:
+      - string
+      - 'null'
+      description: The collaboration (Paperclip edge) client of this provider
+    collabClientSecretArn:
+      type:
+      - string
+      - 'null'
+      description: Reference only; needs collabClientId; never returned by ListSignInProviders
     clientSecretArn:
       type:
       - string
@@ -163,6 +173,16 @@ CreateIdentityProviderRequest:
       type: string
     cliClientId:
       type: string
+    collabClientId:
+      type:
+      - string
+      - 'null'
+      description: The collaboration (Paperclip edge) client of this provider
+    collabClientSecretArn:
+      type:
+      - string
+      - 'null'
+      description: Reference only; needs collabClientId; never returned by ListSignInProviders
     clientSecretArn:
       type: string
     groupsClaim:
@@ -182,6 +202,16 @@ UpdateIdentityProviderRequest:
       type: string
     cliClientId:
       type: string
+    collabClientId:
+      type:
+      - string
+      - 'null'
+      description: The collaboration (Paperclip edge) client of this provider
+    collabClientSecretArn:
+      type:
+      - string
+      - 'null'
+      description: Reference only; needs collabClientId; never returned by ListSignInProviders
     clientSecretArn:
       type:
       - string
@@ -624,6 +654,12 @@ PutAgentTemplateRequest:
     currentDigest:
       type: string
       pattern: ^sha256:[0-9a-f]{64}$
+    capabilities:
+      type: array
+      items:
+        type: string
+        enum:
+        - paperclip
     enabled:
       type: boolean
 OrgAccount:

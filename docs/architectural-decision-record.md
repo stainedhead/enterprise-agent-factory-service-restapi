@@ -189,3 +189,57 @@ Decisions local to this repository. Cross-repo decisions live in the root reposi
 - Decision: `contractgen` pins the contract version (1.2.0) and skips database-only `unset` settings (CD-8). The check is
   only meaningful with `AFS_ROOT_DIR` pointing at root `main`; run `make contract` after a root contract change.
 - Consequences: `-skip-missing` is for local convenience only; CI checks out the root `main`.
+
+## ADR-023 The collaboration edge is its own binary with its own database role
+
+- Status: Accepted (spec 261122-paperclip-collaboration, C3)
+- Context: the edge is the only internet-reachable component. It must not share a process, a role or a failure domain with
+  `afs-api`, and a compromise of it must not reach tables.
+- Decision: `cmd/afs-edge` connects as `afs_edge`, which has no table privilege and executes ten SECURITY DEFINER functions
+  (-db 000020). Decisions are in `internal/usecase/edge` (imports `domain/collab` and `authz` only); `edgehttp`, `edgedb`,
+  `edgesession`, `edgelog` and the OIDC code flow in `adapter/oidc` are thin adapters. RBAC still comes from `authz`.
+- Consequences: the edge cannot read a team's data even if exploited; adding a permission rule is a use case change with a
+  denied-case test; the edge has its own Deployment, role, ALB target group and alerts.
+
+## ADR-024 Sessions are server-side; the sign-in state is sealed, not stored
+
+- Status: Accepted (spec 261122-paperclip-collaboration, C3)
+- Context: the OIDC redirect URI is one apex callback for all teams, and the cookie is host-only.
+- Decision: the state parameter carries the PKCE verifier, nonce, team, host and return path sealed with AES-256-GCM (two
+  keys, so rotation does not fail sign-ins in flight). The callback stores a one-time handoff (database, 60 s, single use
+  across replicas); the team host consumes it and sets `__Host-afs-collab` holding only a 256-bit random id whose SHA-256
+  hash is the key of the session row. Return targets are limited to rooted, non-reserved paths of the same host.
+- Consequences: no sticky routing and no shared memory between replicas; sign-out and turning the web UI off take effect
+  at once; losing the sealing keys only fails sign-ins in flight.
+
+## ADR-025 The edge buffers a scanned body and polices WebSocket frames itself
+
+- Status: Accepted (spec 261122-paperclip-collaboration, C3)
+- Context: `collab.content_scan = block` must refuse a request that contains a credential before the upstream sees it, and a
+  caller holding only `collaboration:access` may watch a WebSocket but not send (PC-D17).
+- Decision: a text body is read up to `collab.max_body_mb`, scanned with a streaming scanner and forwarded from memory
+  (blocked: `422`, nothing forwarded). WebSocket upgrades are tunnelled by the edge: client frames are parsed (not the
+  payload of binary frames), text messages up to 1 MiB are held until complete and scanned, a data frame from an
+  access-only caller closes with 1008. Both directions end after `AFS_EDGE_IDLE_TIMEOUT` without traffic.
+- Consequences: memory per scanned request is bounded by the body limit and the request limiter; compressed bodies are
+  refused (`unsupported_encoding`) because they cannot be scanned; no WebSocket library is added.
+
+## ADR-026 ALB to edge over HTTPS; health on the operations port
+
+- Status: Accepted (spec 261122-paperclip-collaboration, C4)
+- Decision: the ALB target group is `HTTPS` to port 8443 with a cert-manager certificate (the ALB does not validate it, the
+  hop is still encrypted); the health check reads `/readyz` on the operations port 9090 so no Paperclip path is reserved.
+  The NetworkPolicy admits the ALB's subnets on both ports.
+- Consequences: `edge.network.albCidrs` should be set in production; with it empty any source in the cluster network may
+  reach 8443.
+
+## ADR-027 Reconciler-side Paperclip behaviour that needs an upstream image is a port, not a guess
+
+- Status: Accepted (spec 261122-paperclip-collaboration, C2)
+- Context: the Paperclip image's bootstrap contract (`AFS_PAPERCLIP_BOOTSTRAP`) and its HTTP API are upstream dependencies
+  that this repository cannot exercise without a cluster.
+- Decision: the use cases define ports for the Paperclip client, the board key finder, the roster guard and the readiness
+  probe; the wiring leaves them unset where no implementation exists, so those paths stay pending instead of calling an API
+  of unknown shape. Endpoint readiness is derived from the agent's pod readiness plus the route checks.
+- Consequences: managed registration, member sync and the board key read run when an implementation is wired; the
+  parked items are listed in the spec's implementation notes.

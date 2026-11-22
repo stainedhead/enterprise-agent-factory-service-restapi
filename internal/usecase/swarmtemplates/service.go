@@ -29,6 +29,8 @@ type Repository interface {
 	Update(ctx context.Context, tx port.Tx, t domain.SwarmTemplate, expect domain.Version) (domain.SwarmTemplate, error)
 	// Delete removes the template when its version is expect.
 	Delete(ctx context.Context, tx port.Tx, id string, expect domain.Version) error
+	// CollaborationTemplateOK reports whether id names an enabled agent template with capability paperclip.
+	CollaborationTemplateOK(ctx context.Context, tx port.Tx, id string) (bool, error)
 	// OpenWorkOrders counts the work orders that use the template and are not done, failed or cancelled.
 	OpenWorkOrders(ctx context.Context, tx port.Tx, id string) (int, error)
 }
@@ -106,6 +108,9 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, in domain.NewSwar
 		if err != nil {
 			return err
 		}
+		if err := s.checkCollab(ctx, tx, t.Spec); err != nil {
+			return err
+		}
 		if err := s.Repo.Insert(ctx, tx, t); err != nil {
 			return err
 		}
@@ -118,6 +123,22 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, in domain.NewSwar
 		return idem.Complete(ctx, s.Idem, tx, res.Template)
 	})
 	return res, err
+}
+
+// checkCollab refuses a spec whose collaboration template is unknown, disabled or without capability paperclip.
+func (s *Service) checkCollab(ctx context.Context, tx port.Tx, spec map[string]any) error {
+	id := domain.SwarmCollaborationTemplateID(spec)
+	if id == "" {
+		return nil
+	}
+	ok, err := s.Repo.CollaborationTemplateOK(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return domain.Validation(domain.FieldError{Field: "spec.collaboration.templateId", Reason: "must name an enabled agent template with capability paperclip"})
+	}
+	return nil
 }
 
 // Update implements UpdateSwarmTemplate (If-Match required). A body that changes nothing is a
@@ -140,6 +161,9 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, id string, expect
 		}
 		next, err := cur.Apply(patch, s.Now())
 		if err != nil {
+			return err
+		}
+		if err := s.checkCollab(ctx, tx, next.Spec); err != nil {
 			return err
 		}
 		if out, err = s.Repo.Update(ctx, tx, next, expect); err != nil {

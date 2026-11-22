@@ -1,0 +1,296 @@
+# OpenAPI fragment (API contract §4.4b and §5 shapes). Bundled into api/openapi.yaml by make openapi.
+CollaborationEffective:
+  type: object
+  description: What the edge honours (stored choice, team guardrail, service settings and the provider's collaboration client)
+  required:
+  - webUi
+  - restApi
+  - reasons
+  properties:
+    webUi:
+      type: boolean
+    restApi:
+      type: boolean
+    reasons:
+      type: array
+      items:
+        type: string
+        enum:
+        - team_not_allowed
+        - service_endpoints_off
+        - base_domain_unset
+        - provider_without_collab_client
+TeamCollaboration:
+  type: object
+  description: The team's collaboration resource; singleton per team (API contract §4.4b)
+  required:
+  - teamId
+  - agentId
+  - hostname
+  - webUiUrl
+  - restApiUrl
+  - webUiEnabled
+  - restApiEnabled
+  - registrationMode
+  - effective
+  - unmanagedPaperclipAgents
+  - version
+  - generation
+  - status
+  properties:
+    teamId:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+      readOnly: true
+    agentId:
+      type: string
+      pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+      readOnly: true
+    hostname:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+    webUiUrl:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+    restApiUrl:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+    webUiEnabled:
+      type: boolean
+    restApiEnabled:
+      type: boolean
+    registrationMode:
+      type: string
+      enum:
+      - manual
+      - managed
+    effective:
+      $ref: '#/components/schemas/CollaborationEffective'
+    unmanagedPaperclipAgents:
+      type: array
+      items:
+        type: string
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    generation:
+      type: integer
+      minimum: 1
+      readOnly: true
+    status:
+      $ref: '#/components/schemas/Status'
+      readOnly: true
+PutTeamCollaborationRequest:
+  type: object
+  required:
+  - webUiEnabled
+  - restApiEnabled
+  properties:
+    webUiEnabled:
+      type: boolean
+    restApiEnabled:
+      type: boolean
+    registrationMode:
+      type: string
+      enum:
+      - manual
+      - managed
+      description: Omitted keeps the current value
+CollaborationLink:
+  type: object
+  required:
+  - agentId
+  - agentName
+  - connect
+  - linkState
+  - version
+  properties:
+    agentId:
+      type: string
+      pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+      readOnly: true
+    agentName:
+      type: string
+      readOnly: true
+    connect:
+      type: boolean
+    paperclipAgentId:
+      type:
+      - string
+      - 'null'
+      pattern: ^[A-Za-z0-9._:-]{1,128}$
+    linkState:
+      type: string
+      enum:
+      - pending
+      - linked
+      - failed
+      - disabled
+      readOnly: true
+    lastSyncedAt:
+      type:
+      - string
+      - 'null'
+      format: date-time
+      readOnly: true
+    lastError:
+      type:
+      - string
+      - 'null'
+      maxLength: 500
+      description: A short sanitized reason; never a Paperclip key or content
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      readOnly: true
+CollaborationLinkList:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/CollaborationLink'
+    nextToken:
+      type: string
+      description: Absent on the last page
+ConnectAgentRequest:
+  type: object
+  properties:
+    paperclipAgentId:
+      type: string
+      pattern: ^[A-Za-z0-9._:-]{1,128}$
+      description: Accepted only while registrationMode is manual
+RotateCollaborationKeysRequest:
+  type: object
+  properties:
+    names:
+      type: array
+      items:
+        type: string
+        enum:
+        - paperclip-better-auth-secret
+        - paperclip-tool-action-signing-secret
+      description: Default is both. paperclip-secrets-master-key is refused (master_key_not_rotatable)
+RotatedSecret:
+  type: object
+  required:
+  - secretId
+  - name
+  - versionId
+  properties:
+    secretId:
+      type: string
+      pattern: ^sec_[0-9A-HJKMNP-TV-Z]{26}$
+    name:
+      type: string
+    versionId:
+      type: string
+RotateCollaborationKeysResult:
+  type: object
+  required:
+  - rotated
+  - signsOutEveryone
+  - agentRolloutPending
+  properties:
+    rotated:
+      type: array
+      items:
+        $ref: '#/components/schemas/RotatedSecret'
+    signsOutEveryone:
+      type: boolean
+    agentRolloutPending:
+      type: boolean
+CollaborationEndpoint:
+  type: object
+  required:
+  - teamId
+  - slug
+  - teamState
+  - hostname
+  - agentId
+  - webUiEnabled
+  - restApiEnabled
+  - effective
+  - mayExposeCollaboration
+  - phase
+  properties:
+    teamId:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+    slug:
+      type: string
+    teamState:
+      type: string
+      enum:
+      - active
+      - suspended
+      - deleting
+      - deleted
+    hostname:
+      type:
+      - string
+      - 'null'
+    agentId:
+      type: string
+      pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+    webUiEnabled:
+      type: boolean
+    restApiEnabled:
+      type: boolean
+    effective:
+      type: object
+      required:
+      - webUi
+      - restApi
+      properties:
+        webUi:
+          type: boolean
+        restApi:
+          type: boolean
+    mayExposeCollaboration:
+      type: boolean
+    phase:
+      type: string
+      enum:
+      - Ready
+      - Degraded
+      - Failed
+      - Pending
+    lastAccessAt:
+      type:
+      - string
+      - 'null'
+      format: date-time
+CollaborationEndpointList:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/CollaborationEndpoint'
+    nextToken:
+      type: string
+      description: Absent on the last page

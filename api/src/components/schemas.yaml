@@ -120,6 +120,7 @@ schemas:
     - Conflict
     - PreconditionFailed
     - PreconditionRequired
+    - SecretDetected
     - Throttled
     - InternalError
     - Unavailable

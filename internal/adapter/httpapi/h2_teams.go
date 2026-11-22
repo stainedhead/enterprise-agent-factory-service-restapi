@@ -44,6 +44,7 @@ type teamBody struct {
 	AllowedAwsAccounts       []string      `json:"allowedAwsAccounts"`
 	MayManageAwsAccounts     bool          `json:"mayManageAwsAccounts"`
 	MayAddExternalSystems    bool          `json:"mayAddExternalSystems"`
+	MayExposeCollaboration   bool          `json:"mayExposeCollaboration"`
 	Version                  int64         `json:"version"`
 	Generation               int64         `json:"generation"`
 	CreatedAt                string        `json:"createdAt"`
@@ -61,7 +62,7 @@ func (a *TeamsAPI) teamBody(t domain.Team) teamBody {
 		ViewerKubectl: t.ViewerKubectl, ExpiresAt: w2TimePtr(t.ExpiresAt), TeardownRule: string(t.TeardownRule),
 		TornDownAt: w2TimePtr(t.TornDownAt), TeardownReason: string(t.TeardownReason), IdentityProviderID: t.IdentityProviderID,
 		AllowedAwsAccounts: t.AllowedAwsAccounts, MayManageAwsAccounts: t.MayManageAwsAccounts,
-		MayAddExternalSystems: t.MayAddExternalSystems, Version: int64(t.Version), Generation: int64(t.Generation),
+		MayAddExternalSystems: t.MayAddExternalSystems, MayExposeCollaboration: t.MayExposeCollaboration, Version: int64(t.Version), Generation: int64(t.Generation),
 		CreatedAt: w2Time(t.CreatedAt), CreatedBy: t.CreatedBy, UpdatedAt: w2Time(t.UpdatedAt), Status: t.Status,
 	}
 	if b.AllowedAwsAccounts == nil {
@@ -159,26 +160,27 @@ func (a *TeamsAPI) status(w http.ResponseWriter, r *http.Request) {
 }
 
 type createTeamRequest struct {
-	Slug                  string             `json:"slug"`
-	DisplayName           string             `json:"displayName"`
-	Description           string             `json:"description"`
-	Kind                  string             `json:"kind"`
-	CostCenter            string             `json:"costCenter"`
-	OwnerEmail            string             `json:"ownerEmail"`
-	MaxBudgetUsd          *domain.Money      `json:"maxBudgetUsd"`
-	Quotas                domain.Quotas      `json:"quotas"`
-	IsolationTier         string             `json:"isolationTier"`
-	ViewerKubectl         bool               `json:"viewerKubectl"`
-	ExpiresAt             *string            `json:"expiresAt"`
-	TeardownRule          string             `json:"teardownRule"`
-	IdentityProviderID    string             `json:"identityProviderId"`
-	AllowedAwsAccounts    []string           `json:"allowedAwsAccounts"`
-	MayManageAwsAccounts  bool               `json:"mayManageAwsAccounts"`
-	MayAddExternalSystems bool               `json:"mayAddExternalSystems"`
-	FirstAdmin            *firstAdminRequest `json:"firstAdmin"`
-	Models                []string           `json:"models"`
-	Tags                  []tagValueBody     `json:"tags"`
-	Budget                *teamBudgetRequest `json:"budget"`
+	Slug                   string             `json:"slug"`
+	DisplayName            string             `json:"displayName"`
+	Description            string             `json:"description"`
+	Kind                   string             `json:"kind"`
+	CostCenter             string             `json:"costCenter"`
+	OwnerEmail             string             `json:"ownerEmail"`
+	MaxBudgetUsd           *domain.Money      `json:"maxBudgetUsd"`
+	Quotas                 domain.Quotas      `json:"quotas"`
+	IsolationTier          string             `json:"isolationTier"`
+	ViewerKubectl          bool               `json:"viewerKubectl"`
+	ExpiresAt              *string            `json:"expiresAt"`
+	TeardownRule           string             `json:"teardownRule"`
+	IdentityProviderID     string             `json:"identityProviderId"`
+	AllowedAwsAccounts     []string           `json:"allowedAwsAccounts"`
+	MayManageAwsAccounts   bool               `json:"mayManageAwsAccounts"`
+	MayAddExternalSystems  bool               `json:"mayAddExternalSystems"`
+	MayExposeCollaboration *bool              `json:"mayExposeCollaboration"`
+	FirstAdmin             *firstAdminRequest `json:"firstAdmin"`
+	Models                 []string           `json:"models"`
+	Tags                   []tagValueBody     `json:"tags"`
+	Budget                 *teamBudgetRequest `json:"budget"`
 }
 
 type firstAdminRequest struct {
@@ -233,7 +235,7 @@ func (a *TeamsAPI) create(w http.ResponseWriter, r *http.Request) {
 			IsolationTier: domain.IsolationTier(req.IsolationTier), ViewerKubectl: req.ViewerKubectl,
 			TeardownRule: domain.TeardownRule(req.TeardownRule), IdentityProviderID: req.IdentityProviderID,
 			AllowedAwsAccounts: req.AllowedAwsAccounts, MayManageAwsAccounts: req.MayManageAwsAccounts,
-			MayAddExternalSystems: req.MayAddExternalSystems,
+			MayAddExternalSystems: req.MayAddExternalSystems, MayExposeCollaboration: req.MayExposeCollaboration,
 		},
 		FirstAdmin: domain.NewMemberParams{SubjectType: domain.SubjectType(req.FirstAdmin.SubjectType), UserID: req.FirstAdmin.UserID,
 			Email: req.FirstAdmin.Email, GroupName: req.FirstAdmin.GroupName},
@@ -298,6 +300,7 @@ type updateTeamRequest struct {
 	ViewerKubectl            *bool                    `json:"viewerKubectl"`
 	MayManageAwsAccounts     *bool                    `json:"mayManageAwsAccounts"`
 	MayAddExternalSystems    *bool                    `json:"mayAddExternalSystems"`
+	MayExposeCollaboration   *bool                    `json:"mayExposeCollaboration"`
 	AllowedAwsAccounts       *[]string                `json:"allowedAwsAccounts"`
 }
 
@@ -306,7 +309,7 @@ func (q updateTeamRequest) patch() (domain.TeamPatch, error) {
 		DisplayName: q.DisplayName, Description: q.Description, OwnerEmail: q.OwnerEmail, CostCenter: q.CostCenter,
 		MaxBudget: q.MaxBudgetUsd, CeilingOverrideReason: q.CeilingOverrideReason, Quotas: q.Quotas,
 		ViewerKubectl: q.ViewerKubectl, MayManageAwsAccounts: q.MayManageAwsAccounts,
-		MayAddExternalSystems: q.MayAddExternalSystems, AllowedAwsAccounts: q.AllowedAwsAccounts,
+		MayAddExternalSystems: q.MayAddExternalSystems, MayExposeCollaboration: q.MayExposeCollaboration, AllowedAwsAccounts: q.AllowedAwsAccounts,
 	}
 	if q.Kind != nil {
 		k := domain.TeamKind(*q.Kind)

@@ -6,6 +6,11 @@ package agents
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"io"
+	"slices"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
@@ -25,12 +30,14 @@ type TemplateInfo struct {
 	Name           string
 	Enabled        bool
 	AllowedDigests []string
+	Capabilities   []string
 }
 
 // SecretInfo says who owns a secret: an agent, a pool, or neither (team shared).
 type SecretInfo struct {
-	AgentID string
-	PoolID  string
+	AgentID   string
+	PoolID    string
+	ManagedBy string
 }
 
 // Repository is the agent store, plus the catalog reads CreateAgent checks against.
@@ -58,6 +65,36 @@ type Repository interface {
 	Snapshots(ctx context.Context, tx port.Tx, teamID, agentID, after string, limit int) ([]domain.Snapshot, error)
 	// InsertSnapshot stores a manual snapshot request.
 	InsertSnapshot(ctx context.Context, tx port.Tx, teamID string, s domain.Snapshot) error
+
+	// InsertCollaboration stores the team's collaboration resource (defaults: web UI on, REST API off,
+	// manual registration) for the collaboration agent just inserted.
+	InsertCollaboration(ctx context.Context, tx port.Tx, teamID, agentID string) error
+	// CollaborationMode returns the team's registration mode; ok is false when the team has no
+	// collaboration agent.
+	CollaborationMode(ctx context.Context, tx port.Tx, teamID string) (mode domain.RegistrationMode, ok bool, err error)
+	// SetCollaboration inserts or updates a worker's connection to Paperclip.
+	SetCollaboration(ctx context.Context, tx port.Tx, teamID, agentID string, connect bool, paperclipAgentID *string) error
+	// SecretPath returns afs.secret_path of an agent-scoped secret.
+	SecretPath(ctx context.Context, tx port.Tx, teamID, agentID, name string) (string, error)
+	// InsertBootSecret stores an AFS-managed secret row of the collaboration agent and binds it to the
+	// agent as the environment variable env.
+	InsertBootSecret(ctx context.Context, tx port.Tx, s domain.Secret, env string) error
+	// ManagedBindings returns the agent's bindings whose secret AFS manages.
+	ManagedBindings(ctx context.Context, tx port.Tx, teamID, agentID string) ([]domain.SecretBinding, error)
+}
+
+// BootCreated is a secret that now exists in Secrets Manager.
+type BootCreated struct {
+	ARN       string
+	VersionID string
+}
+
+// BootWriter is the Secrets Manager write path CreateAgent uses for a collaboration agent's boot
+// secrets (the same adapter as the secrets use case).
+type BootWriter interface {
+	Create(ctx context.Context, name string, value domain.SecretValue, token string, tags map[string]string) (BootCreated, error)
+	ForceDelete(ctx context.Context, arn string) error
+	TagOrphan(ctx context.Context, arn string) error
 }
 
 // guard is the validator CreateAgent and UpdateAgent share with RestoreRevision (FR-R01).
@@ -67,6 +104,12 @@ func (s *Service) guard() Guard { return Guard{Src: s.Repo} }
 type Service struct {
 	acting.Deps
 	Repo Repository
+	// Boot writes the boot secrets of a collaboration agent; nil refuses role collaboration.
+	Boot BootWriter
+	// Rand is the random source of the boot secrets (crypto/rand.Reader in production).
+	Rand io.Reader
+	// OnOrphan is called when a compensating delete failed (afs_api_orphan_secrets_total). Optional.
+	OnOrphan func()
 }
 
 // Result is an agent with the replayed response of an idempotent call.
@@ -87,7 +130,7 @@ func auditOf(a domain.Agent) map[string]any {
 		b = append(b, map[string]string{"secretId": x.SecretID, "delivery": x.Delivery, "target": x.Target})
 	}
 	return map[string]any{"name": string(a.Name), "description": a.Description, "template": a.Template, "image": string(a.Image),
-		"modelId": a.ModelID, "resources": a.Resources, "iamIdentity": a.IAMIdentity, "state": a.State, "generation": a.Generation,
+		"role": string(a.Role), "modelId": a.ModelID, "resources": a.Resources, "iamIdentity": a.IAMIdentity, "state": a.State, "generation": a.Generation,
 		"volume": map[string]any{"sizeGiB": a.Volume.SizeGiB, "storageClass": a.Volume.StorageClass, "onDelete": a.Volume.OnDelete,
 			"snapshotSchedule": a.Volume.SnapshotSchedule, "snapshotRetain": a.Volume.SnapshotRetain},
 		"secretBindings": b}
@@ -142,8 +185,10 @@ func (s *Service) Get(ctx context.Context, c acting.Caller, teamID, id string) (
 // agent's secret. One transaction writes the row, the audit record and agent.created.
 func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in domain.NewAgentParams, idem *acting.Idem) (Result, error) {
 	var res Result
+	var created []string
 	err := s.Tx.InTx(ctx, c.Session(), func(ctx context.Context, tx port.Tx) error {
 		res = Result{}
+		created = nil
 		replay, err := idem.Begin(ctx, s.Idem, tx)
 		if err != nil || replay != nil {
 			res.Replay = replay
@@ -163,15 +208,31 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in
 		if err := s.guard().CheckStorageClass(ctx, tx, a.Volume.StorageClass); err != nil {
 			return err
 		}
-		tplID, err := s.guard().CheckTemplate(ctx, tx, a.Template, a.Image)
+		tplID, err := s.guard().CheckTemplate(ctx, tx, a.Template, a.Image, a.Role)
 		if err != nil {
 			return err
 		}
 		if err := s.guard().CheckBindings(ctx, tx, teamID, a.ID, a.Bindings); err != nil {
 			return err
 		}
+		if a.IsCollaboration() && (s.Boot == nil || s.Rand == nil) {
+			return domain.Unavailable("Secrets Manager", errNoBootWriter)
+		}
 		if err := s.Repo.Insert(ctx, tx, a, tplID); err != nil {
 			return err
+		}
+		switch {
+		case a.IsCollaboration():
+			if err := s.Repo.InsertCollaboration(ctx, tx, teamID, a.ID); err != nil {
+				return err
+			}
+			if err := s.createBootSecrets(ctx, tx, c, teamID, a.ID, idem, &created); err != nil {
+				return err
+			}
+		case in.Collaboration != nil && in.Collaboration.Connect != nil:
+			if err := s.connect(ctx, tx, teamID, a.ID, *in.Collaboration); err != nil {
+				return err
+			}
 		}
 		if err := s.Audit.Write(ctx, tx, c.Record("CreateAgent", kindAgent, a.ID, teamID, nil, auditOf(a))); err != nil {
 			return err
@@ -184,7 +245,108 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in
 		}
 		return idem.Complete(ctx, s.Idem, tx, res.Agent)
 	})
+	if err != nil {
+		s.compensate(ctx, created)
+	}
 	return res, err
+}
+
+var errNoBootWriter = errors.New("agents: no Secrets Manager writer for the boot secrets")
+
+// bootSecrets is the collaboration agent's boot secrets in creation order, with the environment
+// variable each is bound as (COL-7).
+func bootSecrets() []domain.BootSecret { return domain.BootSecrets() }
+
+// createBootSecrets generates the three boot secrets (32 random bytes each, hex) and writes them to
+// Secrets Manager, then stores the AFS-managed rows bound to the agent. created collects every ARN written,
+// so a failure anywhere in the request deletes them (compensation). A Secrets Manager failure is a 503.
+func (s *Service) createBootSecrets(ctx context.Context, tx port.Tx, c acting.Caller, teamID, agentID string, idem *acting.Idem, created *[]string) error {
+	for _, b := range bootSecrets() {
+		path, err := s.Repo.SecretPath(ctx, tx, teamID, agentID, b.Name)
+		if err != nil {
+			return err
+		}
+		val, err := domain.GenerateSecretValue(s.Rand, 32)
+		if err != nil {
+			return err
+		}
+		cr, err := s.Boot.Create(ctx, path, val, bootToken(c, idem, teamID, path), map[string]string{"afs-team-id": teamID, "afs-agent-id": agentID})
+		if err != nil {
+			e := domain.Unavailable("Secrets Manager", err)
+			e.RetryAfterSeconds = 1
+			return e
+		}
+		*created = append(*created, cr.ARN)
+		sid, err := s.IDs.NewID(domain.PrefixSecret)
+		if err != nil {
+			return err
+		}
+		now := s.Now()
+		sec := domain.Secret{ID: sid.String(), TeamID: teamID, Scope: domain.SecretScopeAgent, AgentID: agentID, Name: b.Name,
+			Description: "Paperclip boot secret, generated by AFS", Path: path, ARN: cr.ARN, VersionID: cr.VersionID,
+			LastChangedAt: &now, ManagedBy: domain.ManagedByAFS}
+		if err := s.Repo.InsertBootSecret(ctx, tx, sec, b.Env); err != nil {
+			return err
+		}
+		if err := s.Audit.Write(ctx, tx, c.Record("CreateSecret", "secrets", sec.ID, teamID, nil,
+			map[string]any{"scope": string(sec.Scope), "agentId": agentID, "name": sec.Name, "managedBy": string(sec.ManagedBy), "path": path})); err != nil {
+			return err
+		}
+		if err := s.Emit(ctx, tx, c, domain.EventSecretCreated, teamID, "secrets", sec.ID,
+			map[string]any{"secretId": sec.ID, "name": sec.Name, "scope": string(sec.Scope)}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func bootToken(c acting.Caller, idem *acting.Idem, parts ...string) string {
+	h := sha256.New()
+	h.Write([]byte(c.Principal.ID))
+	if idem != nil {
+		h.Write([]byte("|idem:" + idem.Key.Key))
+	} else {
+		h.Write([]byte("|req:" + c.RequestID))
+	}
+	for _, p := range parts {
+		h.Write([]byte("|" + p))
+	}
+	return hex.EncodeToString(h.Sum(nil))[:48]
+}
+
+// compensate deletes the Secrets Manager secrets a failed CreateAgent wrote; a delete that fails tags
+// the secret for the reconciler's orphan sweep (RC-27).
+func (s *Service) compensate(ctx context.Context, arns []string) {
+	ctx = context.WithoutCancel(ctx)
+	for _, arn := range arns {
+		if err := s.Boot.ForceDelete(ctx, arn); err == nil {
+			continue
+		}
+		_ = s.Boot.TagOrphan(ctx, arn)
+		if s.OnOrphan != nil {
+			s.OnOrphan()
+		}
+	}
+}
+
+// connect records a worker's collaboration choice. The team must have a collaboration agent, and the
+// Paperclip agent id is accepted only in manual registration (RA-18).
+func (s *Service) connect(ctx context.Context, tx port.Tx, teamID, agentID string, in domain.CollaborationInput) error {
+	mode, ok, err := s.Repo.CollaborationMode(ctx, tx, teamID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return domain.CollaborationAgentMissing(true)
+	}
+	if in.PaperclipAgentID != "" && mode == domain.RegistrationManaged {
+		return domain.Validation(domain.FieldError{Field: "collaboration.paperclipAgentId", Reason: domain.ReasonManagedRegistration})
+	}
+	var pc *string
+	if in.PaperclipAgentID != "" {
+		pc = &in.PaperclipAgentID
+	}
+	return s.Repo.SetCollaboration(ctx, tx, teamID, agentID, in.Connect != nil && *in.Connect, pc)
 }
 
 func changedFields(p domain.AgentPatch) []string {
@@ -202,6 +364,7 @@ func changedFields(p domain.AgentPatch) []string {
 	add(p.IAMIdentity != nil, "iamIdentity")
 	add(p.Volume != nil, "volume")
 	add(p.Bindings != nil, "secretBindings")
+	add(p.Collaboration != nil, "collaboration")
 	return f
 }
 
@@ -225,7 +388,7 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, teamID, id string
 		tplChanged := next.Template != cur.Template || next.Image != cur.Image
 		tplID := ""
 		if tplChanged {
-			if tplID, err = s.guard().CheckTemplate(ctx, tx, next.Template, next.Image); err != nil {
+			if tplID, err = s.guard().CheckTemplate(ctx, tx, next.Template, next.Image, cur.Role); err != nil {
 				return err
 			}
 		}
@@ -238,9 +401,26 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, teamID, id string
 			if err := s.guard().CheckBindings(ctx, tx, teamID, id, next.Bindings); err != nil {
 				return err
 			}
+			if cur.IsCollaboration() {
+				// The boot bindings are AFS's: a replacement of the bindings keeps them.
+				kept, err := s.Repo.ManagedBindings(ctx, tx, teamID, id)
+				if err != nil {
+					return err
+				}
+				for _, k := range kept {
+					if !slices.ContainsFunc(next.Bindings, func(b domain.SecretBinding) bool { return b.Target == k.Target }) {
+						next.Bindings = append(next.Bindings, k)
+					}
+				}
+			}
 		}
 		if err := s.Repo.Update(ctx, tx, next, tplID, tplChanged, expect); err != nil {
 			return err
+		}
+		if p.Collaboration != nil && p.Collaboration.Connect != nil {
+			if err := s.connect(ctx, tx, teamID, id, *p.Collaboration); err != nil {
+				return err
+			}
 		}
 		if err := s.Audit.Write(ctx, tx, c.Record("UpdateAgent", kindAgent, id, teamID, auditOf(cur), auditOf(next))); err != nil {
 			return err

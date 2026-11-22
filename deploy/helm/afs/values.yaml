@@ -53,6 +53,7 @@ prometheusRule:
     driftPerHour: 10
     gatewayAddedLatencyP99Seconds: 0.025
     outboxOldestAgeSeconds: 300
+    edgeErrorRatio: 0.01           # collaboration edge 5xx ratio
     curVarianceRatio: 0.05         # raise to match billing.variance_alert_pct
 
 dashboards:
@@ -65,3 +66,4 @@ api: {}
 reconciler: {}
 gateway: {}
 billing: {}
+edge: {}

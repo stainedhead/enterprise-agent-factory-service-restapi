@@ -1,0 +1,30 @@
+{{- /* The routing rule of the edge's records (API contract 4.4c Records, G5): one JSON line per sign-in, sign-out and
+       denied request carries the field afs.team_id, and the node log collector routes the lines of
+       {{ .Release.Namespace }}/afs-edge by that field to the team's aggregator (the per-team Fluent Bit aggregator
+       of the log delivery), with the redaction of OPS-4. No new network path exists. The platform's collector
+       includes this ConfigMap's rule. */}}
+{{- $c := include "afs.component" (dict "root" $ "name" "edge") | fromYaml }}
+{{- if and $c.enabled $c.logRouting.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: afs-edge-log-routing
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "afs.labels" (dict "root" $ "name" "edge") | nindent 4 }}
+    afs.stainedhead.io/log-routing: "true"
+data:
+  edge-routing.conf: |
+    [FILTER]
+        Name          parser
+        Match         kube.*_{{ .Release.Namespace }}_afs-edge-*
+        Key_Name      log
+        Parser        json
+        Reserve_Data  On
+    [FILTER]
+        Name          rewrite_tag
+        Match         kube.*_{{ .Release.Namespace }}_afs-edge-*
+        Rule          $afs.team_id ^(team_[0-9A-Za-z]+)$ team.$1 false
+        Emitter_Name  afs_edge_by_team
+    # Lines without a team id (the apex callback) stay with the platform's own log group.
+{{- end }}

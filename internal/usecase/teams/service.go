@@ -45,7 +45,7 @@ func teamAudit(t domain.Team) map[string]any {
 		"slug": string(t.Slug), "displayName": t.DisplayName, "kind": t.Kind, "state": t.State,
 		"costCenter": t.CostCenter, "ownerEmail": t.OwnerEmail, "maxBudgetUsd": t.MaxBudget.String(),
 		"isolationTier": t.IsolationTier, "viewerKubectl": t.ViewerKubectl, "quotas": t.Quotas,
-		"mayManageAwsAccounts": t.MayManageAwsAccounts, "mayAddExternalSystems": t.MayAddExternalSystems,
+		"mayManageAwsAccounts": t.MayManageAwsAccounts, "mayAddExternalSystems": t.MayAddExternalSystems, "mayExposeCollaboration": t.MayExposeCollaboration,
 		"allowedAwsAccounts": t.AllowedAwsAccounts, "identityProviderId": t.IdentityProviderID,
 		"generation": t.Generation,
 	}

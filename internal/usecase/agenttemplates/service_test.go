@@ -20,11 +20,16 @@ const (
 )
 
 type repo struct {
-	rows  map[string]domain.AgentTemplate
-	inUse map[string]bool
+	rows     map[string]domain.AgentTemplate
+	inUse    map[string]bool
+	swarmRef map[string]bool
 }
 
-func (r *repo) List(_ context.Context, _ port.Tx, enabledOnly bool, after string, limit int) ([]domain.AgentTemplate, error) {
+func (r *repo) ReferencedBySwarm(_ context.Context, _ port.Tx, id string) (bool, error) {
+	return r.swarmRef[id], nil
+}
+
+func (r *repo) List(_ context.Context, _ port.Tx, enabledOnly bool, capability, after string, limit int) ([]domain.AgentTemplate, error) {
 	var out []domain.AgentTemplate
 	for _, c := range r.rows {
 		if c.Name > after && (!enabledOnly || c.Enabled) {
@@ -77,7 +82,7 @@ var (
 
 func rig() (*agenttemplates.Service, *repo, *fakes.Audit) {
 	a := &fakes.Audit{}
-	r := &repo{rows: map[string]domain.AgentTemplate{}, inUse: map[string]bool{}}
+	r := &repo{rows: map[string]domain.AgentTemplate{}, inUse: map[string]bool{}, swarmRef: map[string]bool{}}
 	return &agenttemplates.Service{Deps: acting.Deps{Tx: &fakes.TxRunner{}, Audit: a, Outbox: &fakes.Outbox{}, Clock: &fakes.Clock{T: time.Now()}, IDs: &fakes.IDGen{}}, Repo: r}, r, a
 }
 
@@ -161,14 +166,14 @@ func TestLists(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got, _, err := s.ListEnabled(ctx, teamAdm, acting.Page{}); err != nil || len(got) != 2 {
+	if got, _, err := s.ListEnabled(ctx, teamAdm, "", acting.Page{}); err != nil || len(got) != 2 {
 		t.Fatalf("enabled = %d %v", len(got), err)
 	}
-	page, next, err := s.ListAll(ctx, svcAdmin, acting.Page{Limit: 2})
+	page, next, err := s.ListAll(ctx, svcAdmin, "", acting.Page{Limit: 2})
 	if err != nil || len(page) != 2 || next == "" {
 		t.Fatalf("page 1 = %d %q %v", len(page), next, err)
 	}
-	if rest, next, err := s.ListAll(ctx, svcAdmin, acting.Page{Limit: 2, Cursor: next}); err != nil || len(rest) != 1 || next != "" {
+	if rest, next, err := s.ListAll(ctx, svcAdmin, "", acting.Page{Limit: 2, Cursor: next}); err != nil || len(rest) != 1 || next != "" {
 		t.Fatalf("page 2 = %d %q %v", len(rest), next, err)
 	}
 }
@@ -180,7 +185,7 @@ func TestDenied(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := map[string]func(acting.Caller) error{
-		"ListAll": func(c acting.Caller) error { _, _, err := s.ListAll(ctx, c, acting.Page{}); return err },
+		"ListAll": func(c acting.Caller) error { _, _, err := s.ListAll(ctx, c, "", acting.Page{}); return err },
 		"Put":     func(c acting.Caller) error { _, err := s.Put(ctx, c, params("xxx"), nil); return err },
 		"Delete":  func(c acting.Caller) error { return s.Delete(ctx, c, "aaa", 1) },
 	}
@@ -200,11 +205,11 @@ func TestDenied(t *testing.T) {
 func TestRepositoryFailures(t *testing.T) {
 	ops := map[string]func(*agenttemplates.Service) error{
 		"ListEnabled": func(s *agenttemplates.Service) error {
-			_, _, err := s.ListEnabled(t.Context(), teamAdm, acting.Page{})
+			_, _, err := s.ListEnabled(t.Context(), teamAdm, "", acting.Page{})
 			return err
 		},
 		"ListAll": func(s *agenttemplates.Service) error {
-			_, _, err := s.ListAll(t.Context(), svcAdmin, acting.Page{})
+			_, _, err := s.ListAll(t.Context(), svcAdmin, "", acting.Page{})
 			return err
 		},
 		"PutNew": func(s *agenttemplates.Service) error {
@@ -232,3 +237,40 @@ func TestRepositoryFailures(t *testing.T) {
 		}
 	}
 }
+
+// RA-22: a template a swarm template names as its collaboration agent cannot be disabled, lose the
+// paperclip capability or be deleted.
+func TestSwarmReferencedTemplateIsProtected(t *testing.T) {
+	s, r, _ := rig()
+	ctx := t.Context()
+	p := params("pcl")
+	p.Capabilities = []string{domain.CapabilityPaperclip}
+	got, err := s.Put(ctx, svcAdmin, p, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.swarmRef[got.ID] = true
+	off := p
+	off.Enabled = ptrBool(false)
+	noCap := params("pcl")
+	for name, in := range map[string]domain.PutAgentTemplateParams{"disable": off, "drop capability": noCap} {
+		if _, err := s.Put(ctx, svcAdmin, in, nil); domain.KindOf(err) != domain.KindConflict {
+			t.Errorf("%s = %v", name, err)
+		}
+	}
+	if err := s.Delete(ctx, svcAdmin, "pcl", 1); domain.KindOf(err) != domain.KindConflict {
+		t.Errorf("delete = %v", err)
+	}
+	// An ordinary update that keeps both stays allowed.
+	same := p
+	same.Description = "changed"
+	if _, err := s.Put(ctx, svcAdmin, same, nil); err != nil {
+		t.Errorf("harmless update = %v", err)
+	}
+	r.swarmRef[got.ID] = false
+	if _, err := s.Put(ctx, svcAdmin, off, nil); err != nil {
+		t.Errorf("disable once unreferenced = %v", err)
+	}
+}
+
+func ptrBool(b bool) *bool { return &b }

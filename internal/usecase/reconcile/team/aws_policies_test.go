@@ -282,3 +282,43 @@ func contains(list []string, s string) bool {
 	}
 	return false
 }
+
+// RC-28: the collaboration agent's role reaches only its own paperclip path and the one board key name.
+func TestCollaborationRolePolicy(t *testing.T) {
+	doc, err := CollaborationRolePolicy("afs", "afs-t-payments", "paperclip", teamA, "arn:aws:kms:us-east-1:111122223333:key/abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := parse(t, doc)
+	if len(p.Statement) != 3 {
+		t.Fatalf("statements: %+v", p.Statement)
+	}
+	own, board, kms := p.Statement[0], p.Statement[1], p.Statement[2]
+	if own.Resource[0] != "arn:*:secretsmanager:*:*:secret:afs/afs-t-payments/paperclip/paperclip/*" {
+		t.Errorf("own path: %v", own.Resource)
+	}
+	if len(board.Action) != 1 || board.Action[0] != "secretsmanager:PutSecretValue" ||
+		board.Resource[0] != "arn:*:secretsmanager:*:*:secret:afs/afs-t-payments/paperclip/paperclip-board-api-key-??????" {
+		t.Errorf("board key: %+v", board)
+	}
+	for _, s := range p.Statement {
+		if s.Effect != "Allow" || contains(s.Action, "*") || contains(s.Resource, "*") || grantsBedrockWildcard(p) {
+			t.Errorf("too broad: %+v", s)
+		}
+		if s.Condition["StringEquals"]["aws:PrincipalTag/afs-team-id"] != teamA {
+			t.Errorf("not conditioned on the team tag: %+v", s)
+		}
+	}
+	if kms.Resource[0] != "arn:aws:kms:us-east-1:111122223333:key/abc" {
+		t.Errorf("kms: %+v", kms)
+	}
+	noKMS, err := CollaborationRolePolicy("afs", "afs-t-payments", "paperclip", teamA, "")
+	if err != nil || len(parse(t, noKMS).Statement) != 2 {
+		t.Errorf("without a key: %v", err)
+	}
+	for _, args := range [][4]string{{"", "ns", "a", teamA}, {"afs", "", "a", teamA}, {"afs", "ns", "", teamA}, {"afs", "ns", "a", ""}} {
+		if _, err := CollaborationRolePolicy(args[0], args[1], args[2], args[3], ""); err == nil {
+			t.Errorf("accepted %v", args)
+		}
+	}
+}

@@ -55,6 +55,7 @@ type agentTemplateBody struct {
 	AllowedDigests   []string         `json:"allowedDigests"`
 	CurrentDigest    string           `json:"currentDigest"`
 	Enabled          bool             `json:"enabled"`
+	Capabilities     []string         `json:"capabilities"`
 	Version          int64            `json:"version"`
 	CreatedAt        string           `json:"createdAt"`
 	UpdatedAt        string           `json:"updatedAt"`
@@ -62,7 +63,7 @@ type agentTemplateBody struct {
 
 func toAgentTemplateBody(t domain.AgentTemplate) agentTemplateBody {
 	return agentTemplateBody{ID: t.ID, Name: t.Name, Description: t.Description, Harness: t.Harness, DefaultResources: t.DefaultResources,
-		AllowedDigests: t.AllowedDigests, CurrentDigest: t.CurrentDigest, Enabled: t.Enabled, Version: int64(t.Version),
+		AllowedDigests: t.AllowedDigests, CurrentDigest: t.CurrentDigest, Enabled: t.Enabled, Capabilities: nonNilStrings(t.Capabilities), Version: int64(t.Version),
 		CreatedAt: w2Time(t.CreatedAt), UpdatedAt: w2Time(t.UpdatedAt)}
 }
 
@@ -122,4 +123,11 @@ func toExtSystemAccessBody(a domain.ExternalSystemAccess) extSystemAccessBody {
 		b.DisabledAt = &at
 	}
 	return b
+}
+
+func nonNilStrings(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }

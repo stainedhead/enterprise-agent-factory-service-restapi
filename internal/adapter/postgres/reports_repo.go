@@ -153,6 +153,8 @@ func sourceFor(q domain.ReportQuery) (reportSource, bool) {
 			measures: []string{bigint(w), bigint(i), `(count(*) FILTER (WHERE x.state IN ('paused', 'stopped')) * 300)::bigint`,
 				`(count(*) FILTER (WHERE x.state IN ('unhealthy', 'blocked_budget')) * 300)::bigint`, bigint(`coalesce(sum(x.model_calls), 0)`),
 				`round(100.0 * count(*) FILTER (WHERE x.state = 'working') / nullif(count(*) FILTER (WHERE x.state IN ('working', 'idle')), 0), 1)::float8`}}, true
+	case domain.ReportKindCollaboration:
+		return collaborationSource(), true
 	case domain.ReportKindTraffic:
 		if daily {
 			return rollupTraffic(), true
@@ -168,6 +170,33 @@ func sourceFor(q domain.ReportQuery) (reportSource, bool) {
 				bigint(`coalesce(sum(x.bytes_out), 0)`), bigint(`coalesce(sum(x.bytes_in), 0)`)}}, true
 	}
 	return reportSource{}, false
+}
+
+// collabDeniedOutcomes are the outcomes the collaboration report counts as denied; bad_request and throttled are
+// reasons of their own and are not denied (API contract 4.9).
+const collabDeniedOutcomes = `'denied_unauthenticated', 'denied_forbidden', 'denied_surface_disabled', 'denied_secret_detected'`
+
+// collabReasonOutcomes are the outcomes that carry a reason, the rows of a report grouped by reason.
+const collabReasonOutcomes = collabDeniedOutcomes + `, 'denied_bad_request', 'throttled'`
+
+// collaborationSource reads afs.collaboration_access, the edge's five-minute counts (usage only, never content,
+// COL-26). One table serves every range; the table is partitioned by month and kept 13 months.
+func collaborationSource() reportSource {
+	count := func(outcomes string) string {
+		return `coalesce(sum(x.requests) FILTER (WHERE x.outcome IN (` + outcomes + `)), 0)::bigint`
+	}
+	return reportSource{from: `afs.collaboration_access x`, timeCond: `x.bucket_start >= {from} AND x.bucket_start < {to}`,
+		dims: map[domain.ReportDim]string{
+			domain.DimTeam: `x.team_id`, domain.DimSurface: `x.surface`, domain.DimDay: fmt.Sprintf(dayText, `(x.bucket_start AT TIME ZONE 'UTC')::date`),
+			domain.DimPerson: `CASE WHEN x.principal_kind = 'anonymous' THEN '(anonymous)' ELSE x.principal_id END`,
+			domain.DimReason: `CASE x.outcome WHEN 'denied_unauthenticated' THEN 'unauthenticated' WHEN 'denied_forbidden' THEN 'forbidden'
+  WHEN 'denied_surface_disabled' THEN 'surface_disabled' WHEN 'denied_secret_detected' THEN 'secret_detected'
+  WHEN 'denied_bad_request' THEN 'bad_request' WHEN 'throttled' THEN 'throttled' END`,
+		},
+		team: `x.team_id`,
+		measures: []string{count(`'signed_in'`),
+			`(count(DISTINCT x.principal_kind || ':' || x.principal_id) FILTER (WHERE x.principal_kind <> 'anonymous'))::bigint`,
+			count(`'allowed', 'secret_warned'`), count(collabDeniedOutcomes), count(`'secret_warned', 'denied_secret_detected'`)}}
 }
 
 // rollupDims are the dimensions of the daily rollup tables (no hour: a range over two days cannot group by it).
@@ -238,6 +267,13 @@ func reportSQL(q domain.ReportQuery, offset, limit int) (rowsSQL string, rowsArg
 	eq(src.pool, f.PoolID)
 	eq(src.model, f.ModelID)
 	eq(src.system, f.SystemID)
+	if q.Kind == domain.ReportKindCollaboration {
+		for _, g := range q.GroupBy {
+			if g.Dim == domain.DimReason {
+				conds = append(conds, `x.outcome IN (`+collabReasonOutcomes+`)`) // only reasons have a row in this view
+			}
+		}
+	}
 	join := ""
 	if src.tagCol != "" {
 		join = ` LEFT JOIN afs.tag_sets ts ON ts.id = ` + src.tagCol
@@ -268,7 +304,11 @@ func reportSQL(q domain.ReportQuery, offset, limit int) (rowsSQL string, rowsArg
 	for i := range dimExprs {
 		pos[i] = fmt.Sprint(i + 1)
 	}
-	rowsSQL = `SELECT ` + strings.Join(dimExprs, `, `) + `, ` + strings.Join(src.measures, `, `) + ` FROM ` + src.from + join + where +
+	flag := ""
+	if q.Kind == domain.ReportKindCollaboration {
+		flag = `, coalesce(bool_or(x.service_admin_entry), false)` // after the measures: the row's serviceAdminEntry
+	}
+	rowsSQL = `SELECT ` + strings.Join(dimExprs, `, `) + `, ` + strings.Join(src.measures, `, `) + flag + ` FROM ` + src.from + join + where +
 		` GROUP BY ` + strings.Join(pos, `, `) + ` ORDER BY ` + strings.Join(pos, `, `) +
 		` OFFSET ` + b.arg(offset) + ` LIMIT ` + b.arg(limit)
 	rowsArgs = b.args
@@ -370,6 +410,10 @@ func (*ReportsRepo) Run(ctx context.Context, tx port.Tx, q domain.ReportQuery, o
 				dest = append(dest, &group[i])
 			}
 			dest = append(dest, sc.targets()...)
+			var adminEntry bool
+			if q.Kind == domain.ReportKindCollaboration {
+				dest = append(dest, &adminEntry)
+			}
 			if err := rows.Scan(dest...); err != nil {
 				return MapError(err, OpRead, "report")
 			}
@@ -377,7 +421,7 @@ func (*ReportsRepo) Run(ctx context.Context, tx port.Tx, q domain.ReportQuery, o
 			if err != nil {
 				return err
 			}
-			res.Rows = append(res.Rows, domain.ReportRow{Group: group, Measures: vals})
+			res.Rows = append(res.Rows, domain.ReportRow{Group: group, Measures: vals, ServiceAdminEntry: adminEntry})
 		}
 		return MapError(rows.Err(), OpRead, "report")
 	}(); err != nil {

@@ -20,3 +20,4 @@ The database refuses a value outside its range. This table and the database cont
 | `api.cors_origins` | `[]` | array of `https://host[:port]` origins | IF-1, IF-4 | 000013 |
 | `work_orders.cost_center` | unset | string of 1 to 100 characters; cost center of a remediation team whose swarm template names none | WO-1, RC-12 | 000016 |
 | `work_orders.owner_email` | unset | string `local@domain`; owner of a remediation team whose swarm template names none | WO-1, RC-12 | 000016 |
+

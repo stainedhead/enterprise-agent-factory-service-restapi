@@ -24,6 +24,12 @@ func PodTemplateHash(d Desired) string {
 	w("cpu=%s memory=%s", d.Resources.CPU, d.Resources.Memory)
 	w("identity=%s", d.IAMIdentity)
 	w("tier=%s workorder=%t", d.Team.IsolationTier, d.Team.WorkOrderAssigned)
+	if d.Collab != nil {
+		w("collab mode=%s host=%s prefix=%s", d.Collab.Mode, d.Collab.Host, d.Collab.SecretsPrefix)
+	}
+	if d.Link != nil {
+		w("collab link id=%s", d.Link.PaperclipAgentID)
+	}
 
 	cfg := slices.Clone(d.Config)
 	sort.Slice(cfg, func(i, j int) bool { return cfg[i].Name < cfg[j].Name })

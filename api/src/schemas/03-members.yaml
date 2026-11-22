@@ -30,6 +30,7 @@ Member:
       type: string
       enum:
       - team_admin
+      - team_collaborator
       - team_viewer
     subjectType:
       type: string
@@ -73,6 +74,7 @@ AddMemberRequest:
       type: string
       enum:
       - team_admin
+      - team_collaborator
       - team_viewer
     subjectType:
       type: string
@@ -101,6 +103,7 @@ UpdateMemberRequest:
       type: string
       enum:
       - team_admin
+      - team_collaborator
       - team_viewer
 ApiKey:
   type: object
@@ -125,6 +128,7 @@ ApiKey:
       type: string
       enum:
       - team_admin
+      - team_collaborator
       - team_viewer
       - security_operator
     keyPrefix:
@@ -176,6 +180,7 @@ CreateApiKeyRequest:
       type: string
       enum:
       - team_admin
+      - team_collaborator
       - team_viewer
     expiresAt:
       type: string

@@ -145,21 +145,23 @@ type teamRefBody struct {
 }
 
 type idpBody struct {
-	ID              string        `json:"id"`
-	Kind            string        `json:"kind"`
-	Name            string        `json:"name"`
-	IssuerURL       string        `json:"issuerUrl"`
-	ConsoleClientID string        `json:"consoleClientId"`
-	CLIClientID     string        `json:"cliClientId"`
-	ClientSecretARN *string       `json:"clientSecretArn"`
-	GroupsClaim     string        `json:"groupsClaim"`
-	IsDefault       bool          `json:"isDefault"`
-	Enabled         bool          `json:"enabled"`
-	Version         int64         `json:"version"`
-	CreatedAt       string        `json:"createdAt"`
-	CreatedBy       string        `json:"createdBy"`
-	UpdatedAt       string        `json:"updatedAt"`
-	Teams           []teamRefBody `json:"teams,omitempty"`
+	ID                    string        `json:"id"`
+	Kind                  string        `json:"kind"`
+	Name                  string        `json:"name"`
+	IssuerURL             string        `json:"issuerUrl"`
+	ConsoleClientID       string        `json:"consoleClientId"`
+	CLIClientID           string        `json:"cliClientId"`
+	ClientSecretARN       *string       `json:"clientSecretArn"`
+	CollabClientID        *string       `json:"collabClientId"`
+	CollabClientSecretARN *string       `json:"collabClientSecretArn"`
+	GroupsClaim           string        `json:"groupsClaim"`
+	IsDefault             bool          `json:"isDefault"`
+	Enabled               bool          `json:"enabled"`
+	Version               int64         `json:"version"`
+	CreatedAt             string        `json:"createdAt"`
+	CreatedBy             string        `json:"createdBy"`
+	UpdatedAt             string        `json:"updatedAt"`
+	Teams                 []teamRefBody `json:"teams,omitempty"`
 }
 
 func toIdPBody(p domain.IdentityProvider) idpBody {
@@ -168,6 +170,12 @@ func toIdPBody(p domain.IdentityProvider) idpBody {
 		Version: int64(p.Version), CreatedAt: w2Time(p.CreatedAt), CreatedBy: p.CreatedBy, UpdatedAt: w2Time(p.UpdatedAt)}
 	if p.ClientSecretARN != "" {
 		b.ClientSecretARN = &p.ClientSecretARN
+	}
+	if p.CollabClientID != "" {
+		b.CollabClientID = &p.CollabClientID
+	}
+	if p.CollabClientSecretARN != "" {
+		b.CollabClientSecretARN = &p.CollabClientSecretARN
 	}
 	return b
 }
@@ -234,15 +242,17 @@ func (a *Admin1API) createIdP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Kind            string  `json:"kind"`
-		Name            string  `json:"name"`
-		IssuerURL       string  `json:"issuerUrl"`
-		ConsoleClientID string  `json:"consoleClientId"`
-		CLIClientID     string  `json:"cliClientId"`
-		ClientSecretARN string  `json:"clientSecretArn"`
-		GroupsClaim     *string `json:"groupsClaim"`
-		IsDefault       bool    `json:"isDefault"`
-		Enabled         *bool   `json:"enabled"`
+		Kind                  string  `json:"kind"`
+		Name                  string  `json:"name"`
+		IssuerURL             string  `json:"issuerUrl"`
+		ConsoleClientID       string  `json:"consoleClientId"`
+		CLIClientID           string  `json:"cliClientId"`
+		ClientSecretARN       string  `json:"clientSecretArn"`
+		CollabClientID        string  `json:"collabClientId"`
+		CollabClientSecretARN string  `json:"collabClientSecretArn"`
+		GroupsClaim           *string `json:"groupsClaim"`
+		IsDefault             bool    `json:"isDefault"`
+		Enabled               *bool   `json:"enabled"`
 	}
 	if err := Decode(r, &req); err != nil {
 		WriteError(w, r, err)
@@ -250,6 +260,7 @@ func (a *Admin1API) createIdP(w http.ResponseWriter, r *http.Request) {
 	}
 	in := domain.IdentityProvider{Kind: domain.IdPKind(req.Kind), Name: req.Name, IssuerURL: req.IssuerURL,
 		ConsoleClientID: req.ConsoleClientID, CLIClientID: req.CLIClientID, ClientSecretARN: req.ClientSecretARN,
+		CollabClientID: req.CollabClientID, CollabClientSecretARN: req.CollabClientSecretARN,
 		GroupsClaim: "groups", IsDefault: req.IsDefault, Enabled: true}
 	if req.GroupsClaim != nil {
 		in.GroupsClaim = *req.GroupsClaim
@@ -290,13 +301,15 @@ func (a *Admin1API) updateIdP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name            *string            `json:"name"`
-		ConsoleClientID *string            `json:"consoleClientId"`
-		CLIClientID     *string            `json:"cliClientId"`
-		ClientSecretARN w2Nullable[string] `json:"clientSecretArn"`
-		GroupsClaim     *string            `json:"groupsClaim"`
-		IsDefault       *bool              `json:"isDefault"`
-		Enabled         *bool              `json:"enabled"`
+		Name                  *string            `json:"name"`
+		ConsoleClientID       *string            `json:"consoleClientId"`
+		CLIClientID           *string            `json:"cliClientId"`
+		ClientSecretARN       w2Nullable[string] `json:"clientSecretArn"`
+		CollabClientID        w2Nullable[string] `json:"collabClientId"`
+		CollabClientSecretARN w2Nullable[string] `json:"collabClientSecretArn"`
+		GroupsClaim           *string            `json:"groupsClaim"`
+		IsDefault             *bool              `json:"isDefault"`
+		Enabled               *bool              `json:"enabled"`
 	}
 	if err := Decode(r, &req); err != nil {
 		WriteError(w, r, err)
@@ -312,6 +325,18 @@ func (a *Admin1API) updateIdP(w http.ResponseWriter, r *http.Request) {
 		}
 		patch.ClientSecretARN = &o
 	}
+	optional := func(n w2Nullable[string]) *domain.OptionalString {
+		if !n.Set {
+			return nil
+		}
+		o := domain.OptionalString{Set: true}
+		if !n.Null {
+			v := n.Value
+			o.Value = &v
+		}
+		return &o
+	}
+	patch.CollabClientID, patch.CollabClientSecretARN = optional(req.CollabClientID), optional(req.CollabClientSecretARN)
 	p, err := a.IdPs.Update(r.Context(), c, r.PathValue("id"), expect, patch)
 	if err != nil {
 		WriteError(w, r, err)

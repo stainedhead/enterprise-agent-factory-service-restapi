@@ -94,6 +94,9 @@ func (s *Service) Put(ctx context.Context, c acting.Caller, key string, value js
 	if err := spec.Validate(value); err != nil {
 		return Setting{}, err
 	}
+	if err := domain.ValidateCollabSetting(key, value); err != nil {
+		return Setting{}, err
+	}
 	var out Setting
 	err := s.Tx.InTx(ctx, c.Session(), func(ctx context.Context, tx port.Tx) error {
 		all, err := s.Repo.All(ctx, tx)

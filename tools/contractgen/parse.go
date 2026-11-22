@@ -83,7 +83,7 @@ type SettingEntry struct {
 }
 
 // roles in contract §3 column order.
-var roles = []string{"team_viewer", "team_admin", "service_admin", "security_operator"}
+var roles = []string{"team_viewer", "team_collaborator", "team_admin", "service_admin", "security_operator"}
 
 // splitRow splits a markdown table row on unescaped pipes and unescapes \|.
 func splitRow(line string) []string {
@@ -175,29 +175,71 @@ func codes(s string) []string {
 	return out
 }
 
-// parsePermissions parses API contract §3.
+// roleOf maps a §3 table header cell to a role name.
+func roleOf(h string) string {
+	switch strings.ToLower(strings.TrimSpace(h)) {
+	case "viewer":
+		return "team_viewer"
+	case "collaborator":
+		return "team_collaborator"
+	case "team-admin":
+		return "team_admin"
+	case "service admin":
+		return "service_admin"
+	case "security operator":
+		return "security_operator"
+	}
+	return ""
+}
+
+// parsePermissions parses API contract §3: the main permission table and, from v1.3.0, the
+// collaboration table that adds a Collaborator column. The collaborator holds every viewer
+// permission of the main table (conditions included, PC-D6) in addition to its own column.
 func parsePermissions(lines []string) ([]PermissionEntry, error) {
 	sec := section(lines, "## 3.")
 	if sec == nil {
 		return nil, fmt.Errorf("§3 not found")
 	}
 	var out []PermissionEntry
-	for _, row := range tableRows(sec) {
-		if len(row) != 6 {
+	var cols []string // role per cell 1..n-2 of the current table
+	inTable := false
+	headerSeen := false
+	for i, l := range sec {
+		if !strings.HasPrefix(strings.TrimSpace(l), "|") {
+			inTable = false
+			headerSeen = false
+			continue
+		}
+		row := splitRow(l)
+		if !inTable {
+			inTable = true
+			headerSeen = true
+			cols = cols[:0]
+			for _, h := range row[1 : len(row)-1] {
+				cols = append(cols, roleOf(h))
+			}
+			continue
+		}
+		if headerSeen && i > 0 && isSeparator(l) {
+			headerSeen = false
+			continue
+		}
+		if len(row) != len(cols)+2 {
 			return nil, fmt.Errorf("§3 row has %d cells: %v", len(row), row)
 		}
 		groups := strings.Split(row[0], "/")
-		cells := make([][]string, len(roles))
-		for r := range roles {
+		cells := make([][]string, len(cols))
+		for r := range cols {
 			cells[r] = strings.Split(row[1+r], "/")
 			for len(cells[r]) < len(groups) {
 				cells[r] = append(cells[r], "")
 			}
 		}
+		notes := row[len(row)-1]
 		for g, group := range groups {
 			for _, name := range codes(group) {
-				e := PermissionEntry{Name: name, Notes: row[5], Grants: []Grant{}}
-				for r, role := range roles {
+				e := PermissionEntry{Name: name, Notes: notes, Grants: []Grant{}}
+				for r, role := range cols {
 					cell := strings.TrimSpace(cells[r][g])
 					if !strings.HasPrefix(cell, "✓") {
 						continue
@@ -205,6 +247,18 @@ func parsePermissions(lines []string) ([]PermissionEntry, error) {
 					e.Grants = append(e.Grants, Grant{Role: role, Condition: grantCondition(cell)})
 				}
 				out = append(out, e)
+			}
+		}
+	}
+	// The collaborator holds every viewer permission of the main table (PC-D6).
+	for i := range out {
+		if strings.HasPrefix(out[i].Name, "collaboration:") {
+			continue
+		}
+		for _, g := range out[i].Grants {
+			if g.Role == "team_viewer" {
+				out[i].Grants = append(out[i].Grants, Grant{Role: "team_collaborator", Condition: g.Condition})
+				break
 			}
 		}
 	}
@@ -254,7 +308,8 @@ func parseOperations(lines []string) ([]Operation, error) {
 			svcSection = strings.Contains(l, "Service administration")
 			continue
 		}
-		if !strings.HasPrefix(l, "| `") {
+		// §4.4c describes the edge's externally visible behaviour, not API operations.
+		if current == "4.4c" || !strings.HasPrefix(l, "| `") {
 			continue
 		}
 		row := splitRow(l)
@@ -549,4 +604,25 @@ func parseSettings(lines []string) ([]SettingEntry, error) {
 		return nil, fmt.Errorf("§6.13 has no rows")
 	}
 	return out, nil
+}
+
+// collabSettings are the seven collab.* keys of the Paperclip PRD §6.9. The root PRD §6.13 table does not
+// carry them (root contract follow-up), but API contract §4.11 requires GetSettings to expose them, so the
+// generator adds them from this fixed list; the values mirror -db migration 000020.
+func collabSettings() []SettingEntry {
+	i := func(n int64) *int64 { return &n }
+	const since = "000020"
+	return []SettingEntry{
+		{Key: "collab.base_domain", Type: "string", Default: nil, Nullable: true,
+			Pattern: `^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$`,
+			Allowed: "DNS name; unset turns the feature off", UsedBy: "COL-15, COL-23", Since: since},
+		{Key: "collab.public_endpoints", Type: "boolean", Default: true, Allowed: "boolean", UsedBy: "COL-20, COL-23", Since: since},
+		{Key: "collab.allowed_source_cidrs", Type: "array", Default: []string{}, Items: "string",
+			Pattern: `^[0-9A-Fa-f:.]+/[0-9]{1,3}$`,
+			Allowed: "array of IPv4 or IPv6 CIDRs; empty means any", UsedBy: "COL-23", Since: since},
+		{Key: "collab.session_ttl_minutes", Type: "integer", Default: int64(480), Min: i(15), Max: i(1440), Allowed: "15 to 1440", UsedBy: "COL-17", Since: since},
+		{Key: "collab.content_scan", Type: "string", Default: "block", Pattern: `^(block|warn|off)$`, Allowed: "block, warn, off", UsedBy: "COL-24", Since: since},
+		{Key: "collab.max_body_mb", Type: "integer", Default: int64(25), Min: i(1), Max: i(100), Allowed: "1 to 100", UsedBy: "COL-21", Since: since},
+		{Key: "collab.denied_spike_threshold", Type: "integer", Default: int64(50), Min: i(1), Max: i(100000), Allowed: "1 to 100000 denied requests per team in 5 minutes", UsedBy: "COL-30", Since: since},
+	}
 }

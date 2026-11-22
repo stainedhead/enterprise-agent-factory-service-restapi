@@ -3,12 +3,44 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
     labels:
+        app.kubernetes.io/component: edge
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-edge
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-1.0.1
+    name: afs-edge
+    namespace: afs-system
+spec:
+    dnsNames:
+        - afs-edge
+        - afs-edge.afs-system
+        - afs-edge.afs-system.svc
+        - afs-edge.afs-system.svc.cluster.local
+    duration: 2160h
+    issuerRef:
+        group: cert-manager.io
+        kind: ClusterIssuer
+        name: afs-ca
+    privateKey:
+        algorithm: ECDSA
+        rotationPolicy: Always
+        size: 256
+    renewBefore: 720h
+    secretName: afs-edge-tls
+    usages:
+        - server auth
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+    labels:
         app.kubernetes.io/component: gateway
         app.kubernetes.io/instance: afs
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-gateway
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-gateway
     namespace: afs-system
 spec:
@@ -40,7 +72,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-gateway
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-gateway
 rules:
     - apiGroups:
@@ -76,7 +108,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-reconciler
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-reconciler
 rules:
     - apiGroups:
@@ -261,7 +293,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-reconciler
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-reconciler-viewer-kubectl
 rules:
     - apiGroups:
@@ -323,7 +355,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-gateway
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-gateway
 roleRef:
     apiGroup: rbac.authorization.k8s.io
@@ -343,7 +375,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-reconciler
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-reconciler
 roleRef:
     apiGroup: rbac.authorization.k8s.io
@@ -363,7 +395,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-reconciler
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-reconciler-viewer-kubectl
 roleRef:
     apiGroup: rbac.authorization.k8s.io
@@ -825,8 +857,36 @@ metadata:
         app.kubernetes.io/name: afs-dashboards
         app.kubernetes.io/part-of: afs
         grafana_dashboard: "1"
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-dashboards
+    namespace: afs-system
+---
+apiVersion: v1
+data:
+    edge-routing.conf: |
+        [FILTER]
+            Name          parser
+            Match         kube.*_afs-system_afs-edge-*
+            Key_Name      log
+            Parser        json
+            Reserve_Data  On
+        [FILTER]
+            Name          rewrite_tag
+            Match         kube.*_afs-system_afs-edge-*
+            Rule          $afs.team_id ^(team_[0-9A-Za-z]+)$ team.$1 false
+            Emitter_Name  afs_edge_by_team
+        # Lines without a team id (the apex callback) stay with the platform's own log group.
+kind: ConfigMap
+metadata:
+    labels:
+        afs.stainedhead.io/log-routing: "true"
+        app.kubernetes.io/component: edge
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-edge
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-1.0.1
+    name: afs-edge-log-routing
     namespace: afs-system
 ---
 apiVersion: batch/v1
@@ -839,7 +899,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-billing
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-billing-cost-tags
     namespace: afs-system
 spec:
@@ -857,7 +917,7 @@ spec:
                         app.kubernetes.io/managed-by: Helm
                         app.kubernetes.io/name: afs-billing
                         app.kubernetes.io/part-of: afs
-                        helm.sh/chart: afs-0.1.0
+                        helm.sh/chart: afs-1.0.1
                 spec:
                     containers:
                         - args:
@@ -890,7 +950,7 @@ spec:
                               value: afs-reports-111122223333
                             - name: AFS_REPORTS_KMS_KEY_ID
                               value: 00000000-0000-0000-0000-000000000000
-                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
+                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v1.0.1
                           imagePullPolicy: IfNotPresent
                           name: afs-billing
                           ports:
@@ -927,7 +987,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-billing
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-billing-cur-ingest
     namespace: afs-system
 spec:
@@ -945,7 +1005,7 @@ spec:
                         app.kubernetes.io/managed-by: Helm
                         app.kubernetes.io/name: afs-billing
                         app.kubernetes.io/part-of: afs
-                        helm.sh/chart: afs-0.1.0
+                        helm.sh/chart: afs-1.0.1
                 spec:
                     containers:
                         - args:
@@ -978,7 +1038,7 @@ spec:
                               value: afs-reports-111122223333
                             - name: AFS_REPORTS_KMS_KEY_ID
                               value: 00000000-0000-0000-0000-000000000000
-                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
+                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v1.0.1
                           imagePullPolicy: IfNotPresent
                           name: afs-billing
                           ports:
@@ -1015,7 +1075,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-billing
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-billing-price-sync
     namespace: afs-system
 spec:
@@ -1033,7 +1093,7 @@ spec:
                         app.kubernetes.io/managed-by: Helm
                         app.kubernetes.io/name: afs-billing
                         app.kubernetes.io/part-of: afs
-                        helm.sh/chart: afs-0.1.0
+                        helm.sh/chart: afs-1.0.1
                 spec:
                     containers:
                         - args:
@@ -1066,7 +1126,7 @@ spec:
                               value: afs-reports-111122223333
                             - name: AFS_REPORTS_KMS_KEY_ID
                               value: 00000000-0000-0000-0000-000000000000
-                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
+                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v1.0.1
                           imagePullPolicy: IfNotPresent
                           name: afs-billing
                           ports:
@@ -1103,7 +1163,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-billing
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-billing-reconcile
     namespace: afs-system
 spec:
@@ -1121,7 +1181,7 @@ spec:
                         app.kubernetes.io/managed-by: Helm
                         app.kubernetes.io/name: afs-billing
                         app.kubernetes.io/part-of: afs
-                        helm.sh/chart: afs-0.1.0
+                        helm.sh/chart: afs-1.0.1
                 spec:
                     containers:
                         - args:
@@ -1154,7 +1214,7 @@ spec:
                               value: afs-reports-111122223333
                             - name: AFS_REPORTS_KMS_KEY_ID
                               value: 00000000-0000-0000-0000-000000000000
-                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
+                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v1.0.1
                           imagePullPolicy: IfNotPresent
                           name: afs-billing
                           ports:
@@ -1191,7 +1251,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-billing
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-billing-report-schedules
     namespace: afs-system
 spec:
@@ -1209,7 +1269,7 @@ spec:
                         app.kubernetes.io/managed-by: Helm
                         app.kubernetes.io/name: afs-billing
                         app.kubernetes.io/part-of: afs
-                        helm.sh/chart: afs-0.1.0
+                        helm.sh/chart: afs-1.0.1
                 spec:
                     containers:
                         - args:
@@ -1242,7 +1302,7 @@ spec:
                               value: afs-reports-111122223333
                             - name: AFS_REPORTS_KMS_KEY_ID
                               value: 00000000-0000-0000-0000-000000000000
-                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
+                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v1.0.1
                           imagePullPolicy: IfNotPresent
                           name: afs-billing
                           ports:
@@ -1279,7 +1339,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-billing
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-billing-showback
     namespace: afs-system
 spec:
@@ -1297,7 +1357,7 @@ spec:
                         app.kubernetes.io/managed-by: Helm
                         app.kubernetes.io/name: afs-billing
                         app.kubernetes.io/part-of: afs
-                        helm.sh/chart: afs-0.1.0
+                        helm.sh/chart: afs-1.0.1
                 spec:
                     containers:
                         - args:
@@ -1330,7 +1390,7 @@ spec:
                               value: afs-reports-111122223333
                             - name: AFS_REPORTS_KMS_KEY_ID
                               value: 00000000-0000-0000-0000-000000000000
-                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v0.1.0
+                          image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-billing:v1.0.1
                           imagePullPolicy: IfNotPresent
                           name: afs-billing
                           ports:
@@ -1366,7 +1426,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-api
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-api
     namespace: afs-system
 spec:
@@ -1388,7 +1448,7 @@ spec:
                 app.kubernetes.io/managed-by: Helm
                 app.kubernetes.io/name: afs-api
                 app.kubernetes.io/part-of: afs
-                helm.sh/chart: afs-0.1.0
+                helm.sh/chart: afs-1.0.1
         spec:
             containers:
                 - env:
@@ -1420,7 +1480,7 @@ spec:
                         secretKeyRef:
                             key: idempotencyHmacKey
                             name: afs-api-keys
-                  image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-api:v0.1.0
+                  image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-api:v1.0.1
                   imagePullPolicy: IfNotPresent
                   livenessProbe:
                     failureThreshold: 3
@@ -1483,12 +1543,154 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
     labels:
+        app.kubernetes.io/component: edge
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-edge
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-1.0.1
+    name: afs-edge
+    namespace: afs-system
+spec:
+    replicas: 3
+    selector:
+        matchLabels:
+            app.kubernetes.io/instance: afs
+            app.kubernetes.io/name: afs-edge
+    strategy:
+        rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+        type: RollingUpdate
+    template:
+        metadata:
+            labels:
+                app.kubernetes.io/component: edge
+                app.kubernetes.io/instance: afs
+                app.kubernetes.io/managed-by: Helm
+                app.kubernetes.io/name: afs-edge
+                app.kubernetes.io/part-of: afs
+                helm.sh/chart: afs-1.0.1
+        spec:
+            containers:
+                - env:
+                    - name: AFS_DATABASE_URL
+                      value: postgres://afs_edge@afs.cluster-abc123.us-east-1.rds.amazonaws.com:5432/afs?sslmode=verify-full
+                    - name: AFS_DB_IAM_AUTH
+                      value: "true"
+                    - name: AFS_AWS_REGION
+                      value: us-east-1
+                    - name: AFS_CLUSTER_NAME
+                      value: afs-dev
+                    - name: AFS_LOG_LEVEL
+                      value: info
+                    - name: AFS_OTLP_ENDPOINT
+                      value: http://otel-collector.observability:4318
+                    - name: AFS_EDGE_ADDR
+                      value: :8443
+                    - name: AFS_EDGE_DRAIN_TIMEOUT
+                      value: 30s
+                    - name: AFS_EDGE_FLUSH_INTERVAL
+                      value: 30s
+                    - name: AFS_EDGE_IDLE_TIMEOUT
+                      value: 10m
+                    - name: AFS_EDGE_REFRESH_INTERVAL
+                      value: 30s
+                    - name: AFS_EDGE_TLS_CERT
+                      value: /tls/tls.crt
+                    - name: AFS_EDGE_TLS_KEY
+                      value: /tls/tls.key
+                    - name: AFS_METRICS_ADDR
+                      value: :9090
+                    - name: AFS_EDGE_STATE_KEY
+                      valueFrom:
+                        secretKeyRef:
+                            key: current
+                            name: afs-edge-state-key
+                    - name: AFS_EDGE_STATE_KEY_PREVIOUS
+                      valueFrom:
+                        secretKeyRef:
+                            key: previous
+                            name: afs-edge-state-key
+                            optional: true
+                  image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-edge:v1.0.1
+                  imagePullPolicy: IfNotPresent
+                  livenessProbe:
+                    failureThreshold: 3
+                    httpGet:
+                        path: /healthz
+                        port: metrics
+                    periodSeconds: 10
+                  name: afs-edge
+                  ports:
+                    - containerPort: 8443
+                      name: https
+                    - containerPort: 9090
+                      name: metrics
+                  readinessProbe:
+                    failureThreshold: 2
+                    httpGet:
+                        path: /readyz
+                        port: metrics
+                    periodSeconds: 5
+                  resources:
+                    limits:
+                        memory: 512Mi
+                    requests:
+                        cpu: 250m
+                        memory: 192Mi
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    capabilities:
+                        drop:
+                            - ALL
+                    readOnlyRootFilesystem: true
+                  startupProbe:
+                    failureThreshold: 30
+                    httpGet:
+                        path: /healthz
+                        port: metrics
+                    periodSeconds: 2
+                  volumeMounts:
+                    - mountPath: /tls
+                      name: tls
+                      readOnly: true
+            securityContext:
+                runAsNonRoot: true
+                seccompProfile:
+                    type: RuntimeDefault
+            serviceAccountName: afs-edge
+            terminationGracePeriodSeconds: 45
+            topologySpreadConstraints:
+                - labelSelector:
+                    matchLabels:
+                        app.kubernetes.io/instance: afs
+                        app.kubernetes.io/name: afs-edge
+                  maxSkew: 1
+                  topologyKey: topology.kubernetes.io/zone
+                  whenUnsatisfiable: DoNotSchedule
+                - labelSelector:
+                    matchLabels:
+                        app.kubernetes.io/instance: afs
+                        app.kubernetes.io/name: afs-edge
+                  maxSkew: 1
+                  topologyKey: kubernetes.io/hostname
+                  whenUnsatisfiable: ScheduleAnyway
+            volumes:
+                - name: tls
+                  secret:
+                    secretName: afs-edge-tls
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    labels:
         app.kubernetes.io/component: gateway
         app.kubernetes.io/instance: afs
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-gateway
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-gateway
     namespace: afs-system
 spec:
@@ -1510,7 +1712,7 @@ spec:
                 app.kubernetes.io/managed-by: Helm
                 app.kubernetes.io/name: afs-gateway
                 app.kubernetes.io/part-of: afs
-                helm.sh/chart: afs-0.1.0
+                helm.sh/chart: afs-1.0.1
         spec:
             containers:
                 - env:
@@ -1544,7 +1746,7 @@ spec:
                       value: /tls/tls.key
                     - name: AFS_METRICS_ADDR
                       value: :9090
-                  image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-gateway:v0.1.0
+                  image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-gateway:v1.0.1
                   imagePullPolicy: IfNotPresent
                   livenessProbe:
                     failureThreshold: 3
@@ -1620,7 +1822,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-reconciler
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-reconciler
     namespace: afs-system
 spec:
@@ -1642,7 +1844,7 @@ spec:
                 app.kubernetes.io/managed-by: Helm
                 app.kubernetes.io/name: afs-reconciler
                 app.kubernetes.io/part-of: afs
-                helm.sh/chart: afs-0.1.0
+                helm.sh/chart: afs-1.0.1
         spec:
             containers:
                 - env:
@@ -1678,7 +1880,7 @@ spec:
                       value: efs-sc
                     - name: AFS_LEADER_LEASE_NAMESPACE
                       value: afs-system
-                  image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-reconciler:v0.1.0
+                  image: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-reconciler:v1.0.1
                   imagePullPolicy: IfNotPresent
                   livenessProbe:
                     failureThreshold: 3
@@ -1735,6 +1937,61 @@ spec:
                   topologyKey: kubernetes.io/hostname
                   whenUnsatisfiable: ScheduleAnyway
 ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+    labels:
+        app.kubernetes.io/component: edge
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-edge
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-1.0.1
+    name: afs-edge
+    namespace: afs-system
+spec:
+    egress:
+        - ports:
+            - port: 53
+              protocol: UDP
+            - port: 53
+              protocol: TCP
+          to:
+            - namespaceSelector:
+                matchLabels:
+                    kubernetes.io/metadata.name: kube-system
+        - ports:
+            - port: 5432
+              protocol: TCP
+        - ports:
+            - port: 443
+              protocol: TCP
+        - ports:
+            - port: 3100
+              protocol: TCP
+          to:
+            - namespaceSelector:
+                matchLabels:
+                    afs.stainedhead.io/team-namespace: "true"
+    ingress:
+        - ports:
+            - port: 8443
+              protocol: TCP
+        - from:
+            - namespaceSelector:
+                matchLabels:
+                    kubernetes.io/metadata.name: monitoring
+          ports:
+            - port: 9090
+              protocol: TCP
+    podSelector:
+        matchLabels:
+            app.kubernetes.io/instance: afs
+            app.kubernetes.io/name: afs-edge
+    policyTypes:
+        - Ingress
+        - Egress
+---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -1744,7 +2001,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-api
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-api
     namespace: afs-system
 spec:
@@ -1758,12 +2015,31 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
     labels:
+        app.kubernetes.io/component: edge
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-edge
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-1.0.1
+    name: afs-edge
+    namespace: afs-system
+spec:
+    minAvailable: 2
+    selector:
+        matchLabels:
+            app.kubernetes.io/instance: afs
+            app.kubernetes.io/name: afs-edge
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+    labels:
         app.kubernetes.io/component: gateway
         app.kubernetes.io/instance: afs
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-gateway
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-gateway
     namespace: afs-system
 spec:
@@ -1782,7 +2058,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-reconciler
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-reconciler
     namespace: afs-system
 spec:
@@ -1801,7 +2077,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-slis
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-slis
     namespace: afs-system
 spec:
@@ -1926,6 +2202,28 @@ spec:
               expr: sum by (job_name) (kube_job_status_failed{namespace="afs-system", job_name=~"afs-billing-.+"}) > 0
               labels:
                 severity: warning
+        - name: afs-edge
+          rules:
+            - alert: AFSEdgeErrorRatioHigh
+              annotations:
+                summary: the collaboration edge answers more than 1 percent 5xx
+              expr: |
+                sum(rate(afs_edge_requests_total{code=~"5.."}[5m])) / sum(rate(afs_edge_requests_total[5m])) > 0.01
+              for: 10m
+              labels:
+                severity: warning
+            - alert: AFSEdgeRouteRefreshFailing
+              annotations:
+                summary: the collaboration edge cannot reload its route table; it stops serving after 5 minutes
+              expr: sum(increase(afs_edge_route_refresh_failures_total[10m])) > 3
+              labels:
+                severity: critical
+            - alert: AFSEdgeAccessCountsDropped
+              annotations:
+                summary: the collaboration edge dropped access counts because the database did not take them
+              expr: sum(increase(afs_edge_access_counts_dropped_total[15m])) > 0
+              labels:
+                severity: warning
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -1936,7 +2234,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-reconciler
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-reconciler-leader
     namespace: afs-system
 rules:
@@ -1960,7 +2258,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-reconciler
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-reconciler-leader
     namespace: afs-system
 roleRef:
@@ -1981,7 +2279,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-api
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-api
     namespace: afs-system
 spec:
@@ -2001,12 +2299,37 @@ apiVersion: v1
 kind: Service
 metadata:
     labels:
+        app.kubernetes.io/component: edge
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-edge
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-1.0.1
+    name: afs-edge
+    namespace: afs-system
+spec:
+    ports:
+        - name: https
+          port: 443
+          targetPort: https
+        - name: metrics
+          port: 9090
+          targetPort: metrics
+    selector:
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/name: afs-edge
+    type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+    labels:
         app.kubernetes.io/component: gateway
         app.kubernetes.io/instance: afs
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-gateway
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-gateway
     namespace: afs-system
 spec:
@@ -2031,7 +2354,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-reconciler
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-reconciler
     namespace: afs-system
 spec:
@@ -2053,7 +2376,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-api
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-api
     namespace: afs-system
 ---
@@ -2066,8 +2389,21 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-billing
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-billing
+    namespace: afs-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+    labels:
+        app.kubernetes.io/component: edge
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-edge
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-1.0.1
+    name: afs-edge
     namespace: afs-system
 ---
 apiVersion: v1
@@ -2079,7 +2415,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-gateway
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-gateway
     namespace: afs-system
 ---
@@ -2092,7 +2428,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-reconciler
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-reconciler
     namespace: afs-system
 ---
@@ -2105,7 +2441,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-api
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-api
     namespace: afs-system
 spec:
@@ -2122,12 +2458,34 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
     labels:
+        app.kubernetes.io/component: edge
+        app.kubernetes.io/instance: afs
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: afs-edge
+        app.kubernetes.io/part-of: afs
+        helm.sh/chart: afs-1.0.1
+    name: afs-edge
+    namespace: afs-system
+spec:
+    endpoints:
+        - interval: 30s
+          path: /metrics
+          port: metrics
+    selector:
+        matchLabels:
+            app.kubernetes.io/instance: afs
+            app.kubernetes.io/name: afs-edge
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+    labels:
         app.kubernetes.io/component: gateway
         app.kubernetes.io/instance: afs
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-gateway
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-gateway
     namespace: afs-system
 spec:
@@ -2149,7 +2507,7 @@ metadata:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: afs-reconciler
         app.kubernetes.io/part-of: afs
-        helm.sh/chart: afs-0.1.0
+        helm.sh/chart: afs-1.0.1
     name: afs-reconciler
     namespace: afs-system
 spec:

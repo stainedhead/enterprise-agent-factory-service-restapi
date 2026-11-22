@@ -324,3 +324,25 @@ func w2SameJSON(a, b []byte) bool {
 	}
 	return reflect.DeepEqual(x, y)
 }
+
+// RA-21: a collaboration row grouped by person carries a principal object and the service admin flag.
+func TestCollaborationReportBodyCarriesPrincipalAndFlag(t *testing.T) {
+	r := domain.Report{Kind: domain.ReportKindCollaboration, GroupBy: []string{"person"}, MeasureCols: []string{"requests"},
+		Rows: []domain.ReportRow{{Group: []string{"usr_1"}, Measures: []any{int64(1)}, ServiceAdminEntry: true},
+			{Group: []string{"afs_pk_x"}, Measures: []any{int64(2)}}, {Group: []string{"(anonymous)"}, Measures: []any{int64(3)}}}}
+	b := toReportBody(r, "")
+	p0 := b.Rows[0]["principal"].(map[string]string)
+	if p0["type"] != "user" || p0["id"] != "usr_1" || b.Rows[0]["serviceAdminEntry"] != true {
+		t.Errorf("user row: %v", b.Rows[0])
+	}
+	if b.Rows[1]["principal"].(map[string]string)["type"] != "api_key" || b.Rows[1]["serviceAdminEntry"] != nil {
+		t.Errorf("key row: %v", b.Rows[1])
+	}
+	if b.Rows[2]["principal"].(map[string]string)["type"] != "anonymous" {
+		t.Errorf("anonymous row: %v", b.Rows[2])
+	}
+	// A usage report grouped by something called person would carry none.
+	if _, ok := toReportBody(domain.Report{Kind: domain.ReportKindUsage, GroupBy: []string{"day"}, Rows: []domain.ReportRow{{Group: []string{"d"}}}}, "").Rows[0]["principal"]; ok {
+		t.Error("principal on a usage row")
+	}
+}

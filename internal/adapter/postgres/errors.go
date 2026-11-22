@@ -78,6 +78,9 @@ func MapError(err error, op Op, resource string) error {
 	case strings.HasPrefix(pe.Code, "22"):
 		return validation(pe, err)
 	case pe.Code == codeUnique:
+		if reason, ok := uniqueReasons[pe.ConstraintName]; ok {
+			return withCause(domain.Conflict(reason, pe.Message, constraintDetails(pe)), err)
+		}
 		return withCause(domain.Conflict("duplicate", pe.Message, constraintDetails(pe)), err)
 	case pe.Code == codeForeignKey && op == OpDelete:
 		return withCause(domain.Conflict("dependents_exist", pe.Message, constraintDetails(pe)), err)
@@ -98,10 +101,35 @@ func MapError(err error, op Op, resource string) error {
 	}
 }
 
+// uniqueReasons names the unique violations that carry a contract reason (Paperclip change): a second
+// live collaboration agent, and a team slug whose collaboration hostname is still held (RD-22).
+var uniqueReasons = map[string]string{
+	"agents_team_collaboration_uq": domain.ReasonCollaborationAgentExists,
+	"collab_hostname_held":         domain.ReasonHostnameHeld,
+}
+
+// constraintFields maps the Paperclip check constraints to the request field they refuse.
+var constraintFields = map[string]string{
+	"agents_collaboration_template":      "template",
+	"agents_collaboration_capability":    "template",
+	"agents_worker_capability":           "template",
+	"agents_collaboration_identity":      "iamIdentity",
+	"agents_collaboration_snapshots":     "volume.snapshotSchedule",
+	"agents_role_immutable":              "role",
+	"secrets_reserved_name":              "name",
+	"secrets_managed_by_name":            "name",
+	"secrets_paperclip_scope":            "name",
+	"secrets_paperclip_prefix":           "name",
+	"secrets_registered_paperclip_check": "name",
+}
+
 func validation(pe *pgconn.PgError, cause error) *domain.Error {
 	field := pe.ColumnName
 	if field == "" {
 		field = pe.ConstraintName
+	}
+	if f, ok := constraintFields[pe.ConstraintName]; ok {
+		field = f
 	}
 	e := domain.Validation(domain.FieldError{Field: field, Reason: pe.Message})
 	e.Message = pe.Message

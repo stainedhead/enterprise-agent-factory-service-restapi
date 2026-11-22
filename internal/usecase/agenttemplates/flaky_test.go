@@ -25,11 +25,11 @@ func (f *flaky) tick() error {
 	return nil
 }
 
-func (f *flaky) List(ctx context.Context, tx port.Tx, enabledOnly bool, after string, limit int) ([]domain.AgentTemplate, error) {
+func (f *flaky) List(ctx context.Context, tx port.Tx, enabledOnly bool, capability, after string, limit int) ([]domain.AgentTemplate, error) {
 	if err := f.tick(); err != nil {
 		return nil, err
 	}
-	return f.repo.List(ctx, tx, enabledOnly, after, limit)
+	return f.repo.List(ctx, tx, enabledOnly, capability, after, limit)
 }
 
 func (f *flaky) Get(ctx context.Context, tx port.Tx, name string, forUpdate bool) (domain.AgentTemplate, error) {

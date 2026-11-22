@@ -1,0 +1,64 @@
+{{- $name := "edge" }}
+{{- $c := include "afs.component" (dict "root" $ "name" $name) | fromYaml }}
+{{- if $c.enabled }}
+{{- $ctx := dict "root" $ "name" $name "c" $c }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: afs-edge
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "afs.labels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ $c.replicas }}
+  selector:
+    matchLabels:
+      {{- include "afs.selectorLabels" $ctx | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  template:
+    metadata:
+      labels:
+        {{- include "afs.labels" $ctx | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $c.serviceAccount.name }}
+      terminationGracePeriodSeconds: {{ $c.terminationGracePeriodSeconds }}
+      {{- with .Values.global.image.pullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "afs.podSecurityContext" $ | nindent 8 }}
+      {{- include "afs.spread" $ctx | nindent 6 }}
+      containers:
+        - name: afs-edge
+          image: {{ include "afs.image" $ctx | quote }}
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - {name: https, containerPort: {{ $c.ports.https }}}
+            - {name: metrics, containerPort: {{ $c.ports.metrics }}}
+          env:
+            {{- include "afs.env" $ctx | nindent 12 }}
+            - name: AFS_EDGE_STATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $c.stateKey.secretName }}
+                  key: {{ $c.stateKey.currentKey }}
+            - name: AFS_EDGE_STATE_KEY_PREVIOUS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $c.stateKey.secretName }}
+                  key: {{ $c.stateKey.previousKey }}
+                  optional: true
+          volumeMounts:
+            - {name: tls, mountPath: /tls, readOnly: true}
+          {{- include "afs.probes" $ | nindent 10 }}
+          resources:
+            {{- toYaml $c.resources | nindent 12 }}
+          securityContext:
+            {{- include "afs.containerSecurityContext" $ | nindent 12 }}
+      volumes:
+        - name: tls
+          secret:
+            secretName: {{ $c.tls.secretName }}
+{{- end }}

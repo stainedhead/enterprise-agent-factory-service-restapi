@@ -292,6 +292,12 @@ func TestExternalSecrets(t *testing.T) {
 	if got := render.ExternalSecrets(d); len(got) != 0 {
 		t.Errorf("no bindings: %d", len(got))
 	}
+	// A connected worker's Paperclip key without a value is in no ExternalSecret and no environment variable.
+	d.Bindings = []agent.Binding{{SecretID: "sec_K", SecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/x/paperclip-agent-api-key-AbCdEf", //nolint:gosec // an example ARN, not a credential
+		Delivery: agent.DeliveryEnv, Target: agent.CollabKeyTarget}}
+	if got := render.ExternalSecrets(d); len(got) != 0 {
+		t.Errorf("key without a value: %d ExternalSecrets", len(got))
+	}
 }
 
 func TestFileKeyIsStableAndValid(t *testing.T) {

@@ -187,6 +187,8 @@ func TestEveryMetricNameIsRegistered(t *testing.T) {
 	m.GatewayUsageRowsDropped.WithLabelValues("queue_full")
 	m.RollupRuns.WithLabelValues("j", "ok")
 	m.RollupLastSuccess.WithLabelValues("j")
+	m.EdgeRequests.WithLabelValues("web_ui", "200")
+	m.EdgeRequestSecs.WithLabelValues("web_ui")
 	mfs, err := m.Registry.Gather()
 	if err != nil {
 		t.Fatal(err)

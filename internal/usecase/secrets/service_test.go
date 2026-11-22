@@ -265,7 +265,7 @@ func TestUpdateListGetDelete(t *testing.T) {
 	if _, err := r.svc.Update(t.Context(), admin, team, id, 2, domain.SecretPatch{}); domain.KindOf(err) != domain.KindValidation {
 		t.Errorf("empty patch: %v", err)
 	}
-	rows, next, err := r.svc.List(t.Context(), admin, team, acting.Page{Limit: 10})
+	rows, next, err := r.svc.List(t.Context(), admin, team, "", acting.Page{Limit: 10})
 	if err != nil || len(rows) != 1 || next != "" {
 		t.Fatalf("list %v %v %q", rows, err, next)
 	}

@@ -22,6 +22,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/buildinfo"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/auth"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/secrets"
 )
 
 // components is everything afs-api is built from. wire is the only place adapters are connected.
@@ -34,6 +35,8 @@ type components struct {
 	Creds  *postgres.Credentials
 	// Settings reads service settings (CORS origins, ...).
 	Settings *postgres.SettingsReader
+	// SecretsWriter is the Secrets Manager write path (wireSecrets); the collaboration use cases share it.
+	SecretsWriter secrets.Writer
 	// Auth authenticates bearer credentials (wireAuth).
 	Auth    *auth.Service
 	Handler http.Handler
@@ -272,11 +275,12 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 		wireAuth(c, &cfg, p, s)
 		wireM1W2(c, &cfg, log)
 		wireM2W1(c, log)
-		wireAgents(c, log)
 		if err := wireSecrets(ctx, c, s, log); err != nil {
 			pool.Close()
 			return nil, err
 		}
+		wireAgents(c, log) // after wireSecrets: it shares the Secrets Manager writer (boot secrets)
+		wireCollab(c)
 		wireLogDest(c, log)
 		wireBudgets(c)
 		wireReports(c, log)

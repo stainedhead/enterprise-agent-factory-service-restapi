@@ -1,0 +1,60 @@
+enabled: true
+replicas: 3
+image:
+  repository: afs-edge
+dbUser: afs_edge
+serviceAccount:
+  name: afs-edge
+service:
+  port: 443
+  type: ClusterIP
+ports:
+  https: 8443
+  metrics: 9090
+pdb:
+  minAvailable: 2
+resources:
+  requests: {cpu: 250m, memory: 192Mi}
+  limits: {memory: 512Mi}
+# A rolling update lets requests finish (AFS_EDGE_DRAIN_TIMEOUT) and flushes the buffered access counts.
+terminationGracePeriodSeconds: 45
+env:
+  AFS_EDGE_ADDR: ":8443"
+  AFS_EDGE_TLS_CERT: /tls/tls.crt
+  AFS_EDGE_TLS_KEY: /tls/tls.key
+  AFS_METRICS_ADDR: ":9090"
+  AFS_EDGE_IDLE_TIMEOUT: 10m        # a WebSocket or event stream with no traffic is closed
+  AFS_EDGE_DRAIN_TIMEOUT: 30s
+  AFS_EDGE_REFRESH_INTERVAL: 30s    # route table reload (also on every database notification)
+  AFS_EDGE_FLUSH_INTERVAL: 30s      # five-minute access counts to the database
+# The sealing keys of the sign-in state, identical on every replica, so they come from one Secret and never from
+# a value. The Secret holds two 32-byte base64 keys: `current` seals and opens, `previous` only opens (rotate by
+# moving current to previous and writing a new current).
+stateKey:
+  secretName: afs-edge-state-key
+  currentKey: current
+  previousKey: previous
+tls:
+  # cert-manager issues the server certificate the ALB's HTTPS target group connects to; issuerRef is required.
+  issuerRef:
+    name: ""
+    kind: ClusterIssuer
+    group: cert-manager.io
+  secretName: afs-edge-tls
+  duration: 2160h         # 90 days
+  renewBefore: 720h       # 30 days
+  extraDnsNames: []
+# The ALB target group (owned by deploy/terraform/modules/collab-edge). When set, a TargetGroupBinding registers
+# the pods (aws-load-balancer-controller).
+targetGroupArn: ""
+network:
+  # Who may reach the HTTPS port: the ALB's subnets. Empty allows any source inside the cluster network.
+  albCidrs: []
+  # Namespace of the Prometheus that scrapes the metrics port.
+  monitoringNamespace: monitoring
+  # Where the database and the identity providers are reached (egress). Empty allows any destination on the port.
+  databaseCidrs: []
+logRouting:
+  # The node log collector routes the records of afs-system/afs-edge by afs.team_id to each team's aggregator
+  # (API contract 4.4c Records). The ConfigMap carries the rule for the platform's Fluent Bit.
+  enabled: true

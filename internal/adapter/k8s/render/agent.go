@@ -81,6 +81,16 @@ func PodTemplate(env agent.Environment) corev1.PodTemplateSpec {
 		corev1.EnvVar{Name: "AWS_REGION", Value: env.Region},
 		corev1.EnvVar{Name: "AWS_DEFAULT_REGION", Value: env.Region},
 	)
+	var extra map[string]string
+	switch {
+	case d.Collab != nil:
+		extra = PaperclipEnv(d, *d.Collab)
+	case d.Link != nil:
+		extra = PaperclipWorkerEnv(d, *d.Link)
+	}
+	for _, k := range sortedKeys(extra) {
+		envVars = append(envVars, corev1.EnvVar{Name: k, Value: extra[k]})
+	}
 	if AWSConfig(d) != "" {
 		awsItems = append(awsItems, corev1.KeyToPath{Key: awsConfigKey, Path: awsConfigKey})
 		mounts = append(mounts, corev1.VolumeMount{Name: volumeAWS, MountPath: AWSConfigPath, SubPath: awsConfigKey, ReadOnly: true})
@@ -128,6 +138,9 @@ func PodTemplate(env agent.Environment) corev1.PodTemplateSpec {
 		"app.kubernetes.io/name": agent.WorkloadName(d.Name),
 		LabelTeamID:              d.Team.ID,
 		LabelAgentID:             d.ID,
+	}
+	if d.Link != nil {
+		pod.Labels[LabelCollabConnected] = "true"
 	}
 	pod.Annotations = map[string]string{agentictm.AnnotationPodTemplateHash: env.Hash}
 	if d.RestartNonce != "" {
@@ -196,4 +209,13 @@ func VolumeClaimTemplate(d agent.Desired) corev1.PersistentVolumeClaim {
 		pvc.Spec.StorageClassName = ptr.To(d.Volume.StorageClass)
 	}
 	return pvc
+}
+
+func sortedKeys(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }

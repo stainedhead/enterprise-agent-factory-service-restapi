@@ -23,7 +23,7 @@ var _ secrets.Repository = (*SecretRepo)(nil)
 //nolint:gosec // a SELECT of column names, no credential
 const secretSelect = `SELECT s.id, s.team_id, coalesce(s.agent_id, ''), coalesce(s.pool_id, ''), s.name, s.description,
   coalesce(s.external_system_id, ''), s.path, s.secrets_manager_arn, coalesce(s.current_version_id, ''), s.last_changed_at,
-  s.rotation_days, s.version, s.created_at, s.created_by, s.updated_at,
+  s.rotation_days, s.version, s.created_at, s.created_by, s.updated_at, s.managed_by,
   coalesce((SELECT array_agg(u.owner_id ORDER BY u.owner_id) FROM (
               SELECT b.agent_id AS owner_id FROM afs.agent_secret_bindings b WHERE b.team_id = s.team_id AND b.secret_id = s.id
               UNION ALL
@@ -35,13 +35,15 @@ func scanSecret(row pgx.Row) (domain.Secret, error) {
 		s    domain.Secret
 		days *int
 		v    int64
+		mb   string
 	)
 	err := row.Scan(&s.ID, &s.TeamID, &s.AgentID, &s.PoolID, &s.Name, &s.Description, &s.ExternalSystemID, &s.Path, &s.ARN,
-		&s.VersionID, &s.LastChangedAt, &days, &v, &s.CreatedAt, &s.CreatedBy, &s.UpdatedAt, &s.BoundTo)
+		&s.VersionID, &s.LastChangedAt, &days, &v, &s.CreatedAt, &s.CreatedBy, &s.UpdatedAt, &mb, &s.BoundTo)
 	if err != nil {
 		return domain.Secret{}, err
 	}
 	s.Version, s.Scope = domain.Version(v), domain.ScopeOf(s.AgentID, s.PoolID)
+	s.ManagedBy = domain.SecretManagedBy(mb)
 	if days != nil {
 		s.Rotation = domain.Rotation{Enabled: true, Days: *days}
 	}
@@ -60,12 +62,12 @@ func rotationDays(r domain.Rotation) *int {
 }
 
 // List implements secrets.Repository.
-func (*SecretRepo) List(ctx context.Context, tx port.Tx, teamID, after string, limit int) ([]domain.Secret, error) {
+func (*SecretRepo) List(ctx context.Context, tx port.Tx, teamID, after string, managedBy domain.SecretManagedBy, limit int) ([]domain.Secret, error) {
 	pt, err := Unwrap(tx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := pt.Query(ctx, secretSelect+` WHERE s.team_id=$1 AND s.id > $2 ORDER BY s.id LIMIT $3`, teamID, after, limit)
+	rows, err := pt.Query(ctx, secretSelect+` WHERE s.team_id=$1 AND s.id > $2 AND ($4 = '' OR s.managed_by = $4) ORDER BY s.id LIMIT $3`, teamID, after, limit, string(managedBy))
 	if err != nil {
 		return nil, MapError(err, OpRead, "secret")
 	}
@@ -124,9 +126,10 @@ func (*SecretRepo) Insert(ctx context.Context, tx port.Tx, s domain.Secret) erro
 		return err
 	}
 	_, err = pt.Exec(ctx, `INSERT INTO afs.secrets (id, team_id, name, description, secrets_manager_arn, origin, rotation_days,
-  current_version_id, last_changed_at, agent_id, pool_id, external_system_id)
-VALUES ($1, $2, $3, $4, $5, 'managed', $6, nullif($7, ''), $8, nullif($9, ''), nullif($10, ''), nullif($11, ''))`,
-		s.ID, s.TeamID, s.Name, s.Description, s.ARN, rotationDays(s.Rotation), s.VersionID, s.LastChangedAt, s.AgentID, s.PoolID, s.ExternalSystemID)
+  current_version_id, last_changed_at, agent_id, pool_id, external_system_id, managed_by)
+VALUES ($1, $2, $3, $4, $5, 'managed', $6, nullif($7, ''), $8, nullif($9, ''), nullif($10, ''), nullif($11, ''), $12)`,
+		s.ID, s.TeamID, s.Name, s.Description, s.ARN, rotationDays(s.Rotation), s.VersionID, s.LastChangedAt, s.AgentID, s.PoolID, s.ExternalSystemID,
+		managedOrUser(s.ManagedBy))
 	return MapError(err, OpWrite, "secret")
 }
 
@@ -177,4 +180,11 @@ func (*SecretRepo) Delete(ctx context.Context, tx port.Tx, teamID, id string) er
 		return domain.NotFound("secret")
 	}
 	return nil
+}
+
+func managedOrUser(m domain.SecretManagedBy) string {
+	if m == "" {
+		return string(domain.ManagedByUser)
+	}
+	return string(m)
 }

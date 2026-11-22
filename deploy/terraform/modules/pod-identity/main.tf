@@ -5,10 +5,11 @@
 #                   and access entries, inference profiles, secret deletion, events, exports, snapshots
 #   afs-gateway     assume each team's Bedrock role (and nothing else), database login
 #   afs-billing     Athena over the CUR, Price List, Cost Explorer, report writes, database login
+#   afs-edge        read of the collaboration sign-in client secrets, database login (no table privilege, ten functions)
 # No role here has bedrock:InvokeModel: only a team's own Bedrock role, assumed by the gateway, does.
 
 locals {
-  roles = toset(["api", "reconciler", "gateway", "billing"])
+  roles = toset(["api", "reconciler", "gateway", "billing", "edge"])
 
   db_connect_arn = {
     for k, user in var.db_users :
@@ -382,4 +383,110 @@ resource "aws_iam_role_policy" "billing" {
   name   = "billing"
   role   = aws_iam_role.this["billing"].id
   policy = data.aws_iam_policy_document.billing.json
+}
+
+# ---- afs-edge (RC-28, DP-4) ----
+# The edge reads the client secret of a team's collaboration sign-in client for one token exchange and
+# holds it in memory only. It reads nothing else: not the agents' secrets, not the board keys. Its sealing
+# keys arrive through a Kubernetes Secret, so no statement here covers them.
+
+data "aws_iam_policy_document" "edge" {
+  statement {
+    sid       = "ReadCollaborationClientSecrets"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["arn:${var.partition}:secretsmanager:${var.region}:${var.account_id}:secret:${var.collab_client_secret_name_pattern}"]
+  }
+
+  statement {
+    sid       = "DecryptCollaborationClientSecrets"
+    actions   = ["kms:Decrypt"]
+    resources = [var.secrets_kms_key_arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["secretsmanager.${var.region}.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "edge" {
+  name   = "edge"
+  role   = aws_iam_role.this["edge"].id
+  policy = data.aws_iam_policy_document.edge.json
+}
+
+# ---- afs-reconciler: collaboration (RC-28, DP-4) ----
+
+data "aws_iam_policy_document" "reconciler_collab" {
+  # The board key is written by the collaboration pod's bootstrap; the reconciler reads only secrets with
+  # exactly this name (the ARN suffix is the six random characters Secrets Manager appends) and records them.
+  statement {
+    sid       = "ReadBoardKeys"
+    actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
+    resources = ["arn:${var.partition}:secretsmanager:${var.region}:${var.account_id}:secret:${var.secrets_path_prefix}/*/paperclip-board-api-key-??????"]
+  }
+
+  # Managed registration (COL-12) writes a connected worker's Paperclip key straight to Secrets Manager at the
+  # worker's own path, and schedules it for deletion on disconnect (DeleteSecret is in the reconciler statement
+  # above). Nothing else under the prefix is writable through this statement.
+  statement {
+    sid = "WriteWorkerPaperclipKeys"
+    actions = [
+      "secretsmanager:CreateSecret",
+      "secretsmanager:PutSecretValue",
+      "secretsmanager:TagResource",
+      "secretsmanager:DescribeSecret",
+    ]
+    resources = ["arn:${var.partition}:secretsmanager:${var.region}:${var.account_id}:secret:${var.secrets_path_prefix}/*/paperclip-agent-api-key-??????"]
+  }
+
+  statement {
+    sid       = "EncryptWorkerPaperclipKeys"
+    actions   = ["kms:GenerateDataKey", "kms:Encrypt", "kms:DescribeKey"]
+    resources = [var.secrets_kms_key_arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["secretsmanager.${var.region}.amazonaws.com"]
+    }
+  }
+
+  statement {
+    sid       = "DecryptBoardKeys"
+    actions   = ["kms:Decrypt"]
+    resources = [var.secrets_kms_key_arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["secretsmanager.${var.region}.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "reconciler_collab" {
+  name   = "collaboration"
+  role   = aws_iam_role.this["reconciler"].id
+  policy = data.aws_iam_policy_document.reconciler_collab.json
+}
+
+# The allow-list sync: the two IP sets of the collaboration web ACL, and nothing else in WAF.
+data "aws_iam_policy_document" "reconciler_waf" {
+  count = length(var.collab_waf_ip_set_arns) == 0 ? 0 : 1
+
+  statement {
+    sid       = "SyncCollaborationAllowList"
+    actions   = ["wafv2:GetIPSet", "wafv2:UpdateIPSet"]
+    resources = var.collab_waf_ip_set_arns
+  }
+}
+
+resource "aws_iam_role_policy" "reconciler_waf" {
+  count = length(var.collab_waf_ip_set_arns) == 0 ? 0 : 1
+
+  name   = "collaboration-waf"
+  role   = aws_iam_role.this["reconciler"].id
+  policy = data.aws_iam_policy_document.reconciler_waf[0].json
 }

@@ -137,6 +137,9 @@ Team:
     mayAddExternalSystems:
       type: boolean
       description: 'Guardrail field: needs teams:set-guardrails'
+    mayExposeCollaboration:
+      type: boolean
+      description: 'Guardrail field: needs teams:set-guardrails. Whether the team may publish its Paperclip endpoints (default true)'
 TeamList:
   type: object
   description: A page of Team resources
@@ -254,6 +257,9 @@ CreateTeamRequest:
     mayAddExternalSystems:
       type: boolean
       description: 'Guardrail field: needs teams:set-guardrails'
+    mayExposeCollaboration:
+      type: boolean
+      description: 'Guardrail field: needs teams:set-guardrails. Whether the team may publish its Paperclip endpoints (default true)'
     firstAdmin:
       $ref: '#/components/schemas/FirstAdmin'
     models:
@@ -270,8 +276,8 @@ CreateTeamRequest:
       $ref: '#/components/schemas/TeamBudgetInput'
 UpdateTeamRequest:
   type: object
-  description: Fields to change. maxBudgetUsd, the ceiling override, quotas, isolationTier, viewerKubectl, mayManageAwsAccounts
-    and mayAddExternalSystems need teams:set-guardrails; allowedAwsAccounts needs teams:set-aws-accounts
+  description: Fields to change. maxBudgetUsd, the ceiling override, quotas, isolationTier, viewerKubectl, mayManageAwsAccounts,
+    mayAddExternalSystems and mayExposeCollaboration need teams:set-guardrails; allowedAwsAccounts needs teams:set-aws-accounts
   properties:
     displayName:
       type: string
@@ -325,6 +331,8 @@ UpdateTeamRequest:
     mayManageAwsAccounts:
       type: boolean
     mayAddExternalSystems:
+      type: boolean
+    mayExposeCollaboration:
       type: boolean
     allowedAwsAccounts:
       type: array

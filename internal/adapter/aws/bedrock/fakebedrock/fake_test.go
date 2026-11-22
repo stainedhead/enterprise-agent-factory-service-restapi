@@ -3,12 +3,15 @@ package fakebedrock_test
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
@@ -82,18 +85,46 @@ func TestConverseStreamEndsWithMetadata(t *testing.T) {
 	}
 }
 
+// The failure is checked on the wire, not through the SDK's event stream reader: that reader closes the
+// connection itself as soon as it has seen the exception, and under load its decoder can lose the race
+// and report "use of closed network connection" instead of the exception (reproduced at -count=300 -cpu 1).
+// The behavior under test is the fake's: two events, then an exception frame, then the end of the body.
 func TestStreamFailsPartWay(t *testing.T) {
-	f, c := newClient(t)
+	f := fakebedrock.New()
 	f.FailStreamAfter(2)
-	out, err := c.ConverseStream(context.Background(), &bedrockruntime.ConverseStreamInput{ModelId: aws.String(profile), Messages: converseIn().Messages})
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost,
+		srv.URL+"/model/"+url.PathEscape(profile)+"/converse-stream", strings.NewReader(`{"messages":[{"role":"user","content":[{"text":"hi"}]}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for range out.GetStream().Events() { //nolint:revive // drain
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20260101/us-east-1/bedrock/aws4_request, SignedHeaders=host, Signature=00")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
 	}
-	var ise *types.InternalServerException
-	if err := out.GetStream().Err(); !errors.As(err, &ise) {
-		t.Fatalf("stream error = %v, want InternalServerException", err)
+	defer func() { _ = resp.Body.Close() }()
+	dec := eventstream.NewDecoder()
+	var types []string
+	for {
+		msg, err := dec.Decode(resp.Body, nil)
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				t.Fatalf("decode: %v", err)
+			}
+			break
+		}
+		kind := msg.Headers.Get(":message-type").String()
+		if kind == "exception" {
+			kind += ":" + msg.Headers.Get(":exception-type").String()
+		}
+		types = append(types, kind)
+	}
+	want := []string{"event", "event", "exception:internalServerException"}
+	if strings.Join(types, ",") != strings.Join(want, ",") {
+		t.Fatalf("frames = %v, want %v", types, want)
 	}
 }
 
@@ -118,8 +149,10 @@ func TestInvokeModelAndStream(t *testing.T) {
 			n++
 		}
 	}
-	if st.GetStream().Err() != nil || n < 5 {
-		t.Fatalf("chunks %d err %v", n, st.GetStream().Err())
+	// After the last chunk the SDK may close the connection before its decoder reads the end of the body (see
+	// TestConverseStreamEndsWithMetadata); that is not a stream failure.
+	if err := st.GetStream().Err(); (err != nil && !strings.Contains(err.Error(), "use of closed network connection")) || n < 5 {
+		t.Fatalf("chunks %d err %v", n, err)
 	}
 }
 

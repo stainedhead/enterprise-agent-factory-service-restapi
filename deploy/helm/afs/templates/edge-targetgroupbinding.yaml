@@ -1,0 +1,17 @@
+{{- /* Registers the afs-edge pods in the ALB target group that deploy/terraform/modules/collab-edge creates. */}}
+{{- $c := include "afs.component" (dict "root" $ "name" "edge") | fromYaml }}
+{{- if and $c.enabled $c.targetGroupArn }}
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: afs-edge
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "afs.labels" (dict "root" $ "name" "edge") | nindent 4 }}
+spec:
+  serviceRef:
+    name: afs-edge
+    port: {{ $c.service.port }}
+  targetGroupARN: {{ $c.targetGroupArn | quote }}
+  targetType: ip
+{{- end }}
