@@ -711,12 +711,12 @@ Owns: `internal/usecase/reconcile/pool/`, `internal/adapter/k8s/render/pool.go`,
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M5-C1 | One Deployment per pool with `workers` replicas, own ServiceAccount and Pod Identity role, secrets, ConfigMap, egress policy, scratch volume, optional EFS; scaling changes replicas only [envtest] | RC-US-9.1, RC-11 | M5-B2 |
-| [ ] | M5-C2 | Inbox queue `afs-<team ulid>-<short hash>` per receiving pool; `AFS_INBOX_QUEUE_URL` and `AFS_HANDOFF_<TO_POOL>_QUEUE_URL`; only senders' roles may send, only the receiver may receive [adapter with fake AWS] | RC-US-9.2 | M5-C1 |
-| [ ] | M5-C3 | Shared named role linked and verified in each listed account | RC-US-9.3 | M5-C1 |
-| [ ] | M5-C4 | Pool pause and resume; team suspend and resume for pools (prior state kept); pool delete steps (volumes, queues) in the finalizer [envtest] | RC-US-15.1 (part), RC-US-15.2 (part), RC-17 (part) | M5-C1, M5-C6 |
-| [ ] | M5-C6 | Adopt the `-db` release with X-DB-5; the finalizer marks a pool `deleted` | RC-17 (part) | X-DB-5 |
-| [ ] | M5-C5 | Pool usage, activity and traffic rows carry the pool and worker pod (collector and gateway tests extended) | GW-US-2.4 (part), RC-7 (part), AGT-8 | M5-C1 |
+| [x] | M5-C1 | One Deployment per pool with `workers` replicas, own ServiceAccount and Pod Identity role, secrets, ConfigMap, egress policy, scratch volume, optional EFS; scaling changes replicas only [envtest] | RC-US-9.1, RC-11 | M5-B2 |
+| [x] | M5-C2 | Inbox queue `afs-<team ulid>-<short hash>` per receiving pool; `AFS_INBOX_QUEUE_URL` and `AFS_HANDOFF_<TO_POOL>_QUEUE_URL`; only senders' roles may send, only the receiver may receive [adapter with fake AWS] | RC-US-9.2 | M5-C1 |
+| [x] | M5-C3 | Shared named role linked and verified in each listed account | RC-US-9.3 | M5-C1 |
+| [x] | M5-C4 | Pool pause and resume; team suspend and resume for pools (prior state kept); pool delete steps (volumes, queues) in the finalizer [envtest] | RC-US-15.1 (part), RC-US-15.2 (part), RC-17 (part) | M5-C1, M5-C6 |
+| [x] | M5-C6 | Adopt the `-db` release with X-DB-5; the finalizer marks a pool `deleted` | RC-17 (part) | X-DB-5 |
+| [x] | M5-C5 | Pool usage, activity and traffic rows carry the pool and worker pod (collector and gateway tests extended) | GW-US-2.4 (part), RC-7 (part), AGT-8 | M5-C1 |
 
 ### M5-D · Ephemeral teardown (RC-10)
 
@@ -724,7 +724,7 @@ Owns: `internal/usecase/reconcile/teardown/`.
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M5-D1 | `teams_due_for_teardown` → RC-17 delete flow within 5 minutes; `torn_down_at` and reason; `team.teardown_started`, `team.torn_down`; revisions, usage and audit kept [envtest, adapter] | RC-US-8.1, RC-10 | M5-C4 |
+| [x] | M5-D1 | `teams_due_for_teardown` → RC-17 delete flow within 5 minutes; `torn_down_at` and reason; `team.teardown_started`, `team.torn_down`; revisions, usage and audit kept [envtest, adapter] | RC-US-8.1, RC-10 | M5-C4 |
 
 ### M5-E · Viewer kubectl (RA-10, RC-13)
 

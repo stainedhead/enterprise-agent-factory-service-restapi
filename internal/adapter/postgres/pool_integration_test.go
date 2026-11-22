@@ -355,3 +355,22 @@ func containsDue(l []teardown.Due, id string) bool {
 	}
 	return false
 }
+
+// M5-C5: the pod names a pool's Deployment produces (pool-<name>-<replica set hash>-<suffix>) are the worker
+// pods the usage, activity and traffic tables accept, so the rows the collectors and the gateway write for a
+// pool carry the pool and the worker pod.
+func TestPoolWorkerPodNamesAreAccepted(t *testing.T) {
+	db := pgtest.Get(t)
+	admin := db.Admin(t)
+	for _, name := range []string{"triage", "a", "fixers-2"} {
+		pod := pool.WorkloadName(name) + "-7d9f8b6c5d-x7k2p"
+		var ok bool
+		if err := admin.QueryRow(t.Context(), `SELECT afs.worker_pod_ok($1)`, pod).Scan(&ok); err != nil || !ok {
+			t.Errorf("worker_pod_ok(%q) = %v, %v", pod, ok, err)
+		}
+	}
+	var ok bool
+	if err := admin.QueryRow(t.Context(), `SELECT afs.worker_pod_ok('not a pod name!')`).Scan(&ok); err != nil || ok {
+		t.Errorf("a malformed pod name was accepted: %v %v", ok, err)
+	}
+}
