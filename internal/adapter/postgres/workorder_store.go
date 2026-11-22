@@ -71,9 +71,16 @@ func (s *WorkOrderStore) CreateFromEvent(ctx context.Context, n workorder.NewWor
 		}
 		if n.Kind == "cve_remediation" {
 			var open string
-			err := t.QueryRow(ctx, `SELECT id FROM afs.work_orders WHERE kind = 'cve_remediation' AND external_ref = $1
- AND status NOT IN ('done', 'failed', 'cancelled')`, n.CVEID).Scan(&open)
+			var openEvent *string
+			err := t.QueryRow(ctx, `SELECT id, source_event_id FROM afs.work_orders WHERE kind = 'cve_remediation' AND external_ref = $1
+ AND status NOT IN ('done', 'failed', 'cancelled')`, n.CVEID).Scan(&open, &openEvent)
 			if err == nil {
+				// A concurrent delivery of this very event committed between the check above and this one: it is the
+				// same work order, not a different event for an open CVE.
+				if openEvent != nil && *openEvent == n.SourceEventID {
+					res.ID, res.Duplicate = open, true
+					return nil
+				}
 				return &workorder.Rejection{Reason: "open_work_order", Detail: map[string]any{"cveId": n.CVEID, "workOrderId": open}}
 			} else if !errors.Is(err, pgx.ErrNoRows) {
 				return err
