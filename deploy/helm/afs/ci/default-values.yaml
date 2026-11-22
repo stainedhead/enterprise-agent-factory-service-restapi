@@ -3,7 +3,7 @@
 global:
   image:
     registry: 111122223333.dkr.ecr.us-east-1.amazonaws.com/afs
-    tag: v0.1.0
+    tag: v1.0.1
   clusterName: afs-dev
   region: us-east-1
   otlpEndpoint: http://otel-collector.observability:4318

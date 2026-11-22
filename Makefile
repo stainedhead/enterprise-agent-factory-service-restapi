@@ -1,7 +1,7 @@
 .PHONY: all build test race vet vet-tags lint fmt fmt-check tidy vuln cover gate clean \
 	contract contract-check openapi openapi-check test-db envtest e2e load conformance
 
-VERSION ?= dev
+VERSION ?= 1.0.1
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 PKG     := github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/buildinfo

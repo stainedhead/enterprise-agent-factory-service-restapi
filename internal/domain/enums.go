@@ -72,8 +72,9 @@ type TeamRole string
 
 // TeamRole values.
 const (
-	TeamRoleTeamAdmin  TeamRole = "team_admin"
-	TeamRoleTeamViewer TeamRole = "team_viewer"
+	TeamRoleTeamAdmin        TeamRole = "team_admin"
+	TeamRoleTeamCollaborator TeamRole = "team_collaborator"
+	TeamRoleTeamViewer       TeamRole = "team_viewer"
 )
 
 // Valid reports whether v is a known TeamRole.
@@ -564,7 +565,7 @@ var EnumValues = map[string][]string{
 	"IsolationTier":       {"shared", "dedicated"},
 	"TeardownRule":        {"at_expiry", "at_cap_or_expiry", "at_work_complete"},
 	"TeardownReason":      {"expired", "cap_reached", "work_complete", "manual"},
-	"TeamRole":            {"team_admin", "team_viewer"},
+	"TeamRole":            {"team_admin", "team_collaborator", "team_viewer"},
 	"SubjectType":         {"user", "group"},
 	"PrincipalType":       {"user", "api_key", "workload"},
 	"SecretDelivery":      {"env", "file"},

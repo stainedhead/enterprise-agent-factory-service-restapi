@@ -187,14 +187,30 @@ type Agent struct {
 	IAMRoleARN  string
 	Volume      AgentVolume
 	Bindings    []SecretBinding
-	State       AgentState
-	Version     Version
-	Generation  Generation
-	Status      Status
-	CreatedAt   time.Time
-	CreatedBy   string
-	UpdatedAt   time.Time
+	// Role is worker or collaboration; set on create, immutable (API contract 4.4).
+	Role AgentRole
+	// Collaboration is a worker's connection to the team's Paperclip; nil on the collaboration agent and
+	// for a worker that was never connected.
+	Collaboration *AgentCollaboration
+	State         AgentState
+	Version       Version
+	Generation    Generation
+	Status        Status
+	CreatedAt     time.Time
+	CreatedBy     string
+	UpdatedAt     time.Time
 }
+
+// effectiveRole is the role, worker when none is set (an agent built before roles).
+func (a Agent) effectiveRole() AgentRole {
+	if a.Role == "" {
+		return AgentRoleWorker
+	}
+	return a.Role
+}
+
+// IsCollaboration reports whether this is the team's collaboration agent.
+func (a Agent) IsCollaboration() bool { return a.effectiveRole() == AgentRoleCollaboration }
 
 // Paused reports whether the agent is paused.
 func (a Agent) Paused() bool { return a.State == AgentPaused }
@@ -210,6 +226,10 @@ type NewAgentParams struct {
 	IAMIdentity IAMIdentity
 	Volume      VolumeSpec
 	Bindings    []SecretBinding
+	// Role is worker (the default) or collaboration.
+	Role AgentRole
+	// Collaboration is the worker's optional connection request.
+	Collaboration *CollaborationInput
 }
 
 // NewAgent validates p and returns the agent in state enabled, generation 1.
@@ -230,21 +250,49 @@ func NewAgent(id, teamID string, p NewAgentParams, now time.Time) (Agent, error)
 		fe = append(fe, FieldError{Field: "description", Reason: "must be at most 1000 characters"})
 	}
 	fe = append(fe, p.Resources.validate()...)
+	role := p.Role
+	if role == "" {
+		role = AgentRoleWorker
+	}
+	if !role.Valid() {
+		fe = append(fe, FieldError{Field: "role", Reason: "must be worker or collaboration"})
+	}
 	iam := p.IAMIdentity
-	if iam == "" {
-		iam = IAMIdentityTeamShared
+	base := DefaultAgentVolume()
+	if role == AgentRoleCollaboration {
+		// The collaboration agent holds the team's Paperclip data: a dedicated identity and daily snapshots.
+		if iam == "" {
+			iam = IAMIdentityDedicated
+		}
+		if iam != IAMIdentityDedicated {
+			fe = append(fe, FieldError{Field: "iamIdentity", Reason: "a collaboration agent needs a dedicated identity"})
+		}
+		if p.Volume.SnapshotSchedule == SnapshotOff {
+			fe = append(fe, FieldError{Field: "volume.snapshotSchedule", Reason: "a collaboration agent's snapshots cannot be turned off"})
+		}
+		base.SnapshotRetain = 14
+		if p.Collaboration != nil {
+			fe = append(fe, FieldError{Field: "collaboration", Reason: "is for worker agents; omit it on the collaboration agent"})
+		}
+	} else {
+		if iam == "" {
+			iam = IAMIdentityTeamShared
+		}
+		if p.Collaboration != nil {
+			collect(p.Collaboration.Validate())
+		}
 	}
 	if !iam.Valid() {
 		fe = append(fe, FieldError{Field: "iamIdentity", Reason: "must be team_shared or dedicated"})
 	}
-	vol := DefaultAgentVolume().Overlay(p.Volume)
+	vol := base.Overlay(p.Volume)
 	collect(vol.Validate())
 	collect(ValidateBindings(p.Bindings))
 	if len(fe) > 0 {
 		return Agent{}, Validation(fe...)
 	}
 	return Agent{ID: id, TeamID: teamID, Name: name, Description: p.Description, Template: p.Template, Image: image,
-		ModelID: p.ModelID, Resources: p.Resources, IAMIdentity: iam, Volume: vol, Bindings: p.Bindings,
+		ModelID: p.ModelID, Resources: p.Resources, IAMIdentity: iam, Volume: vol, Bindings: p.Bindings, Role: role,
 		State: AgentEnabled, Version: 1, Generation: 1, Status: PendingStatus(now), CreatedAt: now.UTC(), UpdatedAt: now.UTC()}, nil
 }
 
@@ -259,6 +307,10 @@ type AgentPatch struct {
 	IAMIdentity *IAMIdentity
 	Volume      *VolumeSpec
 	Bindings    *[]SecretBinding
+	// Role is refused when it is set and differs from the agent's role (it is immutable).
+	Role *AgentRole
+	// Collaboration is a worker's connection change.
+	Collaboration *CollaborationInput
 }
 
 // Apply returns a with the patch applied and the generation raised; the volume may grow but not
@@ -268,6 +320,22 @@ func (a Agent) Apply(p AgentPatch, now time.Time) (Agent, error) {
 	collect := func(err error) { fe = append(fe, fieldErrorsOf(err)...) }
 	if a.State == AgentDeleting || a.State == AgentDeleted {
 		return a, Conflict("invalid_state", "an agent in state "+string(a.State)+" cannot be changed", nil)
+	}
+	if p.Role != nil && *p.Role != a.effectiveRole() {
+		fe = append(fe, FieldError{Field: "role", Reason: "cannot change after the agent is created"})
+	}
+	if p.Collaboration != nil {
+		if a.effectiveRole() == AgentRoleCollaboration {
+			fe = append(fe, FieldError{Field: "collaboration", Reason: "is for worker agents"})
+		} else {
+			collect(p.Collaboration.Validate())
+		}
+	}
+	if p.IAMIdentity != nil && a.effectiveRole() == AgentRoleCollaboration && *p.IAMIdentity != IAMIdentityDedicated {
+		fe = append(fe, FieldError{Field: "iamIdentity", Reason: "a collaboration agent needs a dedicated identity"})
+	}
+	if p.Volume != nil && a.effectiveRole() == AgentRoleCollaboration && p.Volume.SnapshotSchedule == SnapshotOff {
+		fe = append(fe, FieldError{Field: "volume.snapshotSchedule", Reason: "a collaboration agent's snapshots cannot be turned off"})
 	}
 	if p.Description != nil {
 		if utf8.RuneCountInString(*p.Description) > 1000 {

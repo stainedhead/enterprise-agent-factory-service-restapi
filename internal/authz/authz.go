@@ -12,6 +12,7 @@ type Role string
 // Roles.
 const (
 	RoleTeamViewer       Role = "team_viewer"
+	RoleTeamCollaborator Role = "team_collaborator"
 	RoleTeamAdmin        Role = "team_admin"
 	RoleServiceAdmin     Role = "service_admin"
 	RoleSecurityOperator Role = "security_operator"
@@ -20,14 +21,16 @@ const (
 // Valid reports whether r is a known role.
 func (r Role) Valid() bool {
 	switch r {
-	case RoleTeamViewer, RoleTeamAdmin, RoleServiceAdmin, RoleSecurityOperator:
+	case RoleTeamViewer, RoleTeamCollaborator, RoleTeamAdmin, RoleServiceAdmin, RoleSecurityOperator:
 		return true
 	}
 	return false
 }
 
-// TeamRole reports whether r is bound per team (team_viewer, team_admin).
-func (r Role) TeamRole() bool { return r == RoleTeamViewer || r == RoleTeamAdmin }
+// TeamRole reports whether r is bound per team (team_viewer, team_collaborator, team_admin).
+func (r Role) TeamRole() bool {
+	return r == RoleTeamViewer || r == RoleTeamCollaborator || r == RoleTeamAdmin
+}
 
 // Permission names one action of the permission catalog (API contract §3).
 type Permission string

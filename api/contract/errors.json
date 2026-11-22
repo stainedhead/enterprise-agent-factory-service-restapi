@@ -32,7 +32,7 @@
   {
     "http": 409,
     "code": "Conflict",
-    "when": "Duplicate name, idempotency body mismatch or in progress (these two are `details.reason` values, `idempotency_mismatch` and `idempotency_in_progress`, not separate codes), dependent objects exist, invalid state transition (for example a suspended team)",
+    "when": "Duplicate name, idempotency body mismatch or in progress (these two are `details.reason` values, `idempotency_mismatch` and `idempotency_in_progress`, not separate codes; v1.3.0 adds `collaboration_agent_exists`, `collaboration_agent_missing`, `managed_secret` and `hostname_held`), dependent objects exist, invalid state transition (for example a suspended team)",
     "dbOrigin": "`23505`, `23503` (on delete), `55000`"
   },
   {
@@ -66,5 +66,10 @@
     "http": 503,
     "code": "Unavailable",
     "when": "Dependency down (database, Secrets Manager); safe to retry with backoff"
+  },
+  {
+    "http": 422,
+    "code": "SecretDetected",
+    "when": "Returned by the collaboration edge only (§4.4c), never by `afs-api`; `details.patterns[]`"
   }
 ]

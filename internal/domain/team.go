@@ -68,12 +68,14 @@ type Team struct {
 	AllowedAwsAccounts       []string
 	MayManageAwsAccounts     bool
 	MayAddExternalSystems    bool
-	Version                  Version
-	Generation               Generation
-	CreatedAt                time.Time
-	CreatedBy                string
-	UpdatedAt                time.Time
-	Status                   Status
+	// MayExposeCollaboration is the guardrail that lets the team publish its Paperclip endpoints (default true).
+	MayExposeCollaboration bool
+	Version                Version
+	Generation             Generation
+	CreatedAt              time.Time
+	CreatedBy              string
+	UpdatedAt              time.Time
+	Status                 Status
 }
 
 // EffectiveCeiling is the ceiling a budget may reach at now: the override while it is unexpired,
@@ -103,6 +105,8 @@ type NewTeamParams struct {
 	AllowedAwsAccounts    []string
 	MayManageAwsAccounts  bool
 	MayAddExternalSystems bool
+	// MayExposeCollaboration is the guardrail; nil means the default, true.
+	MayExposeCollaboration *bool
 }
 
 // NewTeam builds a team in state active, enforcing the invariants of API contract §4.2: an ephemeral
@@ -161,7 +165,8 @@ func NewTeam(id string, p NewTeamParams, now time.Time, ephemeralMaxDays int) (T
 		MaxBudget: p.MaxBudget, Quotas: p.Quotas, IsolationTier: p.IsolationTier, ViewerKubectl: p.ViewerKubectl,
 		ExpiresAt: p.ExpiresAt, TeardownRule: p.TeardownRule, IdentityProviderID: p.IdentityProviderID,
 		AllowedAwsAccounts: slices.Clone(p.AllowedAwsAccounts), MayManageAwsAccounts: p.MayManageAwsAccounts,
-		MayAddExternalSystems: p.MayAddExternalSystems, Version: 1, Generation: 1,
+		MayAddExternalSystems: p.MayAddExternalSystems, MayExposeCollaboration: p.MayExposeCollaboration == nil || *p.MayExposeCollaboration,
+		Version: 1, Generation: 1,
 		CreatedAt: now.UTC(), UpdatedAt: now.UTC(), Status: PendingStatus(now),
 	}
 	if t.AllowedAwsAccounts == nil {
@@ -249,6 +254,7 @@ type TeamPatch struct {
 	ViewerKubectl            *bool
 	MayManageAwsAccounts     *bool
 	MayAddExternalSystems    *bool
+	MayExposeCollaboration   *bool
 	AllowedAwsAccounts       *[]string
 }
 
@@ -269,6 +275,7 @@ func (p TeamPatch) GuardrailFields() []string {
 	add(p.ViewerKubectl != nil, "viewerKubectl")
 	add(p.MayManageAwsAccounts != nil, "mayManageAwsAccounts")
 	add(p.MayAddExternalSystems != nil, "mayAddExternalSystems")
+	add(p.MayExposeCollaboration != nil, "mayExposeCollaboration")
 	return out
 }
 
@@ -343,6 +350,9 @@ func (t Team) Apply(p TeamPatch, budget *Money, now time.Time) (Team, error) {
 	}
 	if p.MayAddExternalSystems != nil {
 		n.MayAddExternalSystems = *p.MayAddExternalSystems
+	}
+	if p.MayExposeCollaboration != nil {
+		n.MayExposeCollaboration = *p.MayExposeCollaboration
 	}
 	if p.AllowedAwsAccounts != nil {
 		n.AllowedAwsAccounts = slices.Clone(*p.AllowedAwsAccounts)

@@ -72,6 +72,9 @@ func TestSecretFingerprintDiffersPerServerKey(t *testing.T) {
 func TestSecretMalformedBodyRefusedBeforeIdempotencyClaim(t *testing.T) {
 	for _, op := range []string{"create", "rotate"} {
 		for _, body := range []string{`not json`, `[]`, `{"value":`, ``} {
+			if op == "rotate" && body == `` {
+				continue // an empty rotate body is valid: an AFS-managed secret takes none (RA-20)
+			}
 			a, idem := secretsRig(idemKeyA)
 			w := secretReq(t, a, op, body)
 			if w.Code != http.StatusBadRequest {

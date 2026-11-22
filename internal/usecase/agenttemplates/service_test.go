@@ -24,7 +24,7 @@ type repo struct {
 	inUse map[string]bool
 }
 
-func (r *repo) List(_ context.Context, _ port.Tx, enabledOnly bool, after string, limit int) ([]domain.AgentTemplate, error) {
+func (r *repo) List(_ context.Context, _ port.Tx, enabledOnly bool, capability, after string, limit int) ([]domain.AgentTemplate, error) {
 	var out []domain.AgentTemplate
 	for _, c := range r.rows {
 		if c.Name > after && (!enabledOnly || c.Enabled) {
@@ -161,14 +161,14 @@ func TestLists(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got, _, err := s.ListEnabled(ctx, teamAdm, acting.Page{}); err != nil || len(got) != 2 {
+	if got, _, err := s.ListEnabled(ctx, teamAdm, "", acting.Page{}); err != nil || len(got) != 2 {
 		t.Fatalf("enabled = %d %v", len(got), err)
 	}
-	page, next, err := s.ListAll(ctx, svcAdmin, acting.Page{Limit: 2})
+	page, next, err := s.ListAll(ctx, svcAdmin, "", acting.Page{Limit: 2})
 	if err != nil || len(page) != 2 || next == "" {
 		t.Fatalf("page 1 = %d %q %v", len(page), next, err)
 	}
-	if rest, next, err := s.ListAll(ctx, svcAdmin, acting.Page{Limit: 2, Cursor: next}); err != nil || len(rest) != 1 || next != "" {
+	if rest, next, err := s.ListAll(ctx, svcAdmin, "", acting.Page{Limit: 2, Cursor: next}); err != nil || len(rest) != 1 || next != "" {
 		t.Fatalf("page 2 = %d %q %v", len(rest), next, err)
 	}
 }
@@ -180,7 +180,7 @@ func TestDenied(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := map[string]func(acting.Caller) error{
-		"ListAll": func(c acting.Caller) error { _, _, err := s.ListAll(ctx, c, acting.Page{}); return err },
+		"ListAll": func(c acting.Caller) error { _, _, err := s.ListAll(ctx, c, "", acting.Page{}); return err },
 		"Put":     func(c acting.Caller) error { _, err := s.Put(ctx, c, params("xxx"), nil); return err },
 		"Delete":  func(c acting.Caller) error { return s.Delete(ctx, c, "aaa", 1) },
 	}
@@ -200,11 +200,11 @@ func TestDenied(t *testing.T) {
 func TestRepositoryFailures(t *testing.T) {
 	ops := map[string]func(*agenttemplates.Service) error{
 		"ListEnabled": func(s *agenttemplates.Service) error {
-			_, _, err := s.ListEnabled(t.Context(), teamAdm, acting.Page{})
+			_, _, err := s.ListEnabled(t.Context(), teamAdm, "", acting.Page{})
 			return err
 		},
 		"ListAll": func(s *agenttemplates.Service) error {
-			_, _, err := s.ListAll(t.Context(), svcAdmin, acting.Page{})
+			_, _, err := s.ListAll(t.Context(), svcAdmin, "", acting.Page{})
 			return err
 		},
 		"PutNew": func(s *agenttemplates.Service) error {

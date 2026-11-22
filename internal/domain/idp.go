@@ -6,9 +6,10 @@ import (
 )
 
 var (
-	issuerRE      = regexp.MustCompile(`^https://[^\s/]+(/[^\s]*)?$`)
-	groupsClaimRE = regexp.MustCompile(`^[A-Za-z0-9_.:/-]{1,100}$`)
-	secretARNRE   = regexp.MustCompile(`^arn:aws[a-z-]*:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+$`)
+	issuerRE         = regexp.MustCompile(`^https://[^\s/]+(/[^\s]*)?$`)
+	groupsClaimRE    = regexp.MustCompile(`^[A-Za-z0-9_.:/-]{1,100}$`)
+	collabClientIDRE = regexp.MustCompile(`^[A-Za-z0-9._:@-]{1,255}$`)
+	secretARNRE      = regexp.MustCompile(`^arn:aws[a-z-]*:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+$`)
 )
 
 // IdentityProvider is a service-level OIDC provider (API contract §5). It never holds a client
@@ -21,13 +22,17 @@ type IdentityProvider struct {
 	ConsoleClientID string
 	CLIClientID     string
 	ClientSecretARN string
-	GroupsClaim     string
-	IsDefault       bool
-	Enabled         bool
-	Version         Version
-	CreatedAt       time.Time
-	CreatedBy       string
-	UpdatedAt       time.Time
+	// CollabClientID and CollabClientSecretARN are the OIDC client the collaboration edge signs people in
+	// with; the ARN is a reference, never a value. Both empty when the provider has no collaboration client.
+	CollabClientID        string
+	CollabClientSecretARN string
+	GroupsClaim           string
+	IsDefault             bool
+	Enabled               bool
+	Version               Version
+	CreatedAt             time.Time
+	CreatedBy             string
+	UpdatedAt             time.Time
 }
 
 // Validate checks what the database also checks, for clear errors: https issuer, ids, ARN shape,
@@ -52,6 +57,17 @@ func (p IdentityProvider) Validate() error {
 	}
 	if p.ClientSecretARN != "" && !secretARNRE.MatchString(p.ClientSecretARN) {
 		bad("clientSecretArn", "must be a Secrets Manager secret ARN")
+	}
+	if p.CollabClientID != "" && !collabClientIDRE.MatchString(p.CollabClientID) {
+		bad("collabClientId", "must match ^[A-Za-z0-9._:@-]{1,255}$")
+	}
+	if p.CollabClientSecretARN != "" {
+		if !secretARNRE.MatchString(p.CollabClientSecretARN) {
+			bad("collabClientSecretArn", "must be a Secrets Manager secret ARN")
+		}
+		if p.CollabClientID == "" {
+			bad("collabClientSecretArn", "needs collabClientId")
+		}
 	}
 	if !groupsClaimRE.MatchString(p.GroupsClaim) {
 		bad("groupsClaim", "must be a claim name of 1 to 100 characters")

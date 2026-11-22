@@ -76,6 +76,7 @@ func wireSecrets(ctx context.Context, c *components, s settings, log *slog.Logge
 	if err != nil {
 		return err
 	}
+	c.SecretsWriter = w
 	orphans := c.Metrics.APIOrphanSecrets
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
 	svc := &secrets.Service{Deps: deps, Repo: postgres.NewSecretRepo(), Writer: w, OnOrphan: func() {

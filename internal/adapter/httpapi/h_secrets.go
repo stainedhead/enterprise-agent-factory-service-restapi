@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
@@ -44,7 +46,7 @@ func (a *SecretsAPI) list(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
-	rows, next, err := a.Svc.List(r.Context(), c, r.PathValue("teamId"), page)
+	rows, next, err := a.Svc.List(r.Context(), c, r.PathValue("teamId"), domain.SecretManagedBy(r.URL.Query().Get("managedBy")), page)
 	if err != nil {
 		WriteError(w, r, err)
 		return
@@ -220,15 +222,22 @@ func (a *SecretsAPI) rotate(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
+	// The body is optional: an AFS-managed secret is rotated with none (AFS generates the value).
+	if len(bytes.TrimSpace(raw)) == 0 {
+		raw = []byte("{}")
+		r.Body = io.NopCloser(bytes.NewReader(raw))
+	}
 	var req valueRequest
 	if err := decodeSecretBody(r, &req); err != nil {
 		WriteError(w, r, err)
 		return
 	}
-	val, err := secretValue(req.Value)
-	if err != nil {
-		WriteError(w, r, err)
-		return
+	var val domain.SecretValue
+	if req.Value != nil {
+		if val, err = secretValue(req.Value); err != nil {
+			WriteError(w, r, err)
+			return
+		}
 	}
 	fp, err := idemBody(a.IdemKey, raw, req.Value)
 	if err != nil {

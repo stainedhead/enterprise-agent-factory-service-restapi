@@ -36,6 +36,7 @@ MeTeam:
       type: string
       enum:
       - team_admin
+      - team_collaborator
       - team_viewer
       - workload
     permissions:

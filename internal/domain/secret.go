@@ -99,12 +99,19 @@ type Secret struct {
 	VersionID     string
 	LastChangedAt *time.Time
 	Rotation      Rotation
+	// ManagedBy says who creates and writes the secret: user, afs or paperclip.
+	ManagedBy SecretManagedBy
 	// BoundTo lists the agents that bind the secret.
 	BoundTo   []string
 	Version   Version
 	CreatedAt time.Time
 	CreatedBy string
 	UpdatedAt time.Time
+}
+
+// Managed reports whether AFS or Paperclip manages the secret (a team cannot change it).
+func (s Secret) Managed() bool {
+	return s.ManagedBy == ManagedByAFS || s.ManagedBy == ManagedByPaperclip
 }
 
 // ScopeOf returns the scope a stored secret has from its owner columns.
@@ -158,6 +165,8 @@ func (p NewSecretParams) Validate() error {
 	}
 	if !secretNameRE.MatchString(p.Name) {
 		add("name", "must match ^[a-z][a-z0-9-]{0,62}$")
+	} else if IsReservedSecretName(p.Name) && (p.Name != SecretPaperclipAgentAPIKey || p.Scope != SecretScopeAgent) {
+		add("name", ReasonReservedName+": names starting paperclip are reserved")
 	}
 	if utf8.RuneCountInString(p.Description) > MaxSecretDescription {
 		add("description", "must be at most 1000 characters")

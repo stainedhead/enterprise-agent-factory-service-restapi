@@ -89,7 +89,7 @@ func TestAgentRepo(t *testing.T) {
 			return err
 		}
 		owners, err := repo.Secrets(ctx, tx, tm.ID, []string{sec.ID, "sec_missing"})
-		if err != nil || len(owners) != 1 || owners[sec.ID] != (agents.SecretInfo{}) {
+		if err != nil || len(owners) != 1 || owners[sec.ID] != (agents.SecretInfo{ManagedBy: "user"}) {
 			t.Errorf("owners: %+v %v", owners, err)
 		}
 		cur, err := repo.Get(ctx, tx, tm.ID, a.ID, true)

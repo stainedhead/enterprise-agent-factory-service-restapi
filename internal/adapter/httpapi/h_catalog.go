@@ -291,13 +291,13 @@ func (a *CatalogAPI) deleteStorageClass(w http.ResponseWriter, r *http.Request) 
 
 func (a *CatalogAPI) listTemplates(w http.ResponseWriter, r *http.Request) {
 	listOf(a, w, r, func(c acting.Caller, p acting.Page) ([]domain.AgentTemplate, string, error) {
-		return a.Templates.ListEnabled(r.Context(), c, p)
+		return a.Templates.ListEnabled(r.Context(), c, r.URL.Query().Get("capability"), p)
 	}, toAgentTemplateBody)
 }
 
 func (a *CatalogAPI) listAdminTemplates(w http.ResponseWriter, r *http.Request) {
 	listOf(a, w, r, func(c acting.Caller, p acting.Page) ([]domain.AgentTemplate, string, error) {
-		return a.Templates.ListAll(r.Context(), c, p)
+		return a.Templates.ListAll(r.Context(), c, r.URL.Query().Get("capability"), p)
 	}, toAgentTemplateBody)
 }
 
@@ -319,6 +319,7 @@ func (a *CatalogAPI) putTemplate(w http.ResponseWriter, r *http.Request) {
 		AllowedDigests   []string         `json:"allowedDigests"`
 		CurrentDigest    string           `json:"currentDigest"`
 		Enabled          *bool            `json:"enabled"`
+		Capabilities     []string         `json:"capabilities"`
 	}
 	if err := Decode(r, &req); err != nil {
 		WriteError(w, r, err)
@@ -326,7 +327,7 @@ func (a *CatalogAPI) putTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 	t, err := a.Templates.Put(r.Context(), c, domain.PutAgentTemplateParams{Name: r.PathValue("name"), Description: req.Description,
 		Harness: req.Harness, DefaultResources: req.DefaultResources, AllowedDigests: req.AllowedDigests, CurrentDigest: req.CurrentDigest,
-		Enabled: req.Enabled}, expect)
+		Enabled: req.Enabled, Capabilities: req.Capabilities}, expect)
 	if err != nil {
 		WriteError(w, r, err)
 		return

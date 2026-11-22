@@ -169,7 +169,7 @@ func TestContainersAreHardenedAndProbed(t *testing.T) {
 		if path(path(c, "readinessProbe"), "httpGet")["path"] != "/readyz" || path(path(c, "livenessProbe"), "httpGet")["path"] != "/healthz" {
 			t.Errorf("%s probes do not use /readyz and /healthz", name)
 		}
-		if !strings.HasPrefix(str(c, "image"), "111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-") || !strings.HasSuffix(str(c, "image"), ":v0.1.0") {
+		if !strings.HasPrefix(str(c, "image"), "111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-") || !strings.HasSuffix(str(c, "image"), ":v1.0.1") {
 			t.Errorf("%s image = %q", name, str(c, "image"))
 		}
 	}

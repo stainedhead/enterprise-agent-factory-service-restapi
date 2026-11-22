@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Contract v1.2.0, draft for implementation (2026-11-21); v1.2.0 records the decisions of `-restapi` milestone M0 (CD-1 to CD-10, see §9) and, as an amendment of 2026-11-22, those of the feature-complete build (CD-7 exemption list, CD-11, CD-12, swarm template secrets, `Me.servicePermissions`; see §9); v1.1.0 was revised after the `review-prd` pass (root PRD D23 to D57) |
+| **Status** | Contract v1.3.1 (2026-11-22) corrects v1.3.0 after the `-db`, `-restapi`, `-website` and `-cli` PRD reviews (see §9). v1.3.0 (2026-11-22) adds Paperclip team collaboration (§4.4b, §4.4c, the `team_collaborator` role and the events of §7; see §9); v1.2.0, draft for implementation (2026-11-21); v1.2.0 records the decisions of `-restapi` milestone M0 (CD-1 to CD-10, see §9) and, as an amendment of 2026-11-22, those of the feature-complete build (CD-7 exemption list, CD-11, CD-12, swarm template secrets, `Me.servicePermissions`; see §9); v1.1.0 was revised after the `review-prd` pass (root PRD D23 to D57) |
 | **Provider** | [enterprise-agent-factory-service-restapi](https://github.com/stainedhead/enterprise-agent-factory-service-restapi) (`afs-api`) |
 | **Consumers** | [-cli](https://github.com/stainedhead/enterprise-agent-factory-service-cli) (`afs`), [-website](https://github.com/stainedhead/enterprise-agent-factory-service-website) (`@afs/sdk`, console) |
 | **Machine-readable form** | `-restapi/api/openapi.yaml` (OpenAPI 3.1). Built from this document; once an operation is in the YAML, the YAML wins and this document is updated to match in the same PR |
@@ -68,7 +68,7 @@ consoles show it as *Budget blocked*. Other conditions in v1: `NamespaceReady`, 
 The API validates IdP tokens against the provider's JWKS (any enabled service-level provider). The
 groups claim (`groupsClaim` of the provider) maps to group role bindings. For a team-scoped request, a
 group binding counts only when the token's issuer is the team's provider (or the default provider when
-the team has none). Team API keys carry one team and one role (`team_admin` or `team_viewer`). Service-level API keys
+the team has none). Team API keys carry one team and one role (`team_admin`, `team_collaborator` or `team_viewer`). Service-level API keys
 carry no team and only the `security_operator` role. Security operators (people bound to the role, or
 those keys) can use only the work order operations, `ListSwarmTemplates`, `GetSwarmTemplate`,
 `ListTeamDirectory` and `GetMe`; every team-scoped route (`/v1/teams/{teamId}/…`), including
@@ -97,6 +97,10 @@ to hide (CD-10).
 `cli_client_id` is empty, `ListSignInProviders` omits `cliClientId` and `afs sso login` exits 255 naming
 the provider (CD-9). On the wire the two members stay `consoleClientId` and `cliClientId` (the
 OpenAPI document is authoritative); the database column names do not appear in the API.
+
+## 2.1 Collaboration edge credentials
+
+The public collaboration endpoint (§4.4c) is not `afs-api`, but it accepts the same credentials: the team provider's access token or a team API key, sent in `X-Afs-Authorization: Bearer <token>` (the Paperclip credential stays in `Authorization`), or, for browsers, a host-only edge session obtained by signing in through the team's provider. Workload and security-operator principals are never admitted.
 
 ## 3. Permission catalog
 
@@ -144,6 +148,22 @@ both, in the same cycle.
 granted by team-admins and never appears in a team binding. **Workload principal**: `work-orders:report`
 on its own team's assigned work orders, nothing else.
 
+**Collaboration permissions and the `team_collaborator` role** (v1.3.0, PC-D6). The role `team_collaborator` (a team role,
+like `team_viewer`; bindings and team API keys may carry it, service-level ones may not) holds **every Viewer permission in
+the table above, including the conditional ones** (`teams:get-kubeconfig` when `viewerKubectl` is switched on for the team, and `work-orders:read` for assigned work orders or own repositories) plus `collaboration:contribute` and `collaboration:api`. The new permissions:
+
+| Permission | Viewer | Collaborator | Team-admin | Service admin | Security operator | Notes |
+|---|:-:|:-:|:-:|:-:|:-:|---|
+| `collaboration:read` | ✓ | ✓ | ✓ | ✓ | | Settings, status, hostname, links (`GetTeamCollaboration`, `ListCollaborationLinks`) |
+| `collaboration:manage` | | | ✓ | ✓ | | `PutTeamCollaboration`, connect, disconnect, rotate keys |
+| `collaboration:access` | ✓ | ✓ | ✓ | ✓ | | Sign in to Paperclip through the edge; `GET` and `HEAD` only (checked by the edge) |
+| `collaboration:contribute` | | ✓ | ✓ | ✓ | | Every method through the edge, including WebSocket client frames |
+| `collaboration:api` | | ✓ | ✓ | ✓ | | Use the REST API surface (`X-Afs-Authorization`); writes also need `collaboration:contribute` |
+
+`teams:set-guardrails` also covers `mayExposeCollaboration`. `ListCollaborationEndpoints` uses `admin:settings`. The new
+permissions are a change in `internal/authz` and `domain/permission.ts` in the same cycle. Team-admins grant
+`team_collaborator` like the other team roles and cannot grant `service_admin` or `security_operator`.
+
 Service admins hold every permission on every team. `GET /v1/me` returns, per bound team, the
 effective permission list; for service admins it returns `"serviceAdmin": true` and the full list;
 for security operators `"securityOperator": true` with their column's permissions.
@@ -181,12 +201,14 @@ P = priority from the root PRD. One row per operation; the CLI and SDK columns a
 | `GetTeamKubeconfig` | `GET /v1/teams/{teamId}/kubeconfig` (YAML, `exec` credential plugin, no token in the file) | `teams:get-kubeconfig` | `teams get-kubeconfig` | `teams.getKubeconfig()` | T1, V1 | P2 |
 | `ListTeamDirectory` | `GET /v1/team-directory` (`id`, `slug`, `displayName` only; every non-deleted team) | `teams:read-directory` *svc* | `teams list-team-directory` | `teams.directory.list()` | P3 create dialog | P2 |
 
+`CreateTeam` with a slug whose collaboration hostname is still held (30 days after the deletion of a team that had a collaboration agent, TEAM-9) → `409 Conflict`, `details.reason = hostname_held` (v1.3.1).
+
 `CreateTeam` body includes the first team-admin binding, the team's models, required tag values and,
 when more than one provider exists, `identityProviderId`. A team missing a required tag is refused
 with `ValidationError` naming the keys. An ephemeral team (`kind: ephemeral`) also needs `expiresAt`
 (at most `teams.ephemeral_max_days` ahead), `teardownRule` (`at_expiry` \| `at_cap_or_expiry` \|
 `at_work_complete`) and a lifetime `budget` in the same request; `kind` cannot change later.
-`isolationTier`, `viewerKubectl`, `maxBudgetUsd`, `quotas`, `ceilingOverrideUsd` and
+`mayExposeCollaboration` (boolean, default `true`; whether the team may publish its Paperclip endpoints, §4.4b), `isolationTier`, `viewerKubectl`, `maxBudgetUsd`, `quotas`, `ceilingOverrideUsd` and
 `ceilingOverrideExpiresAt` are guardrail fields (`teams:set-guardrails`). An override needs both fields
 and a `ceilingOverrideReason` (write-only, stored in the audit record, not on the team), an expiry in the future and an amount above `maxBudgetUsd`; while it is unexpired it is
 the effective ceiling. At expiry the reconciler clears it, lowers a budget above `maxBudgetUsd` to it and
@@ -239,6 +261,30 @@ Agent spec fields (create and update): `name` (create only), `description`, `tem
 {`sizeGiB` grow-only, `storageClass` create-only, `onDelete`, `snapshotSchedule`, `snapshotRetain`},
 `secretBindings[]` {`secretId`, `delivery` `env` \| `file`, `target`}. The agent has no replica count.
 
+v1.3.0 adds `role` and `collaboration` (§4.4b):
+
+- `role`: `worker` (default) or `collaboration`; set on create, immutable (`UpdateAgent` changing it → `ValidationError`).
+  `ListAgents` accepts `?role=`.
+- `collaboration` (worker agents): `{connect, paperclipAgentId?, linkState†, lastSyncedAt†?, lastError†?}`. On create,
+  `connect` defaults to `true` when the team has a collaboration agent, else `false`; `connect: true` with no collaboration
+  agent → `ValidationError` (`field: collaboration.connect`). `connect` and, in `manual` registration, `paperclipAgentId`
+  are writable by `UpdateAgent` (the same effect as `ConnectAgentToCollaboration`); changing `connect` rolls the agent.
+  The object is absent on the collaboration agent.
+- `CreateAgent` with `role: collaboration`: `template` must be an enabled agent template whose `capabilities` contain
+  `paperclip` (else `ValidationError`, `field: template`, naming it); a `paperclip` template is refused for a worker;
+  `iamIdentity` defaults to and must be `dedicated` (`team_shared` → `ValidationError`); `volume.snapshotSchedule`
+  defaults to `daily` with `snapshotRetain` 14 and `off` → `ValidationError`; `volume.onDelete` defaults to
+  `snapshot_then_delete`; `collaboration` must be omitted. A team that already has a live collaboration agent →
+  `409 Conflict`, `details.reason = collaboration_agent_exists`. In the same request `afs-api` generates the three boot
+  secrets of COL-7 (`paperclip-better-auth-secret`, `paperclip-tool-action-signing-secret`, `paperclip-secrets-master-key`,
+  32 random bytes each, hex) in Secrets Manager with `managedBy = afs`, binds them as `BETTER_AUTH_SECRET`,
+  `PAPERCLIP_TOOL_ACTION_SIGNING_SECRET` and `PAPERCLIP_SECRETS_MASTER_KEY`, and creates the team's `TeamCollaboration`
+  with its defaults; if Secrets Manager cannot be written the request fails `503 Unavailable` and creates nothing. It emits
+  `agent.created` and one `secret.created` per boot secret. `DeleteAgent` of the collaboration agent disables both surfaces,
+  removes the route and disconnects every agent (COL-8).
+- `ListAgentTemplates` and `PutAgentTemplate` carry `capabilities[]` (values: `paperclip`); `ListAgentTemplates` accepts
+  `?capability=`.
+
 ### 4.4a Swarms: stages and pools
 
 Ephemeral teams only (`409 Conflict` on a persistent team). `afs-api` checks the team's `kind` before the write and returns `409`, because the database's guard would otherwise raise `23514` (`ValidationError`). Pool names share the team's agent names.
@@ -280,6 +326,163 @@ inbox queue (`afs-<team ulid>-<short hash>`) that the reconciler creates. The re
 `AFS_HANDOFF_<TO_POOL_NAME_UPPER_SNAKE>_QUEUE_URL` (for pool `fixer`: `AFS_HANDOFF_FIXER_QUEUE_URL`).
 Only the roles of pools with a handoff to it may send (D22, D32).
 
+### 4.4b Collaboration (Paperclip)
+
+Requirements: [Paperclip PRD](../../paperclip-team-collaboration-PRD.md) COL-1 to COL-36, SEC-7. A team has at most one
+collaboration agent (an agent with `role: collaboration`, created through `CreateAgent`); these operations configure
+it. On a suspended team every mutation here → `409 Conflict` (`details.reason = team_suspended`). A team with no
+collaboration agent has no collaboration resource: `GetTeamCollaboration`, `ListCollaborationLinks` →
+`404 NotFound` (`details.reason = collaboration_agent_missing`); the mutations → `409 Conflict` with the same reason.
+
+| Op | Method and path | Perm | CLI | SDK | Screen | P |
+|---|---|---|---|---|---|---|
+| `GetTeamCollaboration` | `GET /v1/teams/{teamId}/collaboration` | `collaboration:read` | `collaboration describe-collaboration` | `collaboration.get()` | T16, V3, T1 | P0 |
+| `PutTeamCollaboration` | `PUT /v1/teams/{teamId}/collaboration` | `collaboration:manage` | `collaboration put-collaboration` | `collaboration.put()` | T16 | P0 |
+| `ListCollaborationLinks` | `GET /v1/teams/{teamId}/collaboration/links?linkState&connect` | `collaboration:read` | `collaboration list-collaboration-links` | `collaboration.links.list()` | T16 | P0 (C1) |
+| `ConnectAgentToCollaboration` | `POST /v1/teams/{teamId}/collaboration/links/{agentId}:connect` | `collaboration:manage` | `collaboration connect-agent` | `collaboration.connectAgent()` | T16 | P0 (C1) |
+| `DisconnectAgentFromCollaboration` | `POST /v1/teams/{teamId}/collaboration/links/{agentId}:disconnect` | `collaboration:manage` | `collaboration disconnect-agent` | `collaboration.disconnectAgent()` | T16 | P0 (C1) |
+| `RotateCollaborationKeys` | `POST /v1/teams/{teamId}/collaboration:rotate-keys` | `collaboration:manage` | `collaboration rotate-collaboration-keys` | `collaboration.rotateKeys()` | T16 | P1 |
+| `ListCollaborationEndpoints` | `GET /v1/admin/collaboration-endpoints?teamId&state` *CSV* | `admin:settings` *svc* | `admin list-collaboration-endpoints` | `admin.collaborationEndpoints.list()` | S10 | P0 (C2) |
+
+The local command `afs collaboration invoke-api` (CLI-US-25) calls `GetTeamCollaboration` once to learn the team's host (unless `--collab-url` is given) and then only the edge (§4.4c). `restApiUrl` is `https://<hostname>/api`, the base of Paperclip's REST API; the edge forwards paths unchanged, so a full path `/api/…` equals `restApiUrl` plus a suffix. The CLI's `--path` is the full path and the CLI uses only the origin of `restApiUrl` (v1.3.1).
+
+**`TeamCollaboration`** (the resource; singleton per team; `ETag` is its `version`):
+
+```json
+{
+  "teamId": "team_01J…", "agentId": "agt_01J…",
+  "hostname": "payments-factory.collab.example.com",
+  "webUiUrl": "https://payments-factory.collab.example.com/",
+  "restApiUrl": "https://payments-factory.collab.example.com/api",
+  "webUiEnabled": true, "restApiEnabled": false,
+  "registrationMode": "manual",
+  "effective": {"webUi": true, "restApi": false, "reasons": []},
+  "unmanagedPaperclipAgents": [],
+  "version": 4, "generation": 4, "status": { "...": "§1.1; conditions EndpointReady, PaperclipReady, RegistrationHealthy, UnmanagedPaperclipAgents" },
+  "createdAt": "…", "createdBy": "…", "updatedAt": "…"
+}
+```
+
+`hostname`, `webUiUrl` and `restApiUrl` are `null` while `collab.base_domain` is unset. `webUiEnabled` and
+`restApiEnabled` are the team's stored choices (defaults on creating the agent: web UI on, REST API off);
+`effective` is what the edge honours: a surface is effective only when its stored choice, the team's
+`mayExposeCollaboration`, the service setting `collab.public_endpoints`, a set `collab.base_domain` and (web UI) a
+collaboration client on the team's sign-in provider all hold. `effective.reasons[]` lists every failed condition from
+`team_not_allowed`, `service_endpoints_off`, `base_domain_unset`, `provider_without_collab_client`.
+`registrationMode` is `manual` or `managed` (`manual` by default in v1.3.0; `managed` becomes the default for new
+collaboration agents when managed registration ships, PC-D8). `unmanagedPaperclipAgents` lists names (condition
+`UnmanagedPaperclipAgents`).
+
+**`PutTeamCollaboration`** body `{webUiEnabled, restApiEnabled, registrationMode?}` (`registrationMode` omitted keeps
+the current value). `If-Match` optional (§1): a mismatch → `412 PreconditionFailed`. Returns the resource with
+`status.phase` `Pending`. `ValidationError` (`details.fields[]`) when a surface is switched **on** while:
+`collab.base_domain` is unset (`field: webUiEnabled|restApiEnabled`, `reason: collab_base_domain_unset`),
+`collab.public_endpoints` is off (`collab_public_endpoints_off`), the team's `mayExposeCollaboration` is off
+(`collaboration_not_allowed_for_team`), or, for the web UI, the team's provider has no `collabClientId`
+(`provider_without_collab_client`); and for `registrationMode: managed` when the agent is not `Ready`
+(`collaboration_agent_not_ready`). Switching a surface off is always accepted. Event `collaboration.updated`.
+A viewer, collaborator, security operator or workload caller → `403 AccessDenied` and a denied audit record.
+
+**`ListCollaborationLinks`** → `{items: [CollaborationLink], nextToken?}` with one item per live worker agent of the team
+(the collaboration agent itself is not listed):
+
+```json
+{"agentId": "agt_01J…", "agentName": "reviewer-bot", "connect": true, "paperclipAgentId": "ag_8f2…",
+ "linkState": "linked", "lastSyncedAt": "2026-11-22T10:00:00Z", "lastError": null, "version": 2}
+```
+
+`linkState` is `pending`, `linked`, `failed` or `disabled`; an agent never connected is `connect: false`,
+`linkState: disabled`. `lastError` is a short reason written by the reconciler and never holds a Paperclip key or content.
+
+**`ConnectAgentToCollaboration`** body `{paperclipAgentId?}`; returns the `CollaborationLink` (`200`). Sets
+`connect: true` (idempotent: repeating it updates `paperclipAgentId`). `paperclipAgentId` is accepted only while
+`registrationMode` is `manual` (`ValidationError`, `field: paperclipAgentId`, `reason: managed_registration`); in
+`manual` mode the agent's key is a user secret named `paperclip-agent-api-key` (§4.6). The agent rolls. Errors: `404`
+unknown agent; `ValidationError` for the collaboration agent itself (`field: agentId`) or a pool;
+`409` `collaboration_agent_missing`. `DisconnectAgentFromCollaboration` sets `connect: false`; the reconciler revokes the
+key (managed mode) and the agent rolls. Both accept `Idempotency-Key`, write the row and an audit record and no outbox row
+(§4.12); the reconciler emits `agent.collaboration_linked` and `agent.collaboration_unlinked` when the link state changes.
+
+**`RotateCollaborationKeys`** body (optional) `{names?: ["paperclip-better-auth-secret", "paperclip-tool-action-signing-secret"]}`;
+default is both. `afs-api` writes a new random value (32 bytes, hex) to each with `PutSecretValue` and returns `200`
+`{rotated: [{secretId, name, versionId}], signsOutEveryone: true, agentRolloutPending: true}`. Naming
+`paperclip-secrets-master-key` → `400 ValidationError` (`field: names`, `reason: master_key_not_rotatable`): rotating it
+would make Paperclip's stored identities undecryptable (COL-7). Emits `secret.rotated` per secret. `RotateSecret` on the master
+key gives the same error.
+
+**`ListCollaborationEndpoints`** → `{items: [CollaborationEndpoint]}` (paginated, *CSV*), service admins only; team callers
+and security operators get `403`:
+
+```json
+{"teamId": "team_01J…", "slug": "payments-factory", "teamState": "active", "hostname": "payments-factory.collab.example.com",
+ "agentId": "agt_01J…", "webUiEnabled": true, "restApiEnabled": false, "effective": {"webUi": true, "restApi": false},
+ "mayExposeCollaboration": true, "phase": "Ready", "lastAccessAt": "2026-11-22T09:41:00Z"}
+```
+
+`lastAccessAt` is the newest `signed_in` or `allowed` bucket. Filters `teamId`, `state` (`Ready`, `Degraded`, `Failed`, `Pending`).
+
+### 4.4c Collaboration edge (`afs-edge`): externally visible behaviour
+
+Not a `/v1` operation: this is what a browser, a pipeline or `afs collaboration invoke-api` sees at a team's hostname
+`https://<team-slug>.<collab.base_domain>`. The edge is the only public entry to a team's Paperclip (COL-15). It forwards
+to Paperclip's own paths unchanged, except for the reserved paths below. Its errors use the §6 envelope
+(`{code, message, requestId, details}`) for API traffic and an HTML page with the same `requestId` for browser
+navigation, so the CLI renders them like any service error (`An error occurred (AccessDenied) when calling the
+InvokeApi operation: …`, exit 254).
+
+**Traffic classes.** A request carrying the cookie `__Host-afs-collab` is *web UI traffic*; one carrying
+`X-Afs-Authorization: Bearer <token>` is *REST API traffic*; both → `400 ValidationError` (`details.reason =
+ambiguous_credentials`). With neither, browser navigation (`Accept: text/html`, `Sec-Fetch-Mode: navigate`) is web UI
+traffic and is redirected to sign in; anything else is API traffic.
+
+**Credentials.** `X-Afs-Authorization` is an access token from the team's sign-in provider (same issuer, audience and
+expiry rules as `afs-api`, §2, so the CLI's SSO token works) or a team API key (`afsk_…`) whose role holds
+`collaboration:api`. The caller's Paperclip credential stays in `Authorization`. The edge validates and strips
+`X-Afs-Authorization`, decides with `internal/authz` (cached at most 60 s), and forwards.
+
+**Hosts.** The ALB listener certificate covers `<collab.base_domain>` and `*.<collab.base_domain>`, Route 53 has an apex record and the wildcard, and listener rules forward only those host headers. The edge refuses any `Host` that is neither the apex nor a known team host (`404`); it does not check SNI, which the ALB terminates (G4).
+
+**Sessions.** The edge keeps sessions server-side in the database (`-db` 000020, database contract §7.2.8). The cookie `__Host-afs-collab` (Secure, HttpOnly, SameSite=Lax, host-only) holds only an opaque 256-bit session id; the session row holds the person's issuer, subject, provider and groups, lives `collab.session_ttl_minutes`, and is revoked by sign-out. Turning the web UI off makes the edge refuse that team's sessions at once (no row is deleted). Decisions are cached at most 60 seconds per session.
+
+**Reserved paths** (on team hosts; never forwarded): `GET /_afs/signin` (starts OIDC code + PKCE; sets nothing),
+`GET /_afs/handoff?code=` (one-time code, 60 s, single use across all replicas; creates the session, sets the cookie and redirects to the original path) and `POST /_afs/signout`.
+On the apex only: `GET https://<collab.base_domain>/oauth2/callback`, the one redirect URI per environment (the team is
+carried in `state`); it ends by redirecting to the team host with the one-time code. Every other apex path is `404`.
+
+**Authorization.** Safe methods (`GET`, `HEAD`) need `collaboration:access`; every other method, and every client-to-server
+WebSocket frame, needs `collaboration:contribute` (PC-D17: a caller holding only `collaboration:access` may open a
+WebSocket or SSE stream to watch but its client frames close the connection with code 1008). API traffic needs
+`collaboration:api` as well, and `collaboration:contribute` for non-safe methods.
+
+| Status | `code` | `details.reason` | When |
+|---|---|---|---|
+| `302` | none | none | Web UI traffic without a valid session: to the team's provider; after sign-in, to the handoff |
+| `400` | `ValidationError` | `ambiguous_credentials`, `malformed_credential`, `body_too_large` (over `collab.max_body_mb`; as in §1 there is no `413`), `unsupported_encoding` (a request body with `Content-Encoding` other than identity while `collab.content_scan` is not `off`, because it cannot be scanned) | |
+| `401` | `Unauthenticated` | `token_invalid`, `token_expired`, `key_expired`, `key_revoked`, `session_expired` (a non-navigation web UI request whose session ended) | Missing or unusable credential |
+| `403` | `AccessDenied` | `no_team_role` (no binding on this team), `permission_required` (with `details.requiredPermission`: `collaboration:contribute` or `collaboration:api`), `surface_disabled` (the REST API or the web UI is off or not effective for this team while the other is on) | Valid caller, refused |
+| `404` | `NotFound` | none | Unknown host (the apex serves only `/oauth2/callback`; every other apex path is `404`), a team without a collaboration agent, or both surfaces not effective (`collab.public_endpoints` off, `mayExposeCollaboration` off, base domain unset, both switches off). No team detail, ever. With exactly one surface not effective, a request for it from a caller who holds a binding on the team is `403 surface_disabled`, never `404` |
+| `422` | `SecretDetected` | `details.patterns[]` (pattern types only, for example `aws_access_key`); `message` tells the person to store the credential as an AFS secret. Never the matched text | `collab.content_scan = block` and a body matched (COL-24) |
+| `429` | `Throttled` | `Retry-After` | 20 requests per second per principal, burst 40 |
+| `503` | `Unavailable` | `paused`, `team_suspended`, `starting`, `upstream_unavailable`; `Retry-After: 30`; the page names the reason | Pod down or not ready (COL-8); the route table has `ready = false` |
+
+Other responses are Paperclip's own, passed through. A WAF block (managed rules, the per-IP rate rule or the
+`collab.allowed_source_cidrs` list) answers `403` with the WAF's default body before the edge sees the request; it is
+not in the AFS envelope. A surface switched off is refused within 60 seconds (p95).
+
+**Headers.** The edge removes the AFS cookie, `X-Afs-Authorization`, `X-Amzn-*` and client-sent `X-Forwarded-*`, sets
+`X-Forwarded-For`, `X-Forwarded-Proto` and `X-Request-Id`, and adds `Strict-Transport-Security`,
+`X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` and `frame-ancestors 'none'` in
+`Content-Security-Policy` to responses. No CORS headers are added.
+
+**Scanning.** Text bodies (JSON, `text/*`, form and the text parts of multipart; binary is not scanned) and text WebSocket
+frames are scanned for the pattern types `aws_access_key`, `github_token`, `slack_token`, `private_key`, `jwt`,
+`okta_client_secret`, `entra_client_secret` and `generic_assignment`. `block` answers `422` above; `warn` forwards and
+records outcome `secret_warned`; `off` skips. Each detection emits `collaboration.secret_detected` (no value or
+fragment), at most once per team, person and pattern per five minutes with a `count`.
+
+**Records** (COL-31, G5): the edge writes one structured JSON line per sign-in, sign-out and denied request to stdout with the field `afs.team_id` (and no body, header value, cookie or token). The node log collector that already feeds each team's aggregator (the per-team Fluent Bit aggregator of the log delivery, D17) also routes the records of `afs-system/afs-edge` by `afs.team_id` to that team's aggregator, with the redaction of OPS-4; the platform keeps every line in CloudWatch for 13 months. The routing rule is part of the `-restapi` Helm chart and its Fluent Bit configuration; no new network path exists. Edge records have the same shape as agent sign-in records and are delivered the same way; five-minute counts go to the reports (§4.9); a sign-in held only through a service admin role is marked
+`serviceAdminEntry`. No request body, header value or raw path with ids is recorded. A Paperclip response that carries a once-only key is passed through unchanged, and the edge never logs bodies.
+
 ### 4.5 Agent identity and AWS access
 
 | Op | Method and path | Perm | CLI | SDK | Screen | P |
@@ -309,6 +512,16 @@ Only the roles of pools with a handoff to it may send (D22, D32).
 `externalSystemId` (optional), `value`. The value is sent once, passed to Secrets Manager and dropped.
 No response, error, log line or audit record contains it. The server sets `secretsManagerPath`.
 `DeleteSecret` on a bound secret → `409 Conflict` listing the agents.
+
+v1.3.0: `Secret.managedBy` (†) is `user` (created through `CreateSecret`), `afs` (generated by AFS: the Paperclip boot
+secrets and, in `managed` registration, a connected agent's `paperclip-agent-api-key`) or `paperclip` (created by
+Paperclip itself under the reserved prefix `<service>/<namespace>/<agent>/paperclip/`, SEC-7; listed with metadata, never a
+value, refreshed hourly from Secrets Manager metadata; `name` is `paperclip-` plus the path suffix). `ListSecrets` accepts
+`?managedBy=user|afs|paperclip`. For `afs` and `paperclip` secrets `UpdateSecret`, `DeleteSecret` and `PutSecretValue` →
+`409 Conflict` (`details.reason = managed_secret`); `RotateSecret` on an `afs` secret takes no body (AFS generates the value) and is allowed except
+`paperclip-secrets-master-key` (`ValidationError`, `reason: master_key_not_rotatable`) and a `paperclip` secret → `409 Conflict` (`managed_secret`). A
+`paperclip` secret cannot be bound (`ValidationError`). `CreateSecret` refuses the name `paperclip` and any name starting
+`paperclip-` except `paperclip-agent-api-key` on a worker agent (`ValidationError`, `reason: reserved_name`).
 
 ### 4.7 Configuration values
 
@@ -341,7 +554,7 @@ No response, error, log line or audit record contains it. The server sets `secre
 | `PutBudget` | `PUT /v1/teams/{teamId}/budget` (`onExhaust: notify` needs `teams:set-guardrails` and a persistent team, D33) | `budgets:write` | `budgets put-budget` | `budgets.put()` | T5 | P0 |
 | `GetUsage` | `GET /v1/teams/{teamId}/usage?from&to&groupBy=agent\|model\|day` *CSV* | `usage:read` | `budgets get-usage` | `usage.get()` | T5 | P0 |
 | `ListCosts` | `GET /v1/teams/{teamId}/costs?from&to` (gateway and CUR by day) *CSV* | `usage:read` | `budgets list-costs` | `usage.listCosts()` | T5 | P1 |
-| `GetTeamReport` | `GET /v1/teams/{teamId}/reports/{usage\|costs\|activity\|traffic}` *CSV* | `reports:read` | `reports get-team-report` | `reports.team()` | T11 | P0 |
+| `GetTeamReport` | `GET /v1/teams/{teamId}/reports/{usage\|costs\|activity\|traffic\|collaboration}` *CSV* | `reports:read` | `reports get-team-report` | `reports.team()` | T11 | P0 |
 | `GetAgentReport` | `GET /v1/teams/{teamId}/agents/{agentId}/reports/{kind}` *CSV* | `reports:read` | `reports get-agent-report` | `reports.agent()` | T12 | P0 |
 | `GetServiceReport` | `GET /v1/reports/{kind}` *CSV* | `admin:reports` *svc* | `reports get-service-report` | `reports.service()` | S8, S9 | P0 |
 | `ListReportSchedules` | `GET /v1/teams/{teamId}/report-schedules` | `reports:read` | `reports list-report-schedules` | `reports.schedules.list()` | T11 | P1 |
@@ -349,6 +562,15 @@ No response, error, log line or audit record contains it. The server sets `secre
 | `UpdateReportSchedule` | `PATCH /v1/teams/{teamId}/report-schedules/{scheduleId}` | `reports:schedule` | `reports update-report-schedule` | `reports.schedules.update()` | T11 | P1 |
 | `DeleteReportSchedule` | `DELETE /v1/teams/{teamId}/report-schedules/{scheduleId}` | `reports:schedule` | `reports delete-report-schedule` | `reports.schedules.delete()` | T11 | P1 |
 | `ListCostTagStatus` | `GET /v1/admin/cost-tag-status` (per key: seen in CUR, first and last seen, AWS activation status) | `admin:cost-tag-status` *svc* | `admin list-cost-tag-status` | `admin.costTagStatus.list()` | S9 | P2 |
+
+**Collaboration report** (v1.3.0, COL-36; kind `collaboration` on `GetTeamReport`, and on `GetServiceReport` with
+`groupBy=team`). Usage only, never content. Measures per row: `signIns`, `uniquePeople` (distinct people and keys,
+anonymous excluded), `requests` (allowed and warned requests), `deniedRequests` and `secretDetections` (blocked plus warned
+by the edge). `groupBy` adds `surface` (`web_ui`, `rest_api`), `reason` (denied requests by `unauthenticated`, `forbidden`,
+`surface_disabled`, `secret_detected`; also `bad_request` and `throttled` as separate non-denied reasons), `person`
+(rows carry `principal{id, type: user|api_key, name?}`) and `day`; a row has `serviceAdminEntry` when the access was held only
+as a service admin. T16's *Recent access* panel is `range=7d&groupBy=day,person`. The report is not schedulable
+(`CreateReportSchedule` `report` stays `usage|costs|activity|traffic`, PC-D13).
 
 The S9 activation banner (TAG-7) is acknowledged with `PutSetting` on key
 `billing.tag_activation_acknowledged` = `true`; there is no separate acknowledge operation.
@@ -359,7 +581,7 @@ report query parameters below, stored), `cadence` (`daily` \| `weekly` \| `month
 `enabled`, and read-only `nextRunAt`, `lastRunAt`, `lastStatus`, `lastError`.
 
 Report query parameters: `from`, `to` (or `range=24h|7d|30d|90d|mtd`), `groupBy`
-(`team|agent|model|system|day|hour|tag:<key>`), filters `teamId`, `agentId`, `modelId`, `systemId`,
+(`team|agent|model|system|day|hour|tag:<key>`, and for the collaboration report `surface|reason|person`), filters `teamId`, `agentId`, `modelId`, `systemId`,
 `tag.<key>=<value>`, and in ephemeral teams `poolId` and `groupBy=pool`. Grouping by tag uses the tags in
 effect when each record happened (TAG-6); a record missing a currently required key reports
 `"(untagged)"` for that key. Traffic reports carry counts and bytes, never a cost. Response: `{"range": {...}, "groupBy": [...], "rows": [...], "totals": {...},
@@ -412,7 +634,7 @@ Service-level notification channels (for example the outside-contact email chann
 | `EnableSwarmTemplate` | `POST /v1/admin/swarm-templates/{templateId}:enable` | `admin:swarm-templates` *svc* | `swarm-templates enable-swarm-template` | `swarmTemplates.enable()` | P5 | P2 |
 | `DisableSwarmTemplate` | `POST /v1/admin/swarm-templates/{templateId}:disable` | `admin:swarm-templates` *svc* | `swarm-templates disable-swarm-template` | `swarmTemplates.disable()` | P5 | P2 |
 
-A swarm template's `spec.secrets` entry is `{pool, name, description?, delivery?, target?}`: `pool` names one pool of the
+A swarm template's optional `spec.collaboration` is `{templateId}`, an agent template with the `paperclip` capability (else `ValidationError`, `field: spec.collaboration.templateId`); the remediation team then gets a collaboration agent (dedicated identity, daily snapshots) with the web UI on and the REST API off, and its boot secrets are generated by the reconciler (database contract §7.2.9). Pools never connect to Paperclip. A swarm template's `spec.secrets` entry is `{pool, name, description?, delivery?, target?}`: `pool` names one pool of the
 template, `name` matches `^[a-z][a-z0-9-]{0,62}$` and is unique in the template, `description` has at most
 1000 characters, `delivery` is `env` (default) or `file`, and `target` is an environment variable name
 (`^[A-Z_][A-Z0-9_]{0,127}$`, default the upper-case name with underscores) or an absolute path, unique per
@@ -451,10 +673,10 @@ All *svc*. Screen S10 unless stated.
 
 | Op | Method and path | Perm | CLI | SDK | Screen | P |
 |---|---|---|---|---|---|---|
-| `GetSettings` | `GET /v1/admin/settings` (every key of root PRD §6.13 with value, default and range; the database-only keys `work_orders.cost_center` and `work_orders.owner_email` are not exposed, CD-8) | `admin:settings` | `admin get-settings` | `admin.settings.get()` | S10 | P0 |
+| `GetSettings` | `GET /v1/admin/settings` (every key of root PRD §6.13 with value, default and range, including the seven `collab.*` keys of the Paperclip PRD §6.9 (`collab.base_domain` unset reads `null`); the database-only keys `work_orders.cost_center` and `work_orders.owner_email` are not exposed, CD-8) | `admin:settings` | `admin get-settings` | `admin.settings.get()` | S10 | P0 |
 | `PutSetting` | `PUT /v1/admin/settings/{key}` `{value}` | `admin:settings` | `admin put-setting` | `admin.settings.put()` | S10, S9 | P0 |
 | `ListIdentityProviders` | `GET /v1/admin/identity-providers` | `admin:identity-providers` | `admin list-identity-providers` | `admin.identityProviders.list()` | S10 | P0 |
-| `CreateIdentityProvider` | `POST /v1/admin/identity-providers` | `admin:identity-providers` | `admin create-identity-provider` | `admin.identityProviders.create()` | S10 | P0 |
+| `CreateIdentityProvider` | `POST /v1/admin/identity-providers` (v1.3.0: optional `collabClientId` and `collabClientSecretArn`, a Secrets Manager reference, never the value; `collabClientSecretArn` needs `collabClientId`; `ListSignInProviders` never returns them) | `admin:identity-providers` | `admin create-identity-provider` | `admin.identityProviders.create()` | S10 | P0 |
 | `GetIdentityProvider` | `GET /v1/admin/identity-providers/{id}` (with the teams using it) | `admin:identity-providers` | `admin describe-identity-provider` | `admin.identityProviders.get()` | S10 | P0 |
 | `UpdateIdentityProvider` | `PATCH /v1/admin/identity-providers/{id}` (disabling one in use → `409`) | `admin:identity-providers` | `admin update-identity-provider` | `admin.identityProviders.update()` | S10 | P0 |
 | `DeleteIdentityProvider` | `DELETE /v1/admin/identity-providers/{id}` (in use → `409`) | `admin:identity-providers` | `admin delete-identity-provider` | `admin.identityProviders.delete()` | S10 | P0 |
@@ -505,6 +727,8 @@ With `dryRun=true` (the default) nothing is written. A bundle over 100 MB → `4
 
 ### 4.12 Mutations without an outbox event (exemption from the outbox rule)
 
+(v1.3.0 adds `ConnectAgentToCollaboration` and `DisconnectAgentFromCollaboration`, 71 operations; `PutTeamCollaboration` emits `collaboration.updated` and `RotateCollaborationKeys` emits `secret.rotated`, so neither is listed.)
+
 These mutations have no event type in §7. Each writes the row and one audit record in one transaction and
 no `outbox_events` row (CD-7). Adding an event type for one of them is a contract change (§8) and removes it
 from this list. The `-restapi` test `internal/adapter/httpapi/matrix/outbox_exemptions_test.go` embeds the
@@ -516,7 +740,7 @@ list and fails when the two diverge.
 | api-keys | `CreateApiKey`, `DeleteApiKey`, `CreateServiceApiKey`, `DeleteServiceApiKey` |
 | settings | `PutSetting`, `PutBudget`, `PutServiceTag`, `DeleteServiceTag`, `CreateIdentityProvider`, `UpdateIdentityProvider`, `DeleteIdentityProvider`, `CreateLogDestination`, `UpdateLogDestination`, `DeleteLogDestination`, `CreateNotificationChannel`, `UpdateNotificationChannel`, `DeleteNotificationChannel`, `CreateServiceNotificationChannel`, `UpdateServiceNotificationChannel`, `DeleteServiceNotificationChannel` |
 | catalog | `CreateCatalogSystem`, `UpdateCatalogSystem`, `DeleteCatalogSystem`, `DeclareTeamExternalSystem`, `UpdateTeamExternalSystem`, `DeleteTeamExternalSystem`, `SetTeamExternalSystemState`, `SetAgentExternalSystemState`, `PutPoolExternalSystem`, `CreateModel`, `UpdateModel`, `CreateModelPrice`, `CreateStage`, `UpdateStage`, `DeleteStage`, `PutAgentTemplate`, `DeleteAgentTemplate`, `PutStorageClass`, `DeleteStorageClass` |
-| config | `PutNamespaceConfigValue`, `DeleteNamespaceConfigValue`, `PutAgentConfigValue`, `DeleteAgentConfigValue`, `PutPoolConfigValue`, `DeletePoolConfigValue`, `CreateAgentIdentity`, `DeleteAgentIdentity`, `CreateAgentRoleLink`, `DeleteAgentRoleLink`, `VerifyAgentRoleLink`, `CreatePoolRoleLink`, `DeletePoolRoleLink`, `VerifyPoolRoleLink`, `CreateAgentSnapshot`, `CreateExport`, `UpdateSecret` |
+| config | `ConnectAgentToCollaboration`, `DisconnectAgentFromCollaboration`, `PutNamespaceConfigValue`, `DeleteNamespaceConfigValue`, `PutAgentConfigValue`, `DeleteAgentConfigValue`, `PutPoolConfigValue`, `DeletePoolConfigValue`, `CreateAgentIdentity`, `DeleteAgentIdentity`, `CreateAgentRoleLink`, `DeleteAgentRoleLink`, `VerifyAgentRoleLink`, `CreatePoolRoleLink`, `DeletePoolRoleLink`, `VerifyPoolRoleLink`, `CreateAgentSnapshot`, `CreateExport`, `UpdateSecret` |
 | schedules | `CreateReportSchedule`, `UpdateReportSchedule`, `DeleteReportSchedule` |
 | swarm-templates | `CreateSwarmTemplate`, `UpdateSwarmTemplate`, `DeleteSwarmTemplate`, `EnableSwarmTemplate`, `DisableSwarmTemplate` |
 
@@ -534,12 +758,12 @@ Team:        {slug, displayName, description, kind: persistent|ephemeral, state�
               effectiveCeilingUsd†, quotas{cpu,memory,pods,storage},
               isolationTier: shared|dedicated, viewerKubectl, expiresAt?, teardownRule?: at_expiry|at_cap_or_expiry|at_work_complete,
               tornDownAt†?, teardownReason†?, identityProviderId?, allowedAwsAccounts[], mayManageAwsAccounts,
-              mayAddExternalSystems}
+              mayAddExternalSystems, mayExposeCollaboration}
 TeamTags:    {tags: [{key, value?, source†: system|service|team|service_default|missing}],
               requestMetadataDroppedKeys†[]}       # PUT sends team-owned keys only; the read-only list names tag keys left out of the Bedrock requestMetadata because of its pair limit (D27)
-Member:      {role: team_admin|team_viewer, subjectType: user|group, userId?, email†?, groupName?}
-ApiKey:      {name, role, keyPrefix†, expiresAt (≤ 90 days), lastUsedAt†, secretKey† (create response only)}
-Agent:       {name, description, template, image, modelId, resources{cpu,memory}, iamIdentity, iamRoleArn†,
+Member:      {role: team_admin|team_collaborator|team_viewer, subjectType: user|group, userId?, email†?, groupName?}
+ApiKey:      {name, role: team_admin|team_collaborator|team_viewer|security_operator, keyPrefix†, expiresAt (≤ 90 days), lastUsedAt†, secretKey† (create response only)}
+Agent:       {name, role: worker|collaboration (create-only), collaboration?{connect, paperclipAgentId?, linkState†, lastSyncedAt†?, lastError†?}, description, template, image, modelId, resources{cpu,memory}, iamIdentity, iamRoleArn†,
               volume{sizeGiB, storageClass, onDelete: snapshot_then_delete|delete|retain, snapshotSchedule: off|daily|weekly, snapshotRetain},
               secretBindings[{secretId, delivery: env|file, target}], paused†}
 RoleLink:    {profileName, roleArn, accountId†, maxSessionSeconds, externalId†, status†: pending_trust|verified|failed|disabled,
@@ -548,7 +772,7 @@ Stage:       {name, position (1..50), description}
 Pool:        {name, description, stageId?, template, image, persona?, modelId, workers (0..200), resources{cpu,memory},
               scratchSizeGiB (1..500), sharedVolume: none|efs, state†: enabled|paused|deleting|deleted, handoffs†[poolId]}
 PoolRoleLink: {roleName, accountId, profileName, roleArn†, externalId†, maxSessionSeconds, status†, lastVerifiedAt†}
-SwarmTemplate: {name, description, kind: cve_remediation|general, spec{stages[], pools[], handoffs[], secrets[{pool, name, description?, delivery?, target?}], configValues[]},
+SwarmTemplate: {name, description, kind: cve_remediation|general, spec{stages[], pools[], handoffs[], secrets[{pool, name, description?, delivery?, target?}], configValues[], collaboration?{templateId}},
               budgetUsd, ttlHours, teardownRule, enabled}
 WorkOrder:   {kind: cve_remediation|general, cveId?, severity, title, source†: api|eventbridge, templateId, budgetUsd, slaDueAt,
               status†: open|assigned|in_progress|pr_opened|done|failed|cancelled, teamId†?, assignedAt†?, completedAt†?,
@@ -557,7 +781,7 @@ WorkOrderRepo: {host, repo, owningTeamId?, owningContact?, ownerSource†? (Crea
               prUrl?, prNumber?, detail?, mergedAt†?, notifications†[{kind, recipient, sentAt}]}
 ReportSchedule: {name, report, query{}, cadence, channelId, format: csv, enabled, nextRunAt†, lastRunAt†, lastStatus†, lastError†}
 CostTagStatus: {key, seenInCur, firstSeenAt, lastSeenAt, awsStatus: active|inactive|unknown, checkedAt}
-Secret:      {scope: team|agent|pool, agentId?, poolId?, name, description, externalSystemId?, secretsManagerPath†, secretsManagerArn†,
+Secret:      {managedBy†: user|afs|paperclip, scope: team|agent|pool, agentId?, poolId?, name, description, externalSystemId?, secretsManagerPath†, secretsManagerArn†,
               versionId†, lastChangedAt†, rotation{enabled, days}, boundTo†[agentId]}               # no value field, ever
 ConfigValue: {name, value?, source: literal|namespace, resolvedValue†, usedBy†[agentId]}
 ExternalSystem: {slug, name, category, description, docsUrl, endpoints[], enabled, builtin†, owner?, purpose?,
@@ -565,10 +789,14 @@ ExternalSystem: {slug, name, category, description, docsUrl, endpoints[], enable
 Budget:      {period: monthly|lifetime, amountUsd, thresholds[], onExhaust: block|notify (notify: persistent teams, service admins only), expiresAt?,
               spentUsd†, reservedUsd†, percentUsed†, forecastUsd†, projectedCapAt†}
 ServiceTag:  {key, mode: fixed|required, value?, defaultValue?, allowedValues?[], description}
-IdentityProvider: {kind: okta|entra_id, name, issuerUrl, consoleClientId, cliClientId, clientSecretArn?, groupsClaim, isDefault, enabled}
+IdentityProvider: {kind: okta|entra_id, name, issuerUrl, consoleClientId, cliClientId, collabClientId?, collabClientSecretArn?, clientSecretArn?, groupsClaim, isDefault, enabled}
 Model:       {id, provider, displayName, enabled, contextWindow, maxOutputTokens}
-AgentTemplate: {name, description, harness, defaultResources{cpu,memory}, allowedDigests[], currentDigest, enabled}
+AgentTemplate: {name, description, harness, capabilities[]: paperclip, defaultResources{cpu,memory}, allowedDigests[], currentDigest, enabled}
 Export:      {status†: pending|running|succeeded|failed, schemaVersion†, sha256†, sizeBytes†, downloadUrl†?, finishedAt†?}
+TeamCollaboration: {teamId†, agentId†, hostname†?, webUiUrl†?, restApiUrl†?, webUiEnabled, restApiEnabled, registrationMode: manual|managed,
+              effective†{webUi, restApi, reasons[]}, unmanagedPaperclipAgents†[]}     # §4.4b
+CollaborationLink: {agentId†, agentName†, connect, paperclipAgentId?, linkState†: pending|linked|failed|disabled, lastSyncedAt†?, lastError†?}
+CollaborationEndpoint: {teamId, slug, teamState, hostname?, agentId, webUiEnabled, restApiEnabled, effective{webUi, restApi}, mayExposeCollaboration, phase, lastAccessAt?}
 TeamDirectoryEntry: {id, slug, displayName}
 PriceProposal: {modelId, effectiveFrom, inputUsdPerMtok, outputUsdPerMtok, cacheReadUsdPerMtok, cacheWriteUsdPerMtok,
               status†: pending|approved|rejected|superseded, fetchedAt†, decidedBy†, decidedAt†, note}
@@ -599,13 +827,14 @@ change; clients branch on `code` only. No error contains a secret value, token o
 | 403 | `AccessDenied` | Valid caller without the permission, including a signed-in caller with no team binding on a route not scoped to one team (CD-10); `details.requiredPermission` | `42501` |
 | 404 | `NotFound` | No such resource, **or** a resource in a team the caller cannot see (never reveals existence), **or** an unknown path or `:verb` (error envelope, not a bare 404) | RLS hides the row |
 | 402 | `BudgetExceeded` | Returned by `afs-gateway` to agents only, never by `afs-api`; not retryable (see [gateway contract](gateway-contract.md)) | `reserve_spend_held` returned NULL |
-| 409 | `Conflict` | Duplicate name, idempotency body mismatch or in progress (these two are `details.reason` values, `idempotency_mismatch` and `idempotency_in_progress`, not separate codes), dependent objects exist, invalid state transition (for example a suspended team) | `23505`, `23503` (on delete), `55000` |
+| 409 | `Conflict` | Duplicate name, idempotency body mismatch or in progress (these two are `details.reason` values, `idempotency_mismatch` and `idempotency_in_progress`, not separate codes; v1.3.0 adds `collaboration_agent_exists`, `collaboration_agent_missing`, `managed_secret` and `hostname_held`), dependent objects exist, invalid state transition (for example a suspended team) | `23505`, `23503` (on delete), `55000` |
 | 412 | `PreconditionFailed` | `If-Match` does not match `version` | — |
 | 428 | `PreconditionRequired` | `If-Match` missing on `PATCH` or `DELETE` of an existing resource (optional on `PUT`) | — |
 | 429 | `Throttled` | Rate limit; `Retry-After` | — |
 | 500 | `InternalError` | Anything else; logged with `requestId` | `40001` after retries, others |
 | 502 | `UpstreamError` | Returned by `afs-gateway` only, when Bedrock returns a server error; the reservation is released; retry with backoff | — |
 | 503 | `Unavailable` | Dependency down (database, Secrets Manager); safe to retry with backoff | — |
+| 422 | `SecretDetected` | Returned by the collaboration edge only (§4.4c), never by `afs-api`; `details.patterns[]` | — |
 
 CLI rendering: `An error occurred (<code>) when calling the <operationId> operation: <message>`, exit
 254. SDK: `AfsError` with `code`, `status`, `requestId`, `details`, and getters `isValidationError`,
@@ -650,10 +879,17 @@ delivers events to each team's notification channels through one EventBridge rul
 | `work_order.created`, `work_order.assigned`, `work_order.repo_updated`, `work_order.pr_opened`, `work_order.merged`, `work_order.sla_warning`, `work_order.sla_breached`, `work_order.completed`, `work_order.failed`, `work_order.cancelled` | api, reconciler | WO-1 to WO-5; owners notified once per event |
 | `cost_tags.not_seen` | billing | TAG-7 |
 | `export.completed`, `export.failed`, `import.applied` | reconciler, api | CFG-5 |
+| `collaboration.updated` | api | `PutTeamCollaboration`; `data` `{teamId, agentId, changes: {webUiEnabled?: {from, to}, restApiEnabled?: {from, to}, registrationMode?: {from, to}}}` |
+| `collaboration.endpoint_state_changed` | reconciler | `EndpointReady` changed; `data` `{teamId, agentId, hostname, ready, previousReady, reason: Ready\|Starting\|Paused\|TeamSuspended\|ServiceOff\|GuardrailOff\|BaseDomainUnset\|RouteNotPublished, effective: {webUi, restApi}}` |
+| `collaboration.secret_detected` | edge, reconciler | A credential pattern was found. No value or fragment ever. `data` `{teamId, source: edge\|reconciler, pattern, action: blocked\|warned\|detected, count, surface?: web_ui\|rest_api, principal?: {id, type: user\|api_key}, paperclipItemId?, authorAgentId?}` (`surface` and `principal` from the edge; `paperclipItemId` and `authorAgentId` from the reconciler's scan of agent writes, COL-25). The edge emits at most one per team, person and pattern per 5 minutes |
+| `collaboration.denied_spike` | reconciler | More than `collab.denied_spike_threshold` denied requests (`401`, `403`, `422`) on one team in 5 minutes, read from `collaboration_access`; `data` `{teamId, windowStart, windowEnd, denied, threshold, byReason: {unauthenticated, forbidden, surface_disabled, secret_detected}}`; delivered to the team's channels and the service admins' channels; at most one per team per 15 minutes |
+| `collaboration.unmanaged_agents_found` | reconciler | COL-13, once per new name; `data` `{teamId, agentId, paperclipAgentName, paperclipAgentId, reason: not_linked\|local_adapter}` |
+| `collaboration.bootstrap_completed` | reconciler | Paperclip's first-admin bootstrap finished; `data` `{teamId, agentId, mode: manual\|managed}`. Never the invite URL: the invite is a credential and goes only as a direct notification to the creating team-admin's email through the reconciler's notification delivery, never into events, audit or logs (G8) |
+| `agent.collaboration_linked`, `agent.collaboration_unlinked` | reconciler | An agent's `linkState` became `linked`, or left `linked`; `data` `{agentId, linkState, paperclipAgentId?, registrationMode}` (`unlinked` adds `reason`: `disconnected`, `agent_deleted`, `collaboration_agent_deleted`, `failed`) |
 | `notification.delivery_failed` | reconciler | A channel's EventBridge target failed (D46) |
 | `notification.test_requested` | api | `TestNotificationChannel`; `data` has `channelId` and `testId`. The reconciler tests the channel and reports the result on the channel's status (condition `DeliveryHealthy`, `lastTestId`), which the API returns (CD-3) |
 
-A mutation with no type in this table (the list is §4.12) emits no event; its audit record is its trace (CD-7).
+`CreateAgent` for a collaboration agent also emits `secret.created` for each boot secret and `RotateCollaborationKeys` emits `secret.rotated` for each secret rotated (no value). A mutation with no type in this table (the list is §4.12) emits no event; its audit record is its trace (CD-7).
 
 Events written by database functions use the same envelope (`afs.event_detail`, database contract §4.2): `afs.instantiate_work_order_team` writes `team.created` (`data` `{teamId, kind: ephemeral, workOrderId}`), `pool.created` (`poolId` in the envelope, `data` `{poolId, teamId}`) and `work_order.assigned` (`data` `{workOrderId, teamId}`), and `afs.record_work_order_secret` writes `secret.created` (`data` `{secretId, name, scope: pool}`, `poolId` in the envelope). Rows written before `-db` 000019 hold the older flat payload; the reconciler's outbox publisher wraps them into the envelope (database contract §4.2), so a consumer never sees the flat shape. `PausePool` and `ResumePool` emit `pool.updated`. A future type is an additive change.
 
@@ -669,6 +905,8 @@ Events written by database functions use the same envelope (`afs.event_detail`, 
 
 ## 9. Changelog
 
+- **v1.3.1 (2026-11-22), contract corrections (PC-D20 to PC-D31):** edge callback only on the apex, certificate and DNS cover apex and wildcard, every other apex path `404`; server-side edge sessions and single-use handoff (cookie holds an opaque id); SNI check dropped (`host_mismatch` removed); edge records go to stdout with `afs.team_id` and the node collector routes them to the team's log delivery; event `collaboration.bootstrap_completed`; `CreateTeam` `409 hostname_held`; `team_collaborator` inherits the conditional viewer grants; `RotateSecret` on an `afs` secret takes no body; priorities of `ListCollaborationLinks`, connect and disconnect (P0, C1) and `ListCollaborationEndpoints` (P0, C2); `SwarmTemplate.spec.collaboration`; `invoke-api` reads `GetTeamCollaboration` once and `restApiUrl` is `https://<hostname>/api`; 404 versus 403 `surface_disabled` stated; once-only Paperclip keys pass through unchanged. All additive or clarifying.
+- **v1.3.0 (2026-11-22), Paperclip team collaboration ([PRD](../../paperclip-team-collaboration-PRD.md), PC-D11 to PC-D19):** §4.4b (seven operations: `GetTeamCollaboration`, `PutTeamCollaboration`, `ListCollaborationLinks`, `ConnectAgentToCollaboration`, `DisconnectAgentFromCollaboration`, `RotateCollaborationKeys`, `ListCollaborationEndpoints`); §4.4c the edge's externally visible behaviour; role `team_collaborator` and permissions `collaboration:read|manage|access|contribute|api`; `Agent.role` and `Agent.collaboration`; `Team.mayExposeCollaboration`; `Secret.managedBy` and its filter; `AgentTemplate.capabilities`; identity provider `collabClientId` and `collabClientSecretArn`; seven `collab.*` settings; collaboration report kind; seven events; new `details.reason` values. All additive (minor).
 - **v1.2.0 (2026-11-21), `-restapi` M0 (CD-1 to CD-10):** delete status codes (`202` with body for resources that carry a status, `204` otherwise); `If-Match` optional on `PUT`; `NotificationTestResult` and event `notification.test_requested`; `RestoreResult`, `Snapshot`, `StorageClass`, `AuditEvent`, `Revision` and `CostRow` shapes; `TeamTags.requestMetadataDroppedKeys`; mutations without a §7 event type write no outbox row; identity provider client id mapping recorded as open; `403` for a signed-in caller with no binding on a route not scoped to one team; error notes: oversized body is `400`, unknown path or verb is `404` in the envelope, page tokens bound to operation and caller, CSV formula cells prefixed with `'`.
 - **v1.2.0 amendment (2026-11-22), `-restapi` feature complete (CD-7, CD-9, CD-11, CD-12, CQ-4):** the CD-7 exemption list is now §4.12 (69 operations, checked by a `-restapi` test); a workload principal may omit `If-Match` on `UpdateWorkOrderRepo` (CD-12); `ExternalSystem.disabledAt` adds `pool` for pool views (CD-11); swarm template `spec.secrets` shape and how the reconciler records those secrets; `Me.servicePermissions` and `Stage.position` 1..50 in §5; `CreateImport` body `{bundle, accountMap}`; report cost measures; idempotency conditions named as `details.reason` values; database-function events share the §7 envelope. The two client ids stay `consoleClientId` and `cliClientId` on the wire (CD-9). Not yet reflected in the OpenAPI document and left to `-restapi`: `IfMatchPut` description, the `If-Match` parameter of `DeleteApiKey` and `DeleteServiceApiKey` (an API key has no `version`), duplicate path parameters on `GetTeamReport` and `GetAgentReport`, `info.version`.
 - **v1.1.0:** revised after the `review-prd` pass (root PRD D23 to D57).

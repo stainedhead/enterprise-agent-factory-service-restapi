@@ -18,7 +18,7 @@ const kind = "agent_templates"
 // Repository is the agent_templates store.
 type Repository interface {
 	// List returns templates with name greater than after, in name order; enabledOnly hides disabled ones.
-	List(ctx context.Context, tx port.Tx, enabledOnly bool, after string, limit int) ([]domain.AgentTemplate, error)
+	List(ctx context.Context, tx port.Tx, enabledOnly bool, capability, after string, limit int) ([]domain.AgentTemplate, error)
 	// Get returns one template by name, forUpdate locking it; NotFound when absent.
 	Get(ctx context.Context, tx port.Tx, name string, forUpdate bool) (domain.AgentTemplate, error)
 	Insert(ctx context.Context, tx port.Tx, t domain.AgentTemplate) error
@@ -43,15 +43,15 @@ func (s *Service) check(ctx context.Context, c acting.Caller, action string, per
 
 func audit(t domain.AgentTemplate) map[string]any {
 	return map[string]any{"id": t.ID, "name": t.Name, "description": t.Description, "harness": t.Harness,
-		"defaultResources": t.DefaultResources, "allowedDigests": t.AllowedDigests, "currentDigest": t.CurrentDigest, "enabled": t.Enabled}
+		"defaultResources": t.DefaultResources, "allowedDigests": t.AllowedDigests, "currentDigest": t.CurrentDigest, "enabled": t.Enabled, "capabilities": t.Capabilities}
 }
 
-func (s *Service) list(ctx context.Context, c acting.Caller, enabledOnly bool, p acting.Page) ([]domain.AgentTemplate, string, error) {
+func (s *Service) list(ctx context.Context, c acting.Caller, enabledOnly bool, capability string, p acting.Page) ([]domain.AgentTemplate, string, error) {
 	p = p.Normalized()
 	var rows []domain.AgentTemplate
 	err := s.Tx.ReadTx(ctx, c.Session(), func(ctx context.Context, tx port.Tx) error {
 		var err error
-		rows, err = s.Repo.List(ctx, tx, enabledOnly, p.Cursor, p.Limit+1)
+		rows, err = s.Repo.List(ctx, tx, enabledOnly, capability, p.Cursor, p.Limit+1)
 		return err
 	})
 	if err != nil {
@@ -63,19 +63,25 @@ func (s *Service) list(ctx context.Context, c acting.Caller, enabledOnly bool, p
 
 // ListEnabled implements ListAgentTemplates: enabled templates with their allowed digests
 // (models:read).
-func (s *Service) ListEnabled(ctx context.Context, c acting.Caller, p acting.Page) ([]domain.AgentTemplate, string, error) {
+func (s *Service) ListEnabled(ctx context.Context, c acting.Caller, capability string, p acting.Page) ([]domain.AgentTemplate, string, error) {
 	if err := s.check(ctx, c, "ListAgentTemplates", authz.ModelsRead, authz.ScopeAny); err != nil {
 		return nil, "", err
 	}
-	return s.list(ctx, c, true, p)
+	if err := domain.ValidateCapabilityFilter(capability); err != nil {
+		return nil, "", err
+	}
+	return s.list(ctx, c, true, capability, p)
 }
 
 // ListAll implements ListAdminAgentTemplates (admin:agent-templates).
-func (s *Service) ListAll(ctx context.Context, c acting.Caller, p acting.Page) ([]domain.AgentTemplate, string, error) {
+func (s *Service) ListAll(ctx context.Context, c acting.Caller, capability string, p acting.Page) ([]domain.AgentTemplate, string, error) {
 	if err := s.check(ctx, c, "ListAdminAgentTemplates", authz.AdminAgentTemplates, authz.ScopeService); err != nil {
 		return nil, "", err
 	}
-	return s.list(ctx, c, false, p)
+	if err := domain.ValidateCapabilityFilter(capability); err != nil {
+		return nil, "", err
+	}
+	return s.list(ctx, c, false, capability, p)
 }
 
 // Put implements PutAgentTemplate: an upsert by name. A change to an existing template may carry

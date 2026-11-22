@@ -114,8 +114,8 @@ func TestReplayExamples(t *testing.T) {
 			})
 		}
 	}
-	if total != 182 {
-		t.Fatalf("operations = %d, want 182", total)
+	if total != 189 {
+		t.Fatalf("operations = %d, want 189", total)
 	}
 	t.Logf("%d operations: %d responses validated, %d on placeholders", total, validated, placeholders)
 }

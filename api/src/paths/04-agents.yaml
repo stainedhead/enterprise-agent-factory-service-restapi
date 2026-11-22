@@ -6,6 +6,13 @@
     tags:
     - agents
     parameters:
+    - name: role
+      in: query
+      schema:
+        type: string
+        enum:
+        - worker
+        - collaboration
     - $ref: '#/components/parameters/TeamId'
     - $ref: '#/components/parameters/MaxResults'
     - $ref: '#/components/parameters/NextToken'
@@ -1003,6 +1010,12 @@
     - agents
     description: (enabled templates with allowed digests)
     parameters:
+    - name: capability
+      in: query
+      schema:
+        type: string
+        enum:
+        - paperclip
     - $ref: '#/components/parameters/MaxResults'
     - $ref: '#/components/parameters/NextToken'
     - $ref: '#/components/parameters/XRequestId'

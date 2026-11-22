@@ -27,8 +27,10 @@ const agentSelect = `SELECT a.id, a.team_id, a.name, a.description, a.template, 
   a.iam_identity, coalesce(ident.external_ref, ''),
   a.storage_size_gib, a.storage_class, a.storage_on_delete, a.snapshot_schedule, a.snapshot_retain_count,
   a.state, a.version, a.generation, a.created_at, a.created_by, a.updated_at,
-  rs.phase, rs.observed_generation, rs.conditions, rs.last_reconciled_at
+  rs.phase, rs.observed_generation, rs.conditions, rs.last_reconciled_at,
+  a.role, ac.connect, ac.paperclip_agent_id, ac.link_state, ac.last_synced_at, ac.last_error
 FROM afs.agents a
+LEFT JOIN afs.agent_collaboration ac ON ac.team_id = a.team_id AND ac.agent_id = a.id AND a.role = 'worker'
 LEFT JOIN afs.resource_status rs ON rs.resource_kind = '` + agents.StatusKind + `' AND rs.resource_id = a.id
 LEFT JOIN LATERAL (
   SELECT i.external_ref FROM afs.agent_identities i
@@ -47,10 +49,15 @@ func scanAgent(row pgx.Row) (domain.Agent, error) {
 		lastRec                    *time.Time
 		sizeGiB, retain            int
 		class, onDelete, scheduled string
+		role                       string
+		cConnect                   *bool
+		cPC, cState, cErr          *string
+		cSynced                    *time.Time
 	)
 	err := row.Scan(&a.ID, &a.TeamID, &name, &a.Description, &a.Template, &image, &a.ModelID, &res,
 		&iam, &a.IAMRoleARN, &sizeGiB, &class, &onDelete, &scheduled, &retain,
-		&state, &ver, &gen, &a.CreatedAt, &a.CreatedBy, &a.UpdatedAt, &phase, &obs, &conds, &lastRec)
+		&state, &ver, &gen, &a.CreatedAt, &a.CreatedBy, &a.UpdatedAt, &phase, &obs, &conds, &lastRec,
+		&role, &cConnect, &cPC, &cState, &cSynced, &cErr)
 	if err != nil {
 		return domain.Agent{}, err
 	}
@@ -62,6 +69,20 @@ func scanAgent(row pgx.Row) (domain.Agent, error) {
 		if err := json.Unmarshal(res, &a.Resources); err != nil {
 			return domain.Agent{}, err
 		}
+	}
+	a.Role = domain.AgentRole(role)
+	if cConnect != nil {
+		c := &domain.AgentCollaboration{Connect: *cConnect, LastSyncedAt: cSynced}
+		if cPC != nil {
+			c.PaperclipAgentID = *cPC
+		}
+		if cState != nil {
+			c.LinkState = domain.LinkState(*cState)
+		}
+		if cErr != nil {
+			c.LastError = *cErr
+		}
+		a.Collaboration = c
 	}
 	a.Bindings = []domain.SecretBinding{}
 	a.Status = domain.PendingStatus(a.CreatedAt)
@@ -159,6 +180,13 @@ func (*AgentRepo) Get(ctx context.Context, tx port.Tx, teamID, id string, forUpd
 	return list[0], nil
 }
 
+func roleOrWorker(r domain.AgentRole) string {
+	if r == "" {
+		return string(domain.AgentRoleWorker)
+	}
+	return string(r)
+}
+
 func agentResourcesJSON(r domain.AgentResources) ([]byte, error) { return json.Marshal(r) }
 
 func replaceBindings(ctx context.Context, pt pgx.Tx, a domain.Agent) error {
@@ -185,11 +213,11 @@ func (*AgentRepo) Insert(ctx context.Context, tx port.Tx, a domain.Agent, templa
 		return err
 	}
 	_, err = pt.Exec(ctx, `INSERT INTO afs.agents (id, team_id, name, description, template, template_id, image, model_id, resources,
-  iam_identity, storage_size_gib, storage_class, storage_on_delete, snapshot_schedule, snapshot_retain_count, state, generation)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+  iam_identity, storage_size_gib, storage_class, storage_on_delete, snapshot_schedule, snapshot_retain_count, state, generation, role)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
 		a.ID, a.TeamID, string(a.Name), a.Description, a.Template, nullable(templateID), string(a.Image), a.ModelID, res,
 		string(a.IAMIdentity), a.Volume.SizeGiB, a.Volume.StorageClass, a.Volume.OnDelete, a.Volume.SnapshotSchedule,
-		a.Volume.SnapshotRetain, string(a.State), int64(a.Generation))
+		a.Volume.SnapshotRetain, string(a.State), int64(a.Generation), roleOrWorker(a.Role))
 	if err != nil {
 		return MapError(err, OpWrite, "agent")
 	}
@@ -269,8 +297,8 @@ func (*AgentRepo) Template(ctx context.Context, tx port.Tx, name string) (agents
 		return agents.TemplateInfo{}, false, err
 	}
 	var t agents.TemplateInfo
-	err = pt.QueryRow(ctx, `SELECT id, name, enabled, allowed_image_digests FROM afs.agent_templates WHERE name=$1`, name).
-		Scan(&t.ID, &t.Name, &t.Enabled, &t.AllowedDigests)
+	err = pt.QueryRow(ctx, `SELECT id, name, enabled, allowed_image_digests, capabilities FROM afs.agent_templates WHERE name=$1`, name).
+		Scan(&t.ID, &t.Name, &t.Enabled, &t.AllowedDigests, &t.Capabilities)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return agents.TemplateInfo{}, false, nil
 	}
@@ -306,7 +334,7 @@ func (*AgentRepo) Secrets(ctx context.Context, tx port.Tx, teamID string, ids []
 	if err != nil {
 		return nil, err
 	}
-	rows, err := pt.Query(ctx, `SELECT id, coalesce(agent_id, ''), coalesce(pool_id, '') FROM afs.secrets WHERE team_id=$1 AND id = ANY($2)`, teamID, ids)
+	rows, err := pt.Query(ctx, `SELECT id, coalesce(agent_id, ''), coalesce(pool_id, ''), managed_by FROM afs.secrets WHERE team_id=$1 AND id = ANY($2)`, teamID, ids)
 	if err != nil {
 		return nil, MapError(err, OpRead, "secret")
 	}
@@ -315,7 +343,7 @@ func (*AgentRepo) Secrets(ctx context.Context, tx port.Tx, teamID string, ids []
 	for rows.Next() {
 		var id string
 		var s agents.SecretInfo
-		if err := rows.Scan(&id, &s.AgentID, &s.PoolID); err != nil {
+		if err := rows.Scan(&id, &s.AgentID, &s.PoolID, &s.ManagedBy); err != nil {
 			return nil, MapError(err, OpRead, "secret")
 		}
 		out[id] = s
@@ -357,4 +385,94 @@ func (*AgentRepo) InsertSnapshot(ctx context.Context, tx port.Tx, teamID string,
 	_, err = pt.Exec(ctx, `INSERT INTO afs.agent_volume_snapshots (id, team_id, agent_id, reason) VALUES ($1, $2, $3, $4)`,
 		s.ID, teamID, s.AgentID, s.Reason)
 	return MapError(err, OpWrite, "snapshot")
+}
+
+// InsertCollaboration implements agents.Repository: the team's collaboration resource with the contract
+// defaults (web UI on, REST API off, manual registration).
+func (*AgentRepo) InsertCollaboration(ctx context.Context, tx port.Tx, teamID, agentID string) error {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return err
+	}
+	_, err = pt.Exec(ctx, `INSERT INTO afs.team_collaboration (team_id, agent_id) VALUES ($1, $2)`, teamID, agentID)
+	return MapError(err, OpWrite, "collaboration")
+}
+
+// CollaborationMode implements agents.Repository.
+func (*AgentRepo) CollaborationMode(ctx context.Context, tx port.Tx, teamID string) (domain.RegistrationMode, bool, error) {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return "", false, err
+	}
+	var m string
+	err = pt.QueryRow(ctx, `SELECT registration_mode FROM afs.team_collaboration WHERE team_id = $1`, teamID).Scan(&m)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	return domain.RegistrationMode(m), err == nil, MapError(err, OpRead, "collaboration")
+}
+
+// SetCollaboration implements agents.Repository.
+func (*AgentRepo) SetCollaboration(ctx context.Context, tx port.Tx, teamID, agentID string, connect bool, paperclipAgentID *string) error {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return err
+	}
+	_, err = pt.Exec(ctx, `INSERT INTO afs.agent_collaboration (team_id, agent_id, connect, paperclip_agent_id)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (team_id, agent_id) DO UPDATE SET connect = EXCLUDED.connect,
+  paperclip_agent_id = coalesce($4, afs.agent_collaboration.paperclip_agent_id)`, teamID, agentID, connect, paperclipAgentID)
+	return MapError(err, OpWrite, "collaboration")
+}
+
+// SecretPath implements agents.Repository.
+func (*AgentRepo) SecretPath(ctx context.Context, tx port.Tx, teamID, agentID, name string) (string, error) {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return "", err
+	}
+	var path string
+	err = pt.QueryRow(ctx, `SELECT afs.secret_path($1, $2, NULL, $3)`, teamID, agentID, name).Scan(&path)
+	return path, MapError(err, OpRead, "secret")
+}
+
+// InsertBootSecret implements agents.Repository.
+func (*AgentRepo) InsertBootSecret(ctx context.Context, tx port.Tx, s domain.Secret, env string) error {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return err
+	}
+	if _, err = pt.Exec(ctx, `INSERT INTO afs.secrets (id, team_id, name, description, secrets_manager_arn, origin, current_version_id,
+  last_changed_at, agent_id, managed_by)
+VALUES ($1, $2, $3, $4, $5, 'managed', nullif($6, ''), $7, $8, 'afs')`,
+		s.ID, s.TeamID, s.Name, s.Description, s.ARN, s.VersionID, s.LastChangedAt, s.AgentID); err != nil {
+		return MapError(err, OpWrite, "secret")
+	}
+	_, err = pt.Exec(ctx, `INSERT INTO afs.agent_secret_bindings (team_id, agent_id, secret_id, delivery, target) VALUES ($1, $2, $3, 'env', $4)`,
+		s.TeamID, s.AgentID, s.ID, env)
+	return MapError(err, OpWrite, "secret")
+}
+
+// ManagedBindings implements agents.Repository.
+func (*AgentRepo) ManagedBindings(ctx context.Context, tx port.Tx, teamID, agentID string) ([]domain.SecretBinding, error) {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := pt.Query(ctx, `SELECT b.secret_id, b.delivery, b.target FROM afs.agent_secret_bindings b
+JOIN afs.secrets s ON s.team_id = b.team_id AND s.id = b.secret_id
+WHERE b.team_id = $1 AND b.agent_id = $2 AND s.managed_by = 'afs' ORDER BY b.target`, teamID, agentID)
+	if err != nil {
+		return nil, MapError(err, OpRead, "secret")
+	}
+	defer rows.Close()
+	var out []domain.SecretBinding
+	for rows.Next() {
+		var b domain.SecretBinding
+		if err := rows.Scan(&b.SecretID, &b.Delivery, &b.Target); err != nil {
+			return nil, MapError(err, OpRead, "secret")
+		}
+		out = append(out, b)
+	}
+	return out, MapError(rows.Err(), OpRead, "secret")
 }

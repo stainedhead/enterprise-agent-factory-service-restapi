@@ -21,14 +21,14 @@ func NewIdPRepo() *IdPRepo { return &IdPRepo{} }
 var _ idp.Repository = (*IdPRepo)(nil)
 
 const idpSelect = `SELECT id, kind, name, issuer_url, client_id, coalesce(cli_client_id, ''), coalesce(client_secret_arn, ''), groups_claim,
-  is_default, enabled, version, created_at, created_by, updated_at FROM afs.identity_providers`
+  is_default, enabled, version, created_at, created_by, updated_at, coalesce(collab_client_id, ''), coalesce(collab_client_secret_arn, '') FROM afs.identity_providers`
 
 func scanIdP(row pgx.Row) (domain.IdentityProvider, error) {
 	var p domain.IdentityProvider
 	var kind string
 	var v int64
 	err := row.Scan(&p.ID, &kind, &p.Name, &p.IssuerURL, &p.ConsoleClientID, &p.CLIClientID, &p.ClientSecretARN,
-		&p.GroupsClaim, &p.IsDefault, &p.Enabled, &v, &p.CreatedAt, &p.CreatedBy, &p.UpdatedAt)
+		&p.GroupsClaim, &p.IsDefault, &p.Enabled, &v, &p.CreatedAt, &p.CreatedBy, &p.UpdatedAt, &p.CollabClientID, &p.CollabClientSecretARN)
 	p.Kind, p.Version = domain.IdPKind(kind), domain.Version(v)
 	return p, err
 }
@@ -107,9 +107,10 @@ func (r *IdPRepo) Insert(ctx context.Context, tx port.Tx, p domain.IdentityProvi
 	if err != nil {
 		return err
 	}
-	_, err = pt.Exec(ctx, `INSERT INTO afs.identity_providers (id, kind, name, issuer_url, client_id, cli_client_id, client_secret_arn, groups_claim, is_default, enabled)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, p.ID, string(p.Kind), p.Name, p.IssuerURL, p.ConsoleClientID, nullable(p.CLIClientID),
-		nullable(p.ClientSecretARN), p.GroupsClaim, p.IsDefault, p.Enabled)
+	_, err = pt.Exec(ctx, `INSERT INTO afs.identity_providers (id, kind, name, issuer_url, client_id, cli_client_id, client_secret_arn, groups_claim, is_default, enabled,
+  collab_client_id, collab_client_secret_arn)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, p.ID, string(p.Kind), p.Name, p.IssuerURL, p.ConsoleClientID, nullable(p.CLIClientID),
+		nullable(p.ClientSecretARN), p.GroupsClaim, p.IsDefault, p.Enabled, nullable(p.CollabClientID), nullable(p.CollabClientSecretARN))
 	return MapError(err, OpWrite, "identity provider")
 }
 
@@ -120,8 +121,9 @@ func (r *IdPRepo) Update(ctx context.Context, tx port.Tx, p domain.IdentityProvi
 		return domain.IdentityProvider{}, err
 	}
 	tag, err := pt.Exec(ctx, `UPDATE afs.identity_providers SET name=$3, client_id=$4, client_secret_arn=$5, groups_claim=$6,
-  is_default=$7, enabled=$8, cli_client_id=$9 WHERE id=$1 AND version=$2`,
-		p.ID, int64(expect), p.Name, p.ConsoleClientID, nullable(p.ClientSecretARN), p.GroupsClaim, p.IsDefault, p.Enabled, nullable(p.CLIClientID))
+  is_default=$7, enabled=$8, cli_client_id=$9, collab_client_id=$10, collab_client_secret_arn=$11 WHERE id=$1 AND version=$2`,
+		p.ID, int64(expect), p.Name, p.ConsoleClientID, nullable(p.ClientSecretARN), p.GroupsClaim, p.IsDefault, p.Enabled, nullable(p.CLIClientID),
+		nullable(p.CollabClientID), nullable(p.CollabClientSecretARN))
 	if err != nil {
 		return domain.IdentityProvider{}, MapError(err, OpWrite, "identity provider")
 	}
