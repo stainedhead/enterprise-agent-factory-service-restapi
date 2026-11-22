@@ -12,9 +12,6 @@ import (
 
 // Names and labels of the per-agent egress policies (M2-H1).
 const (
-	// LabelAgentID is the label an agent's pod carries (set by the agent renderer) and the egress policy
-	// selects on. The same label on a policy names the agent it belongs to.
-	LabelAgentID = "afs.stainedhead.io/agent-id"
 	// EgressKind is the engine kind (and resource-kind label) of the team's egress.
 	EgressKind = "egress"
 	// egressPolicyPrefix prefixes the policy names.

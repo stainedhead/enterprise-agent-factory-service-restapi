@@ -40,6 +40,7 @@ is in `resource_status` with the conditions `NamespaceReady`, `IamReady` and `Re
 | `AFS_SECRETS_PREFIX` | no | Secrets Manager path prefix; default `afs` |
 | `AFS_LEADER_LEASE_NAMESPACE` | no | Namespace of the Lease; default `afs-system` |
 | `AFS_GATEWAY_NAMESPACE`, `AFS_GATEWAY_NAME`, `AFS_GATEWAY_CA_CONFIGMAP` | no | Where `afs-gateway` and its CA bundle are; defaults `afs-system`, `afs-gateway`, `afs-gateway-ca` |
+| `AFS_NODECLASS_JSON` | no | Base `EC2NodeClass` spec (role, subnet and security group selectors, AMI family) that every dedicated-tier team's node class copies, as JSON; the team's tags are merged in |
 | `AFS_POLL_INTERVAL`, `AFS_RESYNC_INTERVAL` | no | Backstop poll (30s) and full resync (10m) |
 | `AFS_METRICS_ADDR` | no | Probe and metrics address; default `:9090` |
 | `POD_NAME` | no | Leader election identity; the hostname if unset |

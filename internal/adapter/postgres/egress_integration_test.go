@@ -2,7 +2,6 @@ package postgres_test
 
 import (
 	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -116,10 +115,6 @@ func TestEgressSource(t *testing.T) {
 	}
 }
 
-func isNotFound(err error) bool {
-	var de *domain.Error
-	return err != nil && errors.As(err, &de) && de.Kind == domain.KindNotFound
-}
 
 // M2-H1: EgressPolicyReady is merged onto the agent's status without changing its phase, keeps the
 // transition time while the status stays, and does nothing for an agent that has no status yet.
