@@ -536,9 +536,9 @@ Owns: `internal/domain/budget.go`, `internal/usecase/budgets/`, `internal/adapte
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M3-E1 | `Budget` aggregate: amount ≤ effective ceiling, `notify` only persistent and only with `teams:set-guardrails`, lifetime not removable; forecast (linear) and `projectedCapAt` (absent when not within the period) [unit] | RA-US-7.5, RA-14 | — |
-| [ ] | M3-E2 | `GetBudget` with spent, reserved, percent, forecast, projected cap | RA-1 (part) | M3-E1 |
-| [ ] | M3-E3 | `PutBudget`: above the ceiling → `400`; up to an unexpired override allowed for a team-admin; team-admin setting the override → `403`; `notify` on ephemeral → `400`, by team-admin → `403`, by service admin → `200` | RA-US-13.1, RA-US-13.2, RA-US-13.3 | M3-E1 |
+| [x] | M3-E1 | `Budget` aggregate: amount ≤ effective ceiling, `notify` only persistent and only with `teams:set-guardrails`, lifetime not removable; forecast (linear) and `projectedCapAt` (absent when not within the period) [unit] | RA-US-7.5, RA-14 | — |
+| [x] | M3-E2 | `GetBudget` with spent, reserved, percent, forecast, projected cap | RA-1 (part) | M3-E1 |
+| [x] | M3-E3 | `PutBudget`: above the ceiling → `400`; up to an unexpired override allowed for a team-admin; team-admin setting the override → `403`; `notify` on ephemeral → `400`, by team-admin → `403`, by service admin → `200` | RA-US-13.1, RA-US-13.2, RA-US-13.3 | M3-E1 |
 
 ### M3-F · Budget reconciler (RC-6, RC-14)
 
