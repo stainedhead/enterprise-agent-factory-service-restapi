@@ -144,3 +144,62 @@ func TestIdentityRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// M4-A1: the mirror upserts, deletes what left the organization and retires what a link still uses.
+func TestOrgMirrorStore(t *testing.T) {
+	db := pgtest.Get(t)
+	runner, _ := reconcilerRunner(t, db)
+	store := postgres.NewOrgMirrorStore(runner)
+	admin := db.Admin(t)
+	tm := db.SeedTeam(t)
+	agent := seedAgent(t, db, tm.ID, "mirror")
+	// Clean slate for this test's accounts.
+	if _, err := admin.Exec(t.Context(), `DELETE FROM afs.org_aws_accounts WHERE id IN ('555566667777', '666677778888', '777788889999')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(t.Context(), `UPDATE afs.agents SET iam_identity = 'dedicated' WHERE id = $1`, agent); err != nil {
+		t.Fatal(err)
+	}
+	keep := domain.OrgAccount{ID: "555566667777", Name: "keep", Status: domain.OrgAccountActive}
+	used := domain.OrgAccount{ID: "666677778888", Name: "used", Status: domain.OrgAccountActive}
+	gone := domain.OrgAccount{ID: "777788889999", Name: "gone", Status: domain.OrgAccountActive}
+	at := time.Now().UTC().Truncate(time.Second)
+	if _, err := store.Mirror(t.Context(), []domain.OrgAccount{keep, used, gone}, at); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(t.Context(), `UPDATE afs.teams SET allowed_aws_accounts = ARRAY['*'] WHERE id = $1`, tm.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(t.Context(), `INSERT INTO afs.agent_role_links (id, team_id, agent_id, account_id, role_arn, profile_name, external_id)
+VALUES ($1, $2, $3, '666677778888', 'arn:aws:iam::666677778888:role/r', 'p', 'afs-eeeeeeeeeeeeeeeeeeeeeeee')`, pgtest.NewID("arl"), tm.ID, agent); err != nil {
+		t.Fatal(err)
+	}
+	// Only the live accounts of this test are listed; every other mirrored account is "removed" too, which is the point.
+	res, err := store.Mirror(t.Context(), []domain.OrgAccount{{ID: "555566667777", Name: "renamed", Status: domain.OrgAccountActive}}, at.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	has := func(ids []string, id string) bool {
+		for _, x := range ids {
+			if x == id {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(res.Removed, "777788889999") || !has(res.Retired, "666677778888") || has(res.Removed, "666677778888") {
+		t.Fatalf("result: %+v", res)
+	}
+	var name, status string
+	if err := admin.QueryRow(t.Context(), `SELECT name FROM afs.org_aws_accounts WHERE id = '555566667777'`).Scan(&name); err != nil || name != "renamed" {
+		t.Fatalf("upsert: %q %v", name, err)
+	}
+	if err := admin.QueryRow(t.Context(), `SELECT status FROM afs.org_aws_accounts WHERE id = '666677778888'`).Scan(&status); err != nil || status != "suspended" {
+		t.Fatalf("retired: %q %v", status, err)
+	}
+	var n int
+	_ = admin.QueryRow(t.Context(), `SELECT count(*) FROM afs.org_aws_accounts WHERE id = '777788889999'`).Scan(&n)
+	if n != 0 {
+		t.Fatal("removed account still mirrored")
+	}
+}

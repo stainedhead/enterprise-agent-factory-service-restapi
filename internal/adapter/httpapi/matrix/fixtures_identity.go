@@ -50,7 +50,7 @@ func init() {
 	Register(Case{Op: "ListAgentIdentities", Path: "/v1/teams/{teamId}/agents/{agentId}/identities",
 		Prepare: func(t *testing.T, w *World) map[string]string { return map[string]string{"agentId": w.seedAgentID(t)} }})
 	Register(Case{Op: "CreateAgentIdentity", Path: "/v1/teams/{teamId}/agents/{agentId}/identities", NoOutbox: cdOutbox,
-		Body: `{"kind":"external","externalRef":"mx-account"}`,
+		Body:    `{"kind":"external","externalRef":"mx-account"}`,
 		Prepare: func(t *testing.T, w *World) map[string]string { return map[string]string{"agentId": w.seedAgentID(t)} }})
 	Register(Case{Op: "DeleteAgentIdentity", Path: "/v1/teams/{teamId}/agents/{agentId}/identities/{identityId}", NoOutbox: cdOutbox,
 		Headers: map[string]string{"If-Match": ifMatch},
