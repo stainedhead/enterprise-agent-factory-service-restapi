@@ -395,11 +395,11 @@ Owns: `internal/domain/secret.go`, `internal/usecase/secrets/`, `internal/adapte
 
 | ✓ | ID | Task | AC / Req | Depends |
 |---|---|---|---|---|
-| [ ] | M2-C1 | Secrets Manager writer adapter and fake: `CreateSecret` (name, tags `afs-team-id`, `afs-agent-id`), `PutSecretValue`, new version for rotate; `SecretValue` type never marshals or prints | RA-5 | — |
-| [ ] | M2-C2 | `CreateSecret` (team and agent scope): name from `afs.secret_path`, Secrets Manager first (`ClientRequestToken` derived from the idempotency key or request id, so a retry does not create a second secret), then the ARN row; Secrets Manager failure → no row, `503 Unavailable` without the value; a database failure after Secrets Manager succeeded force-deletes the new secret (compensation), and a failed compensation tags it `afs-orphan=true` and increments `afs_api_orphan_secrets_total` | RA-US-5.1, RA-US-5.2 | M2-C1 |
-| [ ] | M2-C3 | `ListSecrets`, `GetSecret`, `UpdateSecret`, `DeleteSecret` (bound → `409` listing agents), `PutSecretValue` (`204`), `RotateSecret` (`{value}` → new version, `secret.rotated`); events carry no value; Secrets Manager failure on put or rotate → `503`, metadata unchanged; a value over 64 KiB → `400` | RA-1 (part), CT-API-14, SEC-4 | M2-C2 |
-| [ ] | M2-C5 | Orphan sweep in the reconciler: secrets under `<prefix>/` tagged `afs-orphan=true` or with no database row for 1 hour are scheduled for deletion with the 30-day window; audited [adapter with fake AWS] | RA-5 (part), SEC-1 | M2-C2, M1-I1 |
-| [ ] | M2-C4 | Fuzz test over every secret route: the value never appears in a response body, header, log line, trace attribute, audit record or event | RA-US-5.3 | M2-C3, M1-L1 |
+| [x] | M2-C1 | Secrets Manager writer adapter and fake: `CreateSecret` (name, tags `afs-team-id`, `afs-agent-id`), `PutSecretValue`, new version for rotate; `SecretValue` type never marshals or prints | RA-5 | — |
+| [x] | M2-C2 | `CreateSecret` (team and agent scope): name from `afs.secret_path`, Secrets Manager first (`ClientRequestToken` derived from the idempotency key or request id, so a retry does not create a second secret), then the ARN row; Secrets Manager failure → no row, `503 Unavailable` without the value; a database failure after Secrets Manager succeeded force-deletes the new secret (compensation), and a failed compensation tags it `afs-orphan=true` and increments `afs_api_orphan_secrets_total` | RA-US-5.1, RA-US-5.2 | M2-C1 |
+| [x] | M2-C3 | `ListSecrets`, `GetSecret`, `UpdateSecret`, `DeleteSecret` (bound → `409` listing agents), `PutSecretValue` (`204`), `RotateSecret` (`{value}` → new version, `secret.rotated`); events carry no value; Secrets Manager failure on put or rotate → `503`, metadata unchanged; a value over 64 KiB → `400` | RA-1 (part), CT-API-14, SEC-4 | M2-C2 |
+| [x] | M2-C5 | Orphan sweep in the reconciler: secrets under `<prefix>/` tagged `afs-orphan=true` or with no database row for 1 hour are scheduled for deletion with the 30-day window; audited [adapter with fake AWS] | RA-5 (part), SEC-1 | M2-C2, M1-I1 |
+| [x] | M2-C4 | Fuzz test over every secret route: the value never appears in a response body, header, log line, trace attribute, audit record or event | RA-US-5.3 | M2-C3, M1-L1 |
 
 ### M2-D · Configuration values
 

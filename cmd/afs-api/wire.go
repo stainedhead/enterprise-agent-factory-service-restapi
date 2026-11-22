@@ -174,6 +174,10 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 		}
 		wireAuth(c, &cfg, p, s)
 		wireM1W2(c, &cfg, log)
+		if err := wireSecrets(ctx, c, s, log); err != nil {
+			pool.Close()
+			return nil, err
+		}
 		// An explicit Registrars list replaces the default one, so the areas bound by the streams
 		// (wireM1W2 and later) are added next to the sign-in handlers wireAuth registered.
 		for _, a := range httpapi.Areas {

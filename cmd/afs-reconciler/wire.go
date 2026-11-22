@@ -190,6 +190,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	housekeeping.Register(r.Engine, housekeeping.Jobs(housekeeping.Deps{
 		Outbox: hk, Sink: eventbridge.New(awsCfg, s.EventBusName), Partitions: hk, Purger: hk, Recorder: m, Clock: clock.Now, Log: log,
 	}))
+	registerOrphanSweep(r.Engine, sm, runner, audit, clock.Now, log)
 	registerEngineStats(m, r.Engine.Stats)
 	schemaVersion := func(ctx context.Context) (int, error) {
 		var v int
