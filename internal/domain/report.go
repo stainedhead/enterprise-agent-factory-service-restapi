@@ -353,3 +353,59 @@ type Report struct {
 
 // BedrockOnlyNote is the contract's note on what spend a report leaves out.
 const BedrockOnlyNote = "Spend with providers other than Bedrock is not included"
+
+// MeasureType is the JSON type of a measure.
+type MeasureType int
+
+// Measure types.
+const (
+	// MeasureInt is an integer; it is nil when the source has no value.
+	MeasureInt MeasureType = iota
+	// MeasureMoney is a decimal USD string.
+	MeasureMoney
+	// MeasureFloat is a number such as a percentage; nil when undefined.
+	MeasureFloat
+)
+
+// Measure names a measure column of a report.
+type Measure struct {
+	Name string
+	Type MeasureType
+}
+
+// ReportMeasures lists the measure columns of a report kind, in order. Traffic carries counts and
+// bytes, never a cost.
+func ReportMeasures(k ReportKind) []Measure {
+	switch k {
+	case ReportKindUsage:
+		return []Measure{{"calls", MeasureInt}, {"inputTokens", MeasureInt}, {"outputTokens", MeasureInt}, {"costUsd", MeasureMoney}}
+	case ReportKindCosts:
+		return []Measure{{"estimatedUsd", MeasureMoney}, {"billedUsd", MeasureMoney}}
+	case ReportKindActivity:
+		return []Measure{{"workingSeconds", MeasureInt}, {"idleSeconds", MeasureInt}, {"offSeconds", MeasureInt},
+			{"impairedSeconds", MeasureInt}, {"modelCalls", MeasureInt}, {"utilizationPct", MeasureFloat}}
+	case ReportKindTraffic:
+		return []Measure{{"connections", MeasureInt}, {"deniedConnections", MeasureInt}, {"requests", MeasureInt},
+			{"errors", MeasureInt}, {"bytesOut", MeasureInt}, {"bytesIn", MeasureInt}}
+	}
+	return nil
+}
+
+// ReportNotes returns the notes of a report: what it leaves out and where its numbers come from.
+func ReportNotes(q ReportQuery) []string {
+	var n []string
+	switch q.Kind {
+	case ReportKindUsage:
+		n = append(n, BedrockOnlyNote)
+	case ReportKindCosts:
+		n = append(n, BedrockOnlyNote, "estimatedUsd is the gateway's metering; billedUsd comes from the AWS Cost and Usage Report and is present for daily ranges once reconciled")
+	case ReportKindTraffic:
+		n = append(n, "Traffic reports carry counts and bytes, never a cost", "requests and errors are empty where no egress proxy sees HTTP")
+	case ReportKindActivity:
+		n = append(n, "utilizationPct is the working share of working and idle time")
+	}
+	if q.Granularity == Daily {
+		n = append(n, "A range over two days covers every UTC day it touches")
+	}
+	return n
+}
