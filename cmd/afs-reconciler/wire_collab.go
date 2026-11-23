@@ -39,7 +39,9 @@ func wireCollab(e jobs, runner *postgres.TxRunner, status engine.StatusWriter, o
 	} else {
 		log.Warn("the first Paperclip admin invite and member sync invites are not sent: " + envNotifyEmailFrom + " is not set")
 	}
-	wireCollabManaged(e, db, pc, bs.Mail, status, secretsmanager.NewKeyStore(awsCfg), now, log)
+	keys := secretsmanager.NewKeyStore(awsCfg)
+	wireCollabManaged(e, db, pc, bs.Mail, status, keys, now, log)
+	wireCollabBuzz(e, db, keys, status, env, now, log)
 	e.AddJob(engine.Job{Name: "collab-endpoint", Every: 30 * time.Second, Immediate: true, Fn: ctl.Sync})
 	e.AddJob(engine.Job{Name: "collab-links", Every: 30 * time.Second, Immediate: true, Fn: ls.Sync})
 	e.AddJob(engine.Job{Name: "collab-denied-spike", Every: time.Minute, Immediate: false, Fn: sp.Run})

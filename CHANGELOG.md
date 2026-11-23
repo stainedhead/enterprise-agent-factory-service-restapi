@@ -14,7 +14,7 @@ Team orchestration agent and model access (spec `specs/261123-orchestration-and-
 - Gateway: model admission (service, team, agent and pool levels, and a price) with the reasons `model_not_enabled_for_service`, `model_not_enabled_for_team`, `model_not_enabled_for_agent` and `model_not_priced`; fails closed; 60 s cache refreshed on the change feed; `503 model_provisioning` with `Retry-After: 30`; metric `afs_gateway_model_denials_total`.
 - Edge: private and public hostnames from `orchestration_routes()`; a surface offered at one level is a `404` at the other; access records carry `exposure`.
 - Deploy: Terraform module `orchestration-private` (internal ALB, private zone, WAF); Helm `edge.privateTargetGroupArn`, `api.deprecation`, `api.orchestrationBackfill`.
-- Known gaps recorded in `specs/261123-orchestration-and-model-access/implementation-notes.md`: Buzz keypair generation (Buzz is disabled by default) and the tool-change state machine's per-step conditions.
+- Buzz worker registration: the reconciler generates each worker's keypair and registers its public key at the relay (`AFS_BUZZ_RELAY_ADMIN_KEY_FILE`); the tool-change state machine reports `ToolChanging`, `SnapshotTaken` and `ToolReady`.
 
 ## v1.0.1
 

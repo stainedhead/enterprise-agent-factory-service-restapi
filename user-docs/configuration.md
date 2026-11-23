@@ -114,6 +114,9 @@ The reconciler's collaboration jobs read `AFS_EDGE_NAMESPACE` (default `afs-syst
 `AFS_KMS_KEY_ARN` (the environment key, for the collaboration agent's role policy) and, for the WAF allow-list sync,
 `AFS_COLLAB_WAF_IPSET_V4_ARN` and `AFS_COLLAB_WAF_IPSET_V6_ARN`.
 
+Buzz worker registration (managed teams whose orchestration agent runs Buzz) needs `AFS_BUZZ_RELAY_ADMIN_KEY_FILE`, the path of a
+mounted file that holds the relay's admin key. Without it the job is off, with a warning, and Buzz workers stay unregistered.
+
 ### Orchestration and models (1.1.0)
 
 `afs-api` also reads `AFS_DEPRECATION_SINCE` and `AFS_DEPRECATION_SUNSET` (RFC 3339; defaults 2026-11-23 and

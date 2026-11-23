@@ -51,8 +51,20 @@ type TeamState struct {
 	ProviderClient bool
 	Mode           domain.RegistrationMode
 	Generation     int64
-	// ToolChanging is true while a tool change is in progress (the pod is being replaced).
-	ToolChanging     bool
+	// ToolChanging forces the change open (tests, callers that know better); the source normally leaves it
+	// false and the change is computed from the snapshot (ComputeToolChange).
+	ToolChanging bool
+	// SnapshotID and SnapshotState are the latest pre_tool_change snapshot of the agent ("" when none).
+	SnapshotID, SnapshotState string
+	// PodStale is true while the agent's status was observed before its latest generation (the pod may still be
+	// the old tool's).
+	PodStale bool
+	// PendingLinks counts connected workers whose link is not yet registered with the tool.
+	PendingLinks int
+	// PrevClosedSnapshot is the snapshot id the ToolChanging condition recorded when the last change closed.
+	PrevClosedSnapshot string
+	// PrevToolVersion is the message of the last ToolReady condition ("version ...").
+	PrevToolVersion  string
 	PrevReady        *bool  // nil when no status row exists yet
 	PrevReason       string // the last EndpointReady reason
 	PrevPaperclip    *bool
@@ -110,7 +122,7 @@ func ComputeEndpoint(s TeamState) Endpoint {
 		e.Reason = ReasonTeamSuspended
 	case s.AgentState == string(domain.AgentPaused):
 		e.Reason = ReasonPaused
-	case !s.PodReady || s.ToolChanging:
+	case !s.PodReady || s.ToolChanging || ComputeToolChange(s).Open:
 		e.Reason = ReasonStarting
 	case noSurface:
 		e.Reason, e.Ready = ReasonReady, true
@@ -181,6 +193,11 @@ func (c *Controller) syncOne(ctx context.Context, s TeamState) error {
 	if s.PaperclipHealthy != nil {
 		conds = append(conds, condition(ConditionPaperclipReady, *s.PaperclipHealthy, boolReason(*s.PaperclipHealthy, "Healthy", "NotAnswering"), "", now))
 	}
+	tc := ComputeToolChange(s)
+	if s.ToolChanging && !tc.Open {
+		tc.Open, tc.Step = true, StepStarting
+	}
+	conds = append(conds, toolChangeConditions(s, tc, now)...)
 	uiState, apiState := s.Surfaces()
 	for _, sf := range surfaceStates(s, ep, uiState, apiState) {
 		conds = append(conds, condition(sf.cond, sf.ready, string(sf.state.Effective), sf.state.Hostname, now))
@@ -280,4 +297,28 @@ func condition(typ string, ok bool, reason, msg string, at time.Time) domain.Con
 		st = domain.ConditionTrue
 	}
 	return domain.Condition{Type: typ, Status: st, Reason: reason, Message: msg, LastTransitionTime: at.UTC()}
+}
+
+// toolChangeConditions are ToolChanging (reason: the step; message: the closed snapshot id once over),
+// SnapshotTaken (only while a snapshot exists) and ToolReady (message: the tool version, carried over).
+func toolChangeConditions(s TeamState, c ToolChange, now time.Time) []domain.Condition {
+	conds := []domain.Condition{condition(ConditionToolChanging, c.Open, c.Step, c.Closed, now)}
+	if c.SnapshotTaken != "" {
+		reason := "Pending"
+		switch {
+		case c.SnapshotTaken == "True":
+			reason = "Completed"
+		case s.SnapshotState == "failed":
+			reason = "Failed"
+		}
+		conds = append(conds, condition(ConditionSnapshotTaken, c.SnapshotTaken == "True", reason, s.SnapshotID, now))
+	}
+	reason := "Ready"
+	if !c.ToolReady {
+		reason = "Starting"
+		if c.Open {
+			reason = "ToolChanging"
+		}
+	}
+	return append(conds, condition(ConditionToolReady, c.ToolReady, reason, s.PrevToolVersion, now))
 }

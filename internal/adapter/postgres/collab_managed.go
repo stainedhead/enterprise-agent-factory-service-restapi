@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -12,6 +13,7 @@ import (
 
 var (
 	_ rcollab.ManagedSource = (*CollabReconcile)(nil)
+	_ rcollab.BuzzSource    = (*CollabReconcile)(nil)
 	_ rcollab.PeopleSource  = (*CollabReconcile)(nil)
 	_ rcollab.Admins        = (*CollabReconcile)(nil)
 )
@@ -47,10 +49,31 @@ ORDER BY ac.team_id, ac.agent_id`
 // ManagedTeams implements collab.ManagedSource. Links of teams that lost their collaboration agent come back
 // as one team with Gone set per team: Paperclip went with the pod, so only the records and secrets remain.
 func (c *CollabReconcile) ManagedTeams(ctx context.Context) ([]rcollab.ManagedTeam, error) {
+	return c.managedTeams(ctx, managedTeamsSQL, managedLinksSQL)
+}
+
+// buzzTeamsSQL lists the managed teams whose orchestration agent runs Buzz; there is no board key to wait for.
+const buzzTeamsSQL = `SELECT c.team_id, c.agent_id, coalesce(ars.phase = 'Ready', false)
+FROM afs.team_collaboration c
+JOIN afs.teams t ON t.id = c.team_id AND t.deleted_at IS NULL AND t.state NOT IN ('deleting', 'deleted')
+JOIN afs.agents a ON a.team_id = c.team_id AND a.id = c.agent_id AND a.deleted_at IS NULL
+LEFT JOIN afs.resource_status ars ON ars.resource_kind = 'agent' AND ars.resource_id = c.agent_id
+WHERE c.registration_mode = 'managed' AND c.tool = 'buzz'
+ORDER BY c.team_id`
+
+// buzzLinksSQL is managedLinksSQL with the Buzz private key as the link's key.
+var buzzLinksSQL = strings.ReplaceAll(managedLinksSQL, domain.SecretPaperclipAgentAPIKey, domain.SecretBuzzAgentPrivateKey)
+
+// BuzzTeams implements collab.BuzzSource.
+func (c *CollabReconcile) BuzzTeams(ctx context.Context) ([]rcollab.ManagedTeam, error) {
+	return c.managedTeams(ctx, buzzTeamsSQL, buzzLinksSQL)
+}
+
+func (c *CollabReconcile) managedTeams(ctx context.Context, teamsSQL, linksSQL string) ([]rcollab.ManagedTeam, error) {
 	var out []rcollab.ManagedTeam
 	err := c.read(ctx, "managed collaboration", func(ctx context.Context, t *Tx) error {
 		byTeam := map[string]int{}
-		rows, err := t.Query(ctx, managedTeamsSQL)
+		rows, err := t.Query(ctx, teamsSQL)
 		if err != nil {
 			return err
 		}
@@ -67,7 +90,7 @@ func (c *CollabReconcile) ManagedTeams(ctx context.Context) ([]rcollab.ManagedTe
 		if err := rows.Err(); err != nil {
 			return err
 		}
-		lr, err := t.Query(ctx, managedLinksSQL)
+		lr, err := t.Query(ctx, linksSQL)
 		if err != nil {
 			return err
 		}

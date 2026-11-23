@@ -59,6 +59,21 @@ VALUES ($1, $2, 'pc', $3, (SELECT id FROM afs.agent_templates WHERE name = $3), 
 		t.Fatalf("state: %+v", st)
 	}
 
+	// The tool change marker: the latest pre_tool_change snapshot, the stale pod and the unlinked worker.
+	if st.SnapshotID != "" || st.PendingLinks != 1 {
+		t.Fatalf("before a change: snapshot %q pending links %d", st.SnapshotID, st.PendingLinks)
+	}
+	snap := pgtest.NewID("vsnap")
+	exec(`INSERT INTO afs.agent_volume_snapshots (id, team_id, agent_id, reason, tool, retain_until) VALUES ($1, $2, $3, 'pre_tool_change', 'paperclip', now() + interval '90 days')`, snap, tm.ID, collab)
+	if states, err = a.States(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for i := range states {
+		if states[i].TeamID == tm.ID && (states[i].SnapshotID != snap || states[i].SnapshotState != "requested") {
+			t.Errorf("snapshot: %+v", states[i])
+		}
+	}
+
 	links, err := a.Links(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -375,6 +390,66 @@ VALUES ($1, $2, 'web_ui', 'user', $3, 'signed_in', 1), ($1, $2, 'web_ui', 'user'
 func hasTeam(ppl []rcollab.TeamPeople, id string) bool {
 	for _, p := range ppl {
 		if p.TeamID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// ORC-9: the Buzz teams are the managed teams that run Buzz, listed without a board key, with the worker's
+// private key path as the link's key.
+func TestCollabBuzzTeams(t *testing.T) {
+	db := pgtest.Get(t)
+	pool, err := postgres.OpenPool(t.Context(), postgres.Config{URL: db.URLs["afs_reconciler"] + "&options=-c%20role%3Dafs_reconciler", Service: "afs-reconciler", SystemActor: true, MaxConns: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	admin := db.Admin(t)
+	ctx := context.Background()
+	tm := db.SeedTeam(t)
+	model := seedModel(t, db, tm.ID)
+	tpl := "bz-" + lower(pgtest.NewID("x")[2:8])
+	seedTemplateForAgents(t, db, tpl)
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := admin.Exec(ctx, q, args...); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	exec(`UPDATE afs.agent_templates SET capabilities = ARRAY['orchestration','tool:buzz'] WHERE name = $1`, tpl)
+	collab, worker := pgtest.NewID("agt"), pgtest.NewID("agt")
+	img := "registry.example.com/agents/coder@" + testDigest
+	exec(`INSERT INTO afs.agents (id, team_id, name, template, template_id, image, model_id, role, iam_identity)
+VALUES ($1, $2, 'bz', $3, (SELECT id FROM afs.agent_templates WHERE name = $3), $4, $5, 'orchestration', 'dedicated')`, collab, tm.ID, tpl, img, model)
+	exec(`INSERT INTO afs.agents (id, team_id, name, template, image, model_id) VALUES ($1, $2, 'wk', $3, $4, $5)`, worker, tm.ID, tpl, img, model)
+	exec(`INSERT INTO afs.team_collaboration (team_id, agent_id, registration_mode, tool, web_ui_exposure, web_api_exposure) VALUES ($1, $2, 'managed', 'buzz', 'off', 'off')`, tm.ID, collab)
+	exec(`INSERT INTO afs.agent_collaboration (team_id, agent_id, connect) VALUES ($1, $2, true)`, tm.ID, worker)
+	a := postgres.NewCollabReconcile(postgres.NewTxRunner(pool), postgres.NewOutboxWriter(), &fakes.IDGen{}, &fakes.Clock{T: time.Now()}, nil)
+
+	bts, err := a.BuzzTeams(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := a.SecretPath(ctx, tm.ID, worker, domain.SecretBuzzAgentPrivateKey)
+	var bt *rcollab.ManagedTeam
+	for i := range bts {
+		if bts[i].TeamID == tm.ID {
+			bt = &bts[i]
+		}
+	}
+	if bt == nil || bt.CollabAgentID != collab || len(bt.Links) != 1 || bt.Links[0].KeyPath != path || bt.Links[0].KeyARN != "" {
+		t.Fatalf("buzz team: %+v", bt)
+	}
+	// The Paperclip registrar never sees a Buzz team.
+	if mts, err := a.ManagedTeams(ctx); err != nil || hasManaged(mts, tm.ID) {
+		t.Errorf("buzz team listed as paperclip: %v", err)
+	}
+}
+
+func hasManaged(ts []rcollab.ManagedTeam, id string) bool {
+	for _, t := range ts {
+		if t.TeamID == id {
 			return true
 		}
 	}

@@ -1,6 +1,6 @@
 # Tasks
 
-Status: [x] done, [ ] open (recorded as a known gap in implementation-notes.md).
+Status: [x] done, [ ] open.
 
 - [x] T1 Pin `-db` (000022) and regenerate `api/openapi.yaml` v1.4.0 (194 operations)
 - [x] T2 Domain: exposure, tool profile, models, settings, reasons
@@ -20,5 +20,5 @@ Status: [x] done, [ ] open (recorded as a known gap in implementation-notes.md).
 - [x] T16 Edge: private and public hostnames, wrong-level 404, exposure on records
 - [x] T17 Terraform `orchestration-private`; Helm values and hook
 - [x] T18 Release 1.1.0 files; documentation
-- [ ] T19 Buzz keypair generation job (P2; Buzz is disabled by default)
-- [ ] T20 Tool-change state machine conditions beyond `ToolChanging` and `ToolReady` (P2)
+- [x] T19 Buzz keypair generation job (`collab.BuzzRegistrar`, `adapter/buzz`, job `collab-buzz-register`)
+- [x] T20 Tool-change state machine conditions (`collab.ComputeToolChange`: `ToolChanging`, `SnapshotTaken`, `ToolReady`)

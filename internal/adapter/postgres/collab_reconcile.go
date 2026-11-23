@@ -71,12 +71,15 @@ func (c *CollabReconcile) write(ctx context.Context, what string, fn func(contex
 const collabStatesSQL = `SELECT c.team_id, c.agent_id, t.slug, t.state, a.state, c.tool, c.web_ui_exposure, c.web_api_exposure,
   t.max_collaboration_exposure, c.registration_mode, coalesce(p.collab_client_id, '') <> '', c.generation,
   coalesce(ars.phase = 'Ready', false), rs.conditions,
-  EXISTS (SELECT 1 FROM afs.agent_volume_snapshots v WHERE v.team_id = c.team_id AND v.agent_id = c.agent_id
-           AND v.reason = 'pre_tool_change' AND v.state IN ('requested', 'pending'))
+  coalesce(sn.id, ''), coalesce(sn.state, ''),
+  coalesce(ars.observed_generation < a.generation, false),
+  (SELECT count(*) FROM afs.agent_collaboration l WHERE l.team_id = c.team_id AND l.connect AND l.link_state <> 'linked')
 FROM afs.team_collaboration c
 JOIN afs.teams t ON t.id = c.team_id AND t.deleted_at IS NULL AND t.state NOT IN ('deleting', 'deleted')
 JOIN afs.agents a ON a.team_id = c.team_id AND a.id = c.agent_id AND a.deleted_at IS NULL
 LEFT JOIN afs.identity_providers p ON p.id = coalesce(t.identity_provider_id, (SELECT d.id FROM afs.identity_providers d WHERE d.is_default))
+LEFT JOIN LATERAL (SELECT v.id, v.state FROM afs.agent_volume_snapshots v WHERE v.team_id = c.team_id AND v.agent_id = c.agent_id
+                    AND v.reason = 'pre_tool_change' ORDER BY v.requested_at DESC, v.id DESC LIMIT 1) sn ON true
 LEFT JOIN afs.resource_status ars ON ars.resource_kind = 'agent' AND ars.resource_id = c.agent_id
 LEFT JOIN afs.resource_status rs ON rs.resource_kind = '` + CollaborationStatusKind + `' AND rs.resource_id = c.team_id
 ORDER BY c.team_id`
@@ -103,7 +106,7 @@ func (c *CollabReconcile) States(ctx context.Context) ([]rcollab.TeamState, erro
 				gen                  int64
 			)
 			if err := rows.Scan(&s.TeamID, &s.AgentID, &s.TeamSlug, &s.TeamState, &s.AgentState, &tool, &ui, &api, &limit, &mode,
-				&s.ProviderClient, &gen, &s.PodReady, &conds, &s.ToolChanging); err != nil {
+				&s.ProviderClient, &gen, &s.PodReady, &conds, &s.SnapshotID, &s.SnapshotState, &s.PodStale, &s.PendingLinks); err != nil {
 				return err
 			}
 			s.Tool, s.WebUIExposure, s.WebAPIExposure, s.Limit = domain.CollabTool(tool), domain.Exposure(ui), domain.Exposure(api), domain.Exposure(limit)
@@ -132,6 +135,12 @@ func applyPrevious(s *rcollab.TeamState, cs []domain.Condition) {
 			s.PrevReady, s.PrevReason = &on, cd.Reason
 		case rcollab.ConditionPaperclipReady:
 			s.PrevPaperclip = &on
+		case rcollab.ConditionToolChanging:
+			if !on {
+				s.PrevClosedSnapshot = cd.Message
+			}
+		case rcollab.ConditionToolReady:
+			s.PrevToolVersion = cd.Message
 		case rcollab.ConditionWebUIEndpoint, rcollab.ConditionWebAPIEndpoint:
 			if s.PrevSurfaces == nil {
 				s.PrevSurfaces = map[domain.Surface]rcollab.PrevSurface{}
@@ -289,6 +298,8 @@ func (c *CollabReconcile) Pending(ctx context.Context) ([]rcollab.BoardKeyCandid
 FROM afs.team_collaboration c
 JOIN afs.teams t ON t.id = c.team_id AND t.deleted_at IS NULL AND t.state NOT IN ('deleting', 'deleted')
 JOIN afs.agents a ON a.team_id = c.team_id AND a.id = c.agent_id AND a.deleted_at IS NULL
+LEFT JOIN LATERAL (SELECT v.id, v.state FROM afs.agent_volume_snapshots v WHERE v.team_id = c.team_id AND v.agent_id = c.agent_id
+                    AND v.reason = 'pre_tool_change' ORDER BY v.requested_at DESC, v.id DESC LIMIT 1) sn ON true
 LEFT JOIN afs.resource_status ars ON ars.resource_kind = 'agent' AND ars.resource_id = c.agent_id
 WHERE c.registration_mode = 'managed' ORDER BY c.team_id`)
 		if err != nil {

@@ -148,7 +148,7 @@ func TestControllerEmitsOnChangeOnly(t *testing.T) {
 	s3.PrevReady, s3.PrevReason, s3.PaperclipHealthy = &notReady, ReasonStarting, &notReady
 	c.Source = fakeSource{states: []TeamState{s3}}
 	_ = c.Sync(t.Context())
-	if len(ev.got) != before+2 || ev.of(domain.EventOrchestrationEndpointStateChanged) != 2 || len(st.reports[len(st.reports)-1].Conditions) != 4 {
+	if len(ev.got) != before+2 || ev.of(domain.EventOrchestrationEndpointStateChanged) != 2 || len(st.reports[len(st.reports)-1].Conditions) != 6 {
 		t.Errorf("ready transition: %d events", len(ev.got)-before)
 	}
 }
