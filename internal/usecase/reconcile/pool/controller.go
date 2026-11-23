@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
@@ -42,6 +43,8 @@ type Config struct {
 	// EFSStorageClass is the storage class of the shared EFS volume.
 	EFSStorageClass string
 	Now             Clock
+	// Events receives agent.model_unavailable for the pool; nil publishes nothing.
+	Events agent.Events
 }
 
 // DefaultEFSStorageClass is the storage class of a shared volume when the platform names none.
@@ -87,12 +90,12 @@ func Routes() []engine.Route {
 	children := []engine.Target{{Kind: engine.KindPool, Children: true}}
 	routes := []engine.Route{{Table: "agent_pools", Targets: []engine.Target{{Kind: engine.KindPool, Self: true}}}}
 	for _, t := range []string{
-		"teams", "team_models", "pool_handoffs", "pool_secret_bindings", "pool_config_values", "pool_role_links",
+		"teams", "team_models", "pool_models", "team_inference_profiles", "pool_handoffs", "pool_secret_bindings", "pool_config_values", "pool_role_links",
 		"external_system_optouts", "secrets", "namespace_config_values", "team_tags", "work_orders",
 	} {
 		routes = append(routes, engine.Route{Table: t, Targets: children})
 	}
-	for _, t := range []string{"agent_templates", "external_systems", "service_tags", "org_aws_accounts"} {
+	for _, t := range []string{"agent_templates", "external_systems", "service_tags", "org_aws_accounts", "models", "model_prices", "service_settings"} {
 		routes = append(routes, engine.Route{Table: t, FanOut: []engine.Kind{engine.KindPool}})
 	}
 	return routes
@@ -198,6 +201,8 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 		requeue = soonest(requeue, vWait)
 	}
 	conds = append(conds, templateCondition(d))
+	conds = append(conds, agent.ReportModel(ctx, c.cfg.Events, slog.Default(), agent.ModelState{TeamID: d.Team.ID, Kind: "pools", ID: d.ID,
+		Default: d.ModelID, Effective: d.Models, Reason: d.ModelReason, Prev: d.PrevModelUnavailable}))
 
 	out := engine.Outcome{Generation: d.Generation, Conditions: conds, Changed: changed, Phase: phase, Requeue: requeue}
 	if len(errs) > 0 {

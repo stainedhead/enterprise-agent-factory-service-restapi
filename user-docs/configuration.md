@@ -65,6 +65,7 @@ Needs `AFS_AWS_REGION` (or `AWS_REGION`) when `AFS_DB_IAM_AUTH` is `true`.
 | `AFS_EXPORT_BUCKET`, `AFS_EXPORT_KMS_KEY_ID` | no | Turn on the export bundle builder; both are then required. |
 | `AFS_VIEWER_KUBECTL_ROLES` | no | Federated role per identity provider (or `default`) for viewer kubectl access. Unset: no access entries. |
 | `AFS_ORG_MIRROR` | on | `off` disables the hourly AWS Organizations account mirror. |
+| `AFS_MODEL_SYNC` | on | `off` disables the daily Bedrock model catalogue sync (new models arrive disabled; an admin enables and prices them). |
 | `AFS_EFS_STORAGE_CLASS` | `efs-sc` | Storage class for pools with a shared volume. |
 | `AFS_NODECLASS_JSON` | none | Base `EC2NodeClass` spec for dedicated-tier teams. |
 | `AFS_WORK_ORDER_QUEUE_URL` | none | SQS queue fed by the `afs.work_order.requested` EventBridge rule. Unset: work order intake is off. |
@@ -113,8 +114,28 @@ The reconciler's collaboration jobs read `AFS_EDGE_NAMESPACE` (default `afs-syst
 `AFS_KMS_KEY_ARN` (the environment key, for the collaboration agent's role policy) and, for the WAF allow-list sync,
 `AFS_COLLAB_WAF_IPSET_V4_ARN` and `AFS_COLLAB_WAF_IPSET_V6_ARN`.
 
+### Orchestration and models (1.1.0)
+
+`afs-api` also reads `AFS_DEPRECATION_SINCE` and `AFS_DEPRECATION_SUNSET` (RFC 3339; defaults 2026-11-23 and
+2027-11-23): the `Deprecation` and `Sunset` headers of the deprecated 1.0.1 operations. `afs-api orchestration-backfill`
+takes the same environment as `afs-api` (see [upgrading to 1.1.0](upgrading-to-1.1.0.md)).
+
 ## Service settings
 
 Service administrators change these with the settings operations; they are cached for 30 seconds. Examples:
 `api.cors_origins` (browser origins allowed to call the API), `secrets.path_prefix`, `billing.variance_alert_pct`,
 `pricing.price_list_sync`. `GET /v1/admin/settings` lists every key with its default and current value.
+
+Orchestration and model settings (1.1.0), all in `admin:settings` scope:
+
+| Key | Meaning |
+|---|---|
+| `orchestration.tools` | Per tool (`paperclip`, `buzz`): `enabled`, `default` (exactly one), `templateId` (an agent template with `orchestration` and the tool capability), `imageRepository`, and the fixed profile (`webUi`, `webApi`, `registration`, `inNamespacePort`). A tool without a template and an image repository is "not set up": `CreateTeam` answers `orchestration_runtime_unset`. |
+| `orchestration.public_base_domain`, `orchestration.private_base_domain` | Apexes of the public and private hostnames (`<team>.<domain>`, `api.<team>.<domain>`). The 1.0.1 key `collab.base_domain` is a read-only alias of the public one. |
+| `orchestration.public_endpoints`, `orchestration.private_endpoints` | Whether each level is offered; a level that is off cannot be chosen. |
+| `orchestration.default_limit`, `orchestration.default_web_ui_exposure`, `orchestration.default_web_api_exposure` | Defaults for a new team's limit and the two levels (a default is capped by the limit and by the tool's profile). |
+| `orchestration.default_resources`, `orchestration.default_volume_gib` | Defaults of the orchestration agent. |
+| `models.default_model_id` | Default model of an agent created without one. |
+
+Model access is changed with `PutServiceModelAccess` (service level), `PutTeamModels` (team) and the `models` member of
+an agent or pool; see [usage examples](usage-examples.md).

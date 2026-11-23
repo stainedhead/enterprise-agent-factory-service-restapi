@@ -35,7 +35,6 @@ func TestNewAgent(t *testing.T) {
 		{"image tag and digest text", func(p *NewAgentParams) { p.Image = "@sha256:" + strings.Repeat("a", 64) }, "image"},
 		{"bad name", func(p *NewAgentParams) { p.Name = "Coder" }, "name"},
 		{"no template", func(p *NewAgentParams) { p.Template = "" }, "template"},
-		{"no model", func(p *NewAgentParams) { p.ModelID = " " }, "modelId"},
 		{"bad cpu", func(p *NewAgentParams) { p.Resources.CPU = "lots" }, "resources.cpu"},
 		{"bad memory", func(p *NewAgentParams) { p.Resources.Memory = "2 gigs" }, "resources.memory"},
 		{"bad identity", func(p *NewAgentParams) { p.IAMIdentity = "root" }, "iamIdentity"},
@@ -89,7 +88,6 @@ func TestAgentApply(t *testing.T) {
 		{"shrink", AgentPatch{Volume: &VolumeSpec{SizeGiB: 10}}, "volume.sizeGiB"},
 		{"class change", AgentPatch{Volume: &VolumeSpec{StorageClass: "io2-fast"}}, "volume.storageClass"},
 		{"bad image", AgentPatch{Image: s("repo:latest")}, "image"},
-		{"empty model", AgentPatch{ModelID: s("")}, "modelId"},
 		{"bad template", AgentPatch{Template: s("X")}, "template"},
 		{"bad binding", AgentPatch{Bindings: &[]SecretBinding{{"x", "env", "A"}}}, "secretBindings[0].secretId"},
 	}

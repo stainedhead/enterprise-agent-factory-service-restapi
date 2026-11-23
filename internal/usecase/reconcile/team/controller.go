@@ -135,12 +135,13 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 	// TagsApplied false with the limit named (RC-9, TAG-4).
 	teamTags, tagErr := tags.Effective(tags.Subject{TeamID: t.ID, TeamSlug: t.Slug}, t.Tags)
 	var roleARN string
+	var requeue time.Duration
 	if tagErr != nil {
 		errs = append(errs, engine.WithCondition(tags.Condition, tagErr))
 		roleARN = c.teamRoleARN(t)
 	} else {
 		var iamErr error
-		roleARN, iamErr = c.reconcileAWS(ctx, t, teamTags)
+		roleARN, requeue, iamErr = c.reconcileAWS(ctx, t, teamTags)
 		if iamErr != nil {
 			errs = append(errs, engine.WithCondition(domain.CondIamReady, iamErr))
 		} else {
@@ -159,7 +160,7 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 		conds = append(conds, ok(domain.CondNamespaceReady, "Reconciled"))
 	}
 
-	out := engine.Outcome{Generation: t.Generation, Conditions: conds, Changed: changed}
+	out := engine.Outcome{Generation: t.Generation, Conditions: conds, Changed: changed, Requeue: requeue}
 	if len(errs) > 0 {
 		return out, errs[0] // the first failure names the condition; both are logged by the engine's retry
 	}

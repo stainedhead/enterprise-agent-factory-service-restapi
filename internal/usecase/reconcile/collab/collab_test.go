@@ -63,7 +63,8 @@ func (f fakeSource) States(context.Context) ([]TeamState, error) { return f.stat
 
 func up() TeamState {
 	return TeamState{TeamID: "team_a", AgentID: "agt_c", TeamSlug: "a", TeamState: "active", AgentState: "enabled", PodReady: true,
-		BaseDomain: "collab.example.com", PublicEndpoints: true, MayExpose: true, WebUIEnabled: true, ProviderClient: true, Mode: domain.RegistrationManual}
+		Tool: domain.ToolPaperclip, Settings: domain.OrchestrationSettings{PublicBaseDomain: "collab.example.com", PublicEndpoints: true},
+		WebUIExposure: domain.ExposurePublic, WebAPIExposure: domain.ExposureOff, Limit: domain.ExposurePublic, ProviderClient: true, Mode: domain.RegistrationManual}
 }
 
 func TestComputeEndpointReasons(t *testing.T) {
@@ -77,11 +78,15 @@ func TestComputeEndpointReasons(t *testing.T) {
 		{"suspended", func(s *TeamState) { s.TeamState = "suspended" }, false, ReasonTeamSuspended},
 		{"paused", func(s *TeamState) { s.AgentState = "paused" }, false, ReasonPaused},
 		{"starting", func(s *TeamState) { s.PodReady = false }, false, ReasonStarting},
-		{"service off", func(s *TeamState) { s.PublicEndpoints = false }, false, ReasonServiceOff},
-		{"guardrail off", func(s *TeamState) { s.MayExpose = false }, false, ReasonGuardrailOff},
-		{"base domain unset", func(s *TeamState) { s.BaseDomain = "" }, false, ReasonBaseDomainUnset},
-		{"no surface", func(s *TeamState) { s.WebUIEnabled = false }, false, ReasonRouteNotPublish},
-		{"rest only", func(s *TeamState) { s.WebUIEnabled, s.RESTAPIEnabled, s.ProviderClient = false, true, false }, true, ReasonReady},
+		{"service off", func(s *TeamState) { s.Settings.PublicEndpoints = false }, false, ReasonServiceOff},
+		{"guardrail off", func(s *TeamState) { s.Limit = domain.ExposureOff }, false, ReasonGuardrailOff},
+		{"base domain unset", func(s *TeamState) { s.Settings.PublicBaseDomain = "" }, false, ReasonBaseDomainUnset},
+		{"no surface", func(s *TeamState) { s.WebUIExposure = domain.ExposureOff }, false, ReasonRouteNotPublish},
+		{"rest only", func(s *TeamState) {
+			s.WebUIExposure, s.WebAPIExposure, s.ProviderClient = domain.ExposureOff, domain.ExposurePublic, false
+		}, true, ReasonReady},
+		{"buzz ready with its pod", func(s *TeamState) { s.Tool, s.WebUIExposure = domain.ToolBuzz, domain.ExposureOff }, true, ReasonReady},
+		{"buzz changing tool", func(s *TeamState) { s.Tool, s.ToolChanging = domain.ToolBuzz, true }, false, ReasonStarting},
 		{"web without provider client", func(s *TeamState) { s.ProviderClient = false }, false, ReasonRouteNotPublish},
 	}
 	for _, tt := range tests {
@@ -105,6 +110,7 @@ func TestControllerEmitsOnChangeOnly(t *testing.T) {
 	ev, st := &fakeEvents{}, &fakeStatus{}
 	s := up()
 	s.PrevReady, s.PrevReason = &ready, ReasonReady
+	s.PrevSurfaces = map[domain.Surface]PrevSurface{domain.SurfaceWebUI: {Effective: domain.ExposurePublic, Ready: true}}
 	c := &Controller{Source: fakeSource{states: []TeamState{s}}, Status: st, Events: ev, Now: func() time.Time { return t0 }}
 	if err := c.Sync(t.Context()); err != nil {
 		t.Fatal(err)
@@ -117,10 +123,15 @@ func TestControllerEmitsOnChangeOnly(t *testing.T) {
 	if err := c.Sync(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if ev.of(domain.EventCollaborationEndpointStateChanged) != 1 {
+	if ev.of(domain.EventCollaborationEndpointStateChanged) != 1 || ev.of(domain.EventOrchestrationEndpointStateChanged) != 1 {
 		t.Fatalf("events: %+v", ev.got)
 	}
-	d := ev.got[0].data
+	var d map[string]any
+	for _, p := range ev.got {
+		if p.typ == domain.EventCollaborationEndpointStateChanged {
+			d = p.data
+		}
+	}
 	if d["ready"] != false || d["previousReady"] != true || d["reason"] != ReasonStarting || d["hostname"] != "a.collab.example.com" {
 		t.Errorf("data: %v", d)
 	}
@@ -137,7 +148,7 @@ func TestControllerEmitsOnChangeOnly(t *testing.T) {
 	s3.PrevReady, s3.PrevReason, s3.PaperclipHealthy = &notReady, ReasonStarting, &notReady
 	c.Source = fakeSource{states: []TeamState{s3}}
 	_ = c.Sync(t.Context())
-	if len(ev.got) != before+1 || len(st.reports[len(st.reports)-1].Conditions) != 2 {
+	if len(ev.got) != before+2 || ev.of(domain.EventOrchestrationEndpointStateChanged) != 2 || len(st.reports[len(st.reports)-1].Conditions) != 4 {
 		t.Errorf("ready transition: %d events", len(ev.got)-before)
 	}
 }

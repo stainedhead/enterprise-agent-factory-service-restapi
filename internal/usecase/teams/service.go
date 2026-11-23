@@ -18,20 +18,33 @@ const (
 	StatusKind = "team"
 )
 
+// BootProvisioner writes the orchestration agent's boot secrets to Secrets Manager and records them on
+// the agent, in the request's transaction; Compensate deletes what a failed request wrote. The agents
+// use case implements it.
+type BootProvisioner interface {
+	CreateBootSecrets(ctx context.Context, tx port.Tx, c acting.Caller, teamID, agentID string, tool domain.CollabTool, idem *acting.Idem, created *[]string) error
+	Compensate(ctx context.Context, arns []string)
+}
+
 // Service is the team use case set.
 type Service struct {
 	acting.Deps
 	Repo     Repository
 	Settings port.SettingsReader
+	// Boot provisions the orchestration agent's boot secrets (ORC-2). Required to create a team whose
+	// tool has boot secrets (Paperclip).
+	Boot BootProvisioner
 }
 
 // CreateTeamInput is a CreateTeam request.
 type CreateTeamInput struct {
 	Params     domain.NewTeamParams
 	FirstAdmin domain.NewMemberParams
-	Models     []string
-	Tags       []domain.TagValue
-	Budget     *BudgetInput
+	// Models is the explicit model list; with no ModelAccess it means selected (CD-30).
+	Models        []string
+	Tags          []domain.TagValue
+	Budget        *BudgetInput
+	Orchestration *OrchestrationInput
 }
 
 // Result is a team with the replayed response when an idempotent call hit the store.
@@ -45,7 +58,8 @@ func teamAudit(t domain.Team) map[string]any {
 		"slug": string(t.Slug), "displayName": t.DisplayName, "kind": t.Kind, "state": t.State,
 		"costCenter": t.CostCenter, "ownerEmail": t.OwnerEmail, "maxBudgetUsd": t.MaxBudget.String(),
 		"isolationTier": t.IsolationTier, "viewerKubectl": t.ViewerKubectl, "quotas": t.Quotas,
-		"mayManageAwsAccounts": t.MayManageAwsAccounts, "mayAddExternalSystems": t.MayAddExternalSystems, "mayExposeCollaboration": t.MayExposeCollaboration,
+		"mayManageAwsAccounts": t.MayManageAwsAccounts, "mayAddExternalSystems": t.MayAddExternalSystems,
+		"maxCollaborationExposure": string(t.MaxCollaborationExposure), "modelAccess": string(t.ModelAccess),
 		"allowedAwsAccounts": t.AllowedAwsAccounts, "identityProviderId": t.IdentityProviderID,
 		"generation": t.Generation,
 	}
@@ -68,15 +82,176 @@ func (s *Service) ephemeralMaxDays(ctx context.Context) (int, error) {
 	return n, nil
 }
 
-// Create implements CreateTeam (RA-US-3): one transaction writes the team, its models, tags,
-// lifetime budget (ephemeral), the first team-admin binding, one audit record and team.created.
+func (s *Service) stringSetting(ctx context.Context, key string) (string, error) {
+	raw, err := s.Settings.Setting(ctx, key)
+	if err != nil {
+		return "", err
+	}
+	var v *string
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return "", domain.Internal(err)
+	}
+	if v == nil {
+		return "", nil
+	}
+	return *v, nil
+}
+
+// toolEntry is a tool's entry of orchestration.tools as CreateTeam reads it.
+type toolEntry struct {
+	Enabled         bool    `json:"enabled"`
+	Default         bool    `json:"default"`
+	TemplateID      *string `json:"templateId"`
+	ImageRepository *string `json:"imageRepository"`
+}
+
+func (s *Service) tools(ctx context.Context) (map[string]toolEntry, error) {
+	raw, err := s.Settings.Setting(ctx, domain.SettingOrchestrationTools)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]toolEntry{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, domain.Internal(err)
+	}
+	return out, nil
+}
+
+// resolveTool picks the requested tool or the service default and checks it is enabled and its runtime
+// set up (orchestration_runtime_unset is a Conflict, ORC-2).
+func (s *Service) resolveTool(ctx context.Context, want domain.CollabTool) (domain.CollabTool, error) {
+	tools, err := s.tools(ctx)
+	if err != nil {
+		return "", err
+	}
+	tool := want
+	if tool == "" {
+		for name, e := range tools {
+			if e.Default {
+				tool = domain.CollabTool(name)
+			}
+		}
+	}
+	e, ok := tools[string(tool)]
+	switch {
+	case !tool.Valid():
+		return "", domain.Validation(domain.FieldError{Field: "orchestration.tool", Reason: "must be paperclip or buzz"})
+	case !ok || !e.Enabled:
+		return "", domain.Validation(domain.FieldError{Field: "orchestration.tool", Reason: domain.ReasonToolNotEnabled})
+	case e.TemplateID == nil || e.ImageRepository == nil:
+		return "", domain.Conflict(domain.ReasonOrchestrationRuntimeUnset, "the runtime of tool "+string(tool)+" is not set up", nil)
+	}
+	return tool, nil
+}
+
+// orchestrationFields checks the explicit levels against the limit and the tool's profile. Defaults are
+// never refused for being above the limit, because the database lowers them (ORC-26).
+func orchestrationFields(in *OrchestrationInput, tool domain.CollabTool, limit domain.Exposure) error {
+	if in == nil {
+		return nil
+	}
+	var fe []domain.FieldError
+	check := func(field string, surface domain.Surface, e domain.Exposure) {
+		switch {
+		case e == "":
+		case !e.Valid():
+			fe = append(fe, domain.FieldError{Field: field, Reason: "must be off, private or public"})
+		case e != domain.ExposureOff && !tool.Supports(surface):
+			fe = append(fe, domain.FieldError{Field: field, Reason: domain.ReasonSurfaceNotSupported})
+		case e.Rank() > limit.Rank():
+			fe = append(fe, domain.FieldError{Field: field, Reason: domain.ReasonExposureAboveLimit})
+		}
+	}
+	check("orchestration.webUiExposure", domain.SurfaceWebUI, in.WebUIExposure)
+	check("orchestration.webApiExposure", domain.SurfaceWebAPI, in.WebAPIExposure)
+	if in.RegistrationMode != "" && !tool.SupportsRegistration(in.RegistrationMode) {
+		fe = append(fe, domain.FieldError{Field: "orchestration.registrationMode", Reason: domain.ReasonRegistrationNotSupported})
+	}
+	if in.VolumeSizeGiB != 0 && (in.VolumeSizeGiB < 10 || in.VolumeSizeGiB > 1000) {
+		fe = append(fe, domain.FieldError{Field: "orchestration.volume.sizeGiB", Reason: "must be 10 to 1000"})
+	}
+	if len(fe) > 0 {
+		return domain.Validation(fe...)
+	}
+	return nil
+}
+
+// orchestrationModels resolves the orchestration agent's models against the team just created. The
+// fields are reported under orchestration.; a missing default is no_model_available (ORC-26).
+func orchestrationModels(in *OrchestrationInput, sets domain.ModelSets) (domain.AgentModels, error) {
+	var mi *domain.ModelsInput
+	legacy := ""
+	if in != nil {
+		mi, legacy = in.Models, in.ModelID
+	}
+	m, err := domain.ResolveNewModels(mi, legacy, sets)
+	if err != nil {
+		fe := domain.FieldErrors(err)
+		for i := range fe {
+			if fe[i].Field == "models.defaultModelId" && fe[i].Reason == "required" {
+				fe[i].Reason = domain.ReasonNoModelAvailable
+			}
+			fe[i].Field = "orchestration." + fe[i].Field
+		}
+		return domain.AgentModels{}, domain.Validation(fe...)
+	}
+	return m, nil
+}
+
+// teamModelSelection resolves a new team's model access and list (MOD-2, CD-30): modelAccess defaults to
+// models.default_team_access, a list without an access means selected, and a selected team with no list
+// starts with models.default_team_models.
+func (s *Service) teamModelSelection(ctx context.Context, p *domain.NewTeamParams, ids []string) ([]string, error) {
+	access := p.ModelAccess
+	if access == "" && len(ids) > 0 {
+		access = domain.ModelAccessSelected
+	}
+	if access == "" {
+		v, err := s.stringSetting(ctx, domain.SettingModelsDefaultTeamAccess)
+		if err != nil {
+			return nil, err
+		}
+		access = domain.ModelAccess(v)
+		if !access.Valid() {
+			access = domain.ModelAccessAll
+		}
+	}
+	if !access.Valid() {
+		return nil, domain.Validation(domain.FieldError{Field: "modelAccess", Reason: "must be all or selected"})
+	}
+	p.ModelAccess = access
+	switch access {
+	case domain.ModelAccessAll:
+		if len(ids) > 0 {
+			return nil, domain.Validation(domain.FieldError{Field: "models", Reason: domain.ReasonModelIDsNotAllowedForAll})
+		}
+		return nil, nil
+	default:
+		if len(ids) == 0 {
+			raw, err := s.Settings.Setting(ctx, domain.SettingModelsDefaultTeamModels)
+			if err != nil {
+				return nil, err
+			}
+			if err := json.Unmarshal(raw, &ids); err != nil {
+				return nil, domain.Internal(err)
+			}
+		}
+		return ids, nil
+	}
+}
+
+// Create implements CreateTeam (RA-US-3, ORC-2): one transaction writes the team, its models, tags,
+// lifetime budget (ephemeral), the first team-admin binding, the orchestration agent with its boot
+// secrets, audit records and the events. A Secrets Manager failure is a 503 and nothing is created.
 func (s *Service) Create(ctx context.Context, c acting.Caller, in CreateTeamInput, idem *acting.Idem) (Result, error) {
 	if d := authz.Authorize(c.Principal, authz.TeamsCreate, authz.Resource{Scope: authz.ScopeService}); !d.Allowed() {
 		return Result{}, s.Denied(ctx, c, "CreateTeam", "", authz.TeamsCreate)
 	}
 	var res Result
+	var created []string
 	err := s.Tx.InTx(ctx, c.Session(), func(ctx context.Context, tx port.Tx) error {
 		res = Result{}
+		created = nil
 		replay, err := idem.Begin(ctx, s.Idem, tx)
 		if err != nil || replay != nil {
 			res.Replay = replay
@@ -90,7 +265,17 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, in CreateTeamInpu
 		if err != nil {
 			return err
 		}
-		t, err := domain.NewTeam(id.String(), in.Params, s.Now(), days)
+		params := in.Params
+		defLimit, err := s.stringSetting(ctx, domain.SettingOrchestrationDefaultLimit)
+		if err != nil {
+			return err
+		}
+		params.MaxCollaborationExposure = ptrTo(params.LimitFromParams(domain.Exposure(defLimit)))
+		modelIDs, err := s.teamModelSelection(ctx, &params, in.Models)
+		if err != nil {
+			return err
+		}
+		t, err := domain.NewTeam(id.String(), params, s.Now(), days)
 		if err != nil {
 			return err
 		}
@@ -110,7 +295,14 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, in CreateTeamInpu
 			return domain.Validation(domain.FieldError{Field: "firstAdmin", Reason: "no such user; they must sign in once first"})
 		}
 		_ = uid
-		if err := s.checkModels(ctx, tx, in.Models); err != nil {
+		if err := s.checkModels(ctx, tx, modelIDs); err != nil {
+			return err
+		}
+		tool, err := s.resolveTool(ctx, orchTool(in.Orchestration))
+		if err != nil {
+			return err
+		}
+		if err := orchestrationFields(in.Orchestration, tool, t.MaxCollaborationExposure); err != nil {
 			return err
 		}
 		svcTags, err := s.Repo.ServiceTags(ctx, tx)
@@ -134,7 +326,7 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, in CreateTeamInpu
 				return err
 			}
 		}
-		if err := s.Repo.ReplaceModels(ctx, tx, t.ID, in.Models); err != nil {
+		if err := s.Repo.ReplaceModels(ctx, tx, t.ID, modelIDs); err != nil {
 			return err
 		}
 		if err := s.Repo.ReplaceTeamTags(ctx, tx, t.ID, in.Tags); err != nil {
@@ -154,6 +346,9 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, in CreateTeamInpu
 			map[string]any{"slug": string(t.Slug), "kind": string(t.Kind)}); err != nil {
 			return err
 		}
+		if err := s.createOrchestration(ctx, tx, c, t, tool, in.Orchestration, idem, &created); err != nil {
+			return err
+		}
 		got, err := s.Repo.Get(ctx, tx, t.ID, false)
 		if err != nil {
 			return err
@@ -161,7 +356,52 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, in CreateTeamInpu
 		res.Team = got.WithDeletingStatus()
 		return idem.Complete(ctx, s.Idem, tx, res.Team)
 	})
+	if err != nil && s.Boot != nil {
+		s.Boot.Compensate(ctx, created)
+	}
 	return res, err
+}
+
+func ptrTo[T any](v T) *T { return &v }
+
+func orchTool(in *OrchestrationInput) domain.CollabTool {
+	if in == nil {
+		return ""
+	}
+	return in.Tool
+}
+
+// createOrchestration creates the team's orchestration agent (afs.create_orchestration_agent, which also
+// writes its audit record and its outbox events agent.created and orchestration.created, i.e.
+// domain.EventOrchestrationCreated) and then its boot secrets.
+func (s *Service) createOrchestration(ctx context.Context, tx port.Tx, c acting.Caller, t domain.Team, tool domain.CollabTool, in *OrchestrationInput, idem *acting.Idem, created *[]string) error {
+	sets, err := s.Repo.ModelSets(ctx, tx, t.ID)
+	if err != nil {
+		return err
+	}
+	models, err := orchestrationModels(in, sets)
+	if err != nil {
+		return err
+	}
+	aid, err := s.IDs.NewID(domain.PrefixAgent)
+	if err != nil {
+		return err
+	}
+	oa := OrchestrationAgent{TeamID: t.ID, AgentID: aid.String(), Name: domain.OrchestratorName, Tool: tool, Models: models}
+	if in != nil {
+		oa.WebUIExposure, oa.WebAPIExposure, oa.RegistrationMode = in.WebUIExposure, in.WebAPIExposure, in.RegistrationMode
+		oa.Resources, oa.VolumeSizeGiB, oa.VolumeOnDelete = in.Resources, in.VolumeSizeGiB, in.VolumeOnDelete
+	}
+	if err := s.Repo.InsertOrchestration(ctx, tx, oa); err != nil {
+		return err
+	}
+	if len(tool.BootSecrets()) > 0 {
+		if s.Boot == nil {
+			return domain.Unavailable("Secrets Manager", errors.New("teams: no Secrets Manager writer for the boot secrets"))
+		}
+		return s.Boot.CreateBootSecrets(ctx, tx, c, t.ID, oa.AgentID, tool, idem, created)
+	}
+	return nil
 }
 
 func (s *Service) resolveAdmin(ctx context.Context, tx port.Tx, m *domain.NewMemberParams) (string, bool, error) {
@@ -205,7 +445,7 @@ func (s *Service) checkModels(ctx context.Context, tx port.Tx, ids []string) err
 		case !ok:
 			fe = append(fe, domain.FieldError{Field: "models", Reason: id + " is not in the model catalog"})
 		case !m.Enabled:
-			fe = append(fe, domain.FieldError{Field: "models", Reason: id + " is disabled"})
+			fe = append(fe, domain.FieldError{Field: "models", Reason: domain.ReasonModelNotEnabledForService + ": " + id})
 		}
 		seen[id] = true
 	}
@@ -431,30 +671,25 @@ func (s *Service) Delete(ctx context.Context, c acting.Caller, teamID string, ex
 	return r.Team, err
 }
 
-// Models implements ListTeamModels.
-func (s *Service) Models(ctx context.Context, c acting.Caller, teamID string) ([]ModelInfo, domain.Version, error) {
+// Models implements ListTeamModels: the team's access, stored selection and the models it may use now.
+func (s *Service) Models(ctx context.Context, c acting.Caller, teamID string) (TeamModels, error) {
 	if _, err := s.Get(ctx, c, teamID); err != nil {
-		return nil, 0, err
+		return TeamModels{}, err
 	}
-	var (
-		ms []ModelInfo
-		v  domain.Version
-	)
+	var m TeamModels
 	err := s.Tx.ReadTx(ctx, c.Session(), func(ctx context.Context, tx port.Tx) error {
 		var err error
-		ms, v, err = s.Repo.Models(ctx, tx, teamID)
+		m, err = s.Repo.Models(ctx, tx, teamID)
 		return err
 	})
-	return ms, v, err
+	return m, err
 }
 
-// PutModels implements PutTeamModels (teams:set-guardrails). expect is nil when If-Match is absent
-// (PUT is an upsert, CD-2).
-func (s *Service) PutModels(ctx context.Context, c acting.Caller, teamID string, expect *domain.Version, ids []string) ([]ModelInfo, domain.Version, error) {
-	var (
-		ms []ModelInfo
-		v  domain.Version
-	)
+// PutModels implements PutTeamModels (teams:set-guardrails, service admins only, OR-D16). expect is nil
+// when If-Match is absent (PUT is an upsert, CD-2). A body with only modelIds is read as selected
+// (CD-30). Narrowing never edits an agent's own selection (MOD-6).
+func (s *Service) PutModels(ctx context.Context, c acting.Caller, teamID string, expect *domain.Version, access domain.ModelAccess, ids []string) (TeamModels, error) {
+	var out TeamModels
 	err := s.Tx.InTx(ctx, c.Session(), func(ctx context.Context, tx port.Tx) error {
 		t, err := s.Repo.Get(ctx, tx, teamID, true)
 		if err != nil {
@@ -463,43 +698,54 @@ func (s *Service) PutModels(ctx context.Context, c acting.Caller, teamID string,
 		if !authz.Authorize(c.Principal, authz.TeamsSetGuardrails, authz.Resource{Scope: authz.ScopeTeam, TeamID: teamID}).Allowed() {
 			return errDenied{authz.TeamsSetGuardrails}
 		}
-		old, cur, err := s.Repo.Models(ctx, tx, teamID)
+		old, err := s.Repo.Models(ctx, tx, teamID)
 		if err != nil {
 			return err
 		}
 		if expect != nil {
-			if err := domain.CheckVersion(cur, *expect); err != nil {
+			if err := domain.CheckVersion(t.Version, *expect); err != nil {
 				return err
 			}
 		}
-		if err := s.checkModels(ctx, tx, ids); err != nil {
+		enabled, err := s.Repo.ServiceModelIDs(ctx, tx)
+		if err != nil {
 			return err
 		}
-		if err := s.Repo.ReplaceModels(ctx, tx, teamID, ids); err != nil {
+		want, err := domain.ValidateTeamModelAccess(access, ids, enabled)
+		if err != nil {
 			return err
 		}
-		if err := s.Audit.Write(ctx, tx, c.Record("PutTeamModels", "team_models", teamID, teamID,
-			map[string]any{"modelIds": modelIDs(old)}, map[string]any{"modelIds": ids})); err != nil {
+		if err := s.Repo.ReplaceModels(ctx, tx, teamID, want.ModelIDs); err != nil {
 			return err
 		}
-		if err := s.Emit(ctx, tx, c, domain.EventTeamUpdated, teamID, kindTeam, t.ID, map[string]any{"fields": []string{"models"}}); err != nil {
+		if want.Access != old.Access {
+			if err := s.Repo.SetModelAccess(ctx, tx, teamID, want.Access); err != nil {
+				return err
+			}
+		}
+		before := map[string]any{"access": string(old.Access), "modelIds": nonNil(old.ModelIDs)}
+		after := map[string]any{"access": string(want.Access), "modelIds": nonNil(want.ModelIDs)}
+		if err := s.Audit.Write(ctx, tx, c.Record("PutTeamModels", "team_models", teamID, teamID, before, after)); err != nil {
 			return err
 		}
-		ms, v, err = s.Repo.Models(ctx, tx, teamID)
+		if err := s.Emit(ctx, tx, c, domain.EventTeamModelsChanged, teamID, kindTeam, t.ID,
+			map[string]any{"teamId": teamID, "from": before, "to": after}); err != nil {
+			return err
+		}
+		out, err = s.Repo.Models(ctx, tx, teamID)
 		return err
 	})
 	if err != nil {
-		return nil, 0, s.finishDenied(ctx, c, "PutTeamModels", teamID, err)
+		return TeamModels{}, s.finishDenied(ctx, c, "PutTeamModels", teamID, err)
 	}
-	return ms, v, nil
+	return out, nil
 }
 
-func modelIDs(ms []ModelInfo) []string {
-	out := make([]string, 0, len(ms))
-	for _, m := range ms {
-		out = append(out, m.ID)
+func nonNil(ids []string) []string {
+	if ids == nil {
+		return []string{}
 	}
-	return out
+	return ids
 }
 
 // TagsResult is a team's effective tags with the Bedrock requestMetadata keys that did not fit.

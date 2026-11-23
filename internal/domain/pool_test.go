@@ -45,7 +45,6 @@ func TestNewPool(t *testing.T) {
 		{"bad name", func(p *domain.NewPoolParams) { p.Name = "Fixer" }, "name"},
 		{"image without digest", func(p *domain.NewPoolParams) { p.Image = "registry.example.com/a:latest" }, "image"},
 		{"bad template", func(p *domain.NewPoolParams) { p.Template = "X" }, "template"},
-		{"no model", func(p *domain.NewPoolParams) { p.ModelID = " " }, "modelId"},
 		{"bad stage", func(p *domain.NewPoolParams) { p.StageID = "agt_x" }, "stageId"},
 		{"long description", func(p *domain.NewPoolParams) { p.Description = strings.Repeat("x", 1001) }, "description"},
 		{"bad cpu", func(p *domain.NewPoolParams) { p.Resources.CPU = "lots" }, "resources.cpu"},

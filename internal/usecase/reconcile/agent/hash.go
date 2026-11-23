@@ -20,15 +20,15 @@ func PodTemplateHash(d Desired) string {
 	w := func(format string, args ...any) { _, _ = io.WriteString(h, fmt.Sprintf(format, args...)+"\n") }
 	w("image=%s", d.Image)
 	w("persona=%s", d.Persona)
-	w("model=%s", d.ModelID)
+	w("model=%s models=%v", d.ModelID, d.Models)
 	w("cpu=%s memory=%s", d.Resources.CPU, d.Resources.Memory)
 	w("identity=%s", d.IAMIdentity)
 	w("tier=%s workorder=%t", d.Team.IsolationTier, d.Team.WorkOrderAssigned)
 	if d.Collab != nil {
-		w("collab mode=%s host=%s prefix=%s", d.Collab.Mode, d.Collab.Host, d.Collab.SecretsPrefix)
+		w("collab tool=%s mode=%s host=%s prefix=%s", d.Collab.Tool, d.Collab.Mode, d.Collab.Host, d.Collab.SecretsPrefix)
 	}
 	if d.Link != nil {
-		w("collab link id=%s", d.Link.PaperclipAgentID)
+		w("collab link tool=%s id=%s", d.Link.Tool, d.Link.PaperclipAgentID)
 	}
 
 	cfg := slices.Clone(d.Config)

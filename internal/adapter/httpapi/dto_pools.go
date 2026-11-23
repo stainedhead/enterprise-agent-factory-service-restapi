@@ -49,6 +49,7 @@ type poolBody struct {
 	Image          string                `json:"image"`
 	Persona        string                `json:"persona"`
 	ModelID        string                `json:"modelId"`
+	Models         agentModelsBody       `json:"models"`
 	Workers        int                   `json:"workers"`
 	Resources      domain.AgentResources `json:"resources"`
 	ScratchSizeGiB int                   `json:"scratchSizeGiB"`
@@ -60,7 +61,7 @@ type poolBody struct {
 func toPoolBody(p domain.Pool) poolBody {
 	b := poolBody{ID: p.ID, Version: int64(p.Version), CreatedAt: w2Time(p.CreatedAt), CreatedBy: p.CreatedBy,
 		UpdatedAt: w2Time(p.UpdatedAt), Generation: int64(p.Generation), Status: p.Status, Name: string(p.Name),
-		Description: p.Description, Template: p.Template, Image: string(p.Image), Persona: p.Persona, ModelID: p.ModelID,
+		Description: p.Description, Template: p.Template, Image: string(p.Image), Persona: p.Persona, ModelID: p.Models.DefaultModelID, Models: toAgentModelsBody(p.Models),
 		Workers: p.Workers, Resources: p.Resources, ScratchSizeGiB: p.ScratchSizeGiB, SharedVolume: p.SharedVolume,
 		State: string(p.State), Handoffs: append([]string{}, p.Handoffs...)}
 	if p.StageID != "" {
@@ -81,6 +82,7 @@ type createPoolRequest struct {
 	Image          string                `json:"image"`
 	Persona        string                `json:"persona"`
 	ModelID        string                `json:"modelId"`
+	Models         *modelsRequest        `json:"models"`
 	Workers        *int                  `json:"workers"`
 	Resources      domain.AgentResources `json:"resources"`
 	ScratchSizeGiB int                   `json:"scratchSizeGiB"`
@@ -94,6 +96,7 @@ type updatePoolRequest struct {
 	Image          *string                `json:"image"`
 	Persona        *string                `json:"persona"`
 	ModelID        *string                `json:"modelId"`
+	Models         *modelsRequest         `json:"models"`
 	Workers        *int                   `json:"workers"`
 	Resources      *domain.AgentResources `json:"resources"`
 	ScratchSizeGiB *int                   `json:"scratchSizeGiB"`
@@ -102,7 +105,7 @@ type updatePoolRequest struct {
 
 func (u updatePoolRequest) patch() domain.PoolPatch {
 	p := domain.PoolPatch{Description: u.Description, Template: u.Template, Image: u.Image, Persona: u.Persona,
-		ModelID: u.ModelID, Workers: u.Workers, Resources: u.Resources, ScratchSizeGiB: u.ScratchSizeGiB, SharedVolume: u.SharedVolume}
+		ModelID: u.ModelID, Models: u.Models.input(), Workers: u.Workers, Resources: u.Resources, ScratchSizeGiB: u.ScratchSizeGiB, SharedVolume: u.SharedVolume}
 	if u.StageID.Set {
 		p.StageID.Set = true
 		if !u.StageID.Null {

@@ -1,0 +1,293 @@
+# OpenAPI fragment (API contract §4.4d shapes). Bundled into api/openapi.yaml by make openapi.
+OrchestrationSurface:
+  type: object
+  description: 'One surface of the orchestration agent: stored exposure, effective level and why they differ'
+  required:
+  - supported
+  - exposure
+  - effective
+  - reasons
+  - hostname
+  - url
+  properties:
+    supported:
+      type: boolean
+      description: From the tool's profile; false renders N/A (Buzz has no web surface)
+    exposure:
+      type: string
+      enum: &id001
+      - 'off'
+      - private
+      - public
+    effective:
+      type: string
+      enum: *id001
+    reasons:
+      type: array
+      items:
+        type: string
+        enum: &id002
+        - tool_not_supported
+        - team_limit
+        - service_switch_public
+        - service_switch_private
+        - base_domain_unset
+        - provider_without_collab_client
+    hostname:
+      type:
+      - string
+      - 'null'
+      description: Of the effective level; null when off
+    url:
+      type:
+      - string
+      - 'null'
+TeamOrchestration:
+  type: object
+  description: The team's orchestration resource; singleton per team (API contract §4.4d)
+  required:
+  - teamId
+  - agentId
+  - agentName
+  - phase
+  - tool
+  - toolVersion
+  - registrationMode
+  - limit
+  - webUi
+  - webApi
+  - connectedAgents
+  - unmanagedToolAgents
+  - version
+  - generation
+  - status
+  properties:
+    teamId:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+      readOnly: true
+    agentId:
+      type: string
+      pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+      readOnly: true
+    agentName:
+      type: string
+      readOnly: true
+    phase:
+      type: string
+      description: The orchestration agent's phase
+      readOnly: true
+    tool:
+      type: string
+      enum:
+      - paperclip
+      - buzz
+      readOnly: true
+    toolVersion:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+    registrationMode:
+      type: string
+      enum:
+      - manual
+      - managed
+    limit:
+      type: string
+      enum: *id001
+      readOnly: true
+      description: The team's maxCollaborationExposure
+    webUi:
+      $ref: '#/components/schemas/OrchestrationSurface'
+    webApi:
+      $ref: '#/components/schemas/OrchestrationSurface'
+    connectedAgents:
+      type: integer
+      minimum: 0
+      readOnly: true
+    unmanagedToolAgents:
+      type: array
+      items:
+        type: string
+      readOnly: true
+    version:
+      type: integer
+      minimum: 1
+      description: Optimistic-concurrency version; ETag is "<version>"
+      readOnly: true
+    generation:
+      type: integer
+      minimum: 1
+      readOnly: true
+    status:
+      $ref: '#/components/schemas/Status'
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+PutTeamOrchestrationRequest:
+  type: object
+  required:
+  - webUi
+  - webApi
+  properties:
+    webUi:
+      type: object
+      required:
+      - exposure
+      properties:
+        exposure:
+          type: string
+          enum: *id001
+    webApi:
+      type: object
+      required:
+      - exposure
+      properties:
+        exposure:
+          type: string
+          enum:
+          - 'off'
+          - private
+          - public
+    registrationMode:
+      type: string
+      enum:
+      - manual
+      - managed
+      description: Omitted keeps the current value
+ChangeCollaborationToolRequest:
+  type: object
+  required:
+  - tool
+  properties:
+    tool:
+      type: string
+      enum:
+      - paperclip
+      - buzz
+OrchestrationEndpoint:
+  type: object
+  description: One team and surface whose stored exposure is not off
+  required:
+  - teamId
+  - slug
+  - teamState
+  - agentId
+  - tool
+  - surface
+  - exposure
+  - effective
+  - reasons
+  - limit
+  - hostname
+  - phase
+  properties:
+    teamId:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+    slug:
+      type: string
+    teamState:
+      type: string
+    agentId:
+      type: string
+      pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+    tool:
+      type: string
+      enum:
+      - paperclip
+      - buzz
+    surface:
+      type: string
+      enum:
+      - webUi
+      - webApi
+    exposure:
+      type: string
+      enum: *id001
+    effective:
+      type: string
+      enum: *id001
+    reasons:
+      type: array
+      items:
+        type: string
+        enum: *id002
+    limit:
+      type: string
+      enum: *id001
+    hostname:
+      type:
+      - string
+      - 'null'
+    phase:
+      type: string
+    lastAccessAt:
+      type:
+      - string
+      - 'null'
+      format: date-time
+OrchestrationMigration:
+  type: object
+  description: The 1.1.0 backfill progress for S12
+  required:
+  - state
+  - teamsTotal
+  - teamsWithOrchestration
+  - teamsPending
+  - blocked
+  properties:
+    state:
+      type: string
+      enum:
+      - running
+      - complete
+      - blocked
+    teamsTotal:
+      type: integer
+      minimum: 0
+    teamsWithOrchestration:
+      type: integer
+      minimum: 0
+    teamsPending:
+      type: integer
+      minimum: 0
+    blocked:
+      type: array
+      items:
+        type: object
+        required:
+        - teamId
+        - reason
+        properties:
+          teamId:
+            type: string
+          reason:
+            type: string
+            enum:
+            - orchestration_runtime_unset
+            - no_model
+OrchestrationEndpointList:
+  type: object
+  description: A page of OrchestrationEndpoint resources
+  required:
+  - items
+  - migration
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/OrchestrationEndpoint'
+    nextToken:
+      type: string
+      description: Absent on the last page
+    migration:
+      $ref: '#/components/schemas/OrchestrationMigration'

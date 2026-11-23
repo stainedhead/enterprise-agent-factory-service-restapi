@@ -73,7 +73,7 @@ func TestCreateChecks(t *testing.T) {
 		field string // empty: success
 	}{
 		{name: "ok", mod: func(p *domain.NewAgentParams) { p.Bindings = bind(secA) }},
-		{name: "model not enabled for the team", mod: func(p *domain.NewAgentParams) { p.ModelID = "other.model" }, field: "modelId"},
+		{name: "model not enabled for the team", mod: func(p *domain.NewAgentParams) { p.ModelID = "other.model" }, field: "models.defaultModelId"},
 		{name: "unknown template", mod: func(p *domain.NewAgentParams) { p.Template = "nope-tpl" }, field: "template"},
 		{name: "disabled template", setup: func(r *rig) {
 			r.repo.Templates["claude-code"] = agents.TemplateInfo{ID: "tpl_1", Enabled: false, AllowedDigests: []string{digest}}
@@ -235,11 +235,11 @@ func TestListAndSnapshots(t *testing.T) {
 	r.create(t, "gamma")
 	ctx := t.Context()
 
-	page, next, err := r.svc.List(ctx, admin, team, acting.Page{Limit: 2})
+	page, next, err := r.svc.List(ctx, admin, team, "", acting.Page{Limit: 2})
 	if err != nil || len(page) != 2 || next == "" {
 		t.Fatalf("page 1: %v next=%q %v", page, next, err)
 	}
-	rest, next2, err := r.svc.List(ctx, admin, team, acting.Page{Limit: 2, Cursor: next})
+	rest, next2, err := r.svc.List(ctx, admin, team, "", acting.Page{Limit: 2, Cursor: next})
 	if err != nil || len(rest) != 1 || next2 != "" {
 		t.Fatalf("page 2: %v next=%q %v", rest, next2, err)
 	}
@@ -332,7 +332,7 @@ func opOn(r *rig, op string, a domain.Agent) error {
 		_, err := r.svc.Pause(ctx, admin, team, a.ID, nil)
 		return err
 	case "list":
-		if _, _, err := r.svc.List(ctx, admin, team, acting.Page{}); err != nil {
+		if _, _, err := r.svc.List(ctx, admin, team, "", acting.Page{}); err != nil {
 			return err
 		}
 		_, _, err := r.svc.ListSnapshots(ctx, admin, team, a.ID, acting.Page{})

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
 )
 
 // agentBody is the wire shape of Agent (API contract §4.4). It has no replica count.
@@ -14,9 +15,11 @@ type agentBody struct {
 	UpdatedAt     string                  `json:"updatedAt"`
 	Name          string                  `json:"name"`
 	Description   string                  `json:"description"`
-	Template      string                  `json:"template"`
-	Image         string                  `json:"image"`
+	Template      *string                 `json:"template"`
+	Image         *string                 `json:"image"`
 	ModelID       string                  `json:"modelId"`
+	Models        agentModelsBody         `json:"models"`
+	Runtime       string                  `json:"runtime,omitempty"`
 	Resources     domain.AgentResources   `json:"resources"`
 	IAMIdentity   string                  `json:"iamIdentity"`
 	IAMRoleArn    string                  `json:"iamRoleArn,omitempty"`
@@ -26,6 +29,44 @@ type agentBody struct {
 	Status        domain.Status           `json:"status"`
 	Role          string                  `json:"role"`
 	Collaboration *agentCollaborationBody `json:"collaboration,omitempty"`
+}
+
+// agentModelsBody is Agent.models and Pool.models (API contract §4.4 Models).
+type agentModelsBody struct {
+	Access            string   `json:"access"`
+	ModelIDs          []string `json:"modelIds"`
+	DefaultModelID    string   `json:"defaultModelId"`
+	EffectiveModelIDs []string `json:"effectiveModelIds"`
+}
+
+func toAgentModelsBody(m domain.AgentModels) agentModelsBody {
+	b := agentModelsBody{Access: string(m.Access), ModelIDs: m.ModelIDs, DefaultModelID: m.DefaultModelID, EffectiveModelIDs: m.Effective}
+	if b.ModelIDs == nil {
+		b.ModelIDs = []string{}
+	}
+	if b.EffectiveModelIDs == nil {
+		b.EffectiveModelIDs = []string{}
+	}
+	return b
+}
+
+// modelsRequest is the models object of an agent or pool create or update body; a nil member is omitted.
+type modelsRequest struct {
+	Access         *string   `json:"access"`
+	ModelIDs       *[]string `json:"modelIds"`
+	DefaultModelID *string   `json:"defaultModelId"`
+}
+
+func (q *modelsRequest) input() *domain.ModelsInput {
+	if q == nil {
+		return nil
+	}
+	in := &domain.ModelsInput{ModelIDs: q.ModelIDs, DefaultModelID: q.DefaultModelID}
+	if q.Access != nil {
+		a := domain.ModelAccess(*q.Access)
+		in.Access = &a
+	}
+	return in
 }
 
 type agentCollaborationBody struct {
@@ -63,10 +104,21 @@ type secretBindingBody struct {
 	Target   string `json:"target"`
 }
 
+// toAgentBodyFor renders the agent for a caller: on the orchestration agent the template and image are
+// null unless the caller is a service admin (CD-32).
+func toAgentBodyFor(c acting.Caller, a domain.Agent) agentBody {
+	b := toAgentBody(a)
+	if a.IsOrchestration() && !c.Principal.ServiceAdmin {
+		b.Template, b.Image = nil, nil
+	}
+	return b
+}
+
 func toAgentBody(a domain.Agent) agentBody {
+	tpl, img := a.Template, string(a.Image)
 	b := agentBody{ID: a.ID, Version: int64(a.Version), Generation: int64(a.Generation), CreatedAt: w2Time(a.CreatedAt),
 		CreatedBy: a.CreatedBy, UpdatedAt: w2Time(a.UpdatedAt), Name: string(a.Name), Description: a.Description,
-		Template: a.Template, Image: string(a.Image), ModelID: a.ModelID, Resources: a.Resources,
+		Template: &tpl, Image: &img, ModelID: a.Models.DefaultModelID, Models: toAgentModelsBody(a.Models), Resources: a.Resources,
 		IAMIdentity: string(a.IAMIdentity), IAMRoleArn: a.IAMRoleARN, Paused: a.Paused(),
 		Volume: agentVolumeBody{SizeGiB: a.Volume.SizeGiB, StorageClass: a.Volume.StorageClass, OnDelete: a.Volume.OnDelete,
 			SnapshotSchedule: a.Volume.SnapshotSchedule, SnapshotRetain: a.Volume.SnapshotRetain},
@@ -81,7 +133,10 @@ func toAgentBody(a domain.Agent) agentBody {
 	if a.Role != "" {
 		b.Role = string(a.Role)
 	}
-	if c := a.Collaboration; c != nil && !a.IsCollaboration() {
+	if a.IsOrchestration() {
+		b.Runtime = "orchestration"
+	}
+	if c := a.Collaboration; c != nil && !a.IsOrchestration() {
 		cb := &agentCollaborationBody{Connect: c.Connect, LinkState: string(c.LinkState), LastSyncedAt: w2TimePtr(c.LastSyncedAt)}
 		if c.PaperclipAgentID != "" {
 			cb.PaperclipAgentID = &c.PaperclipAgentID
@@ -153,6 +208,7 @@ type createAgentRequest struct {
 	Template      string                `json:"template"`
 	Image         string                `json:"image"`
 	ModelID       string                `json:"modelId"`
+	Models        *modelsRequest        `json:"models"`
 	Resources     domain.AgentResources `json:"resources"`
 	IAMIdentity   string                `json:"iamIdentity"`
 	Volume        *volumeRequest        `json:"volume"`
@@ -162,10 +218,12 @@ type createAgentRequest struct {
 }
 
 type updateAgentRequest struct {
+	Name          *string                `json:"name"`
 	Description   *string                `json:"description"`
 	Template      *string                `json:"template"`
 	Image         *string                `json:"image"`
 	ModelID       *string                `json:"modelId"`
+	Models        *modelsRequest         `json:"models"`
 	Resources     *domain.AgentResources `json:"resources"`
 	IAMIdentity   *string                `json:"iamIdentity"`
 	Volume        *volumeRequest         `json:"volume"`

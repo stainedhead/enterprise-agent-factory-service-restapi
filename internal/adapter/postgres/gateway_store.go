@@ -38,24 +38,53 @@ func (g *GatewayStore) Team(ctx context.Context, id string) (gateway.TeamRecord,
 	return t, nil
 }
 
-// TeamModel implements gateway.Store: only the team's own row, so no other team's profile is reachable.
+// TeamModel implements gateway.Store: only the team's own profile row (team_inference_profiles), so no other
+// team's profile is reachable. A profile still being created has no ARN; a retiring one still serves. Whether the
+// model may be called at all is ModelAdmission's question, so Enabled is true for any row found.
 func (g *GatewayStore) TeamModel(ctx context.Context, teamID, modelID string) (gateway.ModelAccess, error) {
 	var arn *string
 	var maxOut *int32
-	var m gateway.ModelAccess
-	err := g.pool.QueryRow(ctx, `SELECT tm.inference_profile_arn, m.enabled, m.max_output_tokens
-FROM afs.team_models tm JOIN afs.models m ON m.id = tm.model_id
-WHERE tm.team_id = $1 AND tm.model_id = $2`, teamID, modelID).Scan(&arn, &m.Enabled, &maxOut)
+	var state string
+	err := g.pool.QueryRow(ctx, `SELECT p.inference_profile_arn, p.state, m.max_output_tokens
+FROM afs.team_inference_profiles p JOIN afs.models m ON m.id = p.model_id
+WHERE p.team_id = $1 AND p.model_id = $2`, teamID, modelID).Scan(&arn, &state, &maxOut)
 	if err != nil {
-		return gateway.ModelAccess{}, notFound(fmt.Errorf("read team model: %w", err))
+		return gateway.ModelAccess{}, notFound(fmt.Errorf("read team inference profile: %w", err))
 	}
-	if arn != nil {
+	m := gateway.ModelAccess{Enabled: true}
+	if arn != nil && state != "creating" {
 		m.ProfileARN = *arn
 	}
 	if maxOut != nil {
 		m.MaxOutputTokens = int(*maxOut)
 	}
 	return m, nil
+}
+
+// ModelAdmission implements gateway.Store with afs.model_admission: every catalog model with the reason it is
+// refused for the agent or pool, or an empty reason. A subject that does not exist (a deleted agent whose pod
+// is going away) answers no rows, which is ErrNotFound.
+func (g *GatewayStore) ModelAdmission(ctx context.Context, kind, subjectID string) (map[string]string, error) {
+	rows, err := g.pool.Query(ctx, `SELECT model_id, coalesce(reason, '') FROM afs.model_admission($1, $2)`, kind, subjectID)
+	if err != nil {
+		return nil, fmt.Errorf("read model admission: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var id, reason string
+		if err := rows.Scan(&id, &reason); err != nil {
+			return nil, fmt.Errorf("read model admission: %w", err)
+		}
+		out[id] = reason
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read model admission: %w", err)
+	}
+	if len(out) == 0 {
+		return nil, gateway.ErrNotFound
+	}
+	return out, nil
 }
 
 // Prices implements gateway.Store.

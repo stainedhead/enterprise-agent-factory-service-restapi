@@ -323,6 +323,37 @@ Model:
     updatedAt:
       $ref: '#/components/schemas/Timestamp'
       readOnly: true
+    callable:
+      type: boolean
+      description: Enabled at the service, priced and (for a team list) allowed
+    priceState:
+      type: string
+      enum:
+      - approved
+      - pending
+      - none
+    serviceEnabled:
+      type: boolean
+      description: Admin list only
+    origin:
+      type: string
+      enum:
+      - manual
+      - bedrock_sync
+      description: Admin list only
+    teamsWithAccess:
+      type: integer
+      minimum: 0
+      description: Admin list only
+    inferenceProfileState:
+      type: string
+      enum:
+      - none
+      - provisioning
+      - ready
+      - failed
+      - retiring
+      description: Team list only; the team's inference profile for the model
 ModelList:
   type: object
   description: A page of Model resources
@@ -493,9 +524,9 @@ PriceProposal:
     version:
       type: integer
       readOnly: true
-      description: Derived from the status, not a row counter. 1 while the proposal is pending, 2 once it is
-        approved, rejected or superseded. A proposal changes only once, so clients never need to send it
-        (the approve and reject operations take no If-Match).
+      description: Derived from the status, not a row counter. 1 while the proposal is pending, 2 once it is approved, rejected
+        or superseded. A proposal changes only once, so clients never need to send it (the approve and reject operations take
+        no If-Match).
 PriceProposalList:
   type: object
   description: A page of PriceProposal resources

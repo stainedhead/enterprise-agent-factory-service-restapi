@@ -15,3 +15,19 @@ spec:
   targetGroupARN: {{ $c.targetGroupArn | quote }}
   targetType: ip
 {{- end }}
+{{- if and $c.enabled $c.privateTargetGroupArn }}
+---
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: afs-edge-private
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "afs.labels" (dict "root" $ "name" "edge") | nindent 4 }}
+spec:
+  serviceRef:
+    name: afs-edge
+    port: {{ $c.service.port }}
+  targetGroupARN: {{ $c.privateTargetGroupArn | quote }}
+  targetType: ip
+{{- end }}

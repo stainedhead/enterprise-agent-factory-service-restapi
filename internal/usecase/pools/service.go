@@ -27,7 +27,7 @@ type Result struct {
 
 func auditOf(p domain.Pool) map[string]any {
 	return map[string]any{"name": string(p.Name), "description": p.Description, "stageId": p.StageID, "template": p.Template,
-		"image": string(p.Image), "modelId": p.ModelID, "workers": p.Workers, "resources": p.Resources,
+		"image": string(p.Image), "modelId": p.ModelID, "models": p.Models.Audit(), "workers": p.Workers, "resources": p.Resources,
 		"scratchSizeGiB": p.ScratchSizeGiB, "sharedVolume": p.SharedVolume, "state": p.State, "generation": p.Generation}
 }
 
@@ -80,6 +80,9 @@ func (s *Service) get(ctx context.Context, tx port.Tx, teamID, id string, forUpd
 	if err := s.withHandoffs(ctx, tx, list); err != nil {
 		return domain.Pool{}, err
 	}
+	if err := s.Repo.EffectiveModels(ctx, tx, teamID, list); err != nil {
+		return domain.Pool{}, err
+	}
 	return list[0].WithDeletingStatus(), nil
 }
 
@@ -92,7 +95,10 @@ func (s *Service) List(ctx context.Context, c acting.Caller, teamID string, p ac
 		if rows, err = s.Repo.List(ctx, tx, teamID, p.Cursor, p.Limit+1); err != nil {
 			return err
 		}
-		return s.withHandoffs(ctx, tx, rows)
+		if err := s.withHandoffs(ctx, tx, rows); err != nil {
+			return err
+		}
+		return s.Repo.EffectiveModels(ctx, tx, teamID, rows)
 	})
 	if err != nil {
 		return nil, "", err
@@ -160,17 +166,6 @@ func (s *Service) checkTemplate(ctx context.Context, tx port.Tx, name string, im
 	return t.ID, nil
 }
 
-func (s *Service) checkModel(ctx context.Context, tx port.Tx, teamID, model string) error {
-	ok, err := s.Repo.ModelEnabled(ctx, tx, teamID, model)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return domain.Validation(domain.FieldError{Field: "modelId", Reason: model + " is not enabled for the team"})
-	}
-	return nil
-}
-
 func (s *Service) checkStage(ctx context.Context, tx port.Tx, teamID, stageID string) error {
 	if stageID == "" {
 		return nil
@@ -212,9 +207,14 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in
 		} else if taken {
 			return domain.Conflict("duplicate", "an agent named "+string(p.Name)+" already exists in this team; agent and pool names share one namespace", nil)
 		}
-		if err := s.checkModel(ctx, tx, teamID, p.ModelID); err != nil {
+		sets, err := s.Repo.ModelSets(ctx, tx, teamID)
+		if err != nil {
 			return err
 		}
+		if p.Models, err = domain.ResolveNewModels(in.Models, in.ModelID, sets); err != nil {
+			return err
+		}
+		p.ModelID = p.Models.DefaultModelID
 		if err := s.checkStage(ctx, tx, teamID, p.StageID); err != nil {
 			return err
 		}
@@ -252,6 +252,7 @@ func changedFields(p domain.PoolPatch) []string {
 	add(p.Image != nil, "image")
 	add(p.Persona != nil, "persona")
 	add(p.ModelID != nil, "modelId")
+	add(p.Models.Present(), "models")
 	add(p.Workers != nil, "workers")
 	add(p.Resources != nil, "resources")
 	add(p.ScratchSizeGiB != nil, "scratchSizeGiB")
@@ -285,10 +286,20 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, teamID, id string
 				return err
 			}
 		}
-		if next.ModelID != cur.ModelID {
-			if err := s.checkModel(ctx, tx, teamID, next.ModelID); err != nil {
+		next.Models, next.ModelID = cur.Models, cur.ModelID
+		if patch.Models.Present() || patch.ModelID != nil {
+			sets, err := s.Repo.ModelSets(ctx, tx, teamID)
+			if err != nil {
 				return err
 			}
+			legacy := ""
+			if patch.ModelID != nil {
+				legacy = *patch.ModelID
+			}
+			if next.Models, err = cur.Models.ApplyModels(patch.Models, legacy, sets); err != nil {
+				return err
+			}
+			next.ModelID = next.Models.DefaultModelID
 		}
 		if next.StageID != cur.StageID {
 			if err := s.checkStage(ctx, tx, teamID, next.StageID); err != nil {

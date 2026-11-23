@@ -33,11 +33,11 @@ func TestCollabReconcile(t *testing.T) {
 			t.Fatalf("%s: %v", q, err)
 		}
 	}
-	exec(`UPDATE afs.agent_templates SET capabilities = ARRAY['paperclip'] WHERE name = $1`, tpl)
+	exec(`UPDATE afs.agent_templates SET capabilities = ARRAY['orchestration','tool:paperclip'] WHERE name = $1`, tpl)
 	collab, worker := pgtest.NewID("agt"), pgtest.NewID("agt")
 	img := "registry.example.com/agents/coder@" + testDigest
 	exec(`INSERT INTO afs.agents (id, team_id, name, template, template_id, image, model_id, role, iam_identity)
-VALUES ($1, $2, 'pc', $3, (SELECT id FROM afs.agent_templates WHERE name = $3), $4, $5, 'collaboration', 'dedicated')`, collab, tm.ID, tpl, img, model)
+VALUES ($1, $2, 'pc', $3, (SELECT id FROM afs.agent_templates WHERE name = $3), $4, $5, 'orchestration', 'dedicated')`, collab, tm.ID, tpl, img, model)
 	exec(`INSERT INTO afs.agents (id, team_id, name, template, image, model_id) VALUES ($1, $2, 'wk', $3, $4, $5)`, worker, tm.ID, wtpl, img, model)
 	exec(`INSERT INTO afs.team_collaboration (team_id, agent_id) VALUES ($1, $2)`, tm.ID, collab)
 	exec(`INSERT INTO afs.agent_collaboration (team_id, agent_id, connect, paperclip_agent_id) VALUES ($1, $2, true, 'pc-1')`, tm.ID, worker)
@@ -55,7 +55,7 @@ VALUES ($1, $2, 'pc', $3, (SELECT id FROM afs.agent_templates WHERE name = $3), 
 			st = &states[i]
 		}
 	}
-	if st == nil || st.AgentID != collab || st.TeamSlug != tm.Slug || st.PodReady || st.Mode != domain.RegistrationManual || !st.WebUIEnabled {
+	if st == nil || st.AgentID != collab || st.TeamSlug != tm.Slug || st.PodReady || st.Mode != domain.RegistrationManual || st.WebUIExposure != domain.ExposurePublic {
 		t.Fatalf("state: %+v", st)
 	}
 
@@ -125,10 +125,10 @@ VALUES ($1, $2, 'rest_api', 'anonymous', '', 'denied_unauthenticated', 7), ($1, 
 
 	// The agent source reads the role, the collaboration facts and a connected worker's link (RC-21, RC-22).
 	src := postgres.NewAgentSource(runner)
-	exec(`INSERT INTO afs.service_settings (key, value) VALUES ('collab.base_domain', '"collab.example.com"')
+	exec(`INSERT INTO afs.service_settings (key, value) VALUES ('orchestration.public_base_domain', '"collab.example.com"')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`)
 	t.Cleanup(func() {
-		_, _ = admin.Exec(context.Background(), `DELETE FROM afs.service_settings WHERE key = 'collab.base_domain'`)
+		_, _ = admin.Exec(context.Background(), `DELETE FROM afs.service_settings WHERE key = 'orchestration.public_base_domain'`)
 	})
 	ca, err := src.LoadAgent(ctx, collab)
 	if err != nil || !ca.IsCollaboration() || ca.Collab == nil || ca.Collab.Host != tm.Slug+".collab.example.com" || ca.Collab.Mode != "manual" || ca.Link != nil {
@@ -212,7 +212,7 @@ func TestCollabManagedAdapters(t *testing.T) {
 			t.Fatalf("%s: %v", q, err)
 		}
 	}
-	exec(`UPDATE afs.agent_templates SET capabilities = ARRAY['paperclip'] WHERE name = $1`, tpl)
+	exec(`UPDATE afs.agent_templates SET capabilities = ARRAY['orchestration','tool:paperclip'] WHERE name = $1`, tpl)
 	collab, worker := pgtest.NewID("agt"), pgtest.NewID("agt")
 	creator, viewer, signedIn := pgtest.NewID("usr"), pgtest.NewID("usr"), pgtest.NewID("usr")
 	for i, u := range []string{creator, viewer, signedIn} {
@@ -220,7 +220,7 @@ func TestCollabManagedAdapters(t *testing.T) {
 	}
 	img := "registry.example.com/agents/coder@" + testDigest
 	exec(`INSERT INTO afs.agents (id, team_id, name, template, template_id, image, model_id, role, iam_identity, created_by)
-VALUES ($1, $2, 'pc', $3, (SELECT id FROM afs.agent_templates WHERE name = $3), $4, $5, 'collaboration', 'dedicated', $6)`, collab, tm.ID, tpl, img, model, creator)
+VALUES ($1, $2, 'pc', $3, (SELECT id FROM afs.agent_templates WHERE name = $3), $4, $5, 'orchestration', 'dedicated', $6)`, collab, tm.ID, tpl, img, model, creator)
 	exec(`INSERT INTO afs.agents (id, team_id, name, template, image, model_id, persona) VALUES ($1, $2, 'wk', $3, $4, $5, 'helps')`, worker, tm.ID, wtpl, img, model)
 	exec(`INSERT INTO afs.team_collaboration (team_id, agent_id, registration_mode) VALUES ($1, $2, 'managed')`, tm.ID, collab)
 	exec(`INSERT INTO afs.agent_collaboration (team_id, agent_id, connect) VALUES ($1, $2, true)`, tm.ID, worker)

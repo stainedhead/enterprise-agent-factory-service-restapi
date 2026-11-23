@@ -20,6 +20,8 @@ type Deps struct {
 	Usage      UsageSink
 	// SettleRecorder is optional: told of every settlement that falls back to the retry queue.
 	SettleRecorder SettleRecorder
+	// ModelDenials is optional: told of every call refused by model admission.
+	ModelDenials ModelDenialRecorder
 }
 
 // Config configures the Service.

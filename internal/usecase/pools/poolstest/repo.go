@@ -178,9 +178,35 @@ func (r *Repo) Template(_ context.Context, _ port.Tx, name string) (pools.Templa
 	return t, ok, nil
 }
 
-// ModelEnabled implements pools.Repository.
-func (r *Repo) ModelEnabled(_ context.Context, _ port.Tx, _, model string) (bool, error) {
-	return r.Models[model], r.fail("ModelEnabled")
+// ModelSets implements pools.Repository: the models marked true in Models are enabled for the service
+// and allowed for the team, and callable.
+func (r *Repo) ModelSets(context.Context, port.Tx, string) (domain.ModelSets, error) {
+	if err := r.fail("ModelSets"); err != nil {
+		return domain.ModelSets{}, err
+	}
+	var ids []string
+	for id, ok := range r.Models {
+		if ok {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return domain.ModelSets{Service: ids, Team: ids, Callable: ids}, nil
+}
+
+// EffectiveModels implements pools.Repository: every pool's effective set is its stored selection (or
+// every enabled model for access all).
+func (r *Repo) EffectiveModels(_ context.Context, _ port.Tx, _ string, list []domain.Pool) error {
+	if err := r.fail("EffectiveModels"); err != nil {
+		return err
+	}
+	for i := range list {
+		list[i].Models.Effective = []string{}
+		if list[i].Models.DefaultModelID != "" {
+			list[i].Models.Effective = append(list[i].Models.Effective, list[i].Models.DefaultModelID)
+		}
+	}
+	return nil
 }
 
 // AgentNameTaken implements pools.Repository.

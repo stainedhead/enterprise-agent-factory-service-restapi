@@ -225,7 +225,7 @@ func (s *Service) record(r Result, outcome string, bytes int64) {
 	if len(id) > 64 {
 		id = id[:64]
 	}
-	s.Access.Add(s.now(), collab.AccessKey{TeamID: r.Route.TeamID, Surface: r.Class.Surface(), Kind: kind, PrincipalID: id,
+	s.Access.Add(s.now(), collab.AccessKey{TeamID: r.Route.TeamID, Surface: r.Class.Surface(), Exposure: r.Route.ExposureLabel(), Kind: kind, PrincipalID: id,
 		Outcome: outcome, ServiceAdminEntry: r.ServiceAdminEntry}, bytes)
 }
 
@@ -485,6 +485,10 @@ func (r Result) denyDecision(d collab.Decision) Result {
 // refusedSurface answers a request for a surface that is not effective: 403 surface_disabled for a caller
 // who holds a binding on the team, 404 (no detail) for everyone else.
 func (s *Service) refusedSurface(ctx context.Context, req Request, base Result) Result {
+	if base.Route.OtherLevel(base.Class.Surface()) {
+		// Effective at the other level only: this hostname gives nothing away (CD-38).
+		return base.deny(404, "NotFound", "")
+	}
 	id := s.identify(ctx, req, base.Route, base.Class)
 	base.Kind, base.Principal = id.kind, id.id
 	if id.status == 0 {

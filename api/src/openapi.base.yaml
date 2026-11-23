@@ -2,9 +2,9 @@
 openapi: 3.1.0
 info:
   title: Enterprise Agent Factory Service API
-  version: 1.3.1
+  version: 1.4.0
   description: Control plane API of the Enterprise Agent Factory Service (afs-api). Machine-readable form of the root repository's
-    docs/contracts/api-contract.md v1.3.1; once an operation is here, this document wins. Role-based access is enforced on
+    docs/contracts/api-contract.md v1.4.0; once an operation is here, this document wins. Role-based access is enforced on
     every operation (x-afs-permission, x-afs-scope).
   license:
     name: Proprietary
@@ -38,6 +38,8 @@ tags:
   description: API contract §4.9
 - name: collaboration
   description: API contract §4.4b
+- name: orchestration
+  description: API contract §4.4d
 - name: delivery-audit
   description: API contract §4.10
 - name: work-orders

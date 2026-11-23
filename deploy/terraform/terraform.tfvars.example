@@ -17,3 +17,9 @@ athena_results_bucket_arn          = "arn:aws:s3:::example-athena-results"
 # collab_route53_zone_id         = "Z0123456789ABCDEFGHIJ"
 # collab_public_subnet_ids       = ["subnet-0aaaaaaaaaaaaaaaa", "subnet-0bbbbbbbbbbbbbbbb"]
 # collab_edge_security_group_ids = ["sg-0123456789abcdef0"]
+
+# Private orchestration entry (optional): leave the base domain out to serve public hostnames only.
+# orchestration_private_base_domain     = "orch.corp.example.com"
+# orchestration_private_subnet_ids      = ["subnet-0cccccccccccccccc", "subnet-0dddddddddddddddd"]
+# orchestration_private_certificate_arn = "<certificate ARN for the private base domain and its wildcards>"
+# orchestration_private_ingress_cidrs   = ["10.0.0.0/8"]

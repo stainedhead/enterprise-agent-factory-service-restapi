@@ -19,8 +19,9 @@ and [-website](https://github.com/stainedhead/enterprise-agent-factory-service-w
 console) are clients of this API and consume `api/openapi.yaml`. Requirements: the root repository's
 `enterprise-agent-factory-service-initial-PRD.md`.
 
-Status: scaffolded. Binaries start and stop; `authz` implements the role/permission matrix. No feature
-is built yet.
+Status: feature complete, release 1.1.0 (lockstep with `-db`, migrations 000001-000022): the REST API
+(194 operations, contract v1.4.0), reconciler, gateway, billing job and edge, with the team orchestration
+agent and model access added in 1.1.0.
 
 ## Toolchain
 
@@ -160,7 +161,7 @@ for design, requirements, spec or process material, and must not link into `spec
 
 ## Git
 
-**Versioning (lockstep).** `-db` and `-restapi` share version numbers: release `vX.Y.Z` of this repository goes with `vX.Y.Z` of `enterprise-agent-factory-service-db`. The current release is 1.0.1. The Makefile `VERSION` default and the Helm chart `version` and `appVersion` carry it; `CHANGELOG.md` records each release.
+**Versioning (lockstep).** `-db` and `-restapi` share version numbers: release `vX.Y.Z` of this repository goes with `vX.Y.Z` of `enterprise-agent-factory-service-db`. The current release is 1.1.0 (`-db` v1.1.0 adds migration 000022). The Makefile `VERSION` default and the Helm chart `version` and `appVersion` carry it; `CHANGELOG.md` records each release.
 
 Clear commit messages that reference the spec directory when there is one. Do not force-push shared
 branches. Do not commit `bin/`, `dist/`, coverage output or Terraform state. Work on a branch and open a

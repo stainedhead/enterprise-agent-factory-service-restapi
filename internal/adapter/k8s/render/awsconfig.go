@@ -15,8 +15,11 @@ import (
 const (
 	AWSConfigPath = "/etc/afs/aws/config"
 	TagsPath      = "/etc/afs/tags.json"
-	awsConfigKey  = "config"
-	tagsKey       = "tags.json"
+	// ModelsPath is the list of models the agent or pool may call and the default (MOD-6).
+	ModelsPath   = "/etc/afs/models.json"
+	modelsKey    = "models.json"
+	awsConfigKey = "config"
+	tagsKey      = "tags.json"
 )
 
 // AWSConfig renders /etc/afs/aws/config: one profile per link that is not disabled. Every profile sets
@@ -58,11 +61,30 @@ func TagsJSON(d agent.Desired) string {
 	return string(b)
 }
 
-// AgentAWSConfigMap renders the ConfigMap that holds /etc/afs/tags.json and, when the agent has links,
+// ModelsJSON is the content of /etc/afs/models.json: {"default": "<id>", "models": ["<id>", ...]}, the models
+// sorted. Ids only: no price, profile or account detail reaches the pod.
+func ModelsJSON(def string, ids []string) string {
+	ms := append([]string{}, ids...)
+	sort.Strings(ms)
+	b, _ := json.Marshal(struct {
+		Default string   `json:"default"`
+		Models  []string `json:"models"`
+	}{def, ms})
+	return string(b)
+}
+
+// ModelsEnv is AFS_MODELS: the ids, sorted, comma separated.
+func ModelsEnv(ids []string) string {
+	ms := append([]string{}, ids...)
+	sort.Strings(ms)
+	return strings.Join(ms, ",")
+}
+
+// AgentAWSConfigMap renders the ConfigMap that holds /etc/afs/tags.json, /etc/afs/models.json and, when the agent has links,
 // /etc/afs/aws/config.
 func AgentAWSConfigMap(d agent.Desired) *unstructured.Unstructured {
 	u := New("v1", "ConfigMap", d.Team.Namespace, agent.AWSConfigMapName(d.Name))
-	data := map[string]any{tagsKey: TagsJSON(d)}
+	data := map[string]any{tagsKey: TagsJSON(d), modelsKey: ModelsJSON(d.ModelID, d.Models)}
 	if cfg := AWSConfig(d); cfg != "" {
 		data[awsConfigKey] = cfg
 	}

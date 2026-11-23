@@ -42,14 +42,14 @@ func TestEdgeDB(t *testing.T) {
 
 	// settings: defaults, then overrides (wrong types keep the default)
 	set, err := e.Settings(ctx)
-	if err != nil || set.ContentScan != "block" || set.MaxBodyMB != 25 || set.BaseDomain != "" {
+	if err != nil || set.ContentScan != "block" || set.MaxBodyMB != 25 || set.PublicBaseDomain != "" {
 		t.Fatalf("defaults: %+v %v", set, err)
 	}
-	for k, v := range map[string]string{"collab.base_domain": `"collab.example.com"`, "collab.content_scan": `"warn"`, "collab.max_body_mb": `10`,
-		"collab.allowed_source_cidrs": `["10.0.0.0/8"]`, "collab.session_ttl_minutes": `60`, "collab.denied_spike_threshold": `7`, "collab.public_endpoints": `true`} {
+	for k, v := range map[string]string{"orchestration.public_base_domain": `"collab.example.com"`, "orchestration.private_base_domain": `"internal.example.com"`, "collab.content_scan": `"warn"`, "collab.max_body_mb": `10`,
+		"collab.allowed_source_cidrs": `["10.0.0.0/8"]`, "collab.session_ttl_minutes": `60`, "collab.denied_spike_threshold": `7`, "orchestration.public_endpoints": `true`} {
 		exec(`INSERT INTO afs.service_settings (key, value) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, k, v)
 	}
-	if set, err = e.Settings(ctx); err != nil || set.BaseDomain != "collab.example.com" || set.ContentScan != "warn" || set.MaxBodyMB != 10 ||
+	if set, err = e.Settings(ctx); err != nil || set.PublicBaseDomain != "collab.example.com" || set.PrivateBaseDomain != "internal.example.com" || !set.PrivateEndpoints || set.ContentScan != "warn" || set.MaxBodyMB != 10 ||
 		len(set.AllowedSourceCIDRs) != 1 || set.SessionTTLMinutes != 60 || set.DeniedSpikeThreshold != 7 {
 		t.Fatalf("settings: %+v %v", set, err)
 	}
@@ -107,20 +107,26 @@ VALUES ($1, $2, 'hermes', ARRAY[$3]::text[], $3)`, pgtest.NewID("tpl"), tpl, dig
 	const model = "anthropic.claude-edge-test"
 	exec(`INSERT INTO afs.models (id, provider, display_name, max_output_tokens) VALUES ($1, 'anthropic', 'edge', 4096) ON CONFLICT DO NOTHING`, model)
 	exec(`INSERT INTO afs.team_models (team_id, model_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, tm.ID, model)
-	exec(`UPDATE afs.agent_templates SET capabilities = ARRAY['paperclip'] WHERE name = $1`, tpl)
+	exec(`UPDATE afs.agent_templates SET capabilities = ARRAY['orchestration','tool:paperclip'] WHERE name = $1`, tpl)
 	exec(`INSERT INTO afs.agents (id, team_id, name, template, template_id, image, model_id, role, iam_identity)
-VALUES ($1, $2, 'pc', $3, (SELECT id FROM afs.agent_templates WHERE name = $3), $4, $5, 'collaboration', 'dedicated')`,
+VALUES ($1, $2, 'pc', $3, (SELECT id FROM afs.agent_templates WHERE name = $3), $4, $5, 'orchestration', 'dedicated')`,
 		collabAgent, tm.ID, tpl, "registry.example.com/agents/coder@"+digest, model)
 	exec(`INSERT INTO afs.team_collaboration (team_id, agent_id) VALUES ($1, $2)`, tm.ID, collabAgent)
 	routes, err = e.Routes(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var route *collab.Route
+	var route, private *collab.Route
 	for i := range routes {
-		if routes[i].TeamID == tm.ID {
+		switch {
+		case routes[i].TeamID == tm.ID && routes[i].Level == collab.LevelPublic:
 			route = &routes[i]
+		case routes[i].TeamID == tm.ID && routes[i].Level == collab.LevelPrivate:
+			private = &routes[i]
 		}
+	}
+	if private == nil || private.Hostname != tm.Slug+".internal.example.com" || private.PublicHostname != tm.Slug+".collab.example.com" {
+		t.Fatalf("private route: %+v", private)
 	}
 	if route == nil || route.Hostname != tm.Slug+".collab.example.com" || route.ServiceName != "paperclip" || route.Port != 3100 || route.Ready ||
 		route.NotReadyReason != "starting" || route.ClientID != "ccid" || route.ProviderClientID != "cid" || route.ProviderCLIClientID != "cli-cid" || route.IssuerURL != "https://idp.example.com" {

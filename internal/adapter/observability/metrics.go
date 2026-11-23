@@ -35,6 +35,8 @@ type Metrics struct {
 	GatewaySettleFailures prometheus.Counter
 	// GatewayUsageRowsDropped counts lost usage rows by reason (queue_full, write_failed).
 	GatewayUsageRowsDropped *prometheus.CounterVec
+	// GatewayModelDenials counts calls refused by model admission, by reason.
+	GatewayModelDenials *prometheus.CounterVec
 
 	RollupRuns        *prometheus.CounterVec
 	RollupLastSuccess *prometheus.GaugeVec
@@ -75,6 +77,7 @@ func NewMetrics(service, version string) *Metrics {
 	m.GatewayReservationsExpired = prometheus.NewCounter(prometheus.CounterOpts(f(MetricGatewayReservationsExpired, "Spend reservations that expired unsettled.")))
 	m.GatewaySettleFailures = prometheus.NewCounter(prometheus.CounterOpts(f(MetricGatewaySettleFailures, "Settlements that fell back to the retry queue or were dropped.")))
 	m.GatewayUsageRowsDropped = prometheus.NewCounterVec(prometheus.CounterOpts(f(MetricGatewayUsageRowsDropped, "Usage rows the gateway could not write, by reason.")), []string{"reason"})
+	m.GatewayModelDenials = prometheus.NewCounterVec(prometheus.CounterOpts(f(MetricGatewayModelDenials, "Calls the gateway refused because the model is not admitted for the agent, by reason.")), []string{"reason"})
 	m.RollupRuns = prometheus.NewCounterVec(prometheus.CounterOpts(f(MetricReportRollupRuns, "Report rollup runs by job and outcome.")), []string{"job", "outcome"})
 	m.RollupLastSuccess = prometheus.NewGaugeVec(prometheus.GaugeOpts(f(MetricReportRollupLastSuccess, "Unix time of the last successful report rollup run, by job.")), []string{"job"})
 	m.OutboxPending = prometheus.NewGauge(prometheus.GaugeOpts(f(MetricOutboxPending, "Unpublished outbox events.")))
@@ -90,7 +93,7 @@ func NewMetrics(service, version string) *Metrics {
 	r.MustRegister(m.EdgeRequests, m.EdgeRequestSecs, m.EdgeRefreshFailed, m.EdgeAccessDropped, m.APIRequests, m.APIRequestDuration, m.APIInFlight, m.APICrossTeamNotFound, m.APIOrphanSecrets,
 		m.ReconcileDuration, m.ReconcileErrors, m.ReconcileLag, m.DriftCorrected, m.Leader,
 		m.GatewayReservationFailures, m.GatewayAddedLatency, m.GatewayReservationsExpired,
-		m.GatewaySettleFailures, m.GatewayUsageRowsDropped,
+		m.GatewaySettleFailures, m.GatewayUsageRowsDropped, m.GatewayModelDenials,
 		m.OutboxPending, m.OutboxOldestAge, m.OutboxPublishedTotal, m.OutboxFailedTotal,
 		m.NotificationFailures, m.CURVariance, m.RollupRuns, m.RollupLastSuccess)
 	bi := prometheus.NewGaugeVec(prometheus.GaugeOpts(f(MetricBuildInfo, "Build information.")), []string{"service", "version"})
@@ -129,6 +132,9 @@ func (m *Metrics) OutboxLag(pending int, oldest time.Duration) {
 // SettleFailed counts one settlement that fell back to the retry queue or was dropped (gateway
 // SettleRecorder, bound in cmd/afs-gateway).
 func (m *Metrics) SettleFailed() { m.GatewaySettleFailures.Inc() }
+
+// ModelDenied counts one call refused by model admission (gateway ModelDenialRecorder, bound in cmd/afs-gateway).
+func (m *Metrics) ModelDenied(reason string) { m.GatewayModelDenials.WithLabelValues(reason).Inc() }
 
 // UsageRowDropped counts one lost usage row; reason is "queue_full" or "write_failed".
 func (m *Metrics) UsageRowDropped(reason string) {

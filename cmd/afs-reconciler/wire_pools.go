@@ -52,7 +52,7 @@ func buildPoolStream(d agentStreamDeps, efsStorageClass string) (*poolStream, er
 	ctl, err := pool.NewController(pool.Config{
 		Source: src, Cluster: cluster, IAM: d.IAM, PodIdentity: pods, Queues: queues, Probe: probe, Recorder: plc,
 		AWS: d.AWS, Gateway: d.Gateway, Hooks: pool.Hooks{Deleting: lifecycle.PoolDeleting(fin)},
-		LinkVerifierARN: d.LinkVerifierARN, EFSStorageClass: efsStorageClass,
+		LinkVerifierARN: d.LinkVerifierARN, EFSStorageClass: efsStorageClass, Events: d.Events,
 	})
 	if err != nil {
 		return nil, err

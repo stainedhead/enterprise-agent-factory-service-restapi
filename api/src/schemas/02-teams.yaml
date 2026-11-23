@@ -139,7 +139,28 @@ Team:
       description: 'Guardrail field: needs teams:set-guardrails'
     mayExposeCollaboration:
       type: boolean
-      description: 'Guardrail field: needs teams:set-guardrails. Whether the team may publish its Paperclip endpoints (default true)'
+      description: 'Deprecated: use maxCollaborationExposure (limit is not off)'
+      deprecated: true
+    maxCollaborationExposure:
+      type: string
+      enum: &id001
+      - 'off'
+      - private
+      - public
+      description: Highest exposure any surface of the orchestration agent may have; service admins set it (teams:set-guardrails)
+    orchestrationAgentId:
+      type:
+      - string
+      - 'null'
+      pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+      readOnly: true
+      description: The team orchestration agent; null only before the 1.1.0 backfill reaches the team
+    modelAccess:
+      type: string
+      enum:
+      - all
+      - selected
+      description: Whether the team may use every service-enabled model or only those in its list
 TeamList:
   type: object
   description: A page of Team resources
@@ -259,7 +280,9 @@ CreateTeamRequest:
       description: 'Guardrail field: needs teams:set-guardrails'
     mayExposeCollaboration:
       type: boolean
-      description: 'Guardrail field: needs teams:set-guardrails. Whether the team may publish its Paperclip endpoints (default true)'
+      description: 'Guardrail field: needs teams:set-guardrails. Whether the team may publish its Paperclip endpoints (default
+        true)'
+      deprecated: true
     firstAdmin:
       $ref: '#/components/schemas/FirstAdmin'
     models:
@@ -274,10 +297,51 @@ CreateTeamRequest:
       description: Team-owned tag values, including required service tags
     budget:
       $ref: '#/components/schemas/TeamBudgetInput'
+    maxCollaborationExposure:
+      type: string
+      enum: *id001
+      description: Default off
+    modelAccess:
+      type: string
+      enum:
+      - all
+      - selected
+    orchestration:
+      type: object
+      description: The orchestration agent created with the team; every field optional
+      properties:
+        tool:
+          type: string
+          enum:
+          - paperclip
+          - buzz
+        webUi:
+          type: object
+          required:
+          - exposure
+          properties: &id002
+            exposure:
+              type: string
+              enum: *id001
+        webApi:
+          type: object
+          required:
+          - exposure
+          properties: *id002
+        registrationMode:
+          type: string
+          enum:
+          - manual
+          - managed
+        models:
+          $ref: '#/components/schemas/AgentModelsInput'
+        resources:
+          $ref: '#/components/schemas/Resources'
 UpdateTeamRequest:
   type: object
   description: Fields to change. maxBudgetUsd, the ceiling override, quotas, isolationTier, viewerKubectl, mayManageAwsAccounts,
-    mayAddExternalSystems and mayExposeCollaboration need teams:set-guardrails; allowedAwsAccounts needs teams:set-aws-accounts
+    mayAddExternalSystems and mayExposeCollaboration, maxCollaborationExposure and modelAccess need teams:set-guardrails;
+    allowedAwsAccounts needs teams:set-aws-accounts
   properties:
     displayName:
       type: string
@@ -334,24 +398,45 @@ UpdateTeamRequest:
       type: boolean
     mayExposeCollaboration:
       type: boolean
+      deprecated: true
     allowedAwsAccounts:
       type: array
       items:
         $ref: '#/components/schemas/AwsAccountId'
+    maxCollaborationExposure:
+      type: string
+      enum: *id001
 TeamModels:
   type: object
   required:
+  - access
+  - modelIds
   - items
   properties:
+    access:
+      type: string
+      enum:
+      - all
+      - selected
+    modelIds:
+      type: array
+      items:
+        type: string
+      description: The team list; meaningful when access is selected
     items:
       type: array
       items:
         $ref: '#/components/schemas/Model'
+      description: Models the team can use, each with inferenceProfileState
 PutTeamModelsRequest:
   type: object
-  required:
-  - modelIds
+  description: A body with only modelIds is read as access selected (deprecated form)
   properties:
+    access:
+      type: string
+      enum:
+      - all
+      - selected
     modelIds:
       type: array
       items:

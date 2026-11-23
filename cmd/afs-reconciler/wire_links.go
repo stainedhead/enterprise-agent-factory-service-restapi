@@ -6,6 +6,7 @@ import (
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/aws/bedrock"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/aws/organizations"
 	awssts "github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/aws/sts"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres"
@@ -62,4 +63,15 @@ func registerOrgMirror(s housekeeping.Scheduler, cfg awssdk.Config, runner port.
 	}
 	m := &housekeeping.OrgMirror{Lister: organizations.New(cfg), Store: postgres.NewOrgMirrorStore(runner), Clock: now, Log: log}
 	housekeeping.Register(s, []housekeeping.Job{housekeeping.OrgMirrorJob(m)})
+}
+
+// registerModelSync adds the daily Bedrock model catalogue sync to the engine's leader-only jobs.
+// AFS_MODEL_SYNC=off disables it.
+func registerModelSync(s housekeeping.Scheduler, cfg awssdk.Config, runner port.TxRunner, env func(string) string, now func() time.Time, log *slog.Logger) {
+	if env("AFS_MODEL_SYNC") == "off" {
+		log.Info("model catalogue sync disabled (AFS_MODEL_SYNC=off)")
+		return
+	}
+	m := &housekeeping.ModelSync{Lister: bedrock.NewModels(cfg), Store: postgres.NewModelSyncStore(runner), Clock: now, Log: log}
+	housekeeping.Register(s, []housekeeping.Job{housekeeping.ModelSyncJob(m)})
 }

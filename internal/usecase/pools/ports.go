@@ -58,8 +58,10 @@ type PoolRepository interface {
 	// again) and so their version.
 	Touch(ctx context.Context, tx port.Tx, teamID string, poolIDs []string) error
 	Template(ctx context.Context, tx port.Tx, name string) (TemplateInfo, bool, error)
-	// ModelEnabled reports whether the model is enabled and offered to the team.
-	ModelEnabled(ctx context.Context, tx port.Tx, teamID, modelID string) (bool, error)
+	// ModelSets returns the sets the models of a pool are checked against (MOD-3).
+	ModelSets(ctx context.Context, tx port.Tx, teamID string) (domain.ModelSets, error)
+	// EffectiveModels fills Models.Effective of each pool (service ∩ team ∩ pool ∩ callable).
+	EffectiveModels(ctx context.Context, tx port.Tx, teamID string, list []domain.Pool) error
 	// AgentNameTaken reports whether a live agent of the team has this name.
 	AgentNameTaken(ctx context.Context, tx port.Tx, teamID, name string) (bool, error)
 	// Workers returns the worker counts of the pool's latest activity window.

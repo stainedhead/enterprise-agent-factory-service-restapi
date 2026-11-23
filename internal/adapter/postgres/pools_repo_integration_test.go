@@ -2,6 +2,7 @@ package postgres_test
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -59,11 +60,8 @@ func TestPoolRepo(t *testing.T) {
 		if _, err := repo.TeamKind(ctx, tx, persistent.ID); domain.KindOf(err) != domain.KindNotFound {
 			t.Errorf("another team's kind is hidden: %v", err)
 		}
-		if ok, err := repo.ModelEnabled(ctx, tx, swarm, "claude-sonnet"); err != nil || !ok {
-			t.Errorf("ModelEnabled: %v %v", ok, err)
-		}
-		if ok, _ := repo.ModelEnabled(ctx, tx, swarm, "nope"); ok {
-			t.Error("unknown model enabled")
+		if sets, err := repo.ModelSets(ctx, tx, swarm); err != nil || !slices.Contains(sets.Team, "claude-sonnet") || slices.Contains(sets.Team, "nope") {
+			t.Errorf("ModelSets: %+v %v", sets, err)
 		}
 		if tpl, ok, err := repo.Template(ctx, tx, tplName); err != nil || !ok || tpl.ID != tplID || !tpl.Enabled {
 			t.Errorf("Template: %+v %v %v", tpl, ok, err)

@@ -37,6 +37,50 @@ curl -s -X POST https://afs.example.com/v1/teams \
 The row is written with its audit and outbox entries in one transaction. `afs-reconciler` then creates the
 namespace, roles and inference profiles; poll `GET /v1/teams/{teamId}/status` until the phase is `Ready`.
 
+Every team gets its orchestration agent with the team. The optional `orchestration` member chooses the tool and the
+starting levels; `maxCollaborationExposure` (`off`, `private`, `public`) is the limit of the team:
+
+```bash
+  -d '{ ..., "maxCollaborationExposure": "private",
+        "orchestration": {"tool": "paperclip", "webUiExposure": "private", "webApiExposure": "off"},
+        "modelAccess": "all" }'
+```
+
+## Orchestration: read it, change a level, change the tool
+
+```bash
+curl -s https://afs.example.com/v1/teams/$TEAM/orchestration -H "Authorization: Bearer $TOKEN"
+
+# raise the web UI to public (needs collaboration:manage; the limit must allow it)
+curl -s -X PUT https://afs.example.com/v1/teams/$TEAM/orchestration -H "Authorization: Bearer $TOKEN" \
+  -H 'If-Match: 3' -H 'Content-Type: application/json' -d '{"webUiExposure": "public"}'
+
+# change the tool (a snapshot is taken first; the data of the old tool is not carried over)
+curl -s -X POST https://afs.example.com/v1/teams/$TEAM/orchestration:change-tool -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"tool": "buzz"}'
+```
+
+Errors name the reason in `details.reason`: `exposure_above_limit`, `surface_not_supported_by_tool`,
+`tool_not_enabled`, `tool_unchanged`, `tool_change_in_progress`. The orchestration agent cannot be created or deleted
+through `CreateAgent` or `DeleteAgent` (`role_reserved`, `name_reserved`, `orchestration_agent_required`).
+
+## Models
+
+```bash
+# a team's models: access "all" means every model the service enables, now and later
+curl -s -X PUT https://afs.example.com/v1/teams/$TEAM/models -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"access": "selected", "modelIds": ["anthropic.example-model-v1:0"]}'
+
+# an agent's models: a default and, optionally, a selection within the team's
+curl -s -X PATCH https://afs.example.com/v1/teams/$TEAM/agents/$AGENT -H "Authorization: Bearer $TOKEN" \
+  -H 'If-Match: 2' -H 'Content-Type: application/json' \
+  -d '{"models": {"access": "selected", "modelIds": ["anthropic.example-model-v1:0"], "defaultModelId": "anthropic.example-model-v1:0"}}'
+```
+
+A call to a model the agent may not use is refused by the gateway with `AccessDenied` and `details.reason` one of
+`model_not_enabled_for_service`, `model_not_enabled_for_team`, `model_not_enabled_for_agent` or `model_not_priced`.
+`ListModels` shows `callable` and `priceState` per model.
+
 ## Create an agent
 
 ```bash

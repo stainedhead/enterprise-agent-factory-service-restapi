@@ -68,14 +68,23 @@ type Team struct {
 	AllowedAwsAccounts       []string
 	MayManageAwsAccounts     bool
 	MayAddExternalSystems    bool
-	// MayExposeCollaboration is the guardrail that lets the team publish its Paperclip endpoints (default true).
+	// MayExposeCollaboration is the deprecated boolean form of the limit: true when the limit is not off
+	// (read only in 1.1.0; the database keeps the column in step until 2.0.0).
 	MayExposeCollaboration bool
-	Version                Version
-	Generation             Generation
-	CreatedAt              time.Time
-	CreatedBy              string
-	UpdatedAt              time.Time
-	Status                 Status
+	// MaxCollaborationExposure is the team's endpoint limit: the highest exposure its orchestration
+	// endpoints may have (service admins only; API contract §4.2, ORC-14).
+	MaxCollaborationExposure Exposure
+	// ModelAccess is all or selected: the team's model set (MOD-2).
+	ModelAccess ModelAccess
+	// OrchestrationAgentID names the orchestration agent; empty only while the backfill has not reached
+	// a 1.0.1 team.
+	OrchestrationAgentID string
+	Version              Version
+	Generation           Generation
+	CreatedAt            time.Time
+	CreatedBy            string
+	UpdatedAt            time.Time
+	Status               Status
 }
 
 // EffectiveCeiling is the ceiling a budget may reach at now: the override while it is unexpired,
@@ -105,8 +114,29 @@ type NewTeamParams struct {
 	AllowedAwsAccounts    []string
 	MayManageAwsAccounts  bool
 	MayAddExternalSystems bool
-	// MayExposeCollaboration is the guardrail; nil means the default, true.
+	// MayExposeCollaboration is the deprecated alias of MaxCollaborationExposure: true is public and
+	// false is off (ORC-27). MaxCollaborationExposure wins when both are set.
 	MayExposeCollaboration *bool
+	// MaxCollaborationExposure is the team's endpoint limit; nil means the service default
+	// (orchestration.default_limit), which the use case fills in.
+	MaxCollaborationExposure *Exposure
+	// ModelAccess is all or selected; empty means selected when a model list is given (a 1.0.1 client) and
+	// the service default otherwise (CD-30).
+	ModelAccess ModelAccess
+}
+
+// LimitFromParams resolves the limit a new team gets: the explicit limit, else the deprecated boolean,
+// else def.
+func (p NewTeamParams) LimitFromParams(def Exposure) Exposure {
+	switch {
+	case p.MaxCollaborationExposure != nil:
+		return *p.MaxCollaborationExposure
+	case p.MayExposeCollaboration != nil && *p.MayExposeCollaboration:
+		return ExposurePublic
+	case p.MayExposeCollaboration != nil:
+		return ExposureOff
+	}
+	return def
 }
 
 // NewTeam builds a team in state active, enforcing the invariants of API contract §4.2: an ephemeral
@@ -165,13 +195,18 @@ func NewTeam(id string, p NewTeamParams, now time.Time, ephemeralMaxDays int) (T
 		MaxBudget: p.MaxBudget, Quotas: p.Quotas, IsolationTier: p.IsolationTier, ViewerKubectl: p.ViewerKubectl,
 		ExpiresAt: p.ExpiresAt, TeardownRule: p.TeardownRule, IdentityProviderID: p.IdentityProviderID,
 		AllowedAwsAccounts: slices.Clone(p.AllowedAwsAccounts), MayManageAwsAccounts: p.MayManageAwsAccounts,
-		MayAddExternalSystems: p.MayAddExternalSystems, MayExposeCollaboration: p.MayExposeCollaboration == nil || *p.MayExposeCollaboration,
-		Version: 1, Generation: 1,
+		MayAddExternalSystems: p.MayAddExternalSystems, MaxCollaborationExposure: p.LimitFromParams(ExposurePrivate),
+		ModelAccess: p.ModelAccess,
+		Version:     1, Generation: 1,
 		CreatedAt: now.UTC(), UpdatedAt: now.UTC(), Status: PendingStatus(now),
 	}
 	if t.AllowedAwsAccounts == nil {
 		t.AllowedAwsAccounts = []string{}
 	}
+	if t.ModelAccess == "" {
+		t.ModelAccess = ModelAccessAll
+	}
+	t.MayExposeCollaboration = t.MaxCollaborationExposure != ExposureOff
 	return t, nil
 }
 
@@ -254,7 +289,10 @@ type TeamPatch struct {
 	ViewerKubectl            *bool
 	MayManageAwsAccounts     *bool
 	MayAddExternalSystems    *bool
+	// MayExposeCollaboration is the deprecated alias of MaxCollaborationExposure (true is public, false
+	// is off); the limit wins when both are set.
 	MayExposeCollaboration   *bool
+	MaxCollaborationExposure *Exposure
 	AllowedAwsAccounts       *[]string
 }
 
@@ -276,6 +314,7 @@ func (p TeamPatch) GuardrailFields() []string {
 	add(p.MayManageAwsAccounts != nil, "mayManageAwsAccounts")
 	add(p.MayAddExternalSystems != nil, "mayAddExternalSystems")
 	add(p.MayExposeCollaboration != nil, "mayExposeCollaboration")
+	add(p.MaxCollaborationExposure != nil, "maxCollaborationExposure")
 	return out
 }
 
@@ -351,9 +390,18 @@ func (t Team) Apply(p TeamPatch, budget *Money, now time.Time) (Team, error) {
 	if p.MayAddExternalSystems != nil {
 		n.MayAddExternalSystems = *p.MayAddExternalSystems
 	}
-	if p.MayExposeCollaboration != nil {
-		n.MayExposeCollaboration = *p.MayExposeCollaboration
+	switch {
+	case p.MaxCollaborationExposure != nil:
+		if !p.MaxCollaborationExposure.Valid() {
+			fe = append(fe, FieldError{Field: "maxCollaborationExposure", Reason: "must be off, private or public"})
+		}
+		n.MaxCollaborationExposure = *p.MaxCollaborationExposure
+	case p.MayExposeCollaboration != nil && *p.MayExposeCollaboration:
+		n.MaxCollaborationExposure = ExposurePublic
+	case p.MayExposeCollaboration != nil:
+		n.MaxCollaborationExposure = ExposureOff
 	}
+	n.MayExposeCollaboration = n.MaxCollaborationExposure != ExposureOff
 	if p.AllowedAwsAccounts != nil {
 		n.AllowedAwsAccounts = slices.Clone(*p.AllowedAwsAccounts)
 		if n.AllowedAwsAccounts == nil {

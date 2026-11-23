@@ -70,10 +70,12 @@ the build-tagged suites on a cluster. Deployment assets are in [deploy/terraform
 
 ## Status
 
-Feature complete for the restapi spec (milestones M0 to M6): all 182 operations of the API contract are
-implemented behind the permission matrix, with the reconciler, gateway and billing jobs. Checks that need a
+Release 1.1.0 (lockstep with `-db`): all 194 operations of API contract v1.4.0 are implemented behind the permission
+matrix, with the reconciler, gateway, billing jobs and edge. 1.1.0 adds the team orchestration agent (every team has
+one, with the collaboration tool and the exposure of its web UI and web API chosen per team) and model access (service,
+team, agent and pool levels enforced by the gateway); see [upgrading to 1.1.0](user-docs/upgrading-to-1.1.0.md). Checks that need a
 development cluster or an AWS account (end-to-end run, restore drill, full-scale load) run on the cluster, not
-in CI, and have not been run yet. `-db` is pinned to an untagged pseudo-version until it is released.
+in CI, and have not been run yet. `-db` is pinned to a pseudo-version of the commit that carries migration 000022 until `-db` v1.1.0 is tagged.
 
 ## Contributing
 

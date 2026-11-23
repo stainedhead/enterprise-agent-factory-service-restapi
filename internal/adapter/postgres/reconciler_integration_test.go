@@ -14,6 +14,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port/fakes"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/team"
 )
 
 func reconcilerPool(t *testing.T, db *pgtest.DB) *postgres.TxRunner {
@@ -333,26 +334,24 @@ func TestDriftRecorder(t *testing.T) {
 	}
 }
 
-// M1-G1d: the team source reads the row, quotas and enabled models, and records an inference profile ARN.
+// M1-G1d: the team source reads the row, quotas and callable models, and records inference profiles. A model is
+// callable when a live agent of the team may call it: service, team, agent and a price in force (000022).
 func TestTeamSource(t *testing.T) {
 	db := pgtest.Get(t)
-	tm := db.SeedTeam(t)
+	ag := seedFullAgent(t, db)
+	tm := ag.team
 	admin := db.Admin(t)
 	ctx := t.Context()
 	model := "m-" + tm.Slug
-	if _, err := admin.Exec(ctx, `INSERT INTO afs.models (id, provider, display_name) VALUES ($1, 'Anthropic', 'M'), ($1 || '-off', 'Anthropic', 'Off')`, model); err != nil {
+	if _, err := admin.Exec(ctx, `INSERT INTO afs.models (id, provider, display_name) VALUES ($1, 'Anthropic', 'M'), ($1 || '-unpriced', 'Anthropic', 'No price')`, model); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := admin.Exec(ctx, `UPDATE afs.models SET enabled = false WHERE id = $1 || '-off'`, model); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := admin.Exec(ctx, `INSERT INTO afs.team_models (team_id, model_id) VALUES ($1, $2), ($1, $2 || '-off')`, tm.ID, model); err != nil {
+	if _, err := admin.Exec(ctx, `INSERT INTO afs.model_prices (model_id, effective_from, input_usd_per_mtok, output_usd_per_mtok) VALUES ($1, now() - interval '1 day', 1, 2)`, model); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := admin.Exec(ctx, `UPDATE afs.teams SET quotas = '{"cpu":"8","memory":"16Gi","pods":20}' WHERE id = $1`, tm.ID); err != nil {
 		t.Fatal(err)
 	}
-
 	if _, err := admin.Exec(ctx, `INSERT INTO afs.team_tags (team_id, key, value) VALUES ($1, 'project', 'apollo')`, tm.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -368,18 +367,52 @@ func TestTeamSource(t *testing.T) {
 	if got.Tags["project"] != "apollo" || got.Tags["afs-team-id"] != "" {
 		t.Errorf("tags are the team's non-system effective tags: %v", got.Tags)
 	}
-	if len(got.Models) != 1 || got.Models[0].ID != model || got.Models[0].ProfileARN != "" {
-		t.Errorf("only enabled catalog models are returned: %+v", got.Models)
+	find := func(ms []team.Model, id string) *team.Model {
+		for i := range ms {
+			if ms[i].ID == id {
+				return &ms[i]
+			}
+		}
+		return nil
+	}
+	if m := find(got.Models, model); m == nil || m.ProfileARN != "" || find(got.Models, model+"-unpriced") != nil {
+		t.Errorf("only priced, callable models are returned: %+v", got.Models)
 	}
 	arn := "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/abc"
 	if err := src.SetInferenceProfileARN(ctx, tm.ID, model, arn); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ = src.LoadTeam(ctx, tm.ID); got.Models[0].ProfileARN != arn {
+	if got, _ = src.LoadTeam(ctx, tm.ID); find(got.Models, model).ProfileARN != arn || find(got.Models, model).Inactive {
 		t.Errorf("ARN not recorded: %+v", got.Models)
 	}
 	if err := src.SetInferenceProfileARN(ctx, tm.ID, "nope", arn); err == nil {
 		t.Errorf("unknown model: %v", err)
+	}
+	// The model stops being callable: its profile row is a retiring candidate, kept for the grace period.
+	if _, err := admin.Exec(ctx, `UPDATE afs.teams SET model_access = 'selected' WHERE id = $1`, tm.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(ctx, `INSERT INTO afs.team_models (team_id, model_id) VALUES ($1, 'claude-sonnet') ON CONFLICT DO NOTHING`, tm.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = src.LoadTeam(ctx, tm.ID); find(got.Models, model) != nil || len(got.Retiring) != 1 || got.Retiring[0].ID != model || !got.Retiring[0].RetireAfter.IsZero() {
+		t.Fatalf("retiring: %+v %+v", got.Models, got.Retiring)
+	}
+	after := time.Now().Add(team.ProfileGrace).UTC()
+	if err := src.RetireProfile(ctx, tm.ID, model, after); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = src.LoadTeam(ctx, tm.ID); got.Retiring[0].RetireAfter.Sub(after) > time.Second || got.Retiring[0].ProfileARN != arn {
+		t.Errorf("retire after: %+v", got.Retiring)
+	}
+	if err := src.RetireProfile(ctx, tm.ID, "nope", after); err == nil {
+		t.Error("retiring an unknown profile must fail")
+	}
+	if err := src.DropProfile(ctx, tm.ID, model); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = src.LoadTeam(ctx, tm.ID); len(got.Retiring) != 0 {
+		t.Errorf("dropped: %+v", got.Retiring)
 	}
 	if _, err := src.LoadTeam(ctx, "team_01JD0000000000000000009999"); err == nil {
 		t.Error("an unknown team must be NotFound")

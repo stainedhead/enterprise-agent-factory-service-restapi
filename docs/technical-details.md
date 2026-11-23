@@ -228,3 +228,37 @@ The billing role reads `service_settings` and `team_models`; no env fallback rem
   straight to Secrets Manager (`<prefix>/<ns>/<agent>/paperclip-agent-api-key`) and `afs.record_collab_agent_key` records it;
   keys, the board key and invite URLs are the redacting `collab.Key` type and never reach a log, an event or an error.
   A connected worker whose key has no value starts without `PAPERCLIP_AGENT_API_KEY` and gets `CollaborationKeyMissing=True`.
+
+## Orchestration agent and model access (1.1.0, spec 261123-orchestration-and-model-access)
+
+- **Creation.** `teams.Service.createOrchestration` calls `afs.create_orchestration_agent` (service-admin only; `afs_app`
+  cannot insert role `orchestration` or `team_collaboration`) in `CreateTeam`'s transaction, then writes the boot secrets
+  (`agents.CreateBootSecrets`; Buzz has none). A failure deletes the secrets already written. The deferred check
+  `teams_orchestration_required` and the guard `agents_orchestration_required` are mapped by constraint name to
+  `orchestration_agent_required` (`adapter/postgres/errors.go`).
+- **Backfill.** `afs-api orchestration-backfill` (`cmd/afs-api/backfill.go`, `teams.Service.Backfill`) lists live teams
+  without an agent (20 at a time), creates the agent per team in its own transaction as `system:migration` (a service-admin
+  session), and carries on past a failure; exit 1 lists the failed teams. Idempotent: a team with an agent is not listed.
+- **Exposure.** `domain.Exposure` ranks `off < private < public`; a level is checked against the team's
+  `maxCollaborationExposure`, the tool's profile (`CollabTool.Profile`: Buzz offers neither surface) and the service's
+  `orchestration.public_endpoints` / `private_endpoints`. The legacy booleans are kept in step by the database.
+- **Models.** `domain.AgentModels` and `ModelSets` resolve `all`/`selected` at agent and pool level inside the team's set
+  inside the service's set. The effective set the reconciler and gateway use is the view `afs.effective_agent_models`.
+- **Gateway admission.** `gateway.Service.checkModel` asks `Store.ModelAdmission(kind, id)` (`afs.model_admission`), which
+  returns the first failing level; the reasons are `model_not_enabled_for_service|team|agent` and `model_not_priced`. A
+  database error fails closed. Results are cached 60 s and the cache is invalidated by change-feed notifications on
+  `agent_models`, `pool_models`, `agents`, `agent_pools`, `service_settings`, `models`, `model_prices`, `teams` and
+  `team_inference_profiles`. While the team's profile is `creating` the call is `503 model_provisioning`, `Retry-After: 30`.
+- **Inference profiles.** The team reconciler keeps one application inference profile per model the team's agents can call
+  (`team_inference_profiles`); a model that leaves the set is `retiring` for 7 days (`ProfileGrace`) and then dropped.
+- **Model delivery.** `render` adds `AFS_DEFAULT_MODEL`, `AFS_MODELS` and a `models.json` ConfigMap mounted at
+  `/etc/afs/models.json`; `agent.ModelState` computes `ModelUnavailable` and emits `agent.model_unavailable` on change.
+- **Render by tool.** `render.CollabService` and `ToolPort` choose the Service and port by tool (Paperclip 3100, Buzz 3000);
+  Buzz gets `BUZZ_RELAY_URL` and `BUZZ_PRIVATE_KEY` (secret `buzz-agent-private-key`); every orchestration pod gets
+  `AFS_COLLAB_TOOL` and `AFS_COLLAB_URL`.
+- **Bedrock sync.** `housekeeping.ModelSync` (daily, leader only) inserts models it has not seen with `enabled=false` and
+  origin `bedrock_sync` and stamps `synced_at`; `afs_reconciler` may do nothing else to `models`.
+- **Edge.** `edgedb` reads `orchestration_routes()` and `orchestration_settings()`; `collab.Table` holds one route per
+  team and hostname level and recognises both apexes; `decide` answers `404` for a surface whose effective level is the
+  other one (CD-38). Access records carry `exposure`.
+- **Permissions.** No new permission; scope changes are listed in the CHANGELOG (1.1.0).

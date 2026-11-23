@@ -29,6 +29,14 @@ func TestValidateSwarmSpec(t *testing.T) {
 	}{
 		{"valid", validSpec(), ""},
 		{"nil", nil, "spec"},
+		{"orchestration ok", mut(func(s map[string]any) {
+			s["orchestration"] = map[string]any{"tool": "buzz", "webUiExposure": "private", "webApiExposure": "off", "defaultModelId": "m.x"}
+		}), ""},
+		{"orchestration not an object", mut(func(s map[string]any) { s["orchestration"] = "x" }), "spec.orchestration"},
+		{"orchestration unknown member", mut(func(s map[string]any) { s["orchestration"] = map[string]any{"x": 1} }), "orchestration.x"},
+		{"orchestration bad tool", mut(func(s map[string]any) { s["orchestration"] = map[string]any{"tool": "x"} }), "orchestration.tool"},
+		{"orchestration bad level", mut(func(s map[string]any) { s["orchestration"] = map[string]any{"webApiExposure": "world"} }), "orchestration.webApiExposure"},
+		{"orchestration bad model", mut(func(s map[string]any) { s["orchestration"] = map[string]any{"defaultModelId": ""} }), "orchestration.defaultModelId"},
 		{"no pools", mut(func(s map[string]any) { s["pools"] = []any{} }), "spec.pools"},
 		{"bad pool name", mut(func(s map[string]any) { pool0(s)["name"] = "Bad" }), "pools[0].name"},
 		{"dup pool", mut(func(s map[string]any) { s["pools"].([]any)[1].(map[string]any)["name"] = "fixer" }), "pools[1].name"},

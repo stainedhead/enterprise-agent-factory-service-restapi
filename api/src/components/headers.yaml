@@ -29,3 +29,18 @@ headers:
     schema:
       type: string
     description: Next page token of a CSV response; absent on the last page
+  Deprecation:
+    schema:
+      type: string
+      example: '@1795392000'
+    description: 'RFC 9745 Deprecation: @<unix time of the 1.1.0 release>'
+  Sunset:
+    schema:
+      type: string
+      example: Tue, 23 Nov 2027 00:00:00 GMT
+    description: HTTP-date of the planned removal (2.0.0); Helm value deprecation.sunset
+  Link:
+    schema:
+      type: string
+      example: </v1/teams/team_01JD2Q3R4S5T6V7W8X9Y0Z0001/orchestration>; rel="successor-version"
+    description: The successor operation

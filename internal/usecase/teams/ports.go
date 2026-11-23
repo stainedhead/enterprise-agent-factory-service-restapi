@@ -36,6 +36,48 @@ type ModelInfo struct {
 	MaxOutputTokens int
 	Version         int64
 	UpdatedAt       time.Time
+	// Callable is true while the model has a price in force (the gateway needs a price, MOD-1).
+	Callable bool
+	// PriceState is none, pending or approved.
+	PriceState string
+	// InferenceProfileState is the team's inference profile state for the model (creating, active or
+	// retiring); empty when there is none.
+	InferenceProfileState string
+}
+
+// TeamModels is a team's model access: all or the stored selection, and the effective list.
+type TeamModels struct {
+	Access   domain.ModelAccess
+	ModelIDs []string
+	// Items are the models the team may use now: the service's models, narrowed by the selection.
+	Items   []ModelInfo
+	Version domain.Version
+}
+
+// OrchestrationInput is the orchestration object of CreateTeam (ORC-26); every member is optional.
+type OrchestrationInput struct {
+	Tool             domain.CollabTool
+	WebUIExposure    domain.Exposure
+	WebAPIExposure   domain.Exposure
+	RegistrationMode domain.RegistrationMode
+	Models           *domain.ModelsInput
+	ModelID          string
+	Resources        *domain.AgentResources
+	VolumeSizeGiB    int
+	VolumeOnDelete   string
+}
+
+// OrchestrationAgent is what create_orchestration_agent is called with; empty members take the
+// service defaults inside the database function (afs.create_orchestration_agent).
+type OrchestrationAgent struct {
+	TeamID, AgentID, Name         string
+	Tool                          domain.CollabTool
+	WebUIExposure, WebAPIExposure domain.Exposure
+	RegistrationMode              domain.RegistrationMode
+	Models                        domain.AgentModels
+	Resources                     *domain.AgentResources
+	VolumeSizeGiB                 int
+	VolumeOnDelete                string
 }
 
 // Repository is the team store. Implementations run inside the transaction they are given, so
@@ -59,12 +101,27 @@ type Repository interface {
 	ResolveUser(ctx context.Context, tx port.Tx, userID, email string) (id string, ok bool, err error)
 	// InsertAdminBinding stores the first team-admin binding.
 	InsertAdminBinding(ctx context.Context, tx port.Tx, bindingID, teamID string, m domain.NewMemberParams) error
-	// Models lists a team's models and the version of the set.
-	Models(ctx context.Context, tx port.Tx, teamID string) ([]ModelInfo, domain.Version, error)
+	// Models returns a team's model access, stored selection and the models it may use now. The version
+	// is the team's.
+	Models(ctx context.Context, tx port.Tx, teamID string) (TeamModels, error)
 	// ModelsByID returns the catalog models with these ids (missing ids are absent).
 	ModelsByID(ctx context.Context, tx port.Tx, ids []string) (map[string]ModelInfo, error)
-	// ReplaceModels makes the team's model set exactly ids.
+	// ServiceModelIDs returns the ids enabled for the service (every catalog model while the service's
+	// access is all).
+	ServiceModelIDs(ctx context.Context, tx port.Tx) ([]string, error)
+	// ReplaceModels makes the team's stored model selection exactly ids.
 	ReplaceModels(ctx context.Context, tx port.Tx, teamID string, ids []string) error
+	// SetModelAccess sets the team's model access (service admins only).
+	SetModelAccess(ctx context.Context, tx port.Tx, teamID string, access domain.ModelAccess) error
+	// ModelSets returns the sets an agent's models are checked against, for the team.
+	ModelSets(ctx context.Context, tx port.Tx, teamID string) (domain.ModelSets, error)
+	// InsertOrchestration calls afs.create_orchestration_agent for the team just inserted.
+	InsertOrchestration(ctx context.Context, tx port.Tx, in OrchestrationAgent) error
+	// WithoutOrchestration returns up to limit ids of live teams (not deleting or deleted) that have no live
+	// orchestration agent, in id order.
+	WithoutOrchestration(ctx context.Context, tx port.Tx, limit int) ([]string, error)
+	// HasOrchestration reports whether the team has a live orchestration agent.
+	HasOrchestration(ctx context.Context, tx port.Tx, teamID string) (bool, error)
 	// ServiceTags lists the service tags.
 	ServiceTags(ctx context.Context, tx port.Tx) ([]domain.ServiceTag, error)
 	// TeamTags lists the team's own tags and the version of the set.

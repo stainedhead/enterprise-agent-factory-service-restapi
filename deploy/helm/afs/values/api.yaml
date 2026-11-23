@@ -39,3 +39,14 @@ cors:
 # ownerUser empty to run migrations out of band with afs-migrate.
 migrate:
   ownerUser: ""
+# Deprecated operations answer with Deprecation and Sunset headers (API contract 1.4.0). RFC 3339; empty keeps the
+# binary's defaults (the 1.1.0 release date and twelve months later).
+deprecation:
+  since: ""
+  sunset: ""
+# Creates the orchestration agent of every team that has none (RA-US-21), once after an install or upgrade.
+# Idempotent and resumable; it runs as actor system:migration through the same database login as afs-api.
+orchestrationBackfill:
+  enabled: true
+  backoffLimit: 3
+  activeDeadlineSeconds: 3600

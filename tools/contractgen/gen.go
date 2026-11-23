@@ -266,7 +266,7 @@ func genSettings(ex *Extract) []byte {
 const settingSpecType = `// SettingSpec describes one service setting: its JSON type, default (JSON text), range and pattern.
 type SettingSpec struct {
 	Key      string
-	Type     string // string, boolean, integer or array (of strings)
+	Type     string // string, boolean, integer, array (of strings) or object (checked by the database)
 	Default  string
 	Nullable bool
 	Min, Max *int64
@@ -275,9 +275,10 @@ type SettingSpec struct {
 	Allowed  string
 }
 
-// SettingSpecFor returns the spec of key.
+// SettingSpecFor returns the spec of key, from the generated registry or the hand-written
+// orchestration and model settings of AllSettingSpecs.
 func SettingSpecFor(key string) (SettingSpec, bool) {
-	for _, s := range SettingSpecs {
+	for _, s := range AllSettingSpecs() {
 		if s.Key == key {
 			return s, true
 		}
@@ -322,6 +323,10 @@ func (s SettingSpec) Validate(raw json.RawMessage) error {
 		}
 		if s.Pattern != "" && !regexp.MustCompile(s.Pattern).MatchString(str) {
 			return bad(s.Key + " must match " + s.Pattern)
+		}
+	case "object":
+		if _, ok := v.(map[string]any); !ok {
+			return bad(s.Key + " must be an object")
 		}
 	case "array":
 		arr, ok := v.([]any)

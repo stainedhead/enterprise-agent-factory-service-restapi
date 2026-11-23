@@ -83,9 +83,9 @@ func (f *flaky) InsertAdminBinding(ctx context.Context, tx port.Tx, b, tid strin
 	return f.Repository.InsertAdminBinding(ctx, tx, b, tid, m)
 }
 
-func (f *flaky) Models(ctx context.Context, tx port.Tx, id string) ([]teams.ModelInfo, domain.Version, error) {
+func (f *flaky) Models(ctx context.Context, tx port.Tx, id string) (teams.TeamModels, error) {
 	if err := f.hit(); err != nil {
-		return nil, 0, err
+		return teams.TeamModels{}, err
 	}
 	return f.Repository.Models(ctx, tx, id)
 }
@@ -164,7 +164,7 @@ func TestRepositoryFailuresPropagateAndWriteNothing(t *testing.T) {
 			return err
 		}},
 		"PutModels": {true, func(r *rig, tm domain.Team) error {
-			_, _, err := r.svc.PutModels(t.Context(), svcAdmin, tm.ID, nil, []string{"m1"})
+			_, err := r.svc.PutModels(t.Context(), svcAdmin, tm.ID, nil, domain.ModelAccessSelected, []string{"m1"})
 			return err
 		}},
 		"PutTags": {true, func(r *rig, tm domain.Team) error {
@@ -173,7 +173,7 @@ func TestRepositoryFailuresPropagateAndWriteNothing(t *testing.T) {
 		}},
 		"Get": {false, func(r *rig, tm domain.Team) error { _, err := r.svc.Get(t.Context(), svcAdmin, tm.ID); return err }},
 		"Models": {false, func(r *rig, tm domain.Team) error {
-			_, _, err := r.svc.Models(t.Context(), svcAdmin, tm.ID)
+			_, err := r.svc.Models(t.Context(), svcAdmin, tm.ID)
 			return err
 		}},
 		"Tags": {false, func(r *rig, tm domain.Team) error { _, err := r.svc.Tags(t.Context(), svcAdmin, tm.ID); return err }},

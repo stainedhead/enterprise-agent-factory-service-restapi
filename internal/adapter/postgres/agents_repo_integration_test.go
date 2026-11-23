@@ -66,7 +66,7 @@ func TestAgentRepo(t *testing.T) {
 			got.Volume.StorageClass != "gp3" || got.Resources.CPU != "500m" || got.Status.Phase != domain.PhasePending || got.Bindings == nil {
 			t.Errorf("agent: %+v", got)
 		}
-		rows, err := repo.List(ctx, tx, tm.ID, "", 10)
+		rows, err := repo.List(ctx, tx, tm.ID, "", "", 10)
 		if err != nil || len(rows) != 1 || rows[0].ID != a.ID {
 			t.Errorf("list: %v %v", rows, err)
 		}

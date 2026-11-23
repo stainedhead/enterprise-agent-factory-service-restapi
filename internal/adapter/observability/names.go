@@ -25,6 +25,9 @@ const (
 	MetricGatewayReservationsExpired = "afs_gateway_reservations_expired_total"
 	// MetricGatewaySettleFailures counts settlements that fell back to the retry queue or were dropped (FR-R05, RD-3).
 	MetricGatewaySettleFailures = "afs_gateway_settle_failures_total"
+	// MetricGatewayModelDenials counts calls refused by model admission, by reason (model_not_enabled_for_service,
+	// _team or _agent, model_not_priced).
+	MetricGatewayModelDenials = "afs_gateway_model_denials_total"
 	// MetricGatewayUsageRowsDropped counts usage rows the writer lost (FR-R08, RD-3); reason is queue_full or write_failed.
 	MetricGatewayUsageRowsDropped = "afs_gateway_usage_rows_dropped_total"
 
@@ -67,7 +70,7 @@ func AllMetricNames() []string {
 		MetricEdgeRequests, MetricEdgeRequestSeconds, MetricEdgeRefreshFailed, MetricEdgeAccessDropped,
 		MetricReconcileDuration, MetricReconcileErrors, MetricReconcileLag, MetricDriftCorrected, MetricLeader,
 		MetricGatewayReservationFailures, MetricGatewayAddedLatency, MetricGatewayReservationsExpired,
-		MetricGatewaySettleFailures, MetricGatewayUsageRowsDropped,
+		MetricGatewaySettleFailures, MetricGatewayUsageRowsDropped, MetricGatewayModelDenials,
 		MetricOutboxPending, MetricOutboxOldestAge, MetricOutboxPublished, MetricOutboxFailed,
 		MetricNotificationFailures, MetricCURVariance, MetricReportRollupRuns, MetricReportRollupLastSuccess, MetricBuildInfo,
 	}

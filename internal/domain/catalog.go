@@ -146,16 +146,7 @@ func NewAgentTemplate(p PutAgentTemplateParams) (AgentTemplate, error) {
 	if len(p.Capabilities) > 8 {
 		fe = append(fe, FieldError{Field: "capabilities", Reason: "at most 8"})
 	}
-	seenCap := map[string]bool{}
-	for _, cp := range p.Capabilities {
-		switch {
-		case cp != CapabilityPaperclip:
-			fe = append(fe, FieldError{Field: "capabilities", Reason: "unknown capability " + cp + " (known: paperclip)"})
-		case seenCap[cp]:
-			fe = append(fe, FieldError{Field: "capabilities", Reason: "must not repeat " + cp})
-		}
-		seenCap[cp] = true
-	}
+	fe = append(fe, validateCapabilities(p.Capabilities)...)
 	if len(fe) > 0 {
 		return AgentTemplate{}, Validation(fe...)
 	}
@@ -180,8 +171,56 @@ func (t AgentTemplate) AllowsDigest(digest string) bool {
 
 // ValidateCapabilityFilter checks the ?capability= filter of the agent template lists.
 func ValidateCapabilityFilter(v string) error {
-	if v != "" && v != CapabilityPaperclip {
-		return Validation(FieldError{Field: "capability", Reason: "must be paperclip"})
+	if v != "" && !knownCapability(v) {
+		return Validation(FieldError{Field: "capability", Reason: "must be " + knownCapabilityList})
 	}
 	return nil
+}
+
+const knownCapabilityList = "orchestration, tool:paperclip, tool:buzz or paperclip (deprecated)"
+
+func knownCapability(c string) bool {
+	switch c {
+	case CapabilityOrchestration, CapabilityToolPaperclip, CapabilityToolBuzz, CapabilityPaperclip:
+		return true
+	}
+	return false
+}
+
+// HasOrchestrationCapability reports whether a template's capabilities mark it as an orchestration image
+// (orchestration, or the deprecated paperclip).
+func HasOrchestrationCapability(caps []string) bool {
+	for _, c := range caps {
+		if c == CapabilityOrchestration || c == CapabilityPaperclip {
+			return true
+		}
+	}
+	return false
+}
+
+// validateCapabilities checks the capabilities of a PutAgentTemplate body: known values, no repeats, at most one
+// tool, and a tool only with orchestration.
+func validateCapabilities(caps []string) []FieldError {
+	var fe []FieldError
+	seen := map[string]bool{}
+	tools := 0
+	for _, cp := range caps {
+		switch {
+		case !knownCapability(cp):
+			fe = append(fe, FieldError{Field: "capabilities", Reason: "unknown capability " + cp + " (known: " + knownCapabilityList + ")"})
+		case seen[cp]:
+			fe = append(fe, FieldError{Field: "capabilities", Reason: "must not repeat " + cp})
+		}
+		seen[cp] = true
+		if cp == CapabilityToolPaperclip || cp == CapabilityToolBuzz || cp == CapabilityPaperclip {
+			tools++
+		}
+	}
+	if tools > 1 {
+		fe = append(fe, FieldError{Field: "capabilities", Reason: "name exactly one tool capability"})
+	}
+	if (seen[CapabilityToolPaperclip] || seen[CapabilityToolBuzz]) && !seen[CapabilityOrchestration] {
+		fe = append(fe, FieldError{Field: "capabilities", Reason: "a tool capability needs orchestration"})
+	}
+	return fe
 }

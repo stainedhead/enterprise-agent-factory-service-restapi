@@ -1,0 +1,63 @@
+
+/v1/admin/model-access:
+  put:
+    operationId: PutServiceModelAccess
+    summary: Put service model access
+    tags:
+    - admin
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutServiceModelAccessRequest'
+          example:
+            access: selected
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceModelAccess'
+            example:
+              access: selected
+              enabledModels: 3
+              callableModels: 2
+              version: 2
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+    x-afs-permission: admin:models
+    x-afs-scope: service
+    x-afs-cli: admin put-service-model-access
+    x-afs-sdk: admin.models.putServiceAccess()
+    x-afs-screen: S4
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []

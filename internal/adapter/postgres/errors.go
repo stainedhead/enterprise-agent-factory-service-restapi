@@ -69,6 +69,16 @@ func MapError(err error, op Op, resource string) error {
 	if !errors.As(err, &pe) {
 		return domain.Internal(err)
 	}
+	if c, ok := constraintConflicts[pe.ConstraintName]; ok && (pe.Code == codeCheckViolation || pe.Code == codeNotInPrerequisite) {
+		return withCause(domain.Conflict(c.reason, pe.Message, constraintDetails(pe)), err)
+	}
+	if reason, ok := constraintRefusals[pe.ConstraintName]; ok && pe.Code == codeCheckViolation {
+		e := domain.Validation(domain.FieldError{Field: constraintFieldOf(pe), Reason: reason})
+		e.Reason = reason
+		e.Message = pe.Message
+		e.Cause = err
+		return e
+	}
 	switch {
 	case pe.Code == codeCheckViolation || pe.Code == codeNotNull:
 		return validation(pe, err)
@@ -108,8 +118,52 @@ var uniqueReasons = map[string]string{
 	"collab_hostname_held":         domain.ReasonHostnameHeld,
 }
 
+type conflictReason struct{ reason string }
+
+// constraintConflicts names the 000022 guards that are a 409 with a contract reason. The two
+// orchestration_required constraints are deferred, so they surface at COMMIT (the caller's
+// transaction wrapper maps the commit error through MapError).
+var constraintConflicts = map[string]conflictReason{
+	"teams_orchestration_required":              {domain.ReasonOrchestrationAgentReq},
+	"agents_orchestration_required":             {domain.ReasonOrchestrationAgentReq},
+	"orchestration_runtime_unset":               {domain.ReasonOrchestrationRuntimeUnset},
+	"models_enabled_fixed":                      {domain.ReasonServiceModelAccessAll},
+	"orchestration_tool_not_enabled":            {domain.ReasonToolNotEnabled},
+	"team_collaboration_exposure_limit":         {domain.ReasonExposureAboveLimit},
+	"team_collaboration_surface_supported":      {domain.ReasonSurfaceNotSupported},
+	"team_collaboration_registration_supported": {domain.ReasonRegistrationNotSupported},
+}
+
+// constraintRefusals names the 000022 guards that are a 400 ValidationError with a contract reason.
+var constraintRefusals = map[string]string{
+	"agents_role_reserved":             domain.ReasonRoleReserved,
+	"agents_name_reserved":             domain.ReasonNameReserved,
+	"agent_pools_name_reserved":        domain.ReasonNameReserved,
+	"agents_models_selection_nonempty": domain.ReasonModelsSelectionEmpty,
+	"agent_models_service":             domain.ReasonModelNotEnabledForService,
+	"agent_models_team":                domain.ReasonModelNotEnabledForTeam,
+	"agents_default_model_allowed":     domain.ReasonDefaultModelNotAllowed,
+	"service_settings_alias_read_only": "setting_renamed",
+}
+
+func constraintFieldOf(pe *pgconn.PgError) string {
+	switch pe.ConstraintName {
+	case "agents_role_reserved":
+		return "role"
+	case "agents_name_reserved", "agent_pools_name_reserved":
+		return "name"
+	case "service_settings_alias_read_only":
+		return "key"
+	}
+	return "models"
+}
+
 // constraintFields maps the Paperclip check constraints to the request field they refuse.
 var constraintFields = map[string]string{
+	"agents_orchestration_template":      "template",
+	"agents_orchestration_capability":    "template",
+	"agents_orchestration_identity":      "iamIdentity",
+	"agents_orchestration_snapshots":     "volume.snapshotSchedule",
 	"agents_collaboration_template":      "template",
 	"agents_collaboration_capability":    "template",
 	"agents_worker_capability":           "template",

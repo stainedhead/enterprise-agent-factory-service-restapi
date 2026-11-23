@@ -134,7 +134,7 @@ func TestRepositoryFailuresAreReturnedAndWriteNothing(t *testing.T) {
 	}
 	methods := []string{"AccountAllowed", "AgentNameTaken", "Bindings", "DeleteConfig", "DeleteLink", "DeleteStage", "Get", "GetConfig",
 		"GetLink", "GetStage", "GetSystem", "Handoffs", "Insert", "InsertConfig", "InsertLink", "InsertStage", "LinkRoleName", "List",
-		"ListConfig", "ListLinks", "ListStages", "ListSystems", "ModelEnabled", "NamespaceValueExists", "PoolsExist", "ReplaceBindings",
+		"ListConfig", "ListLinks", "ListStages", "ListSystems", "ModelSets", "NamespaceValueExists", "PoolsExist", "ReplaceBindings",
 		"ReplaceHandoffs", "RequestVerify", "Secrets", "SetSystemOff", "TeamKind", "Template", "Touch", "Update", "UpdateConfig",
 		"UpdateStage", "Workers"}
 	boom := errors.New("boom")

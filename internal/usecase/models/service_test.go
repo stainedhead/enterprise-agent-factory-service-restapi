@@ -3,6 +3,7 @@ package models_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sort"
 	"testing"
 	"time"
@@ -18,9 +19,24 @@ import (
 type repo struct {
 	models map[string]domain.Model
 	prices []domain.ModelPrice
+	access domain.ServiceModelAccess
 }
 
-func (r *repo) List(_ context.Context, _ port.Tx, enabledOnly bool, after string, limit int) ([]domain.Model, error) {
+func (r *repo) ServiceAccess(context.Context, port.Tx) (domain.ServiceModelAccess, error) {
+	a := r.access
+	if a.Access == "" {
+		a.Access = domain.ModelAccessAll
+	}
+	return a, nil
+}
+
+func (r *repo) PutServiceAccess(_ context.Context, _ port.Tx, a domain.ModelAccess, _ *domain.Version) error {
+	r.access.Access = a
+	r.access.Version++
+	return nil
+}
+
+func (r *repo) List(_ context.Context, _ port.Tx, enabledOnly, _ bool, after string, limit int) ([]domain.Model, error) {
 	var out []domain.Model
 	for _, m := range r.models {
 		if m.ID > after && (!enabledOnly || m.Enabled) {
@@ -158,7 +174,8 @@ func TestCreateReplay(t *testing.T) {
 }
 
 func TestLists(t *testing.T) {
-	s, _, _, _ := rig()
+	s, r, _, _ := rig()
+	r.access.Access = domain.ModelAccessSelected
 	ctx := t.Context()
 	for _, id := range []string{"a-1", "a-2", "a-3"} {
 		if _, err := s.Create(ctx, svcAdmin, params(id), nil); err != nil {
@@ -231,8 +248,13 @@ func TestDenied(t *testing.T) {
 	name := "x"
 	price := domain.NewModelPriceParams{EffectiveFrom: time.Now(), Input: domain.MustMoney("1"), Output: domain.MustMoney("1")}
 	for name, call := range map[string]func(acting.Caller) error{
-		"ListAll": func(c acting.Caller) error { _, _, err := s.ListAll(ctx, c, acting.Page{}); return err },
-		"Create":  func(c acting.Caller) error { _, err := s.Create(ctx, c, params("m-9"), nil); return err },
+		"PutServiceAccess": func(c acting.Caller) error {
+			_, err := s.PutServiceAccess(ctx, c, "all", nil)
+			return err
+		},
+		"GetServiceAccess": func(c acting.Caller) error { _, err := s.GetServiceAccess(ctx, c); return err },
+		"ListAll":          func(c acting.Caller) error { _, _, err := s.ListAll(ctx, c, acting.Page{}); return err },
+		"Create":           func(c acting.Caller) error { _, err := s.Create(ctx, c, params("m-9"), nil); return err },
 		"Update": func(c acting.Caller) error {
 			_, err := s.Update(ctx, c, "m-1", domain.ModelUpdate{DisplayName: &name}, 1)
 			return err
@@ -249,8 +271,8 @@ func TestDenied(t *testing.T) {
 	if len(r.models) != 1 || len(r.prices) != 0 {
 		t.Errorf("denied calls changed data")
 	}
-	if len(audit.Entries) != 10 {
-		t.Errorf("denied audit = %d, want 10", len(audit.Entries))
+	if len(audit.Entries) != 14 {
+		t.Errorf("denied audit = %d, want 14", len(audit.Entries))
 	}
 }
 
@@ -265,5 +287,49 @@ func TestRepositoryFailureRollsBack(t *testing.T) {
 	}
 	if len(audit.Entries) != 0 {
 		t.Errorf("audit = %d", len(audit.Entries))
+	}
+}
+
+func TestPutServiceAccess(t *testing.T) {
+	s, r, audit, _ := rig()
+	ctx := t.Context()
+	got, err := s.PutServiceAccess(ctx, svcAdmin, "selected", nil)
+	if err != nil || got.Access != domain.ModelAccessSelected || got.Version != 1 {
+		t.Fatalf("put = %+v %v", got, err)
+	}
+	if len(audit.Entries) != 1 || audit.Entries[0].Record.Action != "PutServiceModelAccess" {
+		t.Fatalf("audit = %+v", audit.Entries)
+	}
+	stale := domain.Version(7)
+	if _, err := s.PutServiceAccess(ctx, svcAdmin, "all", &stale); domain.KindOf(err) != domain.KindPreconditionFailed {
+		t.Errorf("stale If-Match = %v", err)
+	}
+	cur := domain.Version(1)
+	if _, err := s.PutServiceAccess(ctx, svcAdmin, "all", &cur); err != nil || r.access.Access != domain.ModelAccessAll {
+		t.Errorf("matching If-Match = %v", err)
+	}
+	if _, err := s.PutServiceAccess(ctx, svcAdmin, "some", nil); domain.KindOf(err) != domain.KindValidation {
+		t.Errorf("bad access = %v", err)
+	}
+	if a, err := s.GetServiceAccess(ctx, svcAdmin); err != nil || a.Access != domain.ModelAccessAll {
+		t.Errorf("get = %+v %v", a, err)
+	}
+}
+
+// CD-35: while service access is all, the enabled flag cannot change; other fields still can.
+func TestUpdateEnabledRefusedUnderAccessAll(t *testing.T) {
+	s, _, _, _ := rig()
+	ctx := t.Context()
+	if _, err := s.Create(ctx, svcAdmin, params("a-1"), nil); err != nil {
+		t.Fatal(err)
+	}
+	off, name := false, "Renamed"
+	_, err := s.Update(ctx, svcAdmin, "a-1", domain.ModelUpdate{Enabled: &off}, 1)
+	var de *domain.Error
+	if !errors.As(err, &de) || de.Kind != domain.KindConflict || de.Reason != domain.ReasonServiceModelAccessAll {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := s.Update(ctx, svcAdmin, "a-1", domain.ModelUpdate{DisplayName: &name}, 1); err != nil {
+		t.Errorf("rename: %v", err)
 	}
 }

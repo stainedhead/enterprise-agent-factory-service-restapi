@@ -33,6 +33,7 @@ type woRig struct {
 func newWORig(t *testing.T) *woRig {
 	t.Helper()
 	db := pgtest.Get(t)
+	db.SeedOrchestrationRuntime(t)
 	runner, audit := reconcilerRunner(t, db)
 	r := &woRig{t: t, db: db, admin: db.Admin(t), model: "anthropic.claude-wo-test"}
 	r.store = postgres.NewWorkOrderStore(runner, audit, postgres.NewOutboxWriter(), budgetIDs{}, time.Now)

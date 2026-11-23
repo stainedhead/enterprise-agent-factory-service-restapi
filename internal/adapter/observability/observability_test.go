@@ -185,6 +185,7 @@ func TestEveryMetricNameIsRegistered(t *testing.T) {
 	m.GatewayReservationFailures.WithLabelValues("db")
 	m.NotificationFailures.WithLabelValues("slack")
 	m.GatewayUsageRowsDropped.WithLabelValues("queue_full")
+	m.GatewayModelDenials.WithLabelValues("model_not_priced")
 	m.RollupRuns.WithLabelValues("j", "ok")
 	m.RollupLastSuccess.WithLabelValues("j")
 	m.EdgeRequests.WithLabelValues("web_ui", "200")

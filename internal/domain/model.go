@@ -28,6 +28,46 @@ type Model struct {
 	MaxOutputTokens int
 	Version         Version
 	UpdatedAt       time.Time
+	// ServiceEnabled is true while the service may use the model: enabled, or the service's model access
+	// is all (MOD-1).
+	ServiceEnabled bool
+	// Callable is true while the model is enabled for the service and has a price in force.
+	Callable bool
+	// PriceState is approved (a price is in force), pending (a proposal or a future price) or none.
+	PriceState PriceState
+	// Origin is manual, or bedrock_sync for a model the daily sync found.
+	Origin ModelOrigin
+	// TeamsWithAccess counts the teams that may use the model (the admin list only; -1 when not loaded).
+	TeamsWithAccess int
+}
+
+// PriceState says whether a model has a price the gateway can charge.
+type PriceState string
+
+// Price states of a model.
+const (
+	PriceApproved PriceState = "approved"
+	PricePending  PriceState = "pending"
+	PriceNone     PriceState = "none"
+)
+
+// ModelOrigin says how a model entered the catalog.
+type ModelOrigin string
+
+// Model origins (database models.origin).
+const (
+	OriginManual      ModelOrigin = "manual"
+	OriginBedrockSync ModelOrigin = "bedrock_sync"
+)
+
+// ServiceModelAccess is the service-wide model access: every catalog model, or the enabled ones
+// (setting models.service_access, MOD-1).
+type ServiceModelAccess struct {
+	Access        ModelAccess
+	EnabledModels int
+	// CallableModels counts the models that are enabled for the service and have a price in force.
+	CallableModels int
+	Version        Version
 }
 
 // NewModelParams are the fields of CreateModel. Enabled defaults to true.
@@ -172,4 +212,13 @@ func NewModelPrice(modelID string, p NewModelPriceParams) (ModelPrice, error) {
 		return ModelPrice{}, Validation(fe...)
 	}
 	return out, nil
+}
+
+// ParseServiceModelAccess validates the body of PutServiceModelAccess.
+func ParseServiceModelAccess(access string) (ModelAccess, error) {
+	a := ModelAccess(access)
+	if a != ModelAccessAll && a != ModelAccessSelected {
+		return "", Validation(FieldError{Field: "access", Reason: "must be all or selected"})
+	}
+	return a, nil
 }

@@ -154,11 +154,12 @@ func TestModelChecks(t *testing.T) {
 		want   domain.ErrorKind
 		usage  gateway.Outcome
 	}{
-		"enabled":     {func(*rig) {}, "", gateway.OutcomeOK},
-		"not enabled": {func(r *rig) { delete(r.store.Models, teamA+"\x00"+modelID) }, domain.KindAccessDenied, gateway.OutcomeRejectedModel},
-		"disabled": {func(r *rig) {
+		"enabled":             {func(*rig) {}, "", gateway.OutcomeOK},
+		"profile row missing": {func(r *rig) { delete(r.store.Models, teamA+"\x00"+modelID) }, domain.KindUnavailable, ""},
+		"profile disabled": {func(r *rig) {
 			r.store.Models[teamA+"\x00"+modelID] = gateway.ModelAccess{Enabled: false, ProfileARN: profA}
 		}, domain.KindAccessDenied, gateway.OutcomeRejectedModel},
+		"unknown model":    {func(r *rig) { r.store.Admission["agent\x00agt_01"] = map[string]string{"other": ""} }, domain.KindAccessDenied, gateway.OutcomeRejectedModel},
 		"profile not made": {func(r *rig) { r.store.Models[teamA+"\x00"+modelID] = gateway.ModelAccess{Enabled: true} }, domain.KindUnavailable, ""},
 		"no price":         {func(r *rig) { r.store.PriceRows[modelID] = nil }, domain.KindUnavailable, ""},
 	}
@@ -202,11 +203,13 @@ func TestATeamsPodNeverGetsAnotherTeamsProfile(t *testing.T) {
 	if len(seen) != 2 || seen[0] != want[0] || seen[1] != want[1] {
 		t.Fatalf("seen %v, want %v", seen, want)
 	}
-	// A request naming a model only team B has is refused for team A.
+	// A request naming a model only team B has a profile for never reaches B's profile: team A's own row is
+	// missing, so the call waits for A's profile (model_provisioning) and nothing is forwarded.
 	r.store.Models[teamB+"\x00other.model"] = gateway.ModelAccess{Enabled: true, ProfileARN: profB}
 	q := req("10.0.0.1")
 	q.ModelID = "other.model"
-	if err := r.svc.Do(t.Context(), q, r.invoke(ok(1, 1), nil)); kind(err) != domain.KindAccessDenied {
+	before := r.invokes.Load()
+	if err := r.svc.Do(t.Context(), q, r.invoke(ok(1, 1), nil)); kind(err) != domain.KindUnavailable || r.invokes.Load() != before {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -499,4 +502,58 @@ func TestAsyncSettleAnswersBeforeTheBooksCloseAndWaitDrains(t *testing.T) {
 	if kind(err) != domain.KindUpstream || len(r.spend.Settlements) != 2 {
 		t.Errorf("err %v settlements %d", err, len(r.spend.Settlements))
 	}
+}
+
+type denials struct{ got []string }
+
+func (d *denials) ModelDenied(_, _, reason string) { d.got = append(d.got, reason) }
+
+// TestModelAdmissionReasons: the first failing level is the reason in the response, the log and the metric;
+// a refused model is rejected_model, reserves nothing and never reaches Bedrock; a profile that is not active
+// yet is a 503 model_provisioning with Retry-After 30 (CD-40).
+func TestModelAdmissionReasons(t *testing.T) {
+	for _, reason := range []string{domain.ReasonModelNotEnabledForService, domain.ReasonModelNotEnabledForTeam,
+		domain.ReasonModelNotEnabledForAgent, domain.ReasonModelNotPriced} {
+		t.Run(reason, func(t *testing.T) {
+			r := newRig(t)
+			d := &denials{}
+			r.svc.ModelDenials = d
+			r.store.Admission["agent\x00agt_01"] = map[string]string{modelID: reason}
+			err := r.svc.Do(t.Context(), req("10.0.0.1"), r.invoke(ok(1, 1), nil))
+			var de *domain.Error
+			if !errors.As(err, &de) || de.Kind != domain.KindAccessDenied || de.Reason != reason || de.Details["reason"] != reason {
+				t.Fatalf("err = %#v", err)
+			}
+			if r.invokes.Load() != 0 || len(d.got) != 1 || d.got[0] != reason {
+				t.Errorf("invokes %d, denials %v", r.invokes.Load(), d.got)
+			}
+			if rows := r.usage.All(); len(rows) != 1 || rows[0].Outcome != gateway.OutcomeRejectedModel {
+				t.Errorf("usage %+v", rows)
+			}
+		})
+	}
+	t.Run("pool subject", func(t *testing.T) {
+		r := newRig(t)
+		r.store.Admission["pool\x00pool_01"] = map[string]string{modelID: domain.ReasonModelNotEnabledForAgent}
+		err := r.svc.Do(t.Context(), req("10.0.0.2"), r.invoke(ok(1, 1), nil))
+		if kind(err) != domain.KindAccessDenied {
+			t.Fatalf("err = %v", err)
+		}
+	})
+	t.Run("provisioning", func(t *testing.T) {
+		r := newRig(t)
+		r.store.Models[teamA+"\x00"+modelID] = gateway.ModelAccess{Enabled: true}
+		err := r.svc.Do(t.Context(), req("10.0.0.1"), r.invoke(ok(1, 1), nil))
+		var de *domain.Error
+		if !errors.As(err, &de) || de.Kind != domain.KindUnavailable || de.Reason != "model_provisioning" || de.RetryAfterSeconds != 30 {
+			t.Fatalf("err = %#v", err)
+		}
+	})
+	t.Run("fails closed when admission cannot be read", func(t *testing.T) {
+		r := newRig(t)
+		r.store.Err = errors.New("db down")
+		if err := r.svc.Do(t.Context(), req("10.0.0.1"), r.invoke(ok(1, 1), nil)); kind(err) != domain.KindUnavailable {
+			t.Fatalf("err = %v", err)
+		}
+	})
 }

@@ -77,7 +77,6 @@ Pool:
   - name
   - template
   - image
-  - modelId
   - workers
   - state
   - version
@@ -130,6 +129,8 @@ Pool:
       type: string
     modelId:
       type: string
+      deprecated: true
+      description: 'Deprecated: models.defaultModelId'
     workers:
       type: integer
       minimum: 0
@@ -161,6 +162,8 @@ Pool:
         pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
         example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
       readOnly: true
+    models:
+      $ref: '#/components/schemas/AgentModels'
 PoolList:
   type: object
   description: A page of Pool resources
@@ -180,7 +183,6 @@ CreatePoolRequest:
   - name
   - template
   - image
-  - modelId
   - workers
   properties:
     name:
@@ -202,6 +204,8 @@ CreatePoolRequest:
       type: string
     modelId:
       type: string
+      deprecated: true
+      description: 'Deprecated: models.defaultModelId'
     workers:
       type: integer
       minimum: 0
@@ -218,6 +222,8 @@ CreatePoolRequest:
       enum:
       - none
       - efs
+    models:
+      $ref: '#/components/schemas/AgentModelsInput'
 UpdatePoolRequest:
   type: object
   properties:
@@ -238,6 +244,8 @@ UpdatePoolRequest:
       type: string
     modelId:
       type: string
+      deprecated: true
+      description: 'Deprecated: models.defaultModelId'
     workers:
       type: integer
       minimum: 0
@@ -254,6 +262,8 @@ UpdatePoolRequest:
       enum:
       - none
       - efs
+    models:
+      $ref: '#/components/schemas/AgentModelsInput'
 ScalePoolRequest:
   type: object
   required:

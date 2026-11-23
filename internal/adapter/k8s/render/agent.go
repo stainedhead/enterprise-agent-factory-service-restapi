@@ -68,8 +68,9 @@ func PodTemplate(env agent.Environment) corev1.PodTemplateSpec {
 	}
 
 	// Tags and the AWS profiles come from one ConfigMap, mounted file by file.
-	awsItems := []corev1.KeyToPath{{Key: tagsKey, Path: tagsKey}}
-	mounts = append(mounts, corev1.VolumeMount{Name: volumeAWS, MountPath: TagsPath, SubPath: tagsKey, ReadOnly: true})
+	awsItems := []corev1.KeyToPath{{Key: tagsKey, Path: tagsKey}, {Key: modelsKey, Path: modelsKey}}
+	mounts = append(mounts, corev1.VolumeMount{Name: volumeAWS, MountPath: TagsPath, SubPath: tagsKey, ReadOnly: true},
+		corev1.VolumeMount{Name: volumeAWS, MountPath: ModelsPath, SubPath: modelsKey, ReadOnly: true})
 	envVars := append([]corev1.EnvVar{}, GatewayEnv(env.Gateway.URL())...)
 	envVars = append(envVars,
 		corev1.EnvVar{Name: "AFS_TAGS", Value: TagsJSON(d)},
@@ -77,6 +78,8 @@ func PodTemplate(env agent.Environment) corev1.PodTemplateSpec {
 		corev1.EnvVar{Name: "AFS_AGENT_ID", Value: d.ID},
 		corev1.EnvVar{Name: "AFS_AGENT_NAME", Value: d.Name},
 		corev1.EnvVar{Name: "AFS_MODEL_ID", Value: d.ModelID},
+		corev1.EnvVar{Name: "AFS_DEFAULT_MODEL", Value: d.ModelID},
+		corev1.EnvVar{Name: "AFS_MODELS", Value: ModelsEnv(d.Models)},
 		corev1.EnvVar{Name: "AFS_DATA_DIR", Value: DataDir},
 		corev1.EnvVar{Name: "AWS_REGION", Value: env.Region},
 		corev1.EnvVar{Name: "AWS_DEFAULT_REGION", Value: env.Region},
@@ -86,7 +89,7 @@ func PodTemplate(env agent.Environment) corev1.PodTemplateSpec {
 	case d.Collab != nil:
 		extra = PaperclipEnv(d, *d.Collab)
 	case d.Link != nil:
-		extra = PaperclipWorkerEnv(d, *d.Link)
+		extra = CollabWorkerEnv(d, *d.Link)
 	}
 	for _, k := range sortedKeys(extra) {
 		envVars = append(envVars, corev1.EnvVar{Name: k, Value: extra[k]})

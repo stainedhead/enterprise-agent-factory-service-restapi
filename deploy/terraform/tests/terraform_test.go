@@ -430,7 +430,7 @@ func TestRootWiresTheModules(t *testing.T) {
 	for _, m := range blocks(files["main.tf"], "module") {
 		got[m.Labels[0]] = true
 	}
-	for _, want := range []string{"rds", "backup", "buckets", "boundary", "pod_identity", "collab_edge"} {
+	for _, want := range []string{"rds", "backup", "buckets", "boundary", "pod_identity", "collab_edge", "orchestration_private"} {
 		if !got[want] {
 			t.Errorf("root does not instantiate module %s", want)
 		}
@@ -532,6 +532,40 @@ func TestCollabEdgeModule(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("collab-edge output %s missing", out)
+		}
+	}
+}
+
+// ORC-13: the private entry is internal, takes no public ingress and reaches only the afs-edge pods.
+func TestOrchestrationPrivateModule(t *testing.T) {
+	files := parsed(t)
+	src := sources(t)
+	f := "modules/orchestration-private/main.tf"
+	text := string(src[f])
+	if len(files[f].Blocks) < 15 {
+		t.Fatalf("orchestration-private has only %d blocks", len(files[f].Blocks))
+	}
+	for _, must := range []string{
+		`internal                   = true`,
+		`drop_invalid_header_fields = true`,
+		`ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"`,
+		`certificate_arn   = var.certificate_arn`,
+		`status_code  = "404"`,
+		`aws_route53_zone" "private"`,
+		`values = local.hosts`,
+		`AWSManagedRulesCommonRuleSet`,
+		`aws-waf-logs-`,
+	} {
+		if !strings.Contains(text, must) {
+			t.Errorf("%s lacks %q", f, must)
+		}
+	}
+	if strings.Contains(text, `0.0.0.0/0`) || strings.Contains(text, `::/0`) {
+		t.Errorf("%s opens the internal ALB to every address", f)
+	}
+	for _, bl := range blocks(files[f], "resource", "aws_vpc_security_group_egress_rule") {
+		if _, bad := bl.Body.Attributes["cidr_ipv4"]; bad {
+			t.Errorf("egress rule %s opens a CIDR", bl.Labels[1])
 		}
 	}
 }

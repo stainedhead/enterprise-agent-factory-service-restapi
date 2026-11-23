@@ -27,7 +27,7 @@ func TestRoutesRouteAgentTables(t *testing.T) {
 		change engine.Change
 		want   []engine.Ref
 	}{
-		{"an agent row is the agent", engine.Change{Table: "agents", TeamID: "team_A", ID: "agt_1"}, []engine.Ref{a1}},
+		{"an agent row is the agent and its team (a new agent may need a profile for its default model)", engine.Change{Table: "agents", TeamID: "team_A", ID: "agt_1"}, []engine.Ref{a1, engine.NewRef(engine.KindTeam, "team_A", "team_A")}},
 		{"bindings reconcile every agent of the team only", engine.Change{Table: "agent_secret_bindings", TeamID: "team_A"}, []engine.Ref{a1, a2}},
 		{"a team's tags reconcile its agents", engine.Change{Table: "team_tags", TeamID: "team_B"}, []engine.Ref{other}},
 		{"a service tag reconciles every agent", engine.Change{Table: "service_tags"}, []engine.Ref{a1, a2, other}},

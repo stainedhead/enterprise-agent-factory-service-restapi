@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/collab"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 	rcollab "github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/collab"
 )
@@ -67,9 +68,11 @@ func (c *CollabReconcile) write(ctx context.Context, what string, fn func(contex
 	return MapError(err, OpWrite, what)
 }
 
-const collabStatesSQL = `SELECT c.team_id, c.agent_id, t.slug, t.state, a.state, c.web_ui_enabled, c.rest_api_enabled, c.registration_mode,
-  t.may_expose_collaboration, coalesce(p.collab_client_id, '') <> '', c.generation,
-  coalesce(ars.phase = 'Ready', false), rs.conditions
+const collabStatesSQL = `SELECT c.team_id, c.agent_id, t.slug, t.state, a.state, c.tool, c.web_ui_exposure, c.web_api_exposure,
+  t.max_collaboration_exposure, c.registration_mode, coalesce(p.collab_client_id, '') <> '', c.generation,
+  coalesce(ars.phase = 'Ready', false), rs.conditions,
+  EXISTS (SELECT 1 FROM afs.agent_volume_snapshots v WHERE v.team_id = c.team_id AND v.agent_id = c.agent_id
+           AND v.reason = 'pre_tool_change' AND v.state IN ('requested', 'pending'))
 FROM afs.team_collaboration c
 JOIN afs.teams t ON t.id = c.team_id AND t.deleted_at IS NULL AND t.state NOT IN ('deleting', 'deleted')
 JOIN afs.agents a ON a.team_id = c.team_id AND a.id = c.agent_id AND a.deleted_at IS NULL
@@ -85,7 +88,7 @@ func (c *CollabReconcile) States(ctx context.Context) ([]rcollab.TeamState, erro
 		return nil, err
 	}
 	var out []rcollab.TeamState
-	err = c.read(ctx, "collaboration states", func(ctx context.Context, t *Tx) error {
+	err = c.read(ctx, "orchestration states", func(ctx context.Context, t *Tx) error {
 		rows, err := t.Query(ctx, collabStatesSQL)
 		if err != nil {
 			return err
@@ -93,17 +96,19 @@ func (c *CollabReconcile) States(ctx context.Context) ([]rcollab.TeamState, erro
 		defer rows.Close()
 		for rows.Next() {
 			var (
-				s     rcollab.TeamState
-				mode  string
-				conds []byte
-				gen   int64
+				s                    rcollab.TeamState
+				tool, ui, api, limit string
+				mode                 string
+				conds                []byte
+				gen                  int64
 			)
-			if err := rows.Scan(&s.TeamID, &s.AgentID, &s.TeamSlug, &s.TeamState, &s.AgentState, &s.WebUIEnabled, &s.RESTAPIEnabled, &mode,
-				&s.MayExpose, &s.ProviderClient, &gen, &s.PodReady, &conds); err != nil {
+			if err := rows.Scan(&s.TeamID, &s.AgentID, &s.TeamSlug, &s.TeamState, &s.AgentState, &tool, &ui, &api, &limit, &mode,
+				&s.ProviderClient, &gen, &s.PodReady, &conds, &s.ToolChanging); err != nil {
 				return err
 			}
+			s.Tool, s.WebUIExposure, s.WebAPIExposure, s.Limit = domain.CollabTool(tool), domain.Exposure(ui), domain.Exposure(api), domain.Exposure(limit)
 			s.Mode, s.Generation = domain.RegistrationMode(mode), gen
-			s.BaseDomain, s.PublicEndpoints = set.BaseDomain, set.PublicEndpoints
+			s.Settings = set
 			if len(conds) > 0 {
 				var cs []domain.Condition
 				if err := json.Unmarshal(conds, &cs); err != nil {
@@ -127,33 +132,22 @@ func applyPrevious(s *rcollab.TeamState, cs []domain.Condition) {
 			s.PrevReady, s.PrevReason = &on, cd.Reason
 		case rcollab.ConditionPaperclipReady:
 			s.PrevPaperclip = &on
+		case rcollab.ConditionWebUIEndpoint, rcollab.ConditionWebAPIEndpoint:
+			if s.PrevSurfaces == nil {
+				s.PrevSurfaces = map[domain.Surface]rcollab.PrevSurface{}
+			}
+			sf := domain.SurfaceWebUI
+			if cd.Type == rcollab.ConditionWebAPIEndpoint {
+				sf = domain.SurfaceWebAPI
+			}
+			s.PrevSurfaces[sf] = rcollab.PrevSurface{Effective: domain.Exposure(cd.Reason), Ready: on}
 		}
 	}
 	s.Unmanaged = unmanagedNames(cs)
 }
 
-func (c *CollabReconcile) settings(ctx context.Context) (domain.CollabSettings, error) {
-	var out domain.CollabSettings
-	rd := NewSettingsReader(c.runner)
-	raw, err := rd.Setting(ctx, domain.SettingCollabBaseDomain)
-	if err != nil {
-		return out, err
-	}
-	var base *string
-	if err := json.Unmarshal(raw, &base); err != nil {
-		return out, domain.Internal(err)
-	}
-	if base != nil {
-		out.BaseDomain = *base
-	}
-	raw, err = rd.Setting(ctx, domain.SettingCollabPublicEndpoints)
-	if err != nil {
-		return out, err
-	}
-	if err := json.Unmarshal(raw, &out.PublicEndpoints); err != nil {
-		return out, domain.Internal(err)
-	}
-	return out, nil
+func (c *CollabReconcile) settings(ctx context.Context) (domain.OrchestrationSettings, error) {
+	return collab.LoadSettings(ctx, NewSettingsReader(c.runner))
 }
 
 const collabLinksSQL = `SELECT ac.team_id, ac.agent_id, ac.connect, ac.link_state, coalesce(ac.paperclip_agent_id, ''),

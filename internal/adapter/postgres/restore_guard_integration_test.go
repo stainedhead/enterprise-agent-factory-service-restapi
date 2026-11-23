@@ -160,8 +160,9 @@ func TestRestoreHonorsTemplateEnabledAndModelGuards(t *testing.T) {
 		r.exec(`INSERT INTO afs.models (id, provider, display_name, max_output_tokens) VALUES ('anthropic.claude-rf-a', 'anthropic', 'rf-a', 4096) ON CONFLICT DO NOTHING`)
 		r.exec(`INSERT INTO afs.team_models (team_id, model_id) VALUES ($1, 'anthropic.claude-rf-a')`, r.team)
 		r.exec(`UPDATE afs.agents SET model_id = 'anthropic.claude-rf-a' WHERE id = $1`, agent)
-		r.exec(`UPDATE afs.models SET enabled = false WHERE id = $1`, r.model)
-		defer r.exec(`UPDATE afs.models SET enabled = true WHERE id = $1`, r.model)
+		// Under the default service access (all) a disabled model still passes, so restrict the team (000022).
+		r.exec(`DELETE FROM afs.team_models WHERE team_id = $1 AND model_id <> 'anthropic.claude-rf-a'`, r.team)
+		r.exec(`UPDATE afs.teams SET model_access = 'selected' WHERE id = $1`, r.team)
 		res, err := r.svc.Run(t.Context(), r.admin, r.team, rev, false, nil, nil)
 		if err != nil {
 			t.Fatal(err)

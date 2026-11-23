@@ -1,0 +1,336 @@
+# OpenAPI fragment (API contract §4.4d). Bundled into api/openapi.yaml by make openapi.
+/v1/teams/{teamId}/orchestration:
+  get:
+    operationId: GetTeamOrchestration
+    summary: Get team orchestration
+    tags:
+    - orchestration
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamOrchestration'
+            example: &id001
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              agentId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              agentName: orchestrator
+              phase: Ready
+              tool: paperclip
+              toolVersion: 2026.11.2
+              registrationMode: managed
+              limit: private
+              webUi: &id002
+                supported: true
+                exposure: public
+                effective: private
+                reasons:
+                - team_limit
+                hostname: payments-factory.collab.corp.example.com
+                url: https://payments-factory.collab.corp.example.com/
+              webApi: &id003
+                supported: true
+                exposure: 'off'
+                effective: 'off'
+                reasons: []
+                hostname: null
+                url: null
+              connectedAgents: 4
+              unmanagedToolAgents: &id004 []
+              version: 7
+              generation: 7
+              status:
+                phase: Ready
+                observedGeneration: 7
+                conditions:
+                - type: EndpointReady
+                  status: 'True'
+                  reason: Ready
+                  message: Endpoint is serving
+                  lastTransitionTime: '2026-11-23T09:00:00Z'
+                updatedAt: '2026-11-23T09:05:00Z'
+              createdAt: '2026-11-23T09:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-23T09:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: collaboration:read
+    x-afs-scope: team
+    x-afs-cli: orchestration describe-orchestration
+    x-afs-sdk: orchestration.get()
+    x-afs-screen: T17, T18, V4, T1, T2
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  put:
+    operationId: PutTeamOrchestration
+    summary: Put team orchestration
+    tags:
+    - orchestration
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutTeamOrchestrationRequest'
+          example:
+            webUi:
+              exposure: public
+            webApi:
+              exposure: 'off'
+            registrationMode: managed
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamOrchestration'
+            example: *id001
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: collaboration:manage
+    x-afs-scope: team
+    x-afs-cli: orchestration put-orchestration
+    x-afs-sdk: orchestration.put()
+    x-afs-screen: T17
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - orchestration.updated
+/v1/teams/{teamId}/orchestration:change-tool:
+  post:
+    operationId: ChangeCollaborationTool
+    summary: Change collaboration tool
+    tags:
+    - orchestration
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ChangeCollaborationToolRequest'
+          example:
+            tool: buzz
+    responses:
+      '202':
+        description: Accepted
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamOrchestration'
+            example:
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              agentId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              agentName: orchestrator
+              phase: Ready
+              tool: buzz
+              toolVersion: null
+              registrationMode: managed
+              limit: private
+              webUi: *id002
+              webApi: *id003
+              connectedAgents: 4
+              unmanagedToolAgents: *id004
+              version: 8
+              generation: 8
+              status:
+                phase: Pending
+                observedGeneration: 7
+                conditions:
+                - type: ToolChanging
+                  status: 'True'
+                  reason: ToolChangeRequested
+                  message: Switching to buzz
+                  lastTransitionTime: '2026-11-23T10:00:00Z'
+                updatedAt: '2026-11-23T10:00:00Z'
+              createdAt: '2026-11-23T09:00:00Z'
+              createdBy: usr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              updatedAt: '2026-11-23T09:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: collaboration:manage
+    x-afs-scope: team
+    x-afs-cli: orchestration change-collaboration-tool
+    x-afs-sdk: orchestration.changeTool()
+    x-afs-screen: T17
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - orchestration.tool_changed
+    - agent.updated
+/v1/admin/orchestration-endpoints:
+  get:
+    operationId: ListOrchestrationEndpoints
+    summary: List orchestration endpoints
+    tags:
+    - orchestration
+    parameters:
+    - name: exposure
+      in: query
+      schema:
+        type: string
+        enum:
+        - private
+        - public
+    - name: tool
+      in: query
+      schema:
+        type: string
+        enum:
+        - paperclip
+        - buzz
+    - name: teamId
+      in: query
+      schema:
+        type: string
+        pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+    - name: state
+      in: query
+      schema:
+        type: string
+        enum:
+        - Ready
+        - Degraded
+        - Failed
+        - Pending
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrchestrationEndpointList'
+            example:
+              items:
+              - teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                slug: payments-factory
+                teamState: active
+                agentId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                tool: paperclip
+                surface: webUi
+                exposure: public
+                effective: private
+                reasons:
+                - team_limit
+                limit: private
+                hostname: payments-factory.collab.corp.example.com
+                phase: Ready
+                lastAccessAt: '2026-11-23T09:41:00Z'
+              migration:
+                state: complete
+                teamsTotal: 12
+                teamsWithOrchestration: 12
+                teamsPending: 0
+                blocked: []
+          text/csv:
+            schema:
+              type: string
+            example: "teamId,slug,teamState,agentId,tool,surface,exposure,effective,reasons,limit,hostname,phase,lastAccessAt\r\
+              \nteam_01JD2Q3R4S5T6V7W8X9Y0Z0001,payments-factory,active,agt_01JD2Q3R4S5T6V7W8X9Y0Z0001,paperclip,webUi,public,private,team_limit,private,payments-factory.collab.corp.example.com,Ready,2026-11-23T09:41:00Z\r\
+              \n"
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:settings
+    x-afs-scope: service
+    x-afs-cli: admin list-orchestration-endpoints
+    x-afs-sdk: admin.orchestrationEndpoints.list()
+    x-afs-screen: S12
+    x-afs-priority: P0
+    x-afs-csv: true
+    x-afs-events: []

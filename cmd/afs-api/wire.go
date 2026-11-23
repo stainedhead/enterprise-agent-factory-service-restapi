@@ -23,6 +23,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/auth"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/secrets"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/teams"
 )
 
 // components is everything afs-api is built from. wire is the only place adapters are connected.
@@ -37,6 +38,8 @@ type components struct {
 	Settings *postgres.SettingsReader
 	// SecretsWriter is the Secrets Manager write path (wireSecrets); the collaboration use cases share it.
 	SecretsWriter secrets.Writer
+	// teamSvc is the team use case (wireM1W2); wireAgents gives it the boot secret provisioner.
+	teamSvc *teams.Service
 	// Auth authenticates bearer credentials (wireAuth).
 	Auth    *auth.Service
 	Handler http.Handler
@@ -99,6 +102,10 @@ type settings struct {
 	// OIDCHTTP fetches identity provider discovery documents and JWKS; nil uses a client with a 5 s
 	// timeout. Tests point it at a fake provider.
 	OIDCHTTP *http.Client
+	// Deprecation sets the Deprecation and Sunset headers of the deprecated 1.0.1 surface
+	// (AFS_DEPRECATION_SINCE and AFS_DEPRECATION_SUNSET, RFC 3339; defaults: the 1.1.0 release date and 12
+	// months after it).
+	Deprecation httpapi.DeprecationPolicy
 	// ClusterOIDCIssuer is the EKS cluster's service account issuer URL (AFS_CLUSTER_OIDC_ISSUER):
 	// workload tokens (RA-2b) are validated against its keys. Empty: workload tokens are refused.
 	ClusterOIDCIssuer string
@@ -124,6 +131,19 @@ func settingsFrom(env func(string) string) (settings, error) {
 				return s, fmt.Errorf("%s: %q is not a positive duration", v.name, raw)
 			}
 			*v.dst = d
+		}
+	}
+	s.Deprecation = httpapi.DefaultDeprecation
+	for _, v := range []struct {
+		name string
+		dst  *time.Time
+	}{{"AFS_DEPRECATION_SINCE", &s.Deprecation.Since}, {"AFS_DEPRECATION_SUNSET", &s.Deprecation.Sunset}} {
+		if raw := env(v.name); raw != "" {
+			t, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				return s, fmt.Errorf("%s: %q is not an RFC 3339 time", v.name, raw)
+			}
+			*v.dst = t.UTC()
 		}
 	}
 	s.APIReplicas = 1
@@ -272,6 +292,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 			pool.Close()
 			return nil, err
 		}
+		httpapi.DefaultDeprecation = s.Deprecation
 		wireAuth(c, &cfg, p, s)
 		wireM1W2(c, &cfg, log)
 		wireM2W1(c, log)
@@ -279,8 +300,8 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 			pool.Close()
 			return nil, err
 		}
-		wireAgents(c, log) // after wireSecrets: it shares the Secrets Manager writer (boot secrets)
-		wireCollab(c)
+		agentSvc := wireAgents(c, log) // after wireSecrets: it shares the Secrets Manager writer (boot secrets)
+		wireCollab(c, agentSvc)
 		wireLogDest(c, log)
 		wireBudgets(c)
 		wireReports(c, log)

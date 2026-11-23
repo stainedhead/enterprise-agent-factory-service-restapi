@@ -87,8 +87,10 @@ func hashSlice(v string) []byte { h := hash(v); return h[:] }
 
 func b64(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 
-func (s *Service) callbackURL() string {
-	return "https://" + s.Table.Settings().BaseDomain + PathCallback
+// callbackURL is the apex callback of a level: a team host signs in through the apex of its own level, so the
+// private entry never depends on a public name and the cookie stays host-only.
+func (s *Service) callbackURL(l collab.Level) string {
+	return "https://" + s.Table.Settings().BaseDomain(l) + PathCallback
 }
 
 func (s *Service) signin(ctx context.Context, req Request, route collab.Route) Result {
@@ -123,7 +125,7 @@ func (s *Service) signin(ctx context.Context, req Request, route collab.Route) R
 	if st.Silent {
 		prompt = "none"
 	}
-	loc, err := s.Identity.AuthURL(ctx, route, s.callbackURL(), sealed, b64(ch[:]), st.Nonce, prompt)
+	loc, err := s.Identity.AuthURL(ctx, route, s.callbackURL(route.Level), sealed, b64(ch[:]), st.Nonce, prompt)
 	if err != nil {
 		return base.deny(503, "Unavailable", "upstream_unavailable")
 	}
@@ -149,8 +151,8 @@ func (s *Service) callback(ctx context.Context, req Request) Result {
 	if json.Unmarshal(plain, &st) != nil || st.Expires < s.now().Unix() {
 		return fail(401, "Unauthenticated", "session_expired")
 	}
-	route, ok := s.Table.RouteByTeam(st.TeamID)
-	if !ok || NormalizeHost(route.Hostname) != NormalizeHost(st.Host) {
+	route, kind := s.Table.Lookup(st.Host)
+	if kind != collab.HostTeam || route.TeamID != st.TeamID {
 		return fail(404, "NotFound", "")
 	}
 	base := Result{Route: route, Class: collab.ClassWeb}
@@ -164,7 +166,7 @@ func (s *Service) callback(ctx context.Context, req Request) Result {
 	if q.Get("error") != "" || q.Get("code") == "" {
 		return base.deny(401, "Unauthenticated", "token_invalid")
 	}
-	claims, err := s.Identity.Exchange(ctx, route, s.callbackURL(), q.Get("code"), st.Verifier)
+	claims, err := s.Identity.Exchange(ctx, route, s.callbackURL(route.Level), q.Get("code"), st.Verifier)
 	if err != nil || claims.Nonce != st.Nonce {
 		return base.deny(401, "Unauthenticated", "token_invalid")
 	}

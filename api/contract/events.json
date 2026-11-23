@@ -442,6 +442,49 @@
     "when": "An agent's `linkState` became `linked`, or left `linked`; `data` `{agentId, linkState, paperclipAgentId?, registrationMode}` (`unlinked` adds `reason`: `disconnected`, `agent_deleted`, `collaboration_agent_deleted`, `failed`)"
   },
   {
+    "type": "orchestration.created",
+    "emittedBy": [
+      "api",
+      "db function"
+    ],
+    "when": "The team's orchestration agent was created (`CreateTeam`, backfill, work order team); `data` `{teamId, agentId, agentName, tool, limit, webUiExposure, webApiExposure}`"
+  },
+  {
+    "type": "orchestration.updated",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "`PutTeamOrchestration` (and the deprecated `PutTeamCollaboration`); `data` `{teamId, agentId, changes: {webUiExposure?: {from, to}, webApiExposure?: {from, to}, registrationMode?: {from, to}}}`. A limit change is in `team.updated`"
+  },
+  {
+    "type": "orchestration.tool_changed",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "`ChangeCollaborationTool`; `data` `{teamId, agentId, fromTool, toTool, snapshotId}`"
+  },
+  {
+    "type": "orchestration.endpoint_state_changed",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "A surface's effective level or readiness changed; `data` `{teamId, agentId, surface: webUi|webApi, exposure, effective, previousEffective, reasons[], hostname, ready}`. Replaces `collaboration.endpoint_state_changed`, which is still emitted until 2.0.0"
+  },
+  {
+    "type": "team.models_changed",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "`PutTeamModels`; `data` `{teamId, from: {access, modelIds}, to: {access, modelIds}}`"
+  },
+  {
+    "type": "agent.model_unavailable",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "An agent's or pool's default model left its effective set, or the set became empty; once per transition; `data` `{teamId, agentId?, poolId?, defaultModelId, reason: model_not_enabled_for_service|model_not_enabled_for_team|model_not_enabled_for_agent|model_not_priced, effectiveModelIds}`; delivered to the team's channels"
+  },
+  {
     "type": "notification.delivery_failed",
     "emittedBy": [
       "reconciler"

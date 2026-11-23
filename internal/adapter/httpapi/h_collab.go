@@ -4,13 +4,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/collab"
 )
 
-// CollaborationAPI serves the seven Paperclip collaboration operations (API contract §4.4b, RA-17).
+// CollaborationAPI serves the orchestration operations (API contract §4.4d), the deprecated 1.0.1
+// collaboration aliases and the collaboration link operations (§4.4b, RA-17).
 type CollaborationAPI struct {
 	Svc   *collab.Service
 	Pages PageTokens
@@ -19,16 +21,19 @@ type CollaborationAPI struct {
 // BindCollaboration binds the collaboration handlers as the collaboration area.
 func BindCollaboration(a *CollaborationAPI) Registrar { return a.Register }
 
-// Register binds the collaboration operations.
+// Register binds the orchestration and collaboration operations.
 func (a *CollaborationAPI) Register(g *Registry) error {
 	return w2Bind(g, map[string]http.HandlerFunc{
+		"GetTeamOrchestration": a.getOrchestration, "PutTeamOrchestration": a.putOrchestration,
+		"ChangeCollaborationTool": a.changeTool, "ListOrchestrationEndpoints": a.orchestrationEndpoints,
 		"GetTeamCollaboration": a.get, "PutTeamCollaboration": a.put, "ListCollaborationLinks": a.links,
 		"ConnectAgentToCollaboration": a.connect, "DisconnectAgentFromCollaboration": a.disconnect,
 		"RotateCollaborationKeys": a.rotate, "ListCollaborationEndpoints": a.endpoints,
 	})
 }
 
-// teamCollaborationBody is the wire shape of TeamCollaboration (API contract §4.4b).
+// teamCollaborationBody is the wire shape of the deprecated TeamCollaboration (API contract §4.4b as
+// kept by §4.4d).
 type teamCollaborationBody struct {
 	TeamID                   string        `json:"teamId"`
 	AgentID                  string        `json:"agentId"`
@@ -54,19 +59,14 @@ type effectiveBody struct {
 	Reasons []string `json:"reasons"`
 }
 
-func toEffectiveBody(e domain.Effective) effectiveBody {
-	r := e.Reasons
-	if r == nil {
-		r = []string{}
-	}
-	return effectiveBody{WebUI: e.WebUI, RESTAPI: e.RESTAPI, Reasons: r}
-}
-
 func toTeamCollaborationBody(v collab.View, pending bool) teamCollaborationBody {
 	c := v.Collab
-	b := teamCollaborationBody{TeamID: c.TeamID, AgentID: c.AgentID, WebUIEnabled: c.WebUIEnabled, RESTAPIEnabled: c.RESTAPIEnabled,
-		RegistrationMode: string(c.Mode), Effective: toEffectiveBody(v.Effective), UnmanagedPaperclipAgents: c.Unmanaged,
-		Version: int64(c.Version), Generation: int64(c.Generation), CreatedAt: w2Time(c.CreatedAt), CreatedBy: c.CreatedBy, UpdatedAt: w2Time(c.UpdatedAt)}
+	eff := domain.LegacyOf(v.WebUI, v.WebAPI)
+	b := teamCollaborationBody{TeamID: c.TeamID, AgentID: c.AgentID, WebUIEnabled: c.WebUIExposure != domain.ExposureOff,
+		RESTAPIEnabled: c.WebAPIExposure != domain.ExposureOff, RegistrationMode: string(c.Mode),
+		Effective:                effectiveBody{WebUI: eff.WebUI, RESTAPI: eff.RESTAPI, Reasons: eff.Reasons},
+		UnmanagedPaperclipAgents: c.Unmanaged,
+		Version:                  int64(c.Version), Generation: int64(c.Generation), CreatedAt: w2Time(c.CreatedAt), CreatedBy: c.CreatedBy, UpdatedAt: w2Time(c.UpdatedAt)}
 	if b.UnmanagedPaperclipAgents == nil {
 		b.UnmanagedPaperclipAgents = []string{}
 	}
@@ -75,9 +75,9 @@ func toTeamCollaborationBody(v collab.View, pending bool) teamCollaborationBody 
 		st.Phase = domain.PhasePending
 	}
 	b.Status = toStatusBody(st)
-	if v.Hostname != "" {
-		h, web, rest := v.Hostname, "https://"+v.Hostname+"/", "https://"+v.Hostname+"/api"
-		b.Hostname, b.WebUIURL, b.RESTAPIURL = &h, &web, &rest
+	if host := c.LegacyHostname(v.Settings); host != "" {
+		web, rest := "https://"+host+"/", "https://"+host+"/api"
+		b.Hostname, b.WebUIURL, b.RESTAPIURL = &host, &web, &rest
 	}
 	return b
 }
@@ -125,14 +125,19 @@ type collaborationEndpointBody struct {
 	LastAccessAt           *string `json:"lastAccessAt"`
 }
 
-func toCollaborationEndpointBody(e collab.Endpoint) collaborationEndpointBody {
-	c := e.Row.Collab
+// toCollaborationEndpointBody maps one team's two surfaces to the deprecated per-team row: booleans for
+// the stored choice, and effective true only for public (the 1.0.1 meaning).
+func toCollaborationEndpointBody(c domain.TeamCollaboration, phase domain.Phase, last *time.Time, ui, api domain.SurfaceState) collaborationEndpointBody {
 	b := collaborationEndpointBody{TeamID: c.TeamID, Slug: c.TeamSlug, TeamState: string(c.TeamState), AgentID: c.AgentID,
-		WebUIEnabled: c.WebUIEnabled, RESTAPIEnabled: c.RESTAPIEnabled, MayExposeCollaboration: c.MayExpose,
-		Phase: string(e.Row.Phase), LastAccessAt: w2TimePtr(e.Row.LastAccessAt)}
-	b.Effective.WebUI, b.Effective.RESTAPI = e.Effective.WebUI, e.Effective.RESTAPI
-	if e.Hostname != "" {
-		h := e.Hostname
+		WebUIEnabled: c.WebUIExposure != domain.ExposureOff, RESTAPIEnabled: c.WebAPIExposure != domain.ExposureOff,
+		MayExposeCollaboration: c.Limit != domain.ExposureOff, Phase: string(phase), LastAccessAt: w2TimePtr(last)}
+	b.Effective.WebUI, b.Effective.RESTAPI = ui.Effective == domain.ExposurePublic, api.Effective == domain.ExposurePublic
+	switch {
+	case ui.Effective == domain.ExposurePublic && ui.Hostname != "":
+		h := ui.Hostname
+		b.Hostname = &h
+	case api.Effective == domain.ExposurePublic && api.Hostname != "":
+		h := api.Hostname
 		b.Hostname = &h
 	}
 	return b
@@ -144,7 +149,9 @@ func (a *CollaborationAPI) get(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
-	v, err := a.Svc.Get(r.Context(), c, r.PathValue("teamId"))
+	teamID := r.PathValue("teamId")
+	DefaultDeprecation.Apply(w, "/v1/teams/"+teamID+"/orchestration")
+	v, err := a.Svc.Get(r.Context(), c, teamID)
 	if err != nil {
 		WriteError(w, r, err)
 		return
@@ -159,12 +166,15 @@ type putCollaborationRequest struct {
 	RegistrationMode *string `json:"registrationMode"`
 }
 
+// put is the deprecated PutTeamCollaboration: the booleans become levels (§4.4d).
 func (a *CollaborationAPI) put(w http.ResponseWriter, r *http.Request) {
 	c, err := w2Caller(r)
 	if err != nil {
 		WriteError(w, r, err)
 		return
 	}
+	teamID := r.PathValue("teamId")
+	DefaultDeprecation.Apply(w, "/v1/teams/"+teamID+"/orchestration")
 	expect, err := w2IfMatchOptional(r)
 	if err != nil {
 		WriteError(w, r, err)
@@ -186,11 +196,11 @@ func (a *CollaborationAPI) put(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, domain.Validation(fe...))
 		return
 	}
-	p := domain.PutCollaborationParams{WebUIEnabled: *req.WebUIEnabled, RESTAPIEnabled: *req.RESTAPIEnabled}
+	var mode domain.RegistrationMode
 	if req.RegistrationMode != nil {
-		p.Mode = domain.RegistrationMode(*req.RegistrationMode)
+		mode = domain.RegistrationMode(*req.RegistrationMode)
 	}
-	v, err := a.Svc.Put(r.Context(), c, r.PathValue("teamId"), p, expect)
+	v, err := a.Svc.LegacyPut(r.Context(), c, teamID, *req.WebUIEnabled, *req.RESTAPIEnabled, mode, expect)
 	if err != nil {
 		WriteError(w, r, err)
 		return
@@ -338,12 +348,14 @@ func (a *CollaborationAPI) rotate(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, toRotateBody(res))
 }
 
+// endpoints is the deprecated ListCollaborationEndpoints: one row per team with a surface not off.
 func (a *CollaborationAPI) endpoints(w http.ResponseWriter, r *http.Request) {
 	c, err := w2Caller(r)
 	if err != nil {
 		WriteError(w, r, err)
 		return
 	}
+	DefaultDeprecation.Apply(w, "/v1/admin/orchestration-endpoints")
 	page, err := w2Page(a.Pages, r, c)
 	if err != nil {
 		WriteError(w, r, err)
@@ -357,16 +369,33 @@ func (a *CollaborationAPI) endpoints(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, bad("state", "must be Ready, Degraded, Failed or Pending"))
 		return
 	}
-	rows, next, err := a.Svc.Endpoints(r.Context(), c, f, page)
+	res, err := a.Svc.Endpoints(r.Context(), c, f, page)
 	if err != nil {
 		WriteError(w, r, err)
 		return
 	}
-	token := w2Next(a.Pages, r, c, next)
+	// The service returns one item per surface; fold the two surfaces of a team into one legacy row.
+	var rows []collaborationEndpointBody
+	for i := 0; i < len(res.Items); i++ {
+		it := res.Items[i]
+		ui, api := it.State, domain.SurfaceState{Effective: domain.ExposureOff}
+		if it.Surface == domain.SurfaceWebAPI {
+			ui, api = domain.SurfaceState{Effective: domain.ExposureOff}, it.State
+		}
+		if i+1 < len(res.Items) && res.Items[i+1].Row.Collab.TeamID == it.Row.Collab.TeamID {
+			if res.Items[i+1].Surface == domain.SurfaceWebAPI {
+				api = res.Items[i+1].State
+			} else {
+				ui = res.Items[i+1].State
+			}
+			i++
+		}
+		rows = append(rows, toCollaborationEndpointBody(it.Row.Collab, it.Row.Phase, it.Row.LastAccessAt, ui, api))
+	}
+	token := w2Next(a.Pages, r, c, res.Next)
 	if WantsCSV(r) {
 		cells := make([][]string, 0, len(rows))
-		for _, e := range rows {
-			b := toCollaborationEndpointBody(e)
+		for _, b := range rows {
 			host, last := "", ""
 			if b.Hostname != nil {
 				host = *b.Hostname
@@ -384,8 +413,6 @@ func (a *CollaborationAPI) endpoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := w2ListBody[collaborationEndpointBody]{Items: make([]collaborationEndpointBody, 0, len(rows)), NextToken: token}
-	for _, e := range rows {
-		out.Items = append(out.Items, toCollaborationEndpointBody(e))
-	}
+	out.Items = append(out.Items, rows...)
 	WriteJSON(w, http.StatusOK, out)
 }

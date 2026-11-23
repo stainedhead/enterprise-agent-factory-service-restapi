@@ -9,7 +9,7 @@ import (
 
 func TestEvents(t *testing.T) {
 	types := domain.EventTypes()
-	if len(types) != 62 || len(domain.EventEmitters) != 62 {
+	if len(types) != 68 || len(domain.EventEmitters) != 68 {
 		t.Fatalf("event types = %d", len(types))
 	}
 	for _, et := range types {

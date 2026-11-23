@@ -39,32 +39,49 @@ var (
 
 func mapErr(err error, what string) error { return postgres.MapError(err, postgres.OpRead, what) }
 
-// Settings implements edge.RouteSource: the collab.* service settings, defaults for what is not set.
+// Settings implements edge.RouteSource: the orchestration domains and switches (afs.orchestration_settings())
+// and the remaining collab.* service settings (afs.collab_settings()); defaults for what is not set.
 func (d *DB) Settings(ctx context.Context) (collab.Settings, error) {
-	rows, err := d.q.Query(ctx, `SELECT key, value FROM afs.collab_settings()`)
-	if err != nil {
-		return collab.Settings{}, mapErr(err, "collab settings")
-	}
-	defer rows.Close()
 	s := collab.DefaultSettings()
-	for rows.Next() {
-		var k string
-		var raw []byte
-		if err := rows.Scan(&k, &raw); err != nil {
+	for _, fn := range []string{"afs.orchestration_settings()", "afs.collab_settings()"} {
+		rows, err := d.q.Query(ctx, `SELECT key, value FROM `+fn)
+		if err != nil {
+			return collab.Settings{}, mapErr(err, "collab settings")
+		}
+		for rows.Next() {
+			var k string
+			var raw []byte
+			if err := rows.Scan(&k, &raw); err != nil {
+				rows.Close()
+				return s, mapErr(err, "collab settings")
+			}
+			applySetting(&s, k, raw)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
 			return s, mapErr(err, "collab settings")
 		}
-		applySetting(&s, k, raw)
 	}
-	return s, mapErr(rows.Err(), "collab settings")
+	return s, nil
 }
 
 // applySetting stores one setting; a value of the wrong type keeps the default (the API validates on write).
 func applySetting(s *collab.Settings, key string, raw []byte) {
 	switch key {
-	case "collab.base_domain":
-		_ = json.Unmarshal(raw, &s.BaseDomain)
-	case "collab.public_endpoints":
+	case "orchestration.public_base_domain":
+		var v *string
+		if json.Unmarshal(raw, &v) == nil && v != nil {
+			s.PublicBaseDomain = *v
+		}
+	case "orchestration.private_base_domain":
+		var v *string
+		if json.Unmarshal(raw, &v) == nil && v != nil {
+			s.PrivateBaseDomain = *v
+		}
+	case "orchestration.public_endpoints":
 		_ = json.Unmarshal(raw, &s.PublicEndpoints)
+	case "orchestration.private_endpoints":
+		_ = json.Unmarshal(raw, &s.PrivateEndpoints)
 	case "collab.allowed_source_cidrs":
 		_ = json.Unmarshal(raw, &s.AllowedSourceCIDRs)
 	case "collab.session_ttl_minutes":
@@ -84,37 +101,78 @@ func applySetting(s *collab.Settings, key string, raw []byte) {
 	}
 }
 
-// Routes implements edge.RouteSource. Teams without a hostname (no base domain) have no route.
+// Routes implements edge.RouteSource. afs.orchestration_routes() gives a team two rows (Web UI and Web API);
+// the team is registered under its public and its private hostname, one Route per hostname that exists, each
+// carrying which surfaces are effective at that level and which only at the other (CD-38).
 func (d *DB) Routes(ctx context.Context) ([]collab.Route, error) {
-	rows, err := d.q.Query(ctx, `SELECT team_id, slug, namespace, hostname, team_state, agent_id, agent_state,
-		web_ui_enabled, rest_api_enabled, web_ui_effective, rest_api_effective, may_expose, ready, not_ready_reason,
-		service_name, port, provider_id, issuer_url, groups_claim, collab_client_id, collab_client_secret_arn,
+	rows, err := d.q.Query(ctx, `SELECT team_id, slug, namespace, team_state, agent_id, agent_state, tool, service_name, port,
+		surface, exposure, effective, public_hostname, private_hostname, ready, not_ready_reason,
+		provider_id, issuer_url, groups_claim, collab_client_id, collab_client_secret_arn,
 		provider_client_id, provider_cli_client_id
-		FROM afs.collab_routes()`)
+		FROM afs.orchestration_routes()`)
 	if err != nil {
-		return nil, mapErr(err, "collab routes")
+		return nil, mapErr(err, "orchestration routes")
 	}
 	defer rows.Close()
-	var out []collab.Route
+	type team struct {
+		base collab.Route
+		ui   [2]bool // effective at public, private
+		api  [2]bool
+		on   [2]bool // stored exposure not off: ui, api
+	}
+	var order []string
+	byTeam := map[string]*team{}
 	for rows.Next() {
 		var r collab.Route
-		var host, agentID, agentState, reason, prov, issuer, groups, client, arn, console, cli *string
-		if err := rows.Scan(&r.TeamID, &r.Slug, &r.Namespace, &host, &r.TeamState, &agentID, &agentState,
-			&r.WebUIEnabled, &r.RESTAPIEnabled, &r.WebUIEffective, &r.RESTAPIEffective, &r.MayExpose, &r.Ready, &reason,
-			&r.ServiceName, &r.Port, &prov, &issuer, &groups, &client, &arn, &console, &cli); err != nil {
-			return nil, mapErr(err, "collab routes")
+		var agentID, agentState, tool, pub, priv, reason, prov, issuer, groups, client, arn, console, cli *string
+		var surface, exposure, effective string
+		if err := rows.Scan(&r.TeamID, &r.Slug, &r.Namespace, &r.TeamState, &agentID, &agentState, &tool, &r.ServiceName, &r.Port,
+			&surface, &exposure, &effective, &pub, &priv, &r.Ready, &reason,
+			&prov, &issuer, &groups, &client, &arn, &console, &cli); err != nil {
+			return nil, mapErr(err, "orchestration routes")
 		}
-		if host == nil {
-			continue
+		t := byTeam[r.TeamID]
+		if t == nil {
+			r.AgentID, r.AgentState, r.Tool, r.NotReadyReason = deref(agentID), deref(agentState), deref(tool), deref(reason)
+			r.PublicHostname, r.PrivateHostname = deref(pub), deref(priv)
+			r.ProviderID, r.IssuerURL, r.GroupsClaim = deref(prov), deref(issuer), deref(groups)
+			r.ClientID, r.ClientSecretARN = deref(client), deref(arn)
+			r.ProviderClientID, r.ProviderCLIClientID = deref(console), deref(cli)
+			t = &team{base: r}
+			byTeam[r.TeamID] = t
+			order = append(order, r.TeamID)
 		}
-		r.Hostname = *host
-		r.AgentID, r.AgentState, r.NotReadyReason = deref(agentID), deref(agentState), deref(reason)
-		r.ProviderID, r.IssuerURL, r.GroupsClaim = deref(prov), deref(issuer), deref(groups)
-		r.ClientID, r.ClientSecretARN = deref(client), deref(arn)
-		r.ProviderClientID, r.ProviderCLIClientID = deref(console), deref(cli)
-		out = append(out, r)
+		flags := &t.ui
+		idx := 0
+		if surface == "web_api" {
+			flags, idx = &t.api, 1
+		}
+		flags[0], flags[1] = effective == "public", effective == "private"
+		t.on[idx] = exposure != "off"
 	}
-	return out, mapErr(rows.Err(), "collab routes")
+	if err := rows.Err(); err != nil {
+		return nil, mapErr(err, "orchestration routes")
+	}
+	var out []collab.Route
+	for _, id := range order {
+		t := byTeam[id]
+		for lvl, host := range map[collab.Level]string{collab.LevelPublic: t.base.PublicHostname, collab.LevelPrivate: t.base.PrivateHostname} {
+			if host == "" {
+				continue
+			}
+			i, o := 0, 1
+			if lvl == collab.LevelPrivate {
+				i, o = 1, 0
+			}
+			r := t.base
+			r.Level, r.Hostname = lvl, host
+			r.WebUIEnabled, r.RESTAPIEnabled = t.on[0], t.on[1]
+			r.WebUIEffective, r.RESTAPIEffective = t.ui[i], t.api[i]
+			r.WebUIOtherLevel, r.RESTAPIOtherLevel = t.ui[o], t.api[o]
+			out = append(out, r)
+		}
+	}
+	return out, nil
 }
 
 func deref(s *string) string {
@@ -226,6 +284,7 @@ type accessRow struct {
 	BucketStart       string `json:"bucket_start"`
 	TeamID            string `json:"team_id"`
 	Surface           string `json:"surface"`
+	Exposure          string `json:"exposure"`
 	PrincipalKind     string `json:"principal_kind"`
 	PrincipalID       string `json:"principal_id"`
 	Outcome           string `json:"outcome"`
@@ -245,7 +304,7 @@ func (d *DB) Record(ctx context.Context, rows []collab.Row) error {
 	}
 	out := make([]accessRow, len(rows))
 	for i, r := range rows {
-		out[i] = accessRow{BucketStart: r.Key.Bucket.UTC().Format(time.RFC3339), TeamID: r.Key.TeamID, Surface: string(r.Key.Surface),
+		out[i] = accessRow{BucketStart: r.Key.Bucket.UTC().Format(time.RFC3339), TeamID: r.Key.TeamID, Surface: string(r.Key.Surface), Exposure: exposureOf(r.Key.Exposure),
 			PrincipalKind: string(r.Key.Kind), PrincipalID: r.Key.PrincipalID, Outcome: r.Key.Outcome,
 			ServiceAdminEntry: r.Key.ServiceAdminEntry, Requests: r.Requests, Bytes: r.Bytes}
 	}
@@ -262,4 +321,12 @@ func (d *DB) SecretDetected(ctx context.Context, teamID string, surface collab.S
 	var id int64
 	return mapErr(d.q.QueryRow(ctx, `SELECT afs.emit_collab_secret_detected($1, $2, $3, $4, $5, $6, $7)`,
 		teamID, string(surface), string(kind), principalID, pattern, action, count).Scan(&id), "collab secret detected")
+}
+
+// exposureOf defaults an unset level to public, as record_collab_access does.
+func exposureOf(v string) string {
+	if v == "" {
+		return "public"
+	}
+	return v
 }

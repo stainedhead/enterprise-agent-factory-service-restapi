@@ -151,7 +151,7 @@ func TestCreateWithStageAndIdempotency(t *testing.T) {
 }
 
 func TestCreateFailuresWriteNothing(t *testing.T) {
-	for _, m := range []string{"TeamKind", "AgentNameTaken", "ModelEnabled", "Template", "Insert", "Handoffs"} {
+	for _, m := range []string{"TeamKind", "AgentNameTaken", "ModelSets", "Template", "Insert", "Handoffs"} {
 		t.Run(m, func(t *testing.T) {
 			r := newRig(t)
 			r.repo.Fail[m] = errors.New("boom")

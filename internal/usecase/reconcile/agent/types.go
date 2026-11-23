@@ -138,7 +138,15 @@ type Desired struct {
 	Template    string
 	Image       string
 	Persona     string
-	ModelID     string
+	// ModelID is the default model (agents.default_model_id; model_id is its 1.0.1 alias).
+	ModelID string
+	// Models are the model ids the agent may call: the service, team and agent sets and a price in force
+	// (afs.effective_agent_models), sorted. The default is among them unless ModelUnavailable.
+	Models []string
+	// ModelReason is why the default model is refused, empty when it is callable; PrevModelUnavailable is the
+	// ModelUnavailable status of the last reconcile (nil when there was none).
+	ModelReason          string
+	PrevModelUnavailable *bool
 	// State is enabled, paused, deleting or deleted.
 	State      string
 	Generation int64
@@ -169,14 +177,41 @@ type Desired struct {
 	Link *CollabLink
 }
 
-// RoleCollaboration is the Role of a team's Paperclip agent.
-const RoleCollaboration = "collaboration"
+// RoleCollaboration is the Role of a team's orchestration agent (the 1.0.1 name was "collaboration").
+const RoleCollaboration = "orchestration"
 
 // CollabPort is the port Paperclip listens on and the Service `paperclip` exposes (RC-21).
 const CollabPort = 3100
 
+// Orchestration tools and their in-namespace ports (ORC-8): the profile of each tool is fixed.
+const (
+	ToolPaperclip = "paperclip"
+	ToolBuzz      = "buzz"
+	// BuzzPort is the port the Buzz relay listens on.
+	BuzzPort = 3000
+)
+
+// ToolPort is the in-namespace port of a tool; an empty tool is Paperclip (a 1.0.1 row).
+func ToolPort(tool string) int {
+	if tool == ToolBuzz {
+		return BuzzPort
+	}
+	return CollabPort
+}
+
+// ToolService is the name of the Service in front of the orchestration agent: the tool's name, so workers and
+// afs-edge find it without a lookup.
+func ToolService(tool string) string {
+	if tool == ToolBuzz {
+		return ToolBuzz
+	}
+	return ToolPaperclip
+}
+
 // Collab is what the collaboration agent's pod and Service are built from beyond the agent row.
 type Collab struct {
+	// Tool is paperclip or buzz.
+	Tool string
 	// Mode is manual or managed registration.
 	Mode string
 	// Host is <slug>.<collab.base_domain>, empty while the base domain is unset.
@@ -188,6 +223,8 @@ type Collab struct {
 
 // CollabLink is a worker's connection to Paperclip.
 type CollabLink struct {
+	// Tool is the team's orchestration tool.
+	Tool string
 	// PaperclipAgentID is the agent's id inside Paperclip, empty until registered.
 	PaperclipAgentID string
 }

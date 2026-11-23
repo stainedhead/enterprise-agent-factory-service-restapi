@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -140,8 +141,9 @@ func TestTeamModelsAndTags(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := inTx(t, db, adminSession(), func(ctx context.Context, tx port.Tx) error {
-		m0, v0, err := repo.Models(ctx, tx, tm.ID)
-		if err != nil || len(m0) != 0 {
+		m0, err := repo.Models(ctx, tx, tm.ID)
+		v0 := m0.Version
+		if err != nil || len(m0.ModelIDs) != 0 {
 			t.Errorf("models = %v, %v", m0, err)
 			return errors.New("assertion failed")
 		}
@@ -153,15 +155,16 @@ func TestTeamModelsAndTags(t *testing.T) {
 		if err := repo.ReplaceModels(ctx, tx, tm.ID, []string{modelID}); err != nil {
 			return err
 		}
-		m1, v1, err := repo.Models(ctx, tx, tm.ID)
-		if err != nil || len(m1) != 1 || v1 <= v0 {
+		m1, err := repo.Models(ctx, tx, tm.ID)
+		v1 := m1.Version
+		if err != nil || len(m1.ModelIDs) != 1 || v1 <= v0 {
 			t.Errorf("after replace: %v v0=%d v1=%d %v", m1, v0, v1, err)
 		}
 		if err := repo.ReplaceModels(ctx, tx, tm.ID, []string{modelID}); err != nil {
 			return err
 		}
-		if _, v2, _ := repo.Models(ctx, tx, tm.ID); v2 != v1 {
-			t.Errorf("unchanged replace moved the version %d -> %d", v1, v2)
+		if m2, _ := repo.Models(ctx, tx, tm.ID); m2.Version != v1 {
+			t.Errorf("unchanged replace moved the version %d -> %d", v1, m2.Version)
 		}
 
 		_, tv0, err := repo.TeamTags(ctx, tx, tm.ID)
@@ -191,8 +194,8 @@ func TestTeamModelsAndTags(t *testing.T) {
 		return repo.ReplaceModels(ctx, tx, tm.ID, nil)
 	})
 	err = inTx(t, db, adminSession(), func(ctx context.Context, tx port.Tx) error {
-		m, _, err := repo.Models(ctx, tx, tm.ID)
-		if err == nil && len(m) != 1 {
+		m, err := repo.Models(ctx, tx, tm.ID)
+		if err == nil && len(m.ModelIDs) != 1 {
 			t.Errorf("a team admin changed the team's models: %v", m)
 		}
 		return err
@@ -525,5 +528,47 @@ VALUES ($1, $2, $2, 'Ready', '[]', 1)`, string(engine.KindTeam), tm.ID); err != 
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// RA-US-21: WithoutOrchestration lists the live teams with no agent and stops listing a team once it has one.
+func TestTeamsWithoutOrchestration(t *testing.T) {
+	db := pgtest.Get(t)
+	db.SeedOrchestrationRuntime(t)
+	repo := postgres.NewTeamRepo()
+	id := pgtest.NewID("team")
+	slug := "bf" + strings.ToLower(id[len(id)-8:])
+	if _, err := db.Admin(t).Exec(t.Context(), `INSERT INTO afs.teams (id, slug, display_name, cost_center, owner_email, max_budget_usd, orchestration_required)
+VALUES ($1, $2, $2, 'CC1', 'o@example.com', 1000, false)`, id, slug); err != nil {
+		t.Fatal(err)
+	}
+	ids := func() (list []string, has bool) {
+		err := inTx(t, db, adminSession(), func(ctx context.Context, tx port.Tx) error {
+			var err error
+			if list, err = repo.WithoutOrchestration(ctx, tx, 100000); err != nil {
+				return err
+			}
+			has, err = repo.HasOrchestration(ctx, tx, id)
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return list, has
+	}
+	list, has := ids()
+	if has || !slices.Contains(list, id) {
+		t.Fatalf("before: has=%v listed=%v", has, slices.Contains(list, id))
+	}
+	err := inTx(t, db, adminSession(), func(ctx context.Context, tx port.Tx) error {
+		return repo.InsertOrchestration(ctx, tx, teams.OrchestrationAgent{TeamID: id, AgentID: pgtest.NewID("agt"), Name: domain.OrchestratorName,
+			Models: domain.AgentModels{Access: domain.ModelAccessAll, DefaultModelID: pgtest.OrchestrationModel}})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, has = ids()
+	if !has || slices.Contains(list, id) {
+		t.Fatalf("after: has=%v listed=%v", has, slices.Contains(list, id))
 	}
 }

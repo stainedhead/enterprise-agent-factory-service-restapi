@@ -112,15 +112,18 @@ type PoolWorkers struct {
 // Pool is a desired-state swarm pool: one identity shared by Workers pods (a Deployment). Pools exist
 // only in ephemeral teams. Name and team never change: they name the pool's identity and secret paths.
 type Pool struct {
-	ID             string
-	TeamID         string
-	Name           Name
-	Description    string
-	StageID        string
-	Template       string
-	Image          ImageRef
-	Persona        string
-	ModelID        string
+	ID          string
+	TeamID      string
+	Name        Name
+	Description string
+	StageID     string
+	Template    string
+	Image       ImageRef
+	Persona     string
+	// ModelID is the deprecated alias of Models.DefaultModelID (kept until 2.0.0).
+	ModelID string
+	// Models is the pool's model access (MOD-3).
+	Models         AgentModels
 	Workers        int
 	Resources      AgentResources
 	ScratchSizeGiB int
@@ -141,13 +144,15 @@ func (p Pool) Paused() bool { return p.State == PoolStatePaused }
 
 // NewPoolParams is a CreatePool body. Zero ScratchSizeGiB and empty SharedVolume take the defaults.
 type NewPoolParams struct {
-	Name           string
-	Description    string
-	StageID        string
-	Template       string
-	Image          string
-	Persona        string
+	Name        string
+	Description string
+	StageID     string
+	Template    string
+	Image       string
+	Persona     string
+	// ModelID is the deprecated alias of Models.DefaultModelID (CD-31).
 	ModelID        string
+	Models         *ModelsInput
 	Workers        int
 	Resources      AgentResources
 	ScratchSizeGiB int
@@ -207,8 +212,8 @@ func NewPool(id, teamID string, p NewPoolParams, now time.Time) (Pool, error) {
 	if !templateRE.MatchString(p.Template) {
 		fe = append(fe, FieldError{Field: "template", Reason: "must be a template name (^[a-z][a-z0-9-]{1,62}$)"})
 	}
-	if strings.TrimSpace(p.ModelID) == "" {
-		fe = append(fe, FieldError{Field: "modelId", Reason: "is required"})
+	if p.Name == OrchestratorName {
+		fe = append(fe, FieldError{Field: "name", Reason: ReasonNameReserved})
 	}
 	fe = append(fe, validatePoolText(p.Description, p.Persona)...)
 	fe = append(fe, p.Resources.validate()...)
@@ -226,19 +231,22 @@ func NewPool(id, teamID string, p NewPoolParams, now time.Time) (Pool, error) {
 		return Pool{}, Validation(fe...)
 	}
 	return Pool{ID: id, TeamID: teamID, Name: name, Description: p.Description, StageID: p.StageID, Template: p.Template,
-		Image: image, Persona: p.Persona, ModelID: p.ModelID, Workers: p.Workers, Resources: p.Resources,
+		Image: image, Persona: p.Persona, Workers: p.Workers, Resources: p.Resources,
 		ScratchSizeGiB: p.ScratchSizeGiB, SharedVolume: p.SharedVolume, State: PoolStateEnabled, Handoffs: []string{},
+		ModelID: strings.TrimSpace(p.ModelID), Models: AgentModels{Access: ModelAccessAll, DefaultModelID: strings.TrimSpace(p.ModelID)},
 		Version: 1, Generation: 1, Status: PendingStatus(now), CreatedAt: now.UTC(), UpdatedAt: now.UTC()}, nil
 }
 
 // PoolPatch is an UpdatePool body: a nil field is left unchanged; StageID null clears the stage.
 type PoolPatch struct {
-	Description    *string
-	StageID        OptionalString
-	Template       *string
-	Image          *string
-	Persona        *string
+	Description *string
+	StageID     OptionalString
+	Template    *string
+	Image       *string
+	Persona     *string
+	// ModelID is the deprecated alias of Models.DefaultModelID; alone it sets only the default (CD-31).
 	ModelID        *string
+	Models         *ModelsInput
 	Workers        *int
 	Resources      *AgentResources
 	ScratchSizeGiB *int
@@ -275,12 +283,6 @@ func (p Pool) Apply(patch PoolPatch, now time.Time) (Pool, error) {
 		img, err := ParseImageRef("image", *patch.Image)
 		fe = append(fe, fieldErrorsOf(err)...)
 		p.Image = img
-	}
-	if patch.ModelID != nil {
-		if strings.TrimSpace(*patch.ModelID) == "" {
-			fe = append(fe, FieldError{Field: "modelId", Reason: "must not be empty"})
-		}
-		p.ModelID = *patch.ModelID
 	}
 	if patch.Workers != nil {
 		fe = append(fe, validateWorkers(*patch.Workers)...)

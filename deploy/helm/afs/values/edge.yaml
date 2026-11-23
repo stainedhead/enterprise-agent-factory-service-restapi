@@ -47,6 +47,9 @@ tls:
 # The ALB target group (owned by deploy/terraform/modules/collab-edge). When set, a TargetGroupBinding registers
 # the pods (aws-load-balancer-controller).
 targetGroupArn: ""
+# The target group of the internal ALB (deploy/terraform/modules/orchestration-private) that serves the private
+# hostnames. Optional: when set, a second TargetGroupBinding registers the same pods.
+privateTargetGroupArn: ""
 network:
   # Who may reach the HTTPS port: the ALB's subnets. Empty allows any source inside the cluster network.
   albCidrs: []
