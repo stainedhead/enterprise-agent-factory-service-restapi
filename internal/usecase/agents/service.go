@@ -42,8 +42,9 @@ type SecretInfo struct {
 
 // Repository is the agent store, plus the catalog reads CreateAgent checks against.
 type Repository interface {
-	// List returns the team's agents that are not deleted, with id greater than after, in id order.
-	List(ctx context.Context, tx port.Tx, teamID, after string, limit int) ([]domain.Agent, error)
+	// List returns the team's agents that are not deleted, with id greater than after, in id order. A
+	// non-empty role keeps only agents of that role.
+	List(ctx context.Context, tx port.Tx, teamID string, role domain.AgentRole, after string, limit int) ([]domain.Agent, error)
 	// Get returns one agent of the team that is not deleted; NotFound otherwise. forUpdate locks it.
 	Get(ctx context.Context, tx port.Tx, teamID, id string, forUpdate bool) (domain.Agent, error)
 	// Insert stores a new agent, its bindings and the catalog template reference.
@@ -54,8 +55,13 @@ type Repository interface {
 	Update(ctx context.Context, tx port.Tx, a domain.Agent, templateID string, templateChanged bool, expect domain.Version) error
 	// Template returns the catalog template of that name.
 	Template(ctx context.Context, tx port.Tx, name string) (TemplateInfo, bool, error)
-	// ModelEnabled reports whether the model is enabled and offered to the team.
+	// ModelEnabled reports whether the model is enabled for the service and allowed for the team.
 	ModelEnabled(ctx context.Context, tx port.Tx, teamID, modelID string) (bool, error)
+	// ModelSets returns the service, team and callable model sets the models of an agent are checked
+	// against (MOD-3), and the default model setting.
+	ModelSets(ctx context.Context, tx port.Tx, teamID string) (domain.ModelSets, error)
+	// EffectiveModels fills Models.Effective of each agent (service ∩ team ∩ agent ∩ callable).
+	EffectiveModels(ctx context.Context, tx port.Tx, teamID string, list []domain.Agent) error
 	// StorageClassEnabled reports whether the storage class exists and is offered.
 	StorageClassEnabled(ctx context.Context, tx port.Tx, name string) (bool, error)
 	// Secrets returns the owners of the team's secrets with these ids; unknown ids are absent.
@@ -66,17 +72,14 @@ type Repository interface {
 	// InsertSnapshot stores a manual snapshot request.
 	InsertSnapshot(ctx context.Context, tx port.Tx, teamID string, s domain.Snapshot) error
 
-	// InsertCollaboration stores the team's collaboration resource (defaults: web UI on, REST API off,
-	// manual registration) for the collaboration agent just inserted.
-	InsertCollaboration(ctx context.Context, tx port.Tx, teamID, agentID string) error
-	// CollaborationMode returns the team's registration mode; ok is false when the team has no
-	// collaboration agent.
-	CollaborationMode(ctx context.Context, tx port.Tx, teamID string) (mode domain.RegistrationMode, ok bool, err error)
+	// CollaborationMode returns the team's tool and registration mode; ok is false when the team has no
+	// orchestration agent (a 1.0.1 team the backfill has not reached).
+	CollaborationMode(ctx context.Context, tx port.Tx, teamID string) (tool domain.CollabTool, mode domain.RegistrationMode, ok bool, err error)
 	// SetCollaboration inserts or updates a worker's connection to Paperclip.
 	SetCollaboration(ctx context.Context, tx port.Tx, teamID, agentID string, connect bool, paperclipAgentID *string) error
 	// SecretPath returns afs.secret_path of an agent-scoped secret.
 	SecretPath(ctx context.Context, tx port.Tx, teamID, agentID, name string) (string, error)
-	// InsertBootSecret stores an AFS-managed secret row of the collaboration agent and binds it to the
+	// InsertBootSecret stores an AFS-managed secret row of the orchestration agent and binds it to the
 	// agent as the environment variable env.
 	InsertBootSecret(ctx context.Context, tx port.Tx, s domain.Secret, env string) error
 	// ManagedBindings returns the agent's bindings whose secret AFS manages.
@@ -89,8 +92,8 @@ type BootCreated struct {
 	VersionID string
 }
 
-// BootWriter is the Secrets Manager write path CreateAgent uses for a collaboration agent's boot
-// secrets (the same adapter as the secrets use case).
+// BootWriter is the Secrets Manager write path for the orchestration agent's boot secrets (the same
+// adapter as the secrets use case). CreateTeam and ChangeCollaborationTool use it.
 type BootWriter interface {
 	Create(ctx context.Context, name string, value domain.SecretValue, token string, tags map[string]string) (BootCreated, error)
 	ForceDelete(ctx context.Context, arn string) error
@@ -104,7 +107,8 @@ func (s *Service) guard() Guard { return Guard{Src: s.Repo} }
 type Service struct {
 	acting.Deps
 	Repo Repository
-	// Boot writes the boot secrets of a collaboration agent; nil refuses role collaboration.
+	// Boot writes the boot secrets of an orchestration agent (CreateBootSecrets); nil refuses a tool that
+	// has boot secrets.
 	Boot BootWriter
 	// Rand is the random source of the boot secrets (crypto/rand.Reader in production).
 	Rand io.Reader
@@ -130,11 +134,13 @@ func auditOf(a domain.Agent) map[string]any {
 		b = append(b, map[string]string{"secretId": x.SecretID, "delivery": x.Delivery, "target": x.Target})
 	}
 	return map[string]any{"name": string(a.Name), "description": a.Description, "template": a.Template, "image": string(a.Image),
-		"role": string(a.Role), "modelId": a.ModelID, "resources": a.Resources, "iamIdentity": a.IAMIdentity, "state": a.State, "generation": a.Generation,
+		"role": string(a.Role), "modelId": a.ModelID, "models": modelsAudit(a.Models), "resources": a.Resources, "iamIdentity": a.IAMIdentity, "state": a.State, "generation": a.Generation,
 		"volume": map[string]any{"sizeGiB": a.Volume.SizeGiB, "storageClass": a.Volume.StorageClass, "onDelete": a.Volume.OnDelete,
 			"snapshotSchedule": a.Volume.SnapshotSchedule, "snapshotRetain": a.Volume.SnapshotRetain},
 		"secretBindings": b}
 }
+
+func modelsAudit(m domain.AgentModels) map[string]any { return m.Audit() }
 
 // emit publishes an agent event; unlike Deps.Emit it sets agentId in the detail.
 func (s *Service) emit(ctx context.Context, tx port.Tx, c acting.Caller, typ domain.EventType, a domain.Agent, data map[string]any) error {
@@ -151,13 +157,15 @@ func (s *Service) emit(ctx context.Context, tx port.Tx, c acting.Caller, typ dom
 }
 
 // List implements ListAgents.
-func (s *Service) List(ctx context.Context, c acting.Caller, teamID string, p acting.Page) ([]domain.Agent, string, error) {
+func (s *Service) List(ctx context.Context, c acting.Caller, teamID string, role domain.AgentRole, p acting.Page) ([]domain.Agent, string, error) {
 	p = p.Normalized()
 	var rows []domain.Agent
 	err := s.Tx.ReadTx(ctx, c.Session(), func(ctx context.Context, tx port.Tx) error {
 		var err error
-		rows, err = s.Repo.List(ctx, tx, teamID, p.Cursor, p.Limit+1)
-		return err
+		if rows, err = s.Repo.List(ctx, tx, teamID, role.Normalize(), p.Cursor, p.Limit+1); err != nil {
+			return err
+		}
+		return s.Repo.EffectiveModels(ctx, tx, teamID, rows)
 	})
 	if err != nil {
 		return nil, "", err
@@ -174,8 +182,15 @@ func (s *Service) Get(ctx context.Context, c acting.Caller, teamID, id string) (
 	var a domain.Agent
 	err := s.Tx.ReadTx(ctx, c.Session(), func(ctx context.Context, tx port.Tx) error {
 		var err error
-		a, err = s.Repo.Get(ctx, tx, teamID, id, false)
-		return err
+		if a, err = s.Repo.Get(ctx, tx, teamID, id, false); err != nil {
+			return err
+		}
+		one := []domain.Agent{a}
+		if err = s.Repo.EffectiveModels(ctx, tx, teamID, one); err != nil {
+			return err
+		}
+		a = one[0]
+		return nil
 	})
 	return a.WithDeletingStatus(), err
 }
@@ -202,9 +217,14 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in
 		if err != nil {
 			return err
 		}
-		if err := s.guard().CheckModel(ctx, tx, teamID, a.ModelID); err != nil {
+		sets, err := s.Repo.ModelSets(ctx, tx, teamID)
+		if err != nil {
 			return err
 		}
+		if a.Models, err = domain.ResolveNewModels(in.Models, in.ModelID, sets); err != nil {
+			return err
+		}
+		a.ModelID = a.Models.DefaultModelID
 		if err := s.guard().CheckStorageClass(ctx, tx, a.Volume.StorageClass); err != nil {
 			return err
 		}
@@ -215,24 +235,11 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in
 		if err := s.guard().CheckBindings(ctx, tx, teamID, a.ID, a.Bindings); err != nil {
 			return err
 		}
-		if a.IsCollaboration() && (s.Boot == nil || s.Rand == nil) {
-			return domain.Unavailable("Secrets Manager", errNoBootWriter)
-		}
 		if err := s.Repo.Insert(ctx, tx, a, tplID); err != nil {
 			return err
 		}
-		switch {
-		case a.IsCollaboration():
-			if err := s.Repo.InsertCollaboration(ctx, tx, teamID, a.ID); err != nil {
-				return err
-			}
-			if err := s.createBootSecrets(ctx, tx, c, teamID, a.ID, idem, &created); err != nil {
-				return err
-			}
-		case in.Collaboration != nil && in.Collaboration.Connect != nil:
-			if err := s.connect(ctx, tx, teamID, a.ID, *in.Collaboration); err != nil {
-				return err
-			}
+		if err := s.connectNew(ctx, tx, teamID, a.ID, in.Collaboration); err != nil {
+			return err
 		}
 		if err := s.Audit.Write(ctx, tx, c.Record("CreateAgent", kindAgent, a.ID, teamID, nil, auditOf(a))); err != nil {
 			return err
@@ -243,6 +250,11 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in
 		if res.Agent, err = s.Repo.Get(ctx, tx, teamID, a.ID, false); err != nil {
 			return err
 		}
+		one := []domain.Agent{res.Agent}
+		if err = s.Repo.EffectiveModels(ctx, tx, teamID, one); err != nil {
+			return err
+		}
+		res.Agent = one[0]
 		return idem.Complete(ctx, s.Idem, tx, res.Agent)
 	})
 	if err != nil {
@@ -253,15 +265,19 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in
 
 var errNoBootWriter = errors.New("agents: no Secrets Manager writer for the boot secrets")
 
-// bootSecrets is the collaboration agent's boot secrets in creation order, with the environment
-// variable each is bound as (COL-7).
-func bootSecrets() []domain.BootSecret { return domain.BootSecrets() }
-
-// createBootSecrets generates the three boot secrets (32 random bytes each, hex) and writes them to
-// Secrets Manager, then stores the AFS-managed rows bound to the agent. created collects every ARN written,
-// so a failure anywhere in the request deletes them (compensation). A Secrets Manager failure is a 503.
-func (s *Service) createBootSecrets(ctx context.Context, tx port.Tx, c acting.Caller, teamID, agentID string, idem *acting.Idem, created *[]string) error {
-	for _, b := range bootSecrets() {
+// CreateBootSecrets generates the tool's boot secrets (32 random bytes each, hex) and writes them to
+// Secrets Manager, then stores the AFS-managed rows bound to the orchestration agent (COL-7). created
+// collects every ARN written, so a failure anywhere in the request deletes them (Compensate). A Secrets
+// Manager failure is a 503. A tool with no boot secrets (Buzz) writes nothing.
+func (s *Service) CreateBootSecrets(ctx context.Context, tx port.Tx, c acting.Caller, teamID, agentID string, tool domain.CollabTool, idem *acting.Idem, created *[]string) error {
+	boots := tool.BootSecrets()
+	if len(boots) == 0 {
+		return nil
+	}
+	if s.Boot == nil || s.Rand == nil {
+		return domain.Unavailable("Secrets Manager", errNoBootWriter)
+	}
+	for _, b := range boots {
 		path, err := s.Repo.SecretPath(ctx, tx, teamID, agentID, b.Name)
 		if err != nil {
 			return err
@@ -283,7 +299,7 @@ func (s *Service) createBootSecrets(ctx context.Context, tx port.Tx, c acting.Ca
 		}
 		now := s.Now()
 		sec := domain.Secret{ID: sid.String(), TeamID: teamID, Scope: domain.SecretScopeAgent, AgentID: agentID, Name: b.Name,
-			Description: "Paperclip boot secret, generated by AFS", Path: path, ARN: cr.ARN, VersionID: cr.VersionID,
+			Description: tool.DisplayName() + " boot secret, generated by AFS", Path: path, ARN: cr.ARN, VersionID: cr.VersionID,
 			LastChangedAt: &now, ManagedBy: domain.ManagedByAFS}
 		if err := s.Repo.InsertBootSecret(ctx, tx, sec, b.Env); err != nil {
 			return err
@@ -299,6 +315,10 @@ func (s *Service) createBootSecrets(ctx context.Context, tx port.Tx, c acting.Ca
 	}
 	return nil
 }
+
+// Compensate deletes the Secrets Manager secrets a failed request wrote; a delete that fails tags the
+// secret for the reconciler's orphan sweep (RC-27).
+func (s *Service) Compensate(ctx context.Context, arns []string) { s.compensate(ctx, arns) }
 
 func bootToken(c acting.Caller, idem *acting.Idem, parts ...string) string {
 	h := sha256.New()
@@ -329,17 +349,17 @@ func (s *Service) compensate(ctx context.Context, arns []string) {
 	}
 }
 
-// connect records a worker's collaboration choice. The team must have a collaboration agent, and the
-// Paperclip agent id is accepted only in manual registration (RA-18).
+// connect records a worker's collaboration choice. The team must have an orchestration agent, and the
+// Paperclip agent id is accepted only for Paperclip in manual registration (RA-18).
 func (s *Service) connect(ctx context.Context, tx port.Tx, teamID, agentID string, in domain.CollaborationInput) error {
-	mode, ok, err := s.Repo.CollaborationMode(ctx, tx, teamID)
+	tool, mode, ok, err := s.Repo.CollaborationMode(ctx, tx, teamID)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return domain.CollaborationAgentMissing(true)
+		return domain.OrchestrationPending(true)
 	}
-	if in.PaperclipAgentID != "" && mode == domain.RegistrationManaged {
+	if in.PaperclipAgentID != "" && (mode == domain.RegistrationManaged || tool != domain.ToolPaperclip) {
 		return domain.Validation(domain.FieldError{Field: "collaboration.paperclipAgentId", Reason: domain.ReasonManagedRegistration})
 	}
 	var pc *string
@@ -347,6 +367,21 @@ func (s *Service) connect(ctx context.Context, tx port.Tx, teamID, agentID strin
 		pc = &in.PaperclipAgentID
 	}
 	return s.Repo.SetCollaboration(ctx, tx, teamID, agentID, in.Connect != nil && *in.Connect, pc)
+}
+
+// connectNew records the connection of a new worker: connect defaults to true because every team has an
+// orchestration agent (COL-10 change). A team the backfill has not reached has none, so the default is
+// false there; an explicit connect true with no agent is refused.
+func (s *Service) connectNew(ctx context.Context, tx port.Tx, teamID, agentID string, in *domain.CollaborationInput) error {
+	if in != nil && in.Connect != nil {
+		return s.connect(ctx, tx, teamID, agentID, *in)
+	}
+	_, _, ok, err := s.Repo.CollaborationMode(ctx, tx, teamID)
+	if err != nil || !ok {
+		return err
+	}
+	t := true
+	return s.connect(ctx, tx, teamID, agentID, domain.CollaborationInput{Connect: &t})
 }
 
 func changedFields(p domain.AgentPatch) []string {
@@ -360,6 +395,7 @@ func changedFields(p domain.AgentPatch) []string {
 	add(p.Template != nil, "template")
 	add(p.Image != nil, "image")
 	add(p.ModelID != nil, "modelId")
+	add(p.Models.Present(), "models")
 	add(p.Resources != nil, "resources")
 	add(p.IAMIdentity != nil, "iamIdentity")
 	add(p.Volume != nil, "volume")
@@ -392,16 +428,26 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, teamID, id string
 				return err
 			}
 		}
-		if next.ModelID != cur.ModelID {
-			if err := s.guard().CheckModel(ctx, tx, teamID, next.ModelID); err != nil {
+		next.Models = cur.Models
+		if p.Models.Present() || p.ModelID != nil {
+			sets, err := s.Repo.ModelSets(ctx, tx, teamID)
+			if err != nil {
 				return err
 			}
+			legacy := ""
+			if p.ModelID != nil {
+				legacy = *p.ModelID
+			}
+			if next.Models, err = cur.Models.ApplyModels(p.Models, legacy, sets); err != nil {
+				return err
+			}
+			next.ModelID = next.Models.DefaultModelID
 		}
 		if p.Bindings != nil {
 			if err := s.guard().CheckBindings(ctx, tx, teamID, id, next.Bindings); err != nil {
 				return err
 			}
-			if cur.IsCollaboration() {
+			if cur.IsOrchestration() {
 				// The boot bindings are AFS's: a replacement of the bindings keeps them.
 				kept, err := s.Repo.ManagedBindings(ctx, tx, teamID, id)
 				if err != nil {
@@ -428,8 +474,15 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, teamID, id string
 		if err := s.emit(ctx, tx, c, domain.EventAgentUpdated, next, map[string]any{"fields": changedFields(p)}); err != nil {
 			return err
 		}
-		out, err = s.Repo.Get(ctx, tx, teamID, id, false)
-		return err
+		if out, err = s.Repo.Get(ctx, tx, teamID, id, false); err != nil {
+			return err
+		}
+		one := []domain.Agent{out}
+		if err = s.Repo.EffectiveModels(ctx, tx, teamID, one); err != nil {
+			return err
+		}
+		out = one[0]
+		return nil
 	})
 	return out, err
 }
@@ -445,6 +498,13 @@ func (s *Service) Delete(ctx context.Context, c acting.Caller, teamID, id string
 		}
 		if err := domain.CheckVersion(cur.Version, expect); err != nil {
 			return err
+		}
+		if cur.IsOrchestration() {
+			// The orchestration agent is deleted only with its team (ORC-2); the refusal is audited as denied.
+			_ = s.Audit.WriteDenied(context.WithoutCancel(ctx), c.Session(), port.AuditRecord{Action: "DeleteAgent", ResourceKind: kindAgent,
+				ResourceID: id, TeamID: teamID, SourceIP: c.SourceIP, UserAgent: c.UserAgent,
+				After: map[string]any{"reason": domain.ReasonOrchestrationAgentReq}})
+			return domain.Conflict(domain.ReasonOrchestrationAgentReq, "the orchestration agent is deleted only with its team", nil)
 		}
 		next, changed, err := cur.MarkDeleting(s.Now())
 		if err != nil {

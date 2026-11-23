@@ -95,17 +95,36 @@ WHERE team_id = $1 AND agent_id = $2 AND connect AND link_state <> 'disabled'`, 
 			return MapError(err, OpRead, "collaboration link")
 		default:
 			d.Link = &agent.CollabLink{PaperclipAgentID: id}
+			if err := t.QueryRow(ctx, `SELECT tool FROM afs.team_collaboration WHERE team_id = $1`, d.Team.ID).Scan(&d.Link.Tool); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return MapError(err, OpRead, "orchestration tool")
+			}
 		}
 	}
+	if err := collect(ctx, t, "agent models", `SELECT model_id FROM afs.effective_agent_models WHERE subject_kind = 'agent' AND subject_id = $1 ORDER BY model_id`,
+		[]any{d.ID}, func(rows pgx.Rows) error {
+			var m string
+			if err := rows.Scan(&m); err != nil {
+				return err
+			}
+			d.Models = append(d.Models, m)
+			return nil
+		}); err != nil {
+		return err
+	}
+	var err error
+	if d.ModelReason, d.PrevModelUnavailable, err = modelState(ctx, t, "agent", d.ID, d.ModelID, d.Models); err != nil {
+		return err
+	}
 	if d.IsCollaboration() {
-		var mode string
+		var mode, tool string
 		var base *string
 		err := t.QueryRow(ctx, `SELECT coalesce((SELECT registration_mode FROM afs.team_collaboration WHERE team_id = $1 AND agent_id = $2), 'manual'),
-  (SELECT value #>> '{}' FROM afs.service_settings WHERE key = 'collab.base_domain')`, d.Team.ID, d.ID).Scan(&mode, &base)
+  coalesce((SELECT tool FROM afs.team_collaboration WHERE team_id = $1 AND agent_id = $2), 'paperclip'),
+  (SELECT value #>> '{}' FROM afs.service_settings WHERE key = 'orchestration.public_base_domain' AND jsonb_typeof(value) = 'string')`, d.Team.ID, d.ID).Scan(&mode, &tool, &base)
 		if err != nil {
 			return MapError(err, OpRead, "collaboration")
 		}
-		d.Collab = &agent.Collab{Mode: mode}
+		d.Collab = &agent.Collab{Mode: mode, Tool: tool}
 		if base != nil && *base != "" {
 			d.Collab.Host = d.Team.Slug + "." + *base
 		}

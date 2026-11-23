@@ -204,10 +204,12 @@ func parsePermissions(lines []string) ([]PermissionEntry, error) {
 	var cols []string // role per cell 1..n-2 of the current table
 	inTable := false
 	headerSeen := false
+	skip := false
 	for i, l := range sec {
 		if !strings.HasPrefix(strings.TrimSpace(l), "|") {
 			inTable = false
 			headerSeen = false
+			skip = false
 			continue
 		}
 		row := splitRow(l)
@@ -215,9 +217,17 @@ func parsePermissions(lines []string) ([]PermissionEntry, error) {
 			inTable = true
 			headerSeen = true
 			cols = cols[:0]
+			skip = true // a table without role columns (the v1.4.0 scope-change table) is prose
 			for _, h := range row[1 : len(row)-1] {
-				cols = append(cols, roleOf(h))
+				role := roleOf(h)
+				cols = append(cols, role)
+				if role != "" {
+					skip = false
+				}
 			}
+			continue
+		}
+		if skip {
 			continue
 		}
 		if headerSeen && i > 0 && isSeparator(l) {
@@ -301,6 +311,7 @@ func parseOperations(lines []string) ([]Operation, error) {
 	var ops []Operation
 	current := ""
 	svcSection := false
+	inOpTable := false
 	for i := 0; i < len(sec); i++ {
 		l := sec[i]
 		if strings.HasPrefix(l, "### ") {
@@ -308,8 +319,17 @@ func parseOperations(lines []string) ([]Operation, error) {
 			svcSection = strings.Contains(l, "Service administration")
 			continue
 		}
-		// §4.4c describes the edge's externally visible behaviour, not API operations.
-		if current == "4.4c" || !strings.HasPrefix(l, "| `") {
+		// Only the tables whose header starts with "Op" list operations; §4.4c and the reason tables
+		// of §4.4d describe behaviour.
+		if !strings.HasPrefix(l, "|") {
+			inOpTable = false
+			continue
+		}
+		if strings.HasPrefix(l, "| Op |") {
+			inOpTable = true
+			continue
+		}
+		if current == "4.4c" || !inOpTable || !strings.HasPrefix(l, "| `") {
 			continue
 		}
 		row := splitRow(l)

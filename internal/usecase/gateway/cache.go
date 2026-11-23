@@ -85,6 +85,7 @@ type CachedStore struct {
 	inner  Store
 	teams  *ttlCache[TeamRecord]
 	models *ttlCache[ModelAccess]
+	admits *ttlCache[map[string]string]
 	prices *ttlCache[[]Price]
 	budget *ttlCache[BudgetRecord]
 	tags   *ttlCache[[]Tag]
@@ -100,7 +101,7 @@ func NewCachedStore(inner Store, ttl time.Duration, now func() time.Time) *Cache
 		ttl = DefaultCacheTTL
 	}
 	return &CachedStore{inner: inner,
-		teams: newTTLCache[TeamRecord](ttl, now), models: newTTLCache[ModelAccess](ttl, now),
+		teams: newTTLCache[TeamRecord](ttl, now), models: newTTLCache[ModelAccess](ttl, now), admits: newTTLCache[map[string]string](ttl, now),
 		prices: newTTLCache[[]Price](ttl, now), budget: newTTLCache[BudgetRecord](ttl, now),
 		tags: newTTLCache[[]Tag](ttl, now), tagSet: newTTLCache[string](ttl, now)}
 }
@@ -113,6 +114,12 @@ func (c *CachedStore) Team(ctx context.Context, id string) (TeamRecord, error) {
 // TeamModel implements Store.
 func (c *CachedStore) TeamModel(ctx context.Context, teamID, modelID string) (ModelAccess, error) {
 	return c.models.get(teamID+"\x00"+modelID, func() (ModelAccess, error) { return c.inner.TeamModel(ctx, teamID, modelID) })
+}
+
+// ModelAdmission implements Store: one answer per agent or pool, kept for the TTL and dropped when the
+// change feed reports a change to models, prices, access lists or settings.
+func (c *CachedStore) ModelAdmission(ctx context.Context, kind, subjectID string) (map[string]string, error) {
+	return c.admits.get(kind+"\x00"+subjectID, func() (map[string]string, error) { return c.inner.ModelAdmission(ctx, kind, subjectID) })
 }
 
 // Prices implements Store.
@@ -145,12 +152,18 @@ func (c *CachedStore) Invalidate(table, teamID string) {
 	switch table {
 	case "teams":
 		c.teams.invalidate(forTeam)
-	case "team_models":
+		c.admits.invalidate(func(string) bool { return true })
+	case "team_models", "team_inference_profiles":
 		c.models.invalidate(forTeamPrefix)
+		c.admits.invalidate(func(string) bool { return true })
 	case "models":
 		c.models.invalidate(func(string) bool { return true })
+		c.admits.invalidate(func(string) bool { return true })
 	case "model_prices":
 		c.prices.invalidate(func(string) bool { return true })
+		c.admits.invalidate(func(string) bool { return true })
+	case "agent_models", "pool_models", "agents", "agent_pools", "service_settings":
+		c.admits.invalidate(func(string) bool { return true })
 	case "budgets":
 		c.budget.invalidate(forTeam)
 	case "team_tags", "service_tags", "tag_sets":
@@ -161,7 +174,7 @@ func (c *CachedStore) Invalidate(table, teamID string) {
 
 // InvalidateAll forgets everything, after the change feed reconnects and may have missed events.
 func (c *CachedStore) InvalidateAll() {
-	for _, t := range []string{"teams", "team_models", "models", "model_prices", "budgets", "team_tags"} {
+	for _, t := range []string{"teams", "team_models", "team_inference_profiles", "models", "model_prices", "agent_models", "pool_models", "agents", "agent_pools", "service_settings", "budgets", "team_tags"} {
 		c.Invalidate(t, "")
 	}
 }

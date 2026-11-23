@@ -181,13 +181,16 @@ type Agent struct {
 	Description string
 	Template    string
 	Image       ImageRef
-	ModelID     string
+	// ModelID is the deprecated alias of Models.DefaultModelID (kept until 2.0.0).
+	ModelID string
+	// Models is the agent's model access (MOD-3).
+	Models      AgentModels
 	Resources   AgentResources
 	IAMIdentity IAMIdentity
 	IAMRoleARN  string
 	Volume      AgentVolume
 	Bindings    []SecretBinding
-	// Role is worker or collaboration; set on create, immutable (API contract 4.4).
+	// Role is worker or orchestration; set on create, immutable (API contract §4.4d).
 	Role AgentRole
 	// Collaboration is a worker's connection to the team's Paperclip; nil on the collaboration agent and
 	// for a worker that was never connected.
@@ -201,16 +204,17 @@ type Agent struct {
 	UpdatedAt     time.Time
 }
 
-// effectiveRole is the role, worker when none is set (an agent built before roles).
+// effectiveRole is the role, worker when none is set (an agent built before roles); the deprecated
+// collaboration role reads as orchestration.
 func (a Agent) effectiveRole() AgentRole {
 	if a.Role == "" {
 		return AgentRoleWorker
 	}
-	return a.Role
+	return a.Role.Normalize()
 }
 
-// IsCollaboration reports whether this is the team's collaboration agent.
-func (a Agent) IsCollaboration() bool { return a.effectiveRole() == AgentRoleCollaboration }
+// IsOrchestration reports whether this is the team's orchestration agent.
+func (a Agent) IsOrchestration() bool { return a.effectiveRole() == AgentRoleOrchestration }
 
 // Paused reports whether the agent is paused.
 func (a Agent) Paused() bool { return a.State == AgentPaused }
@@ -221,12 +225,14 @@ type NewAgentParams struct {
 	Description string
 	Template    string
 	Image       string
+	// ModelID is the deprecated alias of Models.DefaultModelID (CD-31).
 	ModelID     string
+	Models      *ModelsInput
 	Resources   AgentResources
 	IAMIdentity IAMIdentity
 	Volume      VolumeSpec
 	Bindings    []SecretBinding
-	// Role is worker (the default) or collaboration.
+	// Role is worker (the default); any other value is refused with role_reserved (ORC-2).
 	Role AgentRole
 	// Collaboration is the worker's optional connection request.
 	Collaboration *CollaborationInput
@@ -243,9 +249,6 @@ func NewAgent(id, teamID string, p NewAgentParams, now time.Time) (Agent, error)
 	if !templateRE.MatchString(p.Template) {
 		fe = append(fe, FieldError{Field: "template", Reason: "must be a template name (^[a-z][a-z0-9-]{1,62}$)"})
 	}
-	if strings.TrimSpace(p.ModelID) == "" {
-		fe = append(fe, FieldError{Field: "modelId", Reason: "is required"})
-	}
 	if utf8.RuneCountInString(p.Description) > 1000 {
 		fe = append(fe, FieldError{Field: "description", Reason: "must be at most 1000 characters"})
 	}
@@ -254,33 +257,20 @@ func NewAgent(id, teamID string, p NewAgentParams, now time.Time) (Agent, error)
 	if role == "" {
 		role = AgentRoleWorker
 	}
-	if !role.Valid() {
-		fe = append(fe, FieldError{Field: "role", Reason: "must be worker or collaboration"})
+	if role != AgentRoleWorker {
+		// CreateAgent creates workers only: the orchestration agent comes with the team (ORC-2).
+		fe = append(fe, FieldError{Field: "role", Reason: ReasonRoleReserved})
+	}
+	if p.Name == OrchestratorName {
+		fe = append(fe, FieldError{Field: "name", Reason: ReasonNameReserved})
 	}
 	iam := p.IAMIdentity
 	base := DefaultAgentVolume()
-	if role == AgentRoleCollaboration {
-		// The collaboration agent holds the team's Paperclip data: a dedicated identity and daily snapshots.
-		if iam == "" {
-			iam = IAMIdentityDedicated
-		}
-		if iam != IAMIdentityDedicated {
-			fe = append(fe, FieldError{Field: "iamIdentity", Reason: "a collaboration agent needs a dedicated identity"})
-		}
-		if p.Volume.SnapshotSchedule == SnapshotOff {
-			fe = append(fe, FieldError{Field: "volume.snapshotSchedule", Reason: "a collaboration agent's snapshots cannot be turned off"})
-		}
-		base.SnapshotRetain = 14
-		if p.Collaboration != nil {
-			fe = append(fe, FieldError{Field: "collaboration", Reason: "is for worker agents; omit it on the collaboration agent"})
-		}
-	} else {
-		if iam == "" {
-			iam = IAMIdentityTeamShared
-		}
-		if p.Collaboration != nil {
-			collect(p.Collaboration.Validate())
-		}
+	if iam == "" {
+		iam = IAMIdentityTeamShared
+	}
+	if p.Collaboration != nil {
+		collect(p.Collaboration.Validate())
 	}
 	if !iam.Valid() {
 		fe = append(fe, FieldError{Field: "iamIdentity", Reason: "must be team_shared or dedicated"})
@@ -292,17 +282,23 @@ func NewAgent(id, teamID string, p NewAgentParams, now time.Time) (Agent, error)
 		return Agent{}, Validation(fe...)
 	}
 	return Agent{ID: id, TeamID: teamID, Name: name, Description: p.Description, Template: p.Template, Image: image,
-		ModelID: p.ModelID, Resources: p.Resources, IAMIdentity: iam, Volume: vol, Bindings: p.Bindings, Role: role,
+		Resources: p.Resources, IAMIdentity: iam, Volume: vol, Bindings: p.Bindings, Role: role,
+		ModelID: strings.TrimSpace(p.ModelID), Models: AgentModels{Access: ModelAccessAll, DefaultModelID: strings.TrimSpace(p.ModelID)},
 		State: AgentEnabled, Version: 1, Generation: 1, Status: PendingStatus(now), CreatedAt: now.UTC(), UpdatedAt: now.UTC()}, nil
 }
 
 // AgentPatch is an UpdateAgent body: a nil or zero field is left unchanged. Bindings, when not
 // nil, replace the agent's bindings.
 type AgentPatch struct {
+	// Name is accepted only to be refused: an agent's name cannot change (orchestration_field_fixed on the
+	// orchestration agent).
+	Name        *string
 	Description *string
 	Template    *string
 	Image       *string
+	// ModelID is the deprecated alias of Models.DefaultModelID; alone it sets only the default (CD-31).
 	ModelID     *string
+	Models      *ModelsInput
 	Resources   *AgentResources
 	IAMIdentity *IAMIdentity
 	Volume      *VolumeSpec
@@ -321,21 +317,42 @@ func (a Agent) Apply(p AgentPatch, now time.Time) (Agent, error) {
 	if a.State == AgentDeleting || a.State == AgentDeleted {
 		return a, Conflict("invalid_state", "an agent in state "+string(a.State)+" cannot be changed", nil)
 	}
-	if p.Role != nil && *p.Role != a.effectiveRole() {
-		fe = append(fe, FieldError{Field: "role", Reason: "cannot change after the agent is created"})
+	if p.Role != nil && p.Role.Normalize() != a.effectiveRole() {
+		reason := "cannot change after the agent is created"
+		if a.IsOrchestration() {
+			reason = ReasonOrchestrationFieldFixed
+		}
+		fe = append(fe, FieldError{Field: "role", Reason: reason})
+	}
+	if p.Name != nil && string(a.Name) != *p.Name {
+		reason := "cannot change after the agent is created"
+		if a.IsOrchestration() {
+			reason = ReasonOrchestrationFieldFixed
+		}
+		fe = append(fe, FieldError{Field: "name", Reason: reason})
 	}
 	if p.Collaboration != nil {
-		if a.effectiveRole() == AgentRoleCollaboration {
-			fe = append(fe, FieldError{Field: "collaboration", Reason: "is for worker agents"})
+		if a.IsOrchestration() {
+			fe = append(fe, FieldError{Field: "collaboration", Reason: ReasonOrchestrationFieldFixed})
 		} else {
 			collect(p.Collaboration.Validate())
 		}
 	}
-	if p.IAMIdentity != nil && a.effectiveRole() == AgentRoleCollaboration && *p.IAMIdentity != IAMIdentityDedicated {
-		fe = append(fe, FieldError{Field: "iamIdentity", Reason: "a collaboration agent needs a dedicated identity"})
-	}
-	if p.Volume != nil && a.effectiveRole() == AgentRoleCollaboration && p.Volume.SnapshotSchedule == SnapshotOff {
-		fe = append(fe, FieldError{Field: "volume.snapshotSchedule", Reason: "a collaboration agent's snapshots cannot be turned off"})
+	if a.IsOrchestration() {
+		// Name, role, template, image and identity mode are fixed; the tool and runtime change only through
+		// ChangeCollaborationTool (ORC-4, ORC-11).
+		if p.Template != nil && *p.Template != a.Template {
+			fe = append(fe, FieldError{Field: "template", Reason: ReasonOrchestrationFieldFixed})
+		}
+		if p.Image != nil && *p.Image != string(a.Image) {
+			fe = append(fe, FieldError{Field: "image", Reason: ReasonOrchestrationFieldFixed})
+		}
+		if p.IAMIdentity != nil && *p.IAMIdentity != a.IAMIdentity {
+			fe = append(fe, FieldError{Field: "iamIdentity", Reason: ReasonOrchestrationFieldFixed})
+		}
+		if p.Volume != nil && p.Volume.SnapshotSchedule == SnapshotOff {
+			fe = append(fe, FieldError{Field: "volume.snapshotSchedule", Reason: ReasonOrchestrationFieldFixed})
+		}
 	}
 	if p.Description != nil {
 		if utf8.RuneCountInString(*p.Description) > 1000 {
@@ -353,12 +370,6 @@ func (a Agent) Apply(p AgentPatch, now time.Time) (Agent, error) {
 		img, err := ParseImageRef("image", *p.Image)
 		collect(err)
 		a.Image = img
-	}
-	if p.ModelID != nil {
-		if strings.TrimSpace(*p.ModelID) == "" {
-			fe = append(fe, FieldError{Field: "modelId", Reason: "must not be empty"})
-		}
-		a.ModelID = *p.ModelID
 	}
 	if p.Resources != nil {
 		fe = append(fe, p.Resources.validate()...)

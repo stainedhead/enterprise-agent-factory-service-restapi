@@ -105,6 +105,8 @@ func TestDecide(t *testing.T) {
 	off.WebUIEffective, off.RESTAPIEffective = false, false
 	apiOnly := route()
 	apiOnly.WebUIEffective = false
+	otherLevel := route()
+	otherLevel.Level, otherLevel.WebUIEffective, otherLevel.WebUIOtherLevel = LevelPrivate, false, true
 	starting := route()
 	starting.Ready, starting.NotReadyReason = false, ""
 	paused := route()
@@ -119,6 +121,8 @@ func TestDecide(t *testing.T) {
 		reason string
 		req    string
 	}{
+		{"surface effective at the other level only is 404 even for a bound caller", otherLevel, ClassWeb, "GET", has(PermAccess), 404, "", ""},
+		{"the other surface is still served on this host", otherLevel, ClassAPI, "GET", has(PermAccess, PermAPI), 200, "", ""},
 		{"viewer reads web", route(), ClassWeb, "GET", has(PermAccess), 200, "", ""},
 		{"viewer HEAD", route(), ClassWeb, "HEAD", has(PermAccess), 200, "", ""},
 		{"viewer cannot write", route(), ClassWeb, "POST", has(PermAccess), 403, "permission_required", PermContribute},
@@ -177,7 +181,7 @@ func TestTable(t *testing.T) {
 		t.Error("empty table is fresh")
 	}
 	s := DefaultSettings()
-	s.BaseDomain = "collab.example.com"
+	s.PublicBaseDomain = "collab.example.com"
 	tb.Replace([]Route{route(), {TeamID: "team_none"}}, s)
 	if !tb.Fresh() {
 		t.Error("loaded table not fresh")
@@ -197,7 +201,7 @@ func TestTable(t *testing.T) {
 	if _, ok := tb.RouteByTeam("team_x"); ok {
 		t.Error("RouteByTeam unknown")
 	}
-	if tb.Settings().BaseDomain != "collab.example.com" || tb.Settings().MaxBodyBytes() != 25<<20 {
+	if tb.Settings().PublicBaseDomain != "collab.example.com" || tb.Settings().MaxBodyBytes() != 25<<20 {
 		t.Error("settings")
 	}
 	if got := route().Upstream(); got != "http://paperclip.afs-t-a.svc.cluster.local:3100" {
@@ -282,5 +286,30 @@ func TestLimiter(t *testing.T) {
 	clock = clock.Add(time.Hour)
 	if ok, _ := l.Allow("x"); !ok {
 		t.Error("capped refill")
+	}
+}
+
+func TestLevels(t *testing.T) {
+	if LevelPublic.Other() != LevelPrivate || LevelPrivate.Other() != LevelPublic {
+		t.Error("Other")
+	}
+	r := Route{Level: LevelPrivate}
+	if r.ExposureLabel() != "private" || (Route{}).ExposureLabel() != "public" {
+		t.Error("ExposureLabel")
+	}
+	s := Settings{PublicBaseDomain: "a.example.com", PrivateBaseDomain: "b.internal"}
+	if s.BaseDomain(LevelPublic) != "a.example.com" || s.BaseDomain(LevelPrivate) != "b.internal" {
+		t.Error("BaseDomain")
+	}
+	tb := NewTable(nil)
+	pub, priv := Route{TeamID: "t", Hostname: "x.a.example.com", Level: LevelPublic}, Route{TeamID: "t", Hostname: "x.b.internal", Level: LevelPrivate}
+	tb.Replace([]Route{pub, priv}, s)
+	for host, want := range map[string]HostKind{"a.example.com": HostApex, "b.internal": HostApex, "x.b.internal:443": HostTeam, "x.a.example.com": HostTeam, "y.b.internal": HostUnknown} {
+		if _, k := tb.Lookup(host); k != want {
+			t.Errorf("%s: %v", host, k)
+		}
+	}
+	if got, _ := tb.Lookup("x.b.internal"); got.Level != LevelPrivate {
+		t.Errorf("level %v", got.Level)
 	}
 }

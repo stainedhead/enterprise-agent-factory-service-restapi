@@ -19,7 +19,7 @@ func collabDesired() agent.Desired {
 // RC-21: the Service `paperclip` fronts the collaboration agent on port 3100.
 func TestPaperclipService(t *testing.T) {
 	d := collabDesired()
-	u := render.PaperclipService(d)
+	u := render.CollabService(d)
 	if u.GetName() != "paperclip" || u.GetNamespace() != "afs-t-alpha" || u.GetKind() != "Service" {
 		t.Fatalf("%s/%s %s", u.GetNamespace(), u.GetName(), u.GetKind())
 	}
@@ -158,4 +158,50 @@ func toStrings(in []any) []string {
 		out[i] = v.(string)
 	}
 	return out
+}
+
+// ORC-8, ORC-9, ORC-12: with Buzz the Service is `buzz` on port 3000, the policies use 3000, the orchestration
+// agent gets the relay environment and a connected worker the tool-neutral variables plus BUZZ_RELAY_URL.
+func TestBuzzRendering(t *testing.T) {
+	d := collabDesired()
+	d.Collab = &agent.Collab{Tool: agent.ToolBuzz, Mode: "managed"}
+	svc := render.CollabService(d)
+	ports, _, _ := nestedSlice(svc.Object, "spec", "ports")
+	if svc.GetName() != "buzz" || ports[0].(map[string]any)["port"] != int64(3000) {
+		t.Fatalf("service %s %v", svc.GetName(), ports)
+	}
+	in := render.PaperclipIngress(d, agent.EdgeRef{})
+	toPorts := in.Object["spec"].(map[string]any)["ingress"].([]any)[0].(map[string]any)["toPorts"].([]any)[0].(map[string]any)["ports"].([]any)
+	if toPorts[0].(map[string]any)["port"] != "3000" {
+		t.Errorf("ingress ports %v", toPorts)
+	}
+	env := render.PaperclipEnv(d, *d.Collab)
+	if env["PORT"] != "3000" || env["AFS_COLLAB_TOOL"] != "buzz" || env["BUZZ_RELAY_HOSTNAME"] != "buzz.afs-t-alpha.svc.cluster.local" || env["PAPERCLIP_PUBLIC_URL"] != "" {
+		t.Errorf("env %v", env)
+	}
+	w := render.CollabWorkerEnv(d, agent.CollabLink{Tool: agent.ToolBuzz})
+	if w["BUZZ_RELAY_URL"] != "ws://buzz.afs-t-alpha.svc.cluster.local:3000" || w["AFS_COLLAB_URL"] != w["BUZZ_RELAY_URL"] || w["PAPERCLIP_API_URL"] != "" {
+		t.Errorf("worker env %v", w)
+	}
+	pw := render.CollabWorkerEnv(d, agent.CollabLink{PaperclipAgentID: "pc-1"})
+	if pw["AFS_COLLAB_TOOL"] != "paperclip" || pw["PAPERCLIP_API_URL"] != "http://paperclip.afs-t-alpha.svc.cluster.local:3100" || pw["PAPERCLIP_AGENT_ID"] != "pc-1" {
+		t.Errorf("paperclip worker env %v", pw)
+	}
+}
+
+// MOD-6: the pod gets the default model and the effective models as environment and as /etc/afs/models.json.
+func TestModelsDelivery(t *testing.T) {
+	if got := render.ModelsJSON("b", []string{"b", "a"}); got != `{"default":"b","models":["a","b"]}` {
+		t.Errorf("json %s", got)
+	}
+	if render.ModelsEnv([]string{"b", "a"}) != "a,b" || render.ModelsEnv(nil) != "" {
+		t.Error("env")
+	}
+	d := agentDesired()
+	d.ModelID, d.Models = "m2", []string{"m2", "m1"}
+	cm := render.AgentAWSConfigMap(d)
+	data, _, _ := nestedMap(cm.Object, "data")
+	if data["models.json"] != `{"default":"m2","models":["m1","m2"]}` {
+		t.Errorf("configmap %v", data)
+	}
 }

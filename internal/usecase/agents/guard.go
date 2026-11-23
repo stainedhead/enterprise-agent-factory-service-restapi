@@ -15,7 +15,7 @@ import (
 type GuardSource interface {
 	// Template returns the catalog template of that name.
 	Template(ctx context.Context, tx port.Tx, name string) (TemplateInfo, bool, error)
-	// ModelEnabled reports whether the model is enabled and offered to the team.
+	// ModelEnabled reports whether the model is enabled for the service and allowed for the team.
 	ModelEnabled(ctx context.Context, tx port.Tx, teamID, modelID string) (bool, error)
 	// StorageClassEnabled reports whether the storage class exists and is offered.
 	StorageClassEnabled(ctx context.Context, tx port.Tx, name string) (bool, error)
@@ -43,13 +43,14 @@ func (g Guard) CheckTemplate(ctx context.Context, tx port.Tx, name string, image
 	case !t.Enabled:
 		return "", domain.Validation(domain.FieldError{Field: "template", Reason: "agent template " + name + " is disabled"})
 	}
-	// A collaboration agent needs a template with the paperclip capability and a worker may not use one.
-	has := slices.Contains(t.Capabilities, domain.CapabilityPaperclip)
+	// An orchestration agent needs a template with the orchestration capability and a worker may not use
+	// one (ORC-6).
+	has := slices.Contains(t.Capabilities, domain.CapabilityOrchestration)
 	switch {
-	case role == domain.AgentRoleCollaboration && !has:
-		return "", domain.Validation(domain.FieldError{Field: "template", Reason: "agent template " + name + " does not have the paperclip capability"})
-	case role != domain.AgentRoleCollaboration && has:
-		return "", domain.Validation(domain.FieldError{Field: "template", Reason: "agent template " + name + " is a collaboration template; a worker cannot use it"})
+	case role.Normalize() == domain.AgentRoleOrchestration && !has:
+		return "", domain.Validation(domain.FieldError{Field: "template", Reason: "agent template " + name + " does not have the orchestration capability"})
+	case role.Normalize() != domain.AgentRoleOrchestration && has:
+		return "", domain.Validation(domain.FieldError{Field: "template", Reason: "agent template " + name + " is an orchestration template; a worker cannot use it"})
 	}
 	digest := string(image)[strings.LastIndex(string(image), "@")+1:]
 	if !slices.Contains(t.AllowedDigests, digest) {
@@ -103,8 +104,8 @@ func (g Guard) CheckBindings(ctx context.Context, tx port.Tx, teamID, agentID st
 		switch {
 		case !ok:
 			fe = append(fe, domain.FieldError{Field: f, Reason: "no such secret in the team"})
-		case info.ManagedBy == string(domain.ManagedByPaperclip):
-			fe = append(fe, domain.FieldError{Field: f, Reason: "a secret Paperclip manages cannot be bound"})
+		case info.ManagedBy == string(domain.ManagedByPaperclip) || info.ManagedBy == string(domain.ManagedByBuzz):
+			fe = append(fe, domain.FieldError{Field: f, Reason: "a secret the collaboration tool manages cannot be bound"})
 		case info.PoolID != "" || (info.AgentID != "" && info.AgentID != agentID):
 			fe = append(fe, domain.FieldError{Field: f, Reason: "the secret belongs to another agent or a pool and cannot be bound here"})
 		}

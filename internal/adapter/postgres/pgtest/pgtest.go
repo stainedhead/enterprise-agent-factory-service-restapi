@@ -50,13 +50,31 @@ var (
 	once   sync.Once
 	shared *DB
 	setErr error
+
+	strictOnce   sync.Once
+	strictShared *DB
+	strictErr    error
 )
+
+// legacyFixtureDefaults restores the world the 1.0.1 fixtures assume: a team may be inserted without an
+// orchestration agent, a new team's endpoint limit and Web UI default to public (the 1.0.1 behaviour of
+// the boolean columns) and an agent can be driven to deleting on a live team. The real schema is what
+// GetStrict returns, and every 000022 test uses it (same shim as the -db suites, OM-D14).
+var legacyFixtureDefaults = []string{
+	`ALTER TABLE afs.teams ALTER COLUMN orchestration_required SET DEFAULT false`,
+	`ALTER TABLE afs.teams ALTER COLUMN max_collaboration_exposure SET DEFAULT 'public'`,
+	`ALTER TABLE afs.team_collaboration ALTER COLUMN web_ui_exposure SET DEFAULT 'public'`,
+	`ALTER TABLE afs.agents DISABLE TRIGGER agents_orchestration_required`,
+}
 
 // Run runs the package's tests and drops the database afterwards.
 func Run(m *testing.M) int {
 	code := m.Run()
-	if shared != nil {
-		if err := shared.drop(context.Background()); err != nil {
+	for _, d := range []*DB{shared, strictShared} {
+		if d == nil {
+			continue
+		}
+		if err := d.drop(context.Background()); err != nil {
 			fmt.Fprintln(os.Stderr, "pgtest: cleanup:", err)
 		}
 	}
@@ -71,11 +89,26 @@ func Get(t testing.TB) *DB {
 	if admin == "" {
 		t.Skip(EnvURL + " not set")
 	}
-	once.Do(func() { shared, setErr = create(admin) })
+	once.Do(func() { shared, setErr = create(admin, true) })
 	if setErr != nil {
 		t.Fatalf("pgtest: %v", setErr)
 	}
 	return shared
+}
+
+// GetStrict returns a second, separate database exactly as the migrations leave it: a new team needs
+// an orchestration agent at commit, and the delete guard is on. Use it for the 000022 behaviour.
+func GetStrict(t testing.TB) *DB {
+	t.Helper()
+	admin := os.Getenv(EnvURL)
+	if admin == "" {
+		t.Skip(EnvURL + " not set")
+	}
+	strictOnce.Do(func() { strictShared, strictErr = create(admin, false) })
+	if strictErr != nil {
+		t.Fatalf("pgtest: %v", strictErr)
+	}
+	return strictShared
 }
 
 func randHex(n int) string {
@@ -96,7 +129,7 @@ func withDB(raw, db, user, password string) (string, error) {
 	return u.String(), nil
 }
 
-func create(admin string) (*DB, error) {
+func create(admin string, legacy bool) (*DB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	suffix := strings.ToLower(randHex(4))
@@ -140,6 +173,13 @@ func create(admin string) (*DB, error) {
 	}
 	if _, err := migrate.Up(ctx, oc, migs); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
+	}
+	if legacy {
+		for _, q := range legacyFixtureDefaults {
+			if _, err := oc.Exec(ctx, q); err != nil {
+				return nil, fmt.Errorf("legacy fixture defaults: %w", err)
+			}
+		}
 	}
 	return d, nil
 }
@@ -200,4 +240,35 @@ VALUES ($1, $2, $2, 'CC100', 'owner@example.com', 1000)`, tm.ID, tm.Slug)
 		t.Fatalf("seed team: %v", err)
 	}
 	return tm
+}
+
+// OrchestrationModel is the id of the priced model SeedOrchestrationRuntime adds.
+const OrchestrationModel = "pgtest.orchestration-model"
+
+var orchSeed sync.Map // *DB -> *sync.Once
+
+// SeedOrchestrationRuntime gives the database what CreateTeam needs to create the orchestration agent: a
+// priced model to default to, and a Paperclip template and image repository in orchestration.tools (a fresh
+// database has none, so create_orchestration_agent answers orchestration_runtime_unset). It runs once per
+// database; the database is dropped with the package, so nothing is cleaned up.
+func (d *DB) SeedOrchestrationRuntime(t testing.TB) {
+	t.Helper()
+	once, _ := orchSeed.LoadOrStore(d, &sync.Once{})
+	once.(*sync.Once).Do(func() {
+		c := d.Admin(t)
+		const digest = "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+		tpl := NewID("tpl")
+		for _, q := range []string{
+			`INSERT INTO afs.models (id, provider, display_name) VALUES ('` + OrchestrationModel + `', 'anthropic', 'Orchestration test model')`,
+			`INSERT INTO afs.model_prices (model_id, effective_from, input_usd_per_mtok, output_usd_per_mtok) VALUES ('` + OrchestrationModel + `', now() - interval '1 day', 3, 15)`,
+			`INSERT INTO afs.agent_templates (id, name, harness, allowed_image_digests, current_image_digest, capabilities, default_resources)
+VALUES ('` + tpl + `', 'pgtest-orchestration-paperclip', 'paperclip', ARRAY['` + digest + `'], '` + digest + `', '{orchestration,tool:paperclip}', '{"cpu": "2", "memory": "8Gi"}')`,
+			`UPDATE afs.service_settings SET value = jsonb_set(jsonb_set(value, '{paperclip,templateId}', to_jsonb('` + tpl + `'::text)),
+ '{paperclip,imageRepository}', '"registry.example.com/paperclip"') WHERE key = 'orchestration.tools'`,
+		} {
+			if _, err := c.Exec(t.Context(), q); err != nil {
+				t.Fatalf("seed orchestration runtime: %v\n%s", err, q)
+			}
+		}
+	})
 }

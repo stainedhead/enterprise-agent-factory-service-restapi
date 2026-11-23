@@ -98,6 +98,7 @@ TeamCollaboration:
     status:
       $ref: '#/components/schemas/Status'
       readOnly: true
+  deprecated: true
 PutTeamCollaborationRequest:
   type: object
   required:
@@ -137,6 +138,7 @@ CollaborationLink:
       - string
       - 'null'
       pattern: ^[A-Za-z0-9._:-]{1,128}$
+      description: Paperclip only
     linkState:
       type: string
       enum:
@@ -162,6 +164,12 @@ CollaborationLink:
       type: integer
       minimum: 1
       readOnly: true
+    toolAgentId:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+      description: 'Buzz: the agent''s public key'
 CollaborationLinkList:
   type: object
   required:
@@ -294,3 +302,4 @@ CollaborationEndpointList:
     nextToken:
       type: string
       description: Absent on the last page
+  deprecated: true

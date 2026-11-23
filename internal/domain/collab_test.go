@@ -29,8 +29,11 @@ func TestCollabEnumsValid(t *testing.T) {
 	if !RegistrationManual.Valid() || !RegistrationManaged.Valid() {
 		t.Error("registration modes")
 	}
-	if (Agent{}).IsCollaboration() || !(Agent{Role: AgentRoleCollaboration}).IsCollaboration() {
-		t.Error("IsCollaboration")
+	if (Agent{}).IsOrchestration() || !(Agent{Role: AgentRoleOrchestration}).IsOrchestration() || !(Agent{Role: AgentRoleCollaboration}).IsOrchestration() {
+		t.Error("IsOrchestration")
+	}
+	if AgentRoleCollaboration.Normalize() != AgentRoleOrchestration || AgentRoleWorker.Normalize() != AgentRoleWorker {
+		t.Error("Normalize")
 	}
 	if (PutBudgetParams{}).RequestsNotify() || !(PutBudgetParams{OnExhaust: OnExhaustNotify}).RequestsNotify() {
 		t.Error("RequestsNotify")
@@ -60,50 +63,98 @@ func TestBootSecretsAndNames(t *testing.T) {
 	}
 }
 
-func TestComputeEffectiveAndHostname(t *testing.T) {
-	c := TeamCollaboration{WebUIEnabled: true, RESTAPIEnabled: true, MayExpose: true, ProviderClientID: "c", TeamSlug: "acme"}
-	s := CollabSettings{BaseDomain: "collab.example.com", PublicEndpoints: true}
-	if e := c.ComputeEffective(s); !e.WebUI || !e.RESTAPI || len(e.Reasons) != 0 {
-		t.Errorf("%+v", e)
-	}
-	if c.Hostname(s) != "acme.collab.example.com" || c.Hostname(CollabSettings{}) != "" {
-		t.Error("hostname")
-	}
-	c.ProviderClientID = ""
-	if e := c.ComputeEffective(s); e.WebUI || !e.RESTAPI || len(e.Reasons) != 1 || e.Reasons[0] != ReasonProviderWithoutColab {
-		t.Errorf("%+v", e)
-	}
-	c.MayExpose = false
-	if e := c.ComputeEffective(CollabSettings{}); e.WebUI || e.RESTAPI || len(e.Reasons) != 4 {
-		t.Errorf("%+v", e)
-	}
-}
-
-func TestValidatePut(t *testing.T) {
-	c := TeamCollaboration{MayExpose: true, ProviderClientID: "c"}
-	on := CollabSettings{BaseDomain: "x.example.com", PublicEndpoints: true}
+func TestComputeSurface(t *testing.T) {
+	all := OrchestrationSettings{PublicBaseDomain: "collab.example.com", PrivateBaseDomain: "collab.corp.example.com", PublicEndpoints: true, PrivateEndpoints: true}
 	tests := []struct {
-		name  string
-		c     TeamCollaboration
-		p     PutCollaborationParams
-		s     CollabSettings
-		ready bool
-		want  string
+		name    string
+		tool    CollabTool
+		surface Surface
+		chosen  Exposure
+		limit   Exposure
+		client  bool
+		s       OrchestrationSettings
+		eff     Exposure
+		host    string
+		reasons []string
 	}{
-		{"off is always accepted", TeamCollaboration{}, PutCollaborationParams{}, CollabSettings{}, false, ""},
-		{"on ok", c, PutCollaborationParams{WebUIEnabled: true, RESTAPIEnabled: true}, on, false, ""},
-		{"no base domain", c, PutCollaborationParams{WebUIEnabled: true}, CollabSettings{PublicEndpoints: true}, false, "collab_base_domain_unset"},
-		{"endpoints off", c, PutCollaborationParams{RESTAPIEnabled: true}, CollabSettings{BaseDomain: "x"}, false, "collab_public_endpoints_off"},
-		{"team not allowed", TeamCollaboration{ProviderClientID: "c"}, PutCollaborationParams{WebUIEnabled: true}, on, false, "collaboration_not_allowed_for_team"},
-		{"no client", TeamCollaboration{MayExpose: true}, PutCollaborationParams{WebUIEnabled: true}, on, false, "provider_without_collab_client"},
-		{"rest needs no client", TeamCollaboration{MayExpose: true}, PutCollaborationParams{RESTAPIEnabled: true}, on, false, ""},
-		{"bad mode", c, PutCollaborationParams{Mode: "x"}, on, true, "must be manual or managed"},
-		{"managed not ready", c, PutCollaborationParams{Mode: RegistrationManaged}, on, false, "collaboration_agent_not_ready"},
-		{"managed ready", c, PutCollaborationParams{Mode: RegistrationManaged}, on, true, ""},
+		{"public within limit", ToolPaperclip, SurfaceWebUI, ExposurePublic, ExposurePublic, true, all, ExposurePublic, "acme.collab.example.com", nil},
+		{"private host", ToolPaperclip, SurfaceWebAPI, ExposurePrivate, ExposurePublic, false, all, ExposurePrivate, "acme.collab.corp.example.com", nil},
+		{"lowered to limit", ToolPaperclip, SurfaceWebUI, ExposurePublic, ExposurePrivate, true, all, ExposurePrivate, "acme.collab.corp.example.com", []string{ReasonTeamLimit}},
+		{"buzz has no surface", ToolBuzz, SurfaceWebUI, ExposurePublic, ExposurePublic, true, all, ExposureOff, "", []string{ReasonToolNotSupported}},
+		{"public switch off", ToolPaperclip, SurfaceWebAPI, ExposurePublic, ExposurePublic, true, OrchestrationSettings{PublicBaseDomain: "x"}, ExposureOff, "", []string{ReasonServiceSwitchPublic}},
+		{"private switch off", ToolPaperclip, SurfaceWebAPI, ExposurePrivate, ExposurePublic, true, OrchestrationSettings{PrivateBaseDomain: "x", PublicEndpoints: true}, ExposureOff, "", []string{ReasonServiceSwitchPrivate}},
+		{"no base domain", ToolPaperclip, SurfaceWebAPI, ExposurePublic, ExposurePublic, true, OrchestrationSettings{PublicEndpoints: true}, ExposureOff, "", []string{ReasonBaseDomainUnsetNew}},
+		{"no client", ToolPaperclip, SurfaceWebUI, ExposurePublic, ExposurePublic, false, all, ExposureOff, "", []string{ReasonProviderWithoutClient}},
+		{"off stays off", ToolPaperclip, SurfaceWebUI, ExposureOff, ExposureOff, false, OrchestrationSettings{}, ExposureOff, "", nil},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.c.ValidatePut(tc.p, tc.s, tc.ready)
+			st := ComputeSurface(tc.tool, tc.surface, tc.chosen, tc.limit, tc.client, "acme", tc.s)
+			if st.Effective != tc.eff || st.Hostname != tc.host || st.Exposure != tc.chosen || strings.Join(st.Reasons, ",") != strings.Join(tc.reasons, ",") {
+				t.Errorf("%+v", st)
+			}
+			wantURL := ""
+			if tc.host != "" {
+				wantURL = "https://" + tc.host + "/"
+				if tc.surface == SurfaceWebAPI {
+					wantURL += "api"
+				}
+			}
+			if st.URL(tc.surface) != wantURL {
+				t.Errorf("url %q want %q", st.URL(tc.surface), wantURL)
+			}
+		})
+	}
+}
+
+func TestSurfacesAndLegacy(t *testing.T) {
+	c := TeamCollaboration{Tool: ToolPaperclip, WebUIExposure: ExposurePublic, WebAPIExposure: ExposurePrivate, Limit: ExposurePrivate, ProviderClientID: "c", TeamSlug: "acme"}
+	s := OrchestrationSettings{PublicBaseDomain: "collab.example.com", PrivateBaseDomain: "corp.example.com", PublicEndpoints: true, PrivateEndpoints: true}
+	ui, api := c.Surfaces(s)
+	if ui.Effective != ExposurePrivate || api.Effective != ExposurePrivate {
+		t.Fatalf("%+v %+v", ui, api)
+	}
+	l := LegacyOf(ui, api)
+	if !l.WebUI || !l.RESTAPI || len(l.Reasons) != 1 || l.Reasons[0] != ReasonTeamNotAllowed {
+		t.Errorf("%+v", l)
+	}
+	l = LegacyOf(SurfaceState{Effective: ExposureOff, Reasons: []string{ReasonServiceSwitchPublic}}, SurfaceState{Effective: ExposureOff, Reasons: []string{ReasonServiceSwitchPrivate, ReasonBaseDomainUnsetNew}})
+	if l.WebUI || len(l.Reasons) != 2 || l.Reasons[0] != ReasonServiceEndpointsOff {
+		t.Errorf("%+v", l)
+	}
+	if c.LegacyHostname(s) != "acme.corp.example.com" {
+		t.Error("effective hostname")
+	}
+	if (TeamCollaboration{Tool: ToolBuzz, TeamSlug: "acme"}).LegacyHostname(s) != "acme.collab.example.com" ||
+		(TeamCollaboration{Tool: ToolBuzz, TeamSlug: "acme"}).LegacyHostname(OrchestrationSettings{}) != "" {
+		t.Error("fallback hostname")
+	}
+}
+
+func TestValidatePutOrchestration(t *testing.T) {
+	pc := TeamCollaboration{Tool: ToolPaperclip, Limit: ExposurePrivate}
+	bz := TeamCollaboration{Tool: ToolBuzz, Limit: ExposurePublic}
+	tests := []struct {
+		name  string
+		c     TeamCollaboration
+		p     PutOrchestrationParams
+		ready bool
+		want  string
+	}{
+		{"off is accepted", pc, PutOrchestrationParams{WebUI: ExposureOff, WebAPI: ExposureOff}, false, ""},
+		{"within limit", pc, PutOrchestrationParams{WebUI: ExposurePrivate, WebAPI: ExposureOff}, false, ""},
+		{"above limit", pc, PutOrchestrationParams{WebUI: ExposurePublic, WebAPI: ExposureOff}, false, ReasonExposureAboveLimit},
+		{"buzz surface", bz, PutOrchestrationParams{WebUI: ExposurePrivate, WebAPI: ExposureOff}, false, ReasonSurfaceNotSupported},
+		{"buzz off ok", bz, PutOrchestrationParams{WebUI: ExposureOff, WebAPI: ExposureOff, Mode: RegistrationManaged}, true, ""},
+		{"buzz manual", bz, PutOrchestrationParams{WebUI: ExposureOff, WebAPI: ExposureOff, Mode: RegistrationManual}, true, ReasonRegistrationNotSupported},
+		{"bad level", pc, PutOrchestrationParams{WebUI: "x", WebAPI: ExposureOff}, false, "must be off, private or public"},
+		{"bad mode", pc, PutOrchestrationParams{WebUI: ExposureOff, WebAPI: ExposureOff, Mode: "x"}, true, "must be manual or managed"},
+		{"managed not ready", pc, PutOrchestrationParams{WebUI: ExposureOff, WebAPI: ExposureOff, Mode: RegistrationManaged}, false, "collaboration_agent_not_ready"},
+		{"managed ready", pc, PutOrchestrationParams{WebUI: ExposureOff, WebAPI: ExposureOff, Mode: RegistrationManaged}, true, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.c.ValidatePutOrchestration(tc.p, tc.ready)
 			if tc.want == "" {
 				if err != nil {
 					t.Fatal(err)
@@ -115,6 +166,34 @@ func TestValidatePut(t *testing.T) {
 				t.Fatalf("got %v want %s", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestLegacyPutToOrchestration(t *testing.T) {
+	pc := TeamCollaboration{Tool: ToolPaperclip, Limit: ExposurePrivate}
+	p, err := pc.LegacyPutToOrchestration(true, false, "")
+	if err != nil || p.WebUI != ExposurePrivate || p.WebAPI != ExposureOff {
+		t.Errorf("%+v %v", p, err)
+	}
+	for name, tc := range map[string]struct {
+		c      TeamCollaboration
+		reason string
+	}{
+		"limit off": {TeamCollaboration{Tool: ToolPaperclip, Limit: ExposureOff}, ReasonCollabNotAllowedForTeam},
+		"buzz":      {TeamCollaboration{Tool: ToolBuzz, Limit: ExposurePublic}, ReasonSurfaceNotSupported},
+	} {
+		_, err := tc.c.LegacyPutToOrchestration(true, false, "")
+		var de *Error
+		if !errors.As(err, &de) || de.Fields[0].Reason != tc.reason {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+func TestOrchestrationPending(t *testing.T) {
+	if OrchestrationPending(false).Kind != KindNotFound || OrchestrationPending(true).Kind != KindConflict ||
+		OrchestrationPending(true).Reason != ReasonOrchestrationAgentPending {
+		t.Error("pending")
 	}
 }
 

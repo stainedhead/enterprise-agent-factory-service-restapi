@@ -152,3 +152,16 @@ func TestEdgeIsNotExposedByTheChart(t *testing.T) {
 		}
 	}
 }
+
+// ORC-13: a private target group adds a second binding for the same pods; without it there is none.
+func TestEdgePrivateTargetGroupBinding(t *testing.T) {
+	arn := "arn:aws:elasticloadbalancing:us-east-1:111122223333:targetgroup/afs-edge-private/0123456789abcdef"
+	docs := render(t, "edge:\n  privateTargetGroupArn: "+arn+"\n")
+	b := find(t, docs, "TargetGroupBinding", "afs-edge-private")
+	if path(b, "spec")["targetGroupARN"] != arn || path(b, "spec", "serviceRef")["name"] != "afs-edge" {
+		t.Errorf("binding: %v", path(b, "spec"))
+	}
+	if n := count(docs, "TargetGroupBinding"); n != 1 {
+		t.Errorf("%d bindings, want the private one only", n)
+	}
+}

@@ -10,7 +10,20 @@ import (
 // modelBody (the Model wire shape) is declared with the team model list in h2_teams.go.
 func toModelBody(m domain.Model) modelBody {
 	return modelBody{ID: m.ID, Provider: m.Provider, DisplayName: m.DisplayName, Enabled: m.Enabled, ContextWindow: m.ContextWindow,
-		MaxOutputTokens: m.MaxOutputTokens, Version: int64(m.Version), UpdatedAt: w2Time(m.UpdatedAt)}
+		MaxOutputTokens: m.MaxOutputTokens, Version: int64(m.Version), UpdatedAt: w2Time(m.UpdatedAt),
+		Callable: m.Callable, PriceState: string(m.PriceState)}
+}
+
+// toAdminModelBody adds the fields only the admin list shows (serviceEnabled, origin, teamsWithAccess).
+func toAdminModelBody(m domain.Model) modelBody {
+	b := toModelBody(m)
+	se := m.ServiceEnabled
+	b.ServiceEnabled, b.Origin = &se, string(m.Origin)
+	if m.TeamsWithAccess >= 0 {
+		n := m.TeamsWithAccess
+		b.TeamsWithAccess = &n
+	}
+	return b
 }
 
 type modelPriceBody struct {

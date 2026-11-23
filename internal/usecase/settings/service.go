@@ -74,8 +74,8 @@ func (s *Service) Get(ctx context.Context, c acting.Caller) ([]Setting, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Setting, 0, len(domain.SettingSpecs))
-	for _, spec := range domain.SettingSpecs {
+	out := make([]Setting, 0, len(domain.AllSettingSpecs()))
+	for _, spec := range domain.AllSettingSpecs() {
 		st, ok := stored[spec.Key]
 		out = append(out, build(spec, st, ok))
 	}
@@ -86,6 +86,13 @@ func (s *Service) Get(ctx context.Context, c acting.Caller) ([]Setting, error) {
 func (s *Service) Put(ctx context.Context, c acting.Caller, key string, value json.RawMessage, expect *domain.Version) (Setting, error) {
 	if err := s.check(ctx, c, "PutSetting"); err != nil {
 		return Setting{}, err
+	}
+	if next, renamed := domain.RenamedSettings[key]; renamed {
+		// The 1.0.1 keys are read-only aliases until 2.0.0 (ORC-27): the error names the new key.
+		e := domain.Validation(domain.FieldError{Field: "key", Reason: "setting_renamed: use " + next})
+		e.Reason = "setting_renamed"
+		e.Details = map[string]any{"reason": "setting_renamed", "key": key, "newKey": next}
+		return Setting{}, e
 	}
 	spec, ok := domain.SettingSpecFor(key)
 	if !ok {

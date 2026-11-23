@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
@@ -415,5 +416,47 @@ func TestPlatformController(t *testing.T) {
 	_, _ = pc2.Reconcile(t.Context(), team.PlatformRef)
 	if got := cl.Platforms[len(cl.Platforms)-1]; got.GatewayNamespace != "gw" || got.GatewayPort != 9 {
 		t.Errorf("spec = %+v", got)
+	}
+}
+
+// MOD-7: a model that stopped being callable keeps its profile for the grace; the row turns retiring, a retiring one
+// is kept (and requeued) until its time, and one past its time is deleted with its row.
+func TestRetiringProfilesFollowTheGrace(t *testing.T) {
+	r := newRig(t, desired(idA, "payments", sonnet))
+	now := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
+	arnFor := func(m string) string {
+		return "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/" + m
+	}
+	d := desired(idA, "payments", sonnet)
+	d.Retiring = []team.RetiringModel{
+		{ID: "m.fresh", ProfileARN: arnFor("fresh")},
+		{ID: "m.waiting", ProfileARN: arnFor("waiting"), RetireAfter: now.Add(48 * time.Hour)},
+		{ID: "m.expired", ProfileARN: arnFor("expired"), RetireAfter: now.Add(-time.Hour)},
+		{ID: "m.expired-noarn", RetireAfter: now.Add(-time.Minute)},
+	}
+	r.src.Put(d)
+	cfg := team.Config{Source: r.src, Cluster: r.cluster, IAM: r.iam, Profiles: r.profiles, Now: func() time.Time { return now },
+		AWS: team.AWSConfig{Partition: "aws", Region: "us-east-1", AccountID: "111122223333", GatewayRoleARN: gw,
+			PermissionsBoundaryARN: "arn:aws:iam::111122223333:policy/afs-boundary", ClusterARN: "arn:aws:eks:us-east-1:111122223333:cluster/afs", SecretsPrefix: "afs"}}
+	c, err := team.NewController(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := c.Reconcile(t.Context(), ref(idA))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := r.src.Retired[idA+"/m.fresh"]; !ok || len(r.src.Retired) != 1 {
+		t.Errorf("retired: %v", r.src.Retired)
+	}
+	if len(r.src.Dropped) != 2 {
+		t.Errorf("dropped: %v", r.src.Dropped)
+	}
+	if out.Requeue <= 0 || out.Requeue > team.ProfileGrace {
+		t.Errorf("requeue = %v", out.Requeue)
+	}
+	b, _ := r.iam.Role("afs-01JD0000000000000000000001-bedrock")
+	if !strings.Contains(b.Policies["bedrock"], "waiting") || strings.Contains(b.Policies["bedrock"], "expired") {
+		t.Errorf("grants: %s", b.Policies["bedrock"])
 	}
 }

@@ -40,6 +40,9 @@ type repo struct {
 	versions map[string]string
 	bumped   int
 	fail     string
+	runtime  map[domain.CollabTool]collab.ToolRuntime
+	switched []collab.SwitchToolInput
+	blocked  []domain.OrchestrationBlocked
 }
 
 func (r *repo) boom(op string) error {
@@ -59,13 +62,47 @@ func (r *repo) Get(_ context.Context, _ port.Tx, _ string, _ bool) (domain.TeamC
 	return *r.col, true, nil
 }
 
-func (r *repo) Update(_ context.Context, _ port.Tx, _ string, web, rest bool, mode domain.RegistrationMode) error {
+func (r *repo) Update(_ context.Context, _ port.Tx, _ string, web, api domain.Exposure, mode domain.RegistrationMode) error {
 	if err := r.boom("update"); err != nil {
 		return err
 	}
-	r.col.WebUIEnabled, r.col.RESTAPIEnabled, r.col.Mode = web, rest, mode
+	r.col.WebUIExposure, r.col.WebAPIExposure, r.col.Mode = web, api, mode
 	r.col.Version++
 	return nil
+}
+
+func (r *repo) Migration(context.Context, port.Tx) (int, int, []domain.OrchestrationBlocked, error) {
+	if err := r.boom("migration"); err != nil {
+		return 0, 0, nil, err
+	}
+	return 3, 3 - len(r.blocked), r.blocked, nil
+}
+
+func (r *repo) ToolRuntime(_ context.Context, _ port.Tx, tool domain.CollabTool) (collab.ToolRuntime, error) {
+	if err := r.boom("runtime"); err != nil {
+		return collab.ToolRuntime{}, err
+	}
+	return r.runtime[tool], nil
+}
+
+func (r *repo) SwitchTool(_ context.Context, _ port.Tx, in collab.SwitchToolInput) (string, error) {
+	if err := r.boom("switch"); err != nil {
+		return "", err
+	}
+	r.switched = append(r.switched, in)
+	r.col.Tool, r.col.Mode = in.ToTool, in.Mode
+	for _, sfc := range []domain.Surface{domain.SurfaceWebUI, domain.SurfaceWebAPI} {
+		if in.ToTool.Supports(sfc) {
+			continue
+		}
+		if sfc == domain.SurfaceWebUI {
+			r.col.WebUIExposure = domain.ExposureOff
+		} else {
+			r.col.WebAPIExposure = domain.ExposureOff
+		}
+	}
+	r.col.Version++
+	return in.SnapshotID, nil
 }
 
 func (r *repo) ListLinks(_ context.Context, _ port.Tx, _ string, f collab.LinkFilter, after string, limit int) ([]domain.CollaborationLink, error) {
@@ -150,7 +187,7 @@ func (r *repo) Endpoints(_ context.Context, _ port.Tx, f collab.EndpointFilter, 
 	if err := r.boom("endpoints"); err != nil {
 		return nil, err
 	}
-	rows := []collab.EndpointRow{{Collab: *r.col, Phase: domain.PhaseReady}, {Collab: domain.TeamCollaboration{TeamID: "team_z"}}}
+	rows := []collab.EndpointRow{{Collab: *r.col, Phase: domain.PhaseReady}, {Collab: domain.TeamCollaboration{TeamID: "team_z", Tool: domain.ToolPaperclip, WebUIExposure: domain.ExposurePrivate, WebAPIExposure: domain.ExposureOff, Limit: domain.ExposurePrivate, TeamSlug: "zed", ProviderClientID: "c"}}}
 	if len(rows) > limit {
 		rows = rows[:limit]
 	}
@@ -182,10 +219,14 @@ type rig struct {
 func newRig() *rig {
 	r := &rig{audit: &fakes.Audit{}, outbox: &fakes.Outbox{}, set: &fakes.Settings{}, w: &writer{}}
 	r.repo = &repo{
-		col: &domain.TeamCollaboration{TeamID: team, AgentID: collAg, Mode: domain.RegistrationManual, Version: 1,
-			MayExpose: true, ProviderClientID: "cid", TeamSlug: "acme", Status: domain.Status{Phase: domain.PhaseReady}},
+		col: &domain.TeamCollaboration{TeamID: team, AgentID: collAg, Tool: domain.ToolPaperclip, Mode: domain.RegistrationManual, Version: 1,
+			Limit: domain.ExposurePublic, WebUIExposure: domain.ExposureOff, WebAPIExposure: domain.ExposureOff,
+			ProviderClientID: "cid", TeamSlug: "acme", Status: domain.Status{Phase: domain.PhaseReady}},
+		runtime: map[domain.CollabTool]collab.ToolRuntime{
+			domain.ToolBuzz: {Tool: domain.ToolBuzz, Enabled: true, TemplateID: "tpl_b", ImageRepository: "registry.example.com/buzz", Digest: "sha256:aa", TemplateEnabled: true},
+		},
 		links:    map[string]domain.CollaborationLink{},
-		agents:   map[string]collab.AgentRef{worker: {ID: worker, Name: "w", Role: domain.AgentRoleWorker}, collAg: {ID: collAg, Role: domain.AgentRoleCollaboration}, "agt_pool": {ID: "agt_pool", Pool: true}},
+		agents:   map[string]collab.AgentRef{worker: {ID: worker, Name: "w", Role: domain.AgentRoleWorker}, collAg: {ID: collAg, Role: domain.AgentRoleOrchestration}, "agt_pool": {ID: "agt_pool", Pool: true}},
 		secrets:  map[string]collab.SecretRef{},
 		versions: map[string]string{},
 	}
@@ -198,8 +239,10 @@ func newRig() *rig {
 }
 
 func (r *rig) enable() {
-	r.set.Set(domain.SettingCollabBaseDomain, json.RawMessage(`"collab.example.com"`))
-	r.set.Set(domain.SettingCollabPublicEndpoints, json.RawMessage(`true`))
+	r.set.Set(domain.SettingOrchestrationPublicBaseDomain, json.RawMessage(`"collab.example.com"`))
+	r.set.Set(domain.SettingOrchestrationPrivateBaseDomain, json.RawMessage(`"collab.corp.example.com"`))
+	r.set.Set(domain.SettingOrchestrationPublicEndpoints, json.RawMessage(`true`))
+	r.set.Set(domain.SettingOrchestrationPrivateEndpoints, json.RawMessage(`true`))
 }
 
 func idemOf(op, key string) *acting.Idem {
@@ -219,15 +262,17 @@ func kindOf(t *testing.T, err error) domain.ErrorKind {
 func TestGet(t *testing.T) {
 	r := newRig()
 	v, err := r.svc.Get(t.Context(), viewer, team)
-	if err != nil || v.Collab.AgentID != collAg || v.Effective.WebUI {
+	if err != nil || v.Collab.AgentID != collAg || v.WebUI.Effective != domain.ExposureOff {
 		t.Fatalf("%+v %v", v, err)
 	}
 	if _, err := r.svc.Get(t.Context(), outsider, team); kindOf(t, err) != domain.KindNotFound {
 		t.Errorf("outsider: %v", err)
 	}
 	r.repo.col = nil
-	if _, err := r.svc.Get(t.Context(), viewer, team); kindOf(t, err) != domain.KindNotFound {
-		t.Errorf("no agent: %v", err)
+	_, err = r.svc.Get(t.Context(), viewer, team)
+	var de *domain.Error
+	if !errors.As(err, &de) || de.Kind != domain.KindNotFound || de.Reason != domain.ReasonOrchestrationAgentPending {
+		t.Errorf("pending: %v", err)
 	}
 	r.repo.fail = "get"
 	if _, err := r.svc.Get(t.Context(), viewer, team); err == nil {
@@ -235,74 +280,247 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// RA-17: a viewer cannot change the resource and the denial is audited; a surface is enabled only when
-// the guardrail and the settings allow it; every change emits collaboration.updated.
+// ORC-14, ORC-15: a viewer cannot change the resource and the denial is audited; a level above the limit
+// or on a surface the tool lacks is refused; every change emits orchestration.updated.
 func TestPut(t *testing.T) {
 	r := newRig()
-	p := domain.PutCollaborationParams{WebUIEnabled: true, RESTAPIEnabled: true}
+	p := domain.PutOrchestrationParams{WebUI: domain.ExposurePublic, WebAPI: domain.ExposurePrivate}
 	if _, err := r.svc.Put(t.Context(), viewer, team, p, nil); kindOf(t, err) != domain.KindAccessDenied {
 		t.Errorf("viewer: %v", err)
 	}
-	if _, err := r.svc.Put(t.Context(), admin, team, p, nil); kindOf(t, err) != domain.KindValidation {
-		t.Errorf("settings off: %v", err)
+	if len(r.audit.Entries) != 1 || !r.audit.Entries[0].Own {
+		t.Errorf("denial not audited: %+v", r.audit.Entries)
+	}
+	// An unset base domain does not refuse the write: the effective level says why.
+	v, err := r.svc.Put(t.Context(), admin, team, p, nil)
+	if err != nil || v.Collab.WebUIExposure != domain.ExposurePublic || v.WebUI.Effective != domain.ExposureOff {
+		t.Fatalf("settings off: %+v %v", v, err)
 	}
 	r.enable()
-	v, err := r.svc.Put(t.Context(), admin, team, p, nil)
-	if err != nil || !v.Collab.WebUIEnabled || !v.Effective.WebUI || v.Hostname == "" {
+	v, err = r.svc.Put(t.Context(), admin, team, p, nil)
+	if err != nil || v.WebUI.Effective != domain.ExposurePublic || v.WebAPI.Hostname != "acme.collab.corp.example.com" {
 		t.Fatalf("%+v %v", v, err)
 	}
 	var found bool
 	for _, ev := range r.outbox.Events {
-		if ev.Type == domain.EventCollaborationUpdated {
+		if ev.Type == domain.EventOrchestrationUpdated {
 			found = true
 		}
 	}
-	if !found || len(r.audit.Entries) == 0 {
-		t.Errorf("event=%v audit=%d", found, len(r.audit.Entries))
+	if !found {
+		t.Error("no orchestration.updated")
 	}
 	stale := domain.Version(1)
 	if _, err := r.svc.Put(t.Context(), admin, team, p, &stale); kindOf(t, err) != domain.KindPreconditionFailed {
 		t.Errorf("stale: %v", err)
 	}
+	r.repo.col.Limit = domain.ExposurePrivate
+	if _, err := r.svc.Put(t.Context(), admin, team, p, nil); kindOf(t, err) != domain.KindValidation {
+		t.Errorf("above limit: %v", err)
+	}
+	r.repo.col.Tool = domain.ToolBuzz
+	if _, err := r.svc.Put(t.Context(), admin, team, domain.PutOrchestrationParams{WebUI: domain.ExposurePrivate, WebAPI: domain.ExposureOff}, nil); kindOf(t, err) != domain.KindValidation {
+		t.Errorf("buzz surface: %v", err)
+	}
 	// Switching off is always accepted.
-	r.set.Set(domain.SettingCollabPublicEndpoints, json.RawMessage(`false`))
-	if _, err := r.svc.Put(t.Context(), admin, team, domain.PutCollaborationParams{}, nil); err != nil {
+	if _, err := r.svc.Put(t.Context(), admin, team, domain.PutOrchestrationParams{WebUI: domain.ExposureOff, WebAPI: domain.ExposureOff}, nil); err != nil {
 		t.Errorf("off: %v", err)
 	}
 	r.repo.col = nil
-	if _, err := r.svc.Put(t.Context(), admin, team, p, nil); kindOf(t, err) != domain.KindConflict {
+	_, err = r.svc.Put(t.Context(), admin, team, p, nil)
+	var de *domain.Error
+	if !errors.As(err, &de) || de.Kind != domain.KindConflict || de.Reason != domain.ReasonOrchestrationAgentPending {
 		t.Errorf("no agent: %v", err)
 	}
 }
 
+// The deprecated PutTeamCollaboration maps booleans to levels and also emits collaboration.updated.
+func TestLegacyPut(t *testing.T) {
+	r := newRig()
+	r.enable()
+	v, err := r.svc.LegacyPut(t.Context(), admin, team, true, false, "", nil)
+	if err != nil || v.Collab.WebUIExposure != domain.ExposurePublic || v.Collab.WebAPIExposure != domain.ExposureOff {
+		t.Fatalf("%+v %v", v, err)
+	}
+	var orch, legacy bool
+	for _, ev := range r.outbox.Events {
+		orch = orch || ev.Type == domain.EventOrchestrationUpdated
+		legacy = legacy || ev.Type == domain.EventCollaborationUpdated
+	}
+	if !orch || !legacy {
+		t.Errorf("events orchestration=%v collaboration=%v", orch, legacy)
+	}
+	r.repo.col.Limit = domain.ExposureOff
+	if _, err := r.svc.LegacyPut(t.Context(), admin, team, true, false, "", nil); kindOf(t, err) != domain.KindValidation {
+		t.Errorf("limit off: %v", err)
+	}
+	if _, err := r.svc.LegacyPut(t.Context(), viewer, team, false, false, "", nil); kindOf(t, err) != domain.KindAccessDenied {
+		t.Errorf("viewer: %v", err)
+	}
+}
+
 func TestPutFailures(t *testing.T) {
+	p := domain.PutOrchestrationParams{WebUI: domain.ExposureOff, WebAPI: domain.ExposureOff}
 	for _, op := range []string{"get", "update"} {
 		r := newRig()
-		r.enable()
 		r.repo.fail = op
-		if _, err := r.svc.Put(t.Context(), admin, team, domain.PutCollaborationParams{}, nil); err == nil {
+		if _, err := r.svc.Put(t.Context(), admin, team, p, nil); err == nil {
 			t.Errorf("%s swallowed", op)
 		}
 	}
 	r := newRig()
 	r.svc.Audit = failAudit{}
-	if _, err := r.svc.Put(t.Context(), admin, team, domain.PutCollaborationParams{}, nil); err == nil {
+	if _, err := r.svc.Put(t.Context(), admin, team, p, nil); err == nil {
 		t.Error("audit failure swallowed")
 	}
 	r = newRig()
 	r.svc.Outbox = failOutbox{}
-	if _, err := r.svc.Put(t.Context(), admin, team, domain.PutCollaborationParams{}, nil); err == nil {
+	if _, err := r.svc.Put(t.Context(), admin, team, p, nil); err == nil {
 		t.Error("outbox failure swallowed")
 	}
 	r = newRig()
-	r.set.Set(domain.SettingCollabBaseDomain, json.RawMessage(`{`))
-	if _, err := r.svc.Put(t.Context(), admin, team, domain.PutCollaborationParams{}, nil); err == nil {
+	r.set.Set(domain.SettingOrchestrationPublicBaseDomain, json.RawMessage(`{`))
+	if _, err := r.svc.Put(t.Context(), admin, team, p, nil); err == nil {
 		t.Error("bad setting swallowed")
 	}
 	r = newRig()
-	r.set.Set(domain.SettingCollabPublicEndpoints, json.RawMessage(`{`))
+	r.set.Set(domain.SettingOrchestrationPublicEndpoints, json.RawMessage(`{`))
 	if _, err := r.svc.Get(t.Context(), admin, team); err == nil {
 		t.Error("bad setting swallowed")
+	}
+}
+
+type bootFake struct {
+	created, compensated []string
+	err                  error
+}
+
+func (b *bootFake) CreateBootSecrets(_ context.Context, _ port.Tx, _ acting.Caller, _, _ string, tool domain.CollabTool, _ *acting.Idem, created *[]string) error {
+	if b.err != nil {
+		return b.err
+	}
+	for _, bs := range tool.BootSecrets() {
+		*created = append(*created, "arn:"+bs.Name)
+		b.created = append(b.created, bs.Name)
+	}
+	return nil
+}
+func (b *bootFake) Compensate(_ context.Context, arns []string) {
+	b.compensated = append(b.compensated, arns...)
+}
+
+// ORC-11: ChangeCollaborationTool switches the tool in one transaction, takes the pre-change snapshot,
+// lowers the surfaces the new tool lacks and writes the new tool's boot secrets.
+func TestChangeTool(t *testing.T) {
+	r := newRig()
+	boot := &bootFake{}
+	r.svc.Boot = boot
+	r.repo.col.WebUIExposure, r.repo.col.WebAPIExposure = domain.ExposurePublic, domain.ExposurePrivate
+	res, err := r.svc.ChangeTool(t.Context(), admin, team, domain.ToolBuzz, idemOf("ChangeCollaborationTool", "k1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.SnapshotID == "" || res.View.Collab.Tool != domain.ToolBuzz || res.View.Collab.WebUIExposure != domain.ExposureOff ||
+		res.View.Collab.Mode != domain.RegistrationManaged || len(boot.created) != 0 {
+		t.Fatalf("%+v", res)
+	}
+	if len(r.repo.switched) != 1 || r.repo.switched[0].FromTool != domain.ToolPaperclip || r.repo.switched[0].RetainUntil.IsZero() {
+		t.Errorf("switch: %+v", r.repo.switched)
+	}
+	var changed, updated int
+	for _, ev := range r.outbox.Events {
+		switch ev.Type {
+		case domain.EventOrchestrationToolChanged:
+			changed++
+		case domain.EventAgentUpdated:
+			updated++
+		}
+	}
+	if changed != 1 || updated != 1 {
+		t.Errorf("events: tool_changed=%d agent.updated=%d", changed, updated)
+	}
+	if again, err := r.svc.ChangeTool(t.Context(), admin, team, domain.ToolBuzz, idemOf("ChangeCollaborationTool", "k1")); err != nil || again.Replay == nil {
+		t.Errorf("replay: %+v %v", again, err)
+	}
+	// Back to Paperclip writes its three boot secrets.
+	r.repo.runtime[domain.ToolPaperclip] = collab.ToolRuntime{Tool: domain.ToolPaperclip, Enabled: true, TemplateID: "tpl_p", ImageRepository: "registry.example.com/paperclip", Digest: "sha256:bb", TemplateEnabled: true}
+	if _, err := r.svc.ChangeTool(t.Context(), admin, team, domain.ToolPaperclip, nil); err != nil || len(boot.created) != 3 {
+		t.Errorf("paperclip: %v %v", err, boot.created)
+	}
+}
+
+func TestChangeToolRefusals(t *testing.T) {
+	type tc struct {
+		name  string
+		setup func(*rig)
+		who   acting.Caller
+		tool  domain.CollabTool
+		want  domain.ErrorKind
+		why   string
+	}
+	for _, c := range []tc{
+		{"viewer", nil, viewer, domain.ToolBuzz, domain.KindAccessDenied, ""},
+		{"outsider", nil, outsider, domain.ToolBuzz, domain.KindNotFound, ""},
+		{"bad tool", nil, admin, "slack", domain.KindValidation, ""},
+		{"unchanged", nil, admin, domain.ToolPaperclip, domain.KindValidation, domain.ReasonToolUnchanged},
+		{"not enabled", func(r *rig) {
+			x := r.repo.runtime[domain.ToolBuzz]
+			x.Enabled = false
+			r.repo.runtime[domain.ToolBuzz] = x
+		}, admin, domain.ToolBuzz, domain.KindValidation, domain.ReasonToolNotEnabled},
+		{"runtime unset", func(r *rig) {
+			delete(r.repo.runtime, domain.ToolBuzz)
+			r.repo.runtime[domain.ToolBuzz] = collab.ToolRuntime{Enabled: true}
+		}, admin, domain.ToolBuzz, domain.KindConflict, domain.ReasonOrchestrationRuntimeUnset},
+		{"change running", func(r *rig) {
+			r.repo.col.Status.Conditions = []domain.Condition{{Type: "ToolChanging", Status: domain.ConditionTrue}}
+		}, admin, domain.ToolBuzz, domain.KindConflict, domain.ReasonToolChangeInProgress},
+		{"pending", func(r *rig) { r.repo.col = nil }, admin, domain.ToolBuzz, domain.KindConflict, domain.ReasonOrchestrationAgentPending},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := newRig()
+			if c.setup != nil {
+				c.setup(r)
+			}
+			_, err := r.svc.ChangeTool(t.Context(), c.who, team, c.tool, nil)
+			var de *domain.Error
+			if !errors.As(err, &de) || de.Kind != c.want {
+				t.Fatalf("err = %v", err)
+			}
+			if c.why != "" && de.Reason != c.why && (len(de.Fields) == 0 || de.Fields[0].Reason != c.why) {
+				t.Errorf("reason = %q fields %v, want %s", de.Reason, de.Fields, c.why)
+			}
+			if len(r.repo.switched) != 0 {
+				t.Error("tool switched on a refused request")
+			}
+		})
+	}
+	// A Secrets Manager failure for Paperclip's boot secrets is a 503 and what was written is deleted.
+	r := newRig()
+	r.repo.col.Tool = domain.ToolBuzz
+	r.repo.runtime[domain.ToolPaperclip] = collab.ToolRuntime{Tool: domain.ToolPaperclip, Enabled: true, TemplateID: "tpl_p", ImageRepository: "registry.example.com/paperclip", Digest: "sha256:bb", TemplateEnabled: true}
+	boot := &bootFake{err: domain.Unavailable("Secrets Manager", errors.New("down"))}
+	r.svc.Boot = boot
+	if _, err := r.svc.ChangeTool(t.Context(), admin, team, domain.ToolPaperclip, nil); kindOf(t, err) != domain.KindUnavailable {
+		t.Errorf("sm failure: %v", err)
+	}
+	r = newRig()
+	r.repo.col.Tool = domain.ToolBuzz
+	r.repo.runtime[domain.ToolPaperclip] = collab.ToolRuntime{Tool: domain.ToolPaperclip, Enabled: true, TemplateID: "tpl_p", ImageRepository: "registry.example.com/paperclip", Digest: "sha256:bb", TemplateEnabled: true}
+	if _, err := r.svc.ChangeTool(t.Context(), admin, team, domain.ToolPaperclip, nil); kindOf(t, err) != domain.KindUnavailable {
+		t.Errorf("no writer: %v", err)
+	}
+	for _, op := range []string{"runtime", "switch"} {
+		r := newRig()
+		r.repo.fail = op
+		if _, err := r.svc.ChangeTool(t.Context(), admin, team, domain.ToolBuzz, nil); err == nil {
+			t.Errorf("%s swallowed", op)
+		}
+	}
+	r = newRig()
+	r.svc.Audit = failAudit{}
+	if _, err := r.svc.ChangeTool(t.Context(), admin, team, domain.ToolBuzz, nil); err == nil {
+		t.Error("audit failure swallowed")
 	}
 }
 
@@ -457,20 +675,40 @@ func TestRotate(t *testing.T) {
 func TestEndpoints(t *testing.T) {
 	r := newRig()
 	r.enable()
-	rows, next, err := r.svc.Endpoints(t.Context(), service, collab.EndpointFilter{}, acting.Page{Limit: 1})
-	if err != nil || len(rows) != 1 || next == "" || rows[0].Hostname == "" {
-		t.Fatalf("%+v %q %v", rows, next, err)
+	r.repo.col.WebUIExposure, r.repo.col.WebAPIExposure = domain.ExposurePublic, domain.ExposureOff
+	res, err := r.svc.Endpoints(t.Context(), service, collab.EndpointFilter{}, acting.Page{Limit: 1})
+	if err != nil || len(res.Items) != 1 || res.Next != team || res.Items[0].State.Hostname == "" || res.Items[0].Surface != domain.SurfaceWebUI {
+		t.Fatalf("%+v %v", res, err)
 	}
-	if _, _, err := r.svc.Endpoints(t.Context(), admin, collab.EndpointFilter{}, acting.Page{}); kindOf(t, err) != domain.KindAccessDenied {
+	if res.Migration.State != "complete" || res.Migration.TeamsTotal != 3 {
+		t.Errorf("migration %+v", res.Migration)
+	}
+	res, err = r.svc.Endpoints(t.Context(), service, collab.EndpointFilter{}, acting.Page{Limit: 10})
+	if err != nil || len(res.Items) != 2 || res.Next != "" {
+		t.Fatalf("all: %+v %v", res, err)
+	}
+	// The effective-level filter keeps surfaces whose effective level matches.
+	res, _ = r.svc.Endpoints(t.Context(), service, collab.EndpointFilter{Exposure: domain.ExposurePrivate}, acting.Page{Limit: 10})
+	if len(res.Items) != 1 || res.Items[0].Row.Collab.TeamID != "team_z" {
+		t.Errorf("filter: %+v", res.Items)
+	}
+	r.repo.blocked = []domain.OrchestrationBlocked{{TeamID: "team_q", Reason: domain.ReasonOrchestrationRuntimeUnset}}
+	res, _ = r.svc.Endpoints(t.Context(), service, collab.EndpointFilter{}, acting.Page{Limit: 10})
+	if res.Migration.State != "blocked" {
+		t.Errorf("blocked migration: %+v", res.Migration)
+	}
+	if _, err := r.svc.Endpoints(t.Context(), admin, collab.EndpointFilter{}, acting.Page{}); kindOf(t, err) != domain.KindAccessDenied {
 		t.Errorf("team admin: %v", err)
 	}
-	r.repo.fail = "endpoints"
-	if _, _, err := r.svc.Endpoints(t.Context(), service, collab.EndpointFilter{}, acting.Page{}); err == nil {
-		t.Error("store failure swallowed")
+	for _, op := range []string{"endpoints", "migration"} {
+		r.repo.fail = op
+		if _, err := r.svc.Endpoints(t.Context(), service, collab.EndpointFilter{}, acting.Page{}); err == nil {
+			t.Errorf("%s swallowed", op)
+		}
 	}
 	r = newRig()
-	r.set.Set(domain.SettingCollabBaseDomain, json.RawMessage(`{`))
-	if _, _, err := r.svc.Endpoints(t.Context(), service, collab.EndpointFilter{}, acting.Page{}); err == nil {
+	r.set.Set(domain.SettingOrchestrationPublicBaseDomain, json.RawMessage(`{`))
+	if _, err := r.svc.Endpoints(t.Context(), service, collab.EndpointFilter{}, acting.Page{}); err == nil {
 		t.Error("bad setting swallowed")
 	}
 }

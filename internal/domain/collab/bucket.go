@@ -16,9 +16,11 @@ func BucketStart(t time.Time) time.Time {
 
 // AccessKey identifies one counter of collaboration_access.
 type AccessKey struct {
-	Bucket            time.Time
-	TeamID            string
-	Surface           Surface
+	Bucket  time.Time
+	TeamID  string
+	Surface Surface
+	// Exposure is the entry level of the hostname the request came to: public or private.
+	Exposure          string
 	Kind              PrincipalKind
 	PrincipalID       string
 	Outcome           string

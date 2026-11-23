@@ -6,23 +6,39 @@ import (
 	"io"
 	"net/netip"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
 
 // Paperclip team collaboration (API contract §4.4b, change PRD paperclip-collaboration-PRD.md).
 
-// AgentRole is the role of an agent: a worker, or the team's one collaboration agent (Paperclip).
+// AgentRole is the role of an agent: a worker, or the team's one orchestration agent (v1.4.0; the
+// 1.0.1 collaboration agent).
 type AgentRole string
 
 // AgentRole values.
 const (
 	AgentRoleWorker        AgentRole = "worker"
+	AgentRoleOrchestration AgentRole = "orchestration"
+	// AgentRoleCollaboration is the 1.0.1 name of the orchestration role. The database no longer stores
+	// it; a client may still send it as a filter or a request value, and it is read as orchestration
+	// until 2.0.0 (Normalize).
 	AgentRoleCollaboration AgentRole = "collaboration"
 )
 
-// Valid reports whether v is a known AgentRole.
-func (v AgentRole) Valid() bool { return v == AgentRoleWorker || v == AgentRoleCollaboration }
+// Valid reports whether v is a known AgentRole (including the deprecated collaboration alias).
+func (v AgentRole) Valid() bool {
+	return v == AgentRoleWorker || v == AgentRoleOrchestration || v == AgentRoleCollaboration
+}
+
+// Normalize maps the deprecated collaboration role to orchestration.
+func (v AgentRole) Normalize() AgentRole {
+	if v == AgentRoleCollaboration {
+		return AgentRoleOrchestration
+	}
+	return v
+}
 
 // RegistrationMode says who registers connected agents in Paperclip.
 type RegistrationMode string
@@ -64,11 +80,12 @@ const (
 	ManagedByUser      SecretManagedBy = "user"
 	ManagedByAFS       SecretManagedBy = "afs"
 	ManagedByPaperclip SecretManagedBy = "paperclip"
+	ManagedByBuzz      SecretManagedBy = "buzz"
 )
 
 // Valid reports whether v is a known SecretManagedBy.
 func (v SecretManagedBy) Valid() bool {
-	return v == ManagedByUser || v == ManagedByAFS || v == ManagedByPaperclip
+	return v == ManagedByUser || v == ManagedByAFS || v == ManagedByPaperclip || v == ManagedByBuzz
 }
 
 // CapabilityPaperclip is the agent template capability that marks a Paperclip template.
@@ -125,118 +142,82 @@ type CollaborationLink struct {
 	Version          Version
 }
 
-// TeamCollaboration is the team's collaboration resource: the stored choices of a team that has a
-// collaboration agent. Effective and the hostname are computed (ComputeEffective, Hostname).
+// TeamCollaboration is the team's orchestration resource (API contract §4.4d; the 1.0.1 collaboration
+// resource): the stored choices of the team's orchestration agent. The effective levels and hostnames
+// are computed (Surfaces).
 type TeamCollaboration struct {
-	TeamID           string
-	AgentID          string
-	WebUIEnabled     bool
-	RESTAPIEnabled   bool
-	Mode             RegistrationMode
-	Version          Version
-	Generation       Generation
-	Status           Status
-	Unmanaged        []string
+	TeamID      string
+	AgentID     string
+	AgentName   string
+	Tool        CollabTool
+	ToolVersion string // empty until the reconciler reports it (ToolReady condition message)
+	// AgentPhase is the orchestration agent's phase (the agent's own status, not the resource's).
+	AgentPhase    Phase
+	WebUIExposure Exposure
+	// WebAPIExposure is the stored choice for the Web API (the 1.0.1 REST API).
+	WebAPIExposure Exposure
+	// Limit is the team's maxCollaborationExposure.
+	Limit      Exposure
+	Mode       RegistrationMode
+	Version    Version
+	Generation Generation
+	Status     Status
+	Unmanaged  []string
+	// Connected is the number of live workers with connect true.
+	Connected        int
 	CreatedAt        time.Time
 	CreatedBy        string
 	UpdatedAt        time.Time
 	AgentState       AgentState
 	TeamState        TeamState
 	TeamSlug         string
-	MayExpose        bool
 	ProviderClientID string
 }
 
-// CollabSettings are the service settings the effective computation reads.
-type CollabSettings struct {
-	BaseDomain      string // empty when unset
-	PublicEndpoints bool
+// LegacyEffective is what the deprecated GetTeamCollaboration reports: booleans (stored exposure not
+// off) and the effective booleans (effective level not off), with the reasons mapped to the 1.0.1 names
+// (API contract §4.4d, deprecated aliases).
+type LegacyEffective struct {
+	WebUI, RESTAPI bool
+	Reasons        []string
 }
 
-// Effective is what the edge honours for the team (API contract §4.4b).
-type Effective struct {
-	WebUI   bool
-	RESTAPI bool
-	Reasons []string
-}
-
-// Reasons why a surface is not effective.
+// Legacy reasons of the 1.0.1 effective object.
 const (
-	ReasonTeamNotAllowed       = "team_not_allowed"
-	ReasonServiceEndpointsOff  = "service_endpoints_off"
-	ReasonBaseDomainUnset      = "base_domain_unset"
-	ReasonProviderWithoutColab = "provider_without_collab_client"
+	ReasonTeamNotAllowed      = "team_not_allowed"
+	ReasonServiceEndpointsOff = "service_endpoints_off"
 )
 
-// ComputeEffective applies the same rule as afs.collab_routes(): a surface is effective only when its
-// stored choice, the team's guardrail, the service switch, a set base domain and (web UI only) a
-// collaboration client on the team's provider all hold. reasons lists every failed shared condition.
-func (c TeamCollaboration) ComputeEffective(s CollabSettings) Effective {
-	var reasons []string
-	add := func(cond bool, r string) {
-		if !cond {
-			reasons = append(reasons, r)
+// LegacyOf maps the two surface states to the 1.0.1 shape.
+func LegacyOf(webUI, webAPI SurfaceState) LegacyEffective {
+	out := LegacyEffective{WebUI: webUI.Effective != ExposureOff, RESTAPI: webAPI.Effective != ExposureOff, Reasons: []string{}}
+	for _, r := range slices.Concat(webUI.Reasons, webAPI.Reasons) {
+		switch r {
+		case ReasonTeamLimit:
+			r = ReasonTeamNotAllowed
+		case ReasonServiceSwitchPublic, ReasonServiceSwitchPrivate:
+			r = ReasonServiceEndpointsOff
+		}
+		if !slices.Contains(out.Reasons, r) {
+			out.Reasons = append(out.Reasons, r)
 		}
 	}
-	add(c.MayExpose, ReasonTeamNotAllowed)
-	add(s.PublicEndpoints, ReasonServiceEndpointsOff)
-	add(s.BaseDomain != "", ReasonBaseDomainUnset)
-	add(c.ProviderClientID != "", ReasonProviderWithoutColab)
-	shared := c.MayExpose && s.PublicEndpoints && s.BaseDomain != ""
-	if reasons == nil {
-		reasons = []string{}
-	}
-	return Effective{WebUI: c.WebUIEnabled && shared && c.ProviderClientID != "", RESTAPI: c.RESTAPIEnabled && shared, Reasons: reasons}
+	return out
 }
 
-// Hostname returns <slug>.<base domain>, or "" while the base domain is unset.
-func (c TeamCollaboration) Hostname(s CollabSettings) string {
-	if s.BaseDomain == "" {
-		return ""
+// LegacyHostname is the hostname the deprecated resource shows: that of the effective level, else the
+// public hostname, else empty while the public base domain is unset.
+func (c TeamCollaboration) LegacyHostname(s OrchestrationSettings) string {
+	ui, api := c.Surfaces(s)
+	switch {
+	case ui.Hostname != "":
+		return ui.Hostname
+	case api.Hostname != "":
+		return api.Hostname
+	case s.PublicBaseDomain != "":
+		return c.TeamSlug + "." + s.PublicBaseDomain
 	}
-	return c.TeamSlug + "." + s.BaseDomain
-}
-
-// PutCollaborationParams is a PutTeamCollaboration body.
-type PutCollaborationParams struct {
-	WebUIEnabled   bool
-	RESTAPIEnabled bool
-	Mode           RegistrationMode // empty keeps the current value
-}
-
-// ValidatePut checks the new choices against the guardrails and settings (API contract §4.4b). Only
-// switching a surface on is checked; switching off is always accepted. agentReady is whether the
-// collaboration agent is Ready (needed for managed registration).
-func (c TeamCollaboration) ValidatePut(p PutCollaborationParams, s CollabSettings, agentReady bool) error {
-	var fe []FieldError
-	surface := func(on, was bool, field string, needsClient bool) {
-		if !on {
-			return
-		}
-		switch {
-		case s.BaseDomain == "":
-			fe = append(fe, FieldError{Field: field, Reason: "collab_base_domain_unset"})
-		case !s.PublicEndpoints:
-			fe = append(fe, FieldError{Field: field, Reason: "collab_public_endpoints_off"})
-		case !c.MayExpose:
-			fe = append(fe, FieldError{Field: field, Reason: "collaboration_not_allowed_for_team"})
-		case needsClient && c.ProviderClientID == "":
-			fe = append(fe, FieldError{Field: field, Reason: "provider_without_collab_client"})
-		}
-		_ = was
-	}
-	surface(p.WebUIEnabled, c.WebUIEnabled, "webUiEnabled", true)
-	surface(p.RESTAPIEnabled, c.RESTAPIEnabled, "restApiEnabled", false)
-	if p.Mode != "" && !p.Mode.Valid() {
-		fe = append(fe, FieldError{Field: "registrationMode", Reason: "must be manual or managed"})
-	}
-	if p.Mode == RegistrationManaged && !agentReady {
-		fe = append(fe, FieldError{Field: "registrationMode", Reason: "collaboration_agent_not_ready"})
-	}
-	if len(fe) > 0 {
-		return Validation(fe...)
-	}
-	return nil
+	return ""
 }
 
 var paperclipAgentIDRE = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
@@ -279,7 +260,7 @@ type CollaborationEndpoint struct {
 	AgentID      string
 	WebUIEnabled bool
 	RESTEnabled  bool
-	Effective    Effective
+	Effective    LegacyEffective
 	MayExpose    bool
 	Phase        Phase
 	LastAccessAt *time.Time

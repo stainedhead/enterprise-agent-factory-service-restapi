@@ -155,6 +155,6 @@ func (*SwarmTemplateRepo) CollaborationTemplateOK(ctx context.Context, tx port.T
 		return false, err
 	}
 	var ok bool
-	err = pt.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM afs.agent_templates WHERE id = $1 AND enabled AND 'paperclip' = ANY (capabilities))`, id).Scan(&ok)
+	err = pt.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM afs.agent_templates WHERE id = $1 AND enabled AND 'orchestration' = ANY (capabilities))`, id).Scan(&ok)
 	return ok, MapError(err, OpRead, "agent template")
 }

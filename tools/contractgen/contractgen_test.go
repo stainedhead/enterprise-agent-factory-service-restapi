@@ -48,8 +48,8 @@ func TestGolden(t *testing.T) {
 
 func TestOperations(t *testing.T) {
 	ex := fixture(t)
-	if len(ex.Operations) != 189 {
-		t.Fatalf("operations = %d, want 189", len(ex.Operations))
+	if len(ex.Operations) != 194 {
+		t.Fatalf("operations = %d, want 194", len(ex.Operations))
 	}
 	byID := map[string]Operation{}
 	for _, op := range ex.Operations {
@@ -105,8 +105,8 @@ func TestOperations(t *testing.T) {
 			csv++
 		}
 	}
-	if csv != 9 {
-		t.Errorf("CSV operations = %d, want 9", csv)
+	if csv != 10 {
+		t.Errorf("CSV operations = %d, want 10", csv)
 	}
 }
 
@@ -115,7 +115,7 @@ func TestPermissionsErrorsEventsSettings(t *testing.T) {
 	if len(ex.Permissions) != 63 {
 		t.Errorf("permissions = %d", len(ex.Permissions))
 	}
-	if len(ex.Errors) != 13 || len(ex.Events) != 62 || len(ex.Settings) != 19 {
+	if len(ex.Errors) != 13 || len(ex.Events) != 68 || len(ex.Settings) != 19 {
 		t.Errorf("errors %d events %d settings %d", len(ex.Errors), len(ex.Events), len(ex.Settings))
 	}
 	gw := 0

@@ -237,7 +237,8 @@ WHERE s.team_id = $1 AND s.pool_id IS NULL AND s.managed_by = 'user' AND (s.agen
 	}
 	// Collaboration settings and the collaboration agent's name (COL-26): choices only.
 	if tb.Collaboration, err = s.one(ctx, `SELECT jsonb_build_object('agent_name', a.name, 'web_ui_enabled', c.web_ui_enabled,
-  'rest_api_enabled', c.rest_api_enabled, 'registration_mode', c.registration_mode)
+  'rest_api_enabled', c.rest_api_enabled, 'registration_mode', c.registration_mode,
+  'tool', c.tool, 'web_ui_exposure', c.web_ui_exposure, 'web_api_exposure', c.web_api_exposure)
 FROM afs.team_collaboration c JOIN afs.agents a ON a.team_id = c.team_id AND a.id = c.agent_id WHERE c.team_id = $1`, id); err != nil {
 		return tb, err
 	}

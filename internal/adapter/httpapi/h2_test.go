@@ -61,7 +61,10 @@ func newW2Rig(t *testing.T) *w2Rig {
 	tx := &fakes.TxRunner{}
 	deps := acting.Deps{Tx: tx, Audit: r.audit, Outbox: r.outbox, Idem: &fakes.Idempotency{}, Clock: &fakes.Clock{T: w2Now}, IDs: &fakes.IDGen{}}
 	r.teams.Users["boss@example.com"] = "usr_01JD2Q3R4S5T6V7W8X9Y0Z0001"
-	teamSvc := &teams.Service{Deps: deps, Repo: r.teams, Settings: &fakes.Settings{}}
+	set := &fakes.Settings{}
+	set.Set(domain.SettingOrchestrationTools, json.RawMessage(`{"paperclip":{"enabled":true,"default":true,"templateId":"tpl_p","imageRepository":"registry.example.com/paperclip"},"buzz":{"enabled":true,"default":false,"templateId":"tpl_b","imageRepository":"registry.example.com/buzz"}}`))
+	r.teams.Catalog["m1"] = teams.ModelInfo{ID: "m1", Enabled: true, Callable: true}
+	teamSvc := &teams.Service{Deps: deps, Repo: r.teams, Settings: set, Boot: &teamstest.Boot{}}
 	pages := NewPageTokens(bytes.Repeat([]byte{7}, 32), func() time.Time { return w2Now })
 	look := w2Lookup{teamSvc}
 	reg := func(g *Registry) error {
@@ -209,7 +212,6 @@ func TestW2CreateTeamValidationAndReplay(t *testing.T) {
 func TestW2ModelsAndTags(t *testing.T) {
 	r := newW2Rig(t)
 	id := r.createTeam(t)
-	r.teams.Catalog["m1"] = teams.ModelInfo{ID: "m1", Enabled: true}
 	w2Code(t, r.do(t, "GET", "/v1/teams/"+id+"/models", "viewer", ""), 200)
 	w2Code(t, r.do(t, "PUT", "/v1/teams/"+id+"/models", "admin", `{"modelIds":["m1"]}`), 403)
 	w2Code(t, r.do(t, "PUT", "/v1/teams/"+id+"/models", "svc", `{}`), 400)

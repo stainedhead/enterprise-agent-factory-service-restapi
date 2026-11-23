@@ -78,6 +78,11 @@ type Desired struct {
 	Image       string
 	Persona     string
 	ModelID     string
+	// Models are the model ids the pool may call (afs.effective_agent_models), sorted.
+	Models []string
+	// ModelReason and PrevModelUnavailable: see agent.Desired.
+	ModelReason          string
+	PrevModelUnavailable *bool
 	// State is enabled, paused, deleting or deleted.
 	State      string
 	Generation int64

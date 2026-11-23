@@ -18,6 +18,12 @@
             $ref: '#/components/headers/XAfsContractVersion'
           ETag:
             $ref: '#/components/headers/ETag'
+          Deprecation:
+            $ref: '#/components/headers/Deprecation'
+          Sunset:
+            $ref: '#/components/headers/Sunset'
+          Link:
+            $ref: '#/components/headers/Link'
         content:
           application/json:
             schema:
@@ -69,10 +75,13 @@
     x-afs-scope: team
     x-afs-cli: collaboration describe-collaboration
     x-afs-sdk: collaboration.get()
-    x-afs-screen: "T16, V3, T1"
+    x-afs-screen: T16, V3, T1
     x-afs-priority: P0
     x-afs-csv: false
     x-afs-events: []
+    deprecated: true
+    description: Deprecated alias kept until 2.0.0; every response carries Deprecation, Sunset and Link (successor-version)
+      headers.
   put:
     operationId: PutTeamCollaboration
     summary: Put team collaboration
@@ -102,6 +111,12 @@
             $ref: '#/components/headers/XAfsContractVersion'
           ETag:
             $ref: '#/components/headers/ETag'
+          Deprecation:
+            $ref: '#/components/headers/Deprecation'
+          Sunset:
+            $ref: '#/components/headers/Sunset'
+          Link:
+            $ref: '#/components/headers/Link'
         content:
           application/json:
             schema:
@@ -164,6 +179,9 @@
     x-afs-csv: false
     x-afs-events:
     - collaboration.updated
+    deprecated: true
+    description: Deprecated alias kept until 2.0.0; every response carries Deprecation, Sunset and Link (successor-version)
+      headers.
 /v1/teams/{teamId}/collaboration/links:
   get:
     operationId: ListCollaborationLinks
@@ -466,6 +484,12 @@
             $ref: '#/components/headers/XRequestId'
           X-Afs-Contract-Version:
             $ref: '#/components/headers/XAfsContractVersion'
+          Deprecation:
+            $ref: '#/components/headers/Deprecation'
+          Sunset:
+            $ref: '#/components/headers/Sunset'
+          Link:
+            $ref: '#/components/headers/Link'
         content:
           application/json:
             schema:
@@ -488,7 +512,9 @@
           text/csv:
             schema:
               type: string
-            example: "teamId,slug,teamState,hostname,agentId,webUiEnabled,restApiEnabled,mayExposeCollaboration,phase,lastAccessAt\r\nteam_01JD2Q3R4S5T6V7W8X9Y0Z0001,payments-factory,active,payments-factory.collab.example.com,agt_01JD2Q3R4S5T6V7W8X9Y0Z0001,true,false,true,Ready,2026-11-22T09:41:00Z\r\n"
+            example: "teamId,slug,teamState,hostname,agentId,webUiEnabled,restApiEnabled,mayExposeCollaboration,phase,lastAccessAt\r\
+              \nteam_01JD2Q3R4S5T6V7W8X9Y0Z0001,payments-factory,active,payments-factory.collab.example.com,agt_01JD2Q3R4S5T6V7W8X9Y0Z0001,true,false,true,Ready,2026-11-22T09:41:00Z\r\
+              \n"
       '400':
         $ref: '#/components/responses/BadRequest'
       '401':
@@ -509,3 +535,6 @@
     x-afs-priority: P0
     x-afs-csv: true
     x-afs-events: []
+    deprecated: true
+    description: Deprecated alias kept until 2.0.0; every response carries Deprecation, Sunset and Link (successor-version)
+      headers.

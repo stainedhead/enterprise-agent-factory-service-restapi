@@ -197,7 +197,7 @@ func newRig(t *testing.T, mut func(*collab.Route)) *rig {
 		mut(&route)
 	}
 	set := collab.DefaultSettings()
-	set.BaseDomain = "collab.example.com"
+	set.PublicBaseDomain = "collab.example.com"
 	r.rt = &fakeRoutes{routes: []collab.Route{route}, set: set}
 	r.pr = &fakePrincipals{people: map[string][]Binding{"alice": {{Role: "team_admin"}}, "viewer": {{Role: "team_viewer"}},
 		"collab": {{Role: "team_collaborator"}}, "root": {{Role: "service_admin"}}, "nobody": nil}, keys: map[[32]byte]KeyInfo{}}
@@ -936,3 +936,47 @@ func TestRun(t *testing.T) {
 }
 
 func hash2(raw []byte) [32]byte { return sha256.Sum256(raw) }
+
+func TestPrivateEntryAndWrongLevel(t *testing.T) {
+	r := newRig(t, nil)
+	pub := teamRoute()
+	pub.Level, pub.PublicHostname, pub.PrivateHostname = collab.LevelPublic, host, "alpha.internal.example.com"
+	pub.WebUIEffective, pub.RESTAPIEffective = false, true // Web UI is private only
+	pub.WebUIOtherLevel = true
+	priv := pub
+	priv.Level, priv.Hostname = collab.LevelPrivate, "alpha.internal.example.com"
+	priv.WebUIEffective, priv.RESTAPIEffective, priv.WebUIOtherLevel = true, false, false
+	set := collab.DefaultSettings()
+	set.PublicBaseDomain, set.PrivateBaseDomain = "collab.example.com", "internal.example.com"
+	r.rt.routes, r.rt.set = []collab.Route{pub, priv}, set
+	if err := r.svc.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	// The Web UI answers 404 on the public hostname, even to a caller with a binding.
+	req := Request{Method: "GET", Host: host, Path: "/", Cookie: r.session("alice"), Navigate: true, RequestID: "r1", SecFetchSite: "same-origin"}
+	if got := r.svc.Handle(ctx, req); got.Status != 404 {
+		t.Errorf("web ui on the public host: %+v", got)
+	}
+	// It is served on the private hostname, and the sign-in goes through the private apex.
+	req.Host = "alpha.internal.example.com"
+	if got := r.svc.Handle(ctx, req); got.Action != Forward {
+		t.Errorf("web ui on the private host: %+v", got)
+	}
+	if got := r.svc.callbackURL(collab.LevelPrivate); got != "https://internal.example.com"+PathCallback {
+		t.Errorf("callback %s", got)
+	}
+	if got := r.svc.Handle(ctx, Request{Method: "GET", Host: "internal.example.com", Path: "/"}); got.Status != 404 || got.Action != Respond {
+		t.Errorf("private apex: %+v", got)
+	}
+	// The access record carries the level.
+	r.svc.record(Result{Route: priv, Class: collab.ClassWeb}, collab.OutcomeAllowed, 0)
+	rows := r.svc.Access.Take()
+	found := false
+	for _, row := range rows {
+		found = found || row.Key.Exposure == "private"
+	}
+	if !found {
+		t.Errorf("rows %+v", rows)
+	}
+}

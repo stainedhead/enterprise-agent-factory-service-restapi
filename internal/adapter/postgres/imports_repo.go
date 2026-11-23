@@ -251,28 +251,36 @@ func (im *importer) collaboration(ctx context.Context, tb domain.TeamBundle) err
 func (im *importer) teamCollaboration(ctx context.Context, c domain.Row) error {
 	agent := str(c, "agent_name")
 	var agentID string
-	if err := im.t.QueryRow(ctx, `SELECT id FROM afs.agents WHERE team_id = $1 AND name = $2 AND deleted_at IS NULL AND role = 'collaboration'`,
+	if err := im.t.QueryRow(ctx, `SELECT id FROM afs.agents WHERE team_id = $1 AND name = $2 AND deleted_at IS NULL AND role = 'orchestration'`,
 		im.teamID, agent).Scan(&agentID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Validation(domain.FieldError{Field: "collaboration", Reason: "the collaboration agent " + agent + " is not in the bundle"})
 		}
 		return MapError(err, OpRead, "agent")
 	}
-	web, _ := c["web_ui_enabled"].(bool)
-	rest, _ := c["rest_api_enabled"].(bool)
+	// A bundle from 1.1.0 carries the levels; one from 1.0.1 carries booleans, which mean public or off.
+	level := func(key, legacy string) string {
+		if v := str(c, key); v != "" {
+			return v
+		}
+		if b, _ := c[legacy].(bool); b {
+			return string(domain.ExposurePublic)
+		}
+		return string(domain.ExposureOff)
+	}
+	web, rest := level("web_ui_exposure", "web_ui_enabled"), level("web_api_exposure", "rest_api_enabled")
 	mode := str(c, "registration_mode")
-	var curAgent, curMode string
-	var curWeb, curRest bool
-	err := im.t.QueryRow(ctx, `SELECT agent_id, web_ui_enabled, rest_api_enabled, registration_mode FROM afs.team_collaboration WHERE team_id = $1`,
+	var curAgent, curMode, curWeb, curRest string
+	err := im.t.QueryRow(ctx, `SELECT agent_id, web_ui_exposure, web_api_exposure, registration_mode FROM afs.team_collaboration WHERE team_id = $1`,
 		im.teamID).Scan(&curAgent, &curWeb, &curRest, &curMode)
 	action := ""
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		_, err = im.t.Exec(ctx, `INSERT INTO afs.team_collaboration (team_id, agent_id, web_ui_enabled, rest_api_enabled, registration_mode)
-VALUES ($1, $2, $3, $4, $5)`, im.teamID, agentID, web, rest, mode)
-		action = "created"
+		// Only afs.create_orchestration_agent creates this row (000022); a team without one keeps none.
+		im.notes = append(im.notes, "collaboration: the team has no orchestration agent; the bundle's settings were not applied")
+		err = nil
 	case err == nil && (curWeb != web || curRest != rest || curMode != mode):
-		_, err = im.t.Exec(ctx, `UPDATE afs.team_collaboration SET web_ui_enabled = $2, rest_api_enabled = $3, registration_mode = $4 WHERE team_id = $1`,
+		_, err = im.t.Exec(ctx, `UPDATE afs.team_collaboration SET web_ui_exposure = $2, web_api_exposure = $3, registration_mode = $4 WHERE team_id = $1`,
 			im.teamID, web, rest, mode)
 		action = "updated"
 	case err == nil && curAgent != agentID:
@@ -507,7 +515,7 @@ func secretLabel(s domain.Row) string {
 func (im *importer) agent(ctx context.Context, a domain.AgentBundle, tb domain.TeamBundle, shared map[string]string) error {
 	name := str(a.Agent, "name")
 	extra := map[string]any{"team_id": im.teamID}
-	if str(a.Agent, "role") == "collaboration" {
+	if role := str(a.Agent, "role"); role == "collaboration" || role == "orchestration" {
 		// A collaboration agent is made from its catalog template and keeps its role for life (immutable).
 		var tpl string
 		if err := im.t.QueryRow(ctx, `SELECT id FROM afs.agent_templates WHERE name = $1`, str(a.Agent, "template")).Scan(&tpl); err != nil {
@@ -516,7 +524,33 @@ func (im *importer) agent(ctx context.Context, a domain.AgentBundle, tb domain.T
 			}
 			return MapError(err, OpRead, "agent template")
 		}
-		extra["role"], extra["template_id"] = "collaboration", tpl
+		extra["role"], extra["template_id"] = "orchestration", tpl
+		// The orchestration role is reserved (000022): the function creates the agent with its collaboration row,
+		// then the upsert below updates the bundle's other fields in place.
+		var existing string
+		err := im.t.QueryRow(ctx, `SELECT id FROM afs.agents WHERE team_id = $1 AND role = 'orchestration' AND deleted_at IS NULL`, im.teamID).Scan(&existing)
+		if errors.Is(err, pgx.ErrNoRows) {
+			nid, err := im.ids.NewID(domain.PrefixAgent)
+			if err != nil {
+				return err
+			}
+			c := tb.Collaboration
+			var tool, ui, api, reg *string
+			for k, dst := range map[string]**string{"tool": &tool, "web_ui_exposure": &ui, "web_api_exposure": &api, "registration_mode": &reg} {
+				if v := str(c, k); v != "" {
+					v := v
+					*dst = &v
+				}
+			}
+			if _, err := im.t.Exec(ctx, `SELECT afs.create_orchestration_agent($1, $2, $3, $4, $5, $6, $7, NULL, NULL, $8, NULL, NULL, NULL)`,
+				im.teamID, nid.String(), name, tool, ui, api, reg, nullIfEmpty(str(a.Agent, "model_id"))); err != nil {
+				return MapError(err, OpWrite, "orchestration agent")
+			}
+		} else if err != nil {
+			return MapError(err, OpRead, "agent")
+		}
+		delete(extra, "role")
+		delete(extra, "template_id")
 	}
 	agentID, _, err := im.upsert(ctx, tblAgent, `SELECT id FROM afs.agents WHERE team_id = $1 AND name = $2 AND deleted_at IS NULL`,
 		[]any{im.teamID, name}, a.Agent, extra, name)

@@ -112,6 +112,7 @@ type World struct {
 func NewWorld(t testing.TB, db *pgtest.DB) *World {
 	t.Helper()
 	w := &World{DB: db, Admin: db.Admin(t), IDP: NewIDP(t), Cluster: NewIDP(t), Tokens: map[Caller]string{}}
+	db.SeedOrchestrationRuntime(t)
 	w.TeamA, w.TeamB = db.SeedTeam(t), db.SeedTeam(t)
 	w.ProviderID = pgtest.NewID("idp")
 	w.exec(t, `INSERT INTO afs.identity_providers (id, kind, name, issuer_url, client_id, is_default) VALUES ($1, 'okta', 'Matrix IdP', $2, $3, true)`,

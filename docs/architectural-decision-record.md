@@ -243,3 +243,34 @@ Decisions local to this repository. Cross-repo decisions live in the root reposi
   of unknown shape. Endpoint readiness is derived from the agent's pod readiness plus the route checks.
 - Consequences: managed registration, member sync and the board key read run when an implementation is wired; the
   parked items are listed in the spec's implementation notes.
+
+## ADR-028 The orchestration agent is created by a database function, in the team's transaction
+
+- Status: Accepted (spec 261123-orchestration-and-model-access)
+- Context: every team must have one orchestration agent, and `-db` forbids `afs_app` to insert role `orchestration` or a
+  `team_collaboration` row so that no path can create a team without one or a second one.
+- Decision: `CreateTeam`, import and the backfill call `afs.create_orchestration_agent` (service-admin only) inside the
+  request's transaction; the deferred constraint `teams_orchestration_required` is the backstop, mapped by constraint name
+  to `orchestration_agent_required`. The backfill is a subcommand of `afs-api`, run by a Helm hook as `system:migration`.
+- Consequences: the use case cannot place the agent's columns itself; defaults live in the database function and the
+  settings. A team is never visible without its agent, and an existing team gets one through an idempotent job.
+
+## ADR-029 Model admission is decided by one database function and cached for 60 seconds
+
+- Status: Accepted (spec 261123-orchestration-and-model-access)
+- Context: four levels (service, team, agent or pool) and a price decide whether a call may proceed; the gateway is on the
+  request path and must fail closed.
+- Decision: the gateway calls `afs.model_admission(kind, id)` and maps the first failing level to a reason; it caches the
+  answer for 60 s and drops the cache on change-feed notifications of the tables involved. The reconciler uses the view
+  `afs.effective_agent_models` for what it delivers, so both read one definition of "may call".
+- Consequences: a narrowing takes effect within a second on the change feed and within 60 s without it; an unreachable
+  database refuses the call; the rules are not duplicated in Go.
+
+## ADR-030 One edge, two ALBs, the level decided by hostname
+
+- Status: Accepted (spec 261123-orchestration-and-model-access)
+- Context: a team's web UI and web API are offered `private` (internal network) or `public`, per surface.
+- Decision: the same `afs-edge` pods sit behind a public ALB and an internal ALB (two target group bindings). The edge maps a
+  hostname to (team, surface, level) from `orchestration_routes()`; a surface is served only on the hostname of its effective
+  level, the other is a `404`. Sign-in uses the apex of the level it was reached on.
+- Consequences: no per-team load balancer and no change to the edge's database role; a wrong-level request reveals nothing.

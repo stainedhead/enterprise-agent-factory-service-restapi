@@ -26,10 +26,21 @@ var _ team.Source = (*TeamSource)(nil)
 const loadTeamSQL = `SELECT id, slug, namespace, display_name, kind, state, generation, quotas, deleted_at
   FROM afs.teams WHERE id = $1`
 
-// Only models enabled for the team and in the catalog get an inference profile.
-const loadModelsSQL = `SELECT tm.model_id, coalesce(tm.inference_profile_arn, '')
-  FROM afs.team_models tm JOIN afs.models m ON m.id = tm.model_id
- WHERE tm.team_id = $1 AND m.enabled ORDER BY tm.model_id`
+// Only models callable by one of the team's live agents or pools get an inference profile: the service,
+// team, subject and price levels all pass (afs.effective_agent_models, 000022). The profile state tells a
+// row that is being (re)created from an active one.
+const loadModelsSQL = `SELECT m.id, coalesce(p.inference_profile_arn, ''), coalesce(p.state <> 'active', false)
+  FROM afs.models m
+  LEFT JOIN afs.team_inference_profiles p ON p.team_id = $1 AND p.model_id = m.id
+ WHERE EXISTS (SELECT 1 FROM afs.effective_agent_models e WHERE e.team_id = $1 AND e.model_id = m.id)
+ ORDER BY m.id`
+
+// Profile rows of models that are no longer callable: they keep their profile for the grace period.
+const loadRetiringSQL = `SELECT p.model_id, coalesce(p.inference_profile_arn, ''), p.retire_after
+  FROM afs.team_inference_profiles p
+ WHERE p.team_id = $1
+   AND NOT EXISTS (SELECT 1 FROM afs.effective_agent_models e WHERE e.team_id = $1 AND e.model_id = p.model_id)
+ ORDER BY p.model_id`
 
 // The team's tags beyond the system ones. Required keys with no value are listed with a NULL value and
 // are left out (they are reported as missing, not applied).
@@ -68,30 +79,80 @@ func (s *TeamSource) LoadTeam(ctx context.Context, id string) (team.Desired, err
 		d.Models = nil
 		for rows.Next() {
 			var m team.Model
-			if err := rows.Scan(&m.ID, &m.ProfileARN); err != nil {
+			if err := rows.Scan(&m.ID, &m.ProfileARN, &m.Inactive); err != nil {
 				return MapError(err, OpRead, "team models")
 			}
 			d.Models = append(d.Models, m)
 		}
-		return rows.Err()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		rows.Close()
+		ret, err := t.Query(ctx, loadRetiringSQL, id)
+		if err != nil {
+			return MapError(err, OpRead, "retiring team models")
+		}
+		defer ret.Close()
+		for ret.Next() {
+			var r team.RetiringModel
+			var after *time.Time
+			if err := ret.Scan(&r.ID, &r.ProfileARN, &after); err != nil {
+				return MapError(err, OpRead, "retiring team models")
+			}
+			if after != nil {
+				r.RetireAfter = *after
+			}
+			d.Retiring = append(d.Retiring, r)
+		}
+		return ret.Err()
 	})
 	return d, err
 }
 
-// SetInferenceProfileARN implements team.Source. The reconciler may update only this column of
-// team_models (column grant, database contract §4).
+// SetInferenceProfileARN implements team.Source: the team's profile of the model is active with this ARN
+// (team_inference_profiles; the reconciler owns the table, and a trigger keeps the 1.0.1 column in step).
 func (s *TeamSource) SetInferenceProfileARN(ctx context.Context, teamID, modelID, arn string) error {
 	return s.runner.InTx(ctx, ReconcilerSession(), func(ctx context.Context, tx port.Tx) error {
 		t, err := Unwrap(tx)
 		if err != nil {
 			return err
 		}
-		ct, err := t.Exec(ctx, `UPDATE afs.team_models SET inference_profile_arn = $3 WHERE team_id = $1 AND model_id = $2`, teamID, modelID, arn)
+		if _, err := t.Exec(ctx, `INSERT INTO afs.team_inference_profiles (team_id, model_id, inference_profile_arn, state) VALUES ($1, $2, $3, 'active')
+ON CONFLICT (team_id, model_id) DO UPDATE SET inference_profile_arn = EXCLUDED.inference_profile_arn, state = 'active', retire_after = NULL, updated_at = now()`,
+			teamID, modelID, arn); err != nil {
+			return MapError(err, OpWrite, "team inference profile")
+		}
+		return nil
+	})
+}
+
+// RetireProfile implements team.Source.
+func (s *TeamSource) RetireProfile(ctx context.Context, teamID, modelID string, after time.Time) error {
+	return s.runner.InTx(ctx, ReconcilerSession(), func(ctx context.Context, tx port.Tx) error {
+		t, err := Unwrap(tx)
 		if err != nil {
-			return MapError(err, OpWrite, "team model")
+			return err
+		}
+		ct, err := t.Exec(ctx, `UPDATE afs.team_inference_profiles SET state = 'retiring', retire_after = $3, updated_at = now() WHERE team_id = $1 AND model_id = $2`, teamID, modelID, after)
+		if err != nil {
+			return MapError(err, OpWrite, "team inference profile")
 		}
 		if ct.RowsAffected() == 0 {
-			return domain.NotFound("team model")
+			return domain.NotFound("team inference profile")
+		}
+		return nil
+	})
+}
+
+// DropProfile implements team.Source.
+func (s *TeamSource) DropProfile(ctx context.Context, teamID, modelID string) error {
+	return s.runner.InTx(ctx, ReconcilerSession(), func(ctx context.Context, tx port.Tx) error {
+		t, err := Unwrap(tx)
+		if err != nil {
+			return err
+		}
+		if _, err := t.Exec(ctx, `DELETE FROM afs.team_inference_profiles WHERE team_id = $1 AND model_id = $2`, teamID, modelID); err != nil {
+			return MapError(err, OpWrite, "team inference profile")
 		}
 		return nil
 	})

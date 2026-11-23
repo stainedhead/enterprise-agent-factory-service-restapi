@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
@@ -40,6 +41,8 @@ type Config struct {
 	// LinkVerifierARN is the reconciler's role, which the dedicated agent roles trust so that role links
 	// can be verified (M4-A4, links.TrustWithVerifier). Empty: links cannot be verified.
 	LinkVerifierARN string
+	// Events receives agent.model_unavailable; nil publishes nothing.
+	Events Events
 }
 
 // Controller reconciles agents (engine.KindAgent).
@@ -147,6 +150,8 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 		}
 	}
 	conds = append(conds, templateCondition(d))
+	conds = append(conds, ReportModel(ctx, c.cfg.Events, slog.Default(), ModelState{TeamID: d.Team.ID, Kind: "agents", ID: d.ID,
+		Default: d.ModelID, Effective: d.Models, Reason: d.ModelReason, Prev: d.PrevModelUnavailable}))
 	if d.Link != nil {
 		conds = append(conds, keyCondition(d))
 	}

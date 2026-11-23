@@ -44,14 +44,19 @@ func (a *AgentsAPI) list(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
-	rows, next, err := a.Svc.List(r.Context(), c, r.PathValue("teamId"), page)
+	role := domain.AgentRole(r.URL.Query().Get("role"))
+	if role != "" && !role.Valid() {
+		WriteError(w, r, bad("role", "must be worker or orchestration"))
+		return
+	}
+	rows, next, err := a.Svc.List(r.Context(), c, r.PathValue("teamId"), role, page)
 	if err != nil {
 		WriteError(w, r, err)
 		return
 	}
 	out := w2ListBody[agentBody]{Items: make([]agentBody, 0, len(rows)), NextToken: w2Next(a.Pages, r, c, next)}
 	for _, x := range rows {
-		out.Items = append(out.Items, toAgentBody(x))
+		out.Items = append(out.Items, toAgentBodyFor(c, x))
 	}
 	WriteJSON(w, http.StatusOK, out)
 }
@@ -68,7 +73,7 @@ func (a *AgentsAPI) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w2Etag(w, x.Version)
-	WriteJSON(w, http.StatusOK, toAgentBody(x))
+	WriteJSON(w, http.StatusOK, toAgentBodyFor(c, x))
 }
 
 func (a *AgentsAPI) status(w http.ResponseWriter, r *http.Request) {
@@ -112,6 +117,9 @@ func (a *AgentsAPI) create(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
+	if req.ModelID != "" {
+		DefaultDeprecation.Apply(w, "")
+	}
 	idem, err := w2Idem(r, "CreateAgent", teamID, raw, func(v any) (int, json.RawMessage, error) {
 		return w2Render(http.StatusCreated, toAgentBody(v.(domain.Agent)))
 	})
@@ -120,7 +128,7 @@ func (a *AgentsAPI) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := a.Svc.Create(r.Context(), c, teamID, domain.NewAgentParams{Name: req.Name, Description: req.Description,
-		Template: req.Template, Image: req.Image, ModelID: req.ModelID, Resources: req.Resources,
+		Template: req.Template, Image: req.Image, ModelID: req.ModelID, Models: req.Models.input(), Resources: req.Resources,
 		IAMIdentity: domain.IAMIdentity(req.IAMIdentity), Volume: vol, Bindings: bindingsOf(req.SecretBinds),
 		Role: domain.AgentRole(req.Role), Collaboration: req.Collaboration.input()}, idem)
 	if err != nil {
@@ -152,8 +160,13 @@ func (a *AgentsAPI) update(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
-	p := domain.AgentPatch{Description: req.Description, Template: req.Template, Image: req.Image, ModelID: req.ModelID,
-		Resources: req.Resources, Collaboration: req.Collaboration.input()}
+	p := domain.AgentPatch{Name: req.Name, Description: req.Description, Template: req.Template, Image: req.Image, ModelID: req.ModelID,
+		Models: req.Models.input(), Resources: req.Resources, Collaboration: req.Collaboration.input()}
+	if req.ModelID != nil {
+		// The deprecated modelId alone changes only the default; with a different models.defaultModelId it
+		// is refused by the domain as conflicting_fields.
+		DefaultDeprecation.Apply(w, "")
+	}
 	if req.Role != nil {
 		role := domain.AgentRole(*req.Role)
 		p.Role = &role
@@ -180,7 +193,7 @@ func (a *AgentsAPI) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w2Etag(w, x.Version)
-	WriteJSON(w, http.StatusOK, toAgentBody(x))
+	WriteJSON(w, http.StatusOK, toAgentBodyFor(c, x))
 }
 
 // del serves DeleteAgent: 202 with the agent in status Deleting (CD-1).
@@ -201,7 +214,7 @@ func (a *AgentsAPI) del(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w2Etag(w, x.Version)
-	WriteJSON(w, http.StatusAccepted, toAgentBody(x))
+	WriteJSON(w, http.StatusAccepted, toAgentBodyFor(c, x))
 }
 
 // verb serves PauseAgent, ResumeAgent and RestartAgent.
@@ -235,7 +248,7 @@ func (a *AgentsAPI) verb(w http.ResponseWriter, r *http.Request, op string, stat
 		return
 	}
 	w2Etag(w, res.Agent.Version)
-	WriteJSON(w, status, toAgentBody(res.Agent))
+	WriteJSON(w, status, toAgentBodyFor(c, res.Agent))
 }
 
 func (a *AgentsAPI) pause(w http.ResponseWriter, r *http.Request) {

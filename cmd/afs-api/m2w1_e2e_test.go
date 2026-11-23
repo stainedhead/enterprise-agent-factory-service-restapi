@@ -120,6 +120,21 @@ func TestM2W1ModelsAndPrices(t *testing.T) {
 	}
 	m.expect(403, "GET", "/v1/admin/models", matrix.TeamAdmin, "")
 	m.expect(403, "PATCH", "/v1/admin/models/"+id, matrix.TeamAdmin, `{"enabled":false}`, "If-Match", `"2"`)
+	// With service access all every model is enabled and the flag cannot change (CD-35, MOD-1).
+	m.expect(200, "PUT", "/v1/admin/model-access", matrix.ServiceAdmin, `{"access":"all"}`)
+	obj, _ = m.expect(409, "PATCH", "/v1/admin/models/"+id, matrix.ServiceAdmin, `{"enabled":false}`, "If-Match", `"2"`)
+	if !strings.Contains(fmt.Sprint(obj), "service_model_access_all") {
+		t.Errorf("flag change under access all: %v", obj)
+	}
+	m.expect(403, "PUT", "/v1/admin/model-access", matrix.TeamAdmin, `{"access":"selected"}`)
+	m.expect(400, "PUT", "/v1/admin/model-access", matrix.ServiceAdmin, `{"access":"some"}`)
+	t.Cleanup(func() {
+		_, _ = m.w.Admin.Exec(context.WithoutCancel(t.Context()), `UPDATE afs.service_settings SET value = '"all"' WHERE key = 'models.service_access'`)
+	})
+	obj, _ = m.expect(200, "PUT", "/v1/admin/model-access", matrix.ServiceAdmin, `{"access":"selected"}`)
+	if obj["access"] != "selected" {
+		t.Errorf("model access: %v", obj)
+	}
 	m.expect(200, "PATCH", "/v1/admin/models/"+id, matrix.ServiceAdmin, `{"enabled":false}`, "If-Match", `"2"`)
 	list, _ = m.expect(200, "GET", "/v1/models", matrix.TeamAdmin, "")
 	if find(items(t, list), "id", id) != nil {

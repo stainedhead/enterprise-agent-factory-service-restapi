@@ -67,6 +67,7 @@ func (r *exportRig) count(t *testing.T, sql string, args ...any) int {
 func newExportRig(t *testing.T) *exportRig {
 	t.Helper()
 	db := pgtest.Get(t)
+	db.SeedOrchestrationRuntime(t)
 	r := &exportRig{db: db, blob: &memBlob{objects: map[string][]byte{}}}
 	r.team = seedFullAgent(t, db)
 	// Other tests assert on the shared outbox, so the events these tests publish are removed after.
@@ -87,6 +88,7 @@ func newExportRig(t *testing.T) *exportRig {
 	// What seedFullAgent does not cover: tags, a budget, members, an opt-out, an identity, a role link in an
 	// allowed account, and a completed volume snapshot.
 	tm := r.team.team.ID
+	r.exec(t, `UPDATE afs.agent_templates SET allowed_image_digests = allowed_image_digests || ARRAY[$1]::text[] WHERE name = 'pgtest-orchestration-paperclip' AND NOT $1 = ANY (allowed_image_digests)`, agentDigest)
 	r.exec(t, `UPDATE afs.teams SET allowed_aws_accounts = ARRAY['*'], description = 'payments team' WHERE id = $1`, tm)
 	r.exec(t, `INSERT INTO afs.org_aws_accounts (id, name, status) VALUES ('111122223333', 'source', 'active'), ('444455556666', 'target', 'active') ON CONFLICT DO NOTHING`)
 	r.exec(t, `INSERT INTO afs.team_tags (team_id, key, value) VALUES ($1, 'env', 'prod')`, tm)
@@ -392,13 +394,13 @@ func TestExportImportCollaboration(t *testing.T) {
 	tm := r.team.team.ID
 	tpl := "pc-" + strings.ToLower(pgtest.NewID("x")[2:8])
 	r.exec(t, `INSERT INTO afs.agent_templates (id, name, harness, default_resources, allowed_image_digests, current_image_digest, enabled, capabilities)
-SELECT $1, $2, t.harness, t.default_resources, t.allowed_image_digests, t.current_image_digest, true, ARRAY['paperclip']
+SELECT $1, $2, t.harness, t.default_resources, t.allowed_image_digests, t.current_image_digest, true, ARRAY['orchestration','tool:paperclip']
 FROM afs.agent_templates t WHERE t.id = $3`, pgtest.NewID("tpl"), tpl, r.team.templateID)
 	collab := pgtest.NewID("agt")
 	r.exec(t, `INSERT INTO afs.agents (id, team_id, name, template, template_id, image, model_id, role, iam_identity)
-SELECT $1, team_id, 'pc', $2, (SELECT id FROM afs.agent_templates WHERE name = $2), image, model_id, 'collaboration', 'dedicated'
+SELECT $1, team_id, 'pc', $2, (SELECT id FROM afs.agent_templates WHERE name = $2), image, model_id, 'orchestration', 'dedicated'
 FROM afs.agents WHERE id = $3`, collab, tpl, r.team.agentID)
-	r.exec(t, `INSERT INTO afs.team_collaboration (team_id, agent_id, web_ui_enabled, rest_api_enabled, registration_mode) VALUES ($1, $2, true, true, 'managed')`, tm, collab)
+	r.exec(t, `INSERT INTO afs.team_collaboration (team_id, agent_id, web_ui_exposure, web_api_exposure, registration_mode) VALUES ($1, $2, 'public', 'public', 'managed')`, tm, collab)
 	r.exec(t, `INSERT INTO afs.agent_collaboration (team_id, agent_id, connect) VALUES ($1, $2, true)`, tm, r.team.agentID)
 	// The service's own key secret for the worker, bound to it, recorded as the reconciler does.
 	var path string
@@ -459,7 +461,7 @@ FROM afs.agents WHERE id = $3`, collab, tpl, r.team.agentID)
 	if err := r.db.Admin(t).QueryRow(t.Context(), `SELECT id FROM afs.teams WHERE slug = $1`, r.team.team.Slug).Scan(&teamID); err != nil {
 		t.Fatal(err)
 	}
-	if r.count(t, `SELECT count(*) FROM afs.team_collaboration c JOIN afs.agents a ON a.id = c.agent_id AND a.role = 'collaboration' AND a.name = 'pc'
+	if r.count(t, `SELECT count(*) FROM afs.team_collaboration c JOIN afs.agents a ON a.id = c.agent_id AND a.role = 'orchestration' AND a.name = 'pc'
 WHERE c.team_id = $1 AND c.registration_mode = 'managed' AND c.rest_api_enabled`, teamID) != 1 {
 		t.Error("team collaboration not restored")
 	}

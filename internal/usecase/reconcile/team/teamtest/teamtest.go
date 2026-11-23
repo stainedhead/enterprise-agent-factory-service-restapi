@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/team"
@@ -21,11 +22,14 @@ type Source struct {
 	SetARNErr error
 	// ARNs records the profile ARNs written, by "teamID/modelID".
 	ARNs map[string]string
+	// Retired records RetireProfile calls and Dropped the profile rows dropped, by "teamID/modelID".
+	Retired map[string]time.Time
+	Dropped []string
 }
 
 // NewSource returns a Source holding teams.
 func NewSource(teams ...team.Desired) *Source {
-	s := &Source{Teams: map[string]team.Desired{}, ARNs: map[string]string{}}
+	s := &Source{Teams: map[string]team.Desired{}, ARNs: map[string]string{}, Retired: map[string]time.Time{}}
 	for _, t := range teams {
 		s.Teams[t.ID] = t
 	}
@@ -57,6 +61,23 @@ func (s *Source) SetInferenceProfileARN(_ context.Context, teamID, modelID, arn 
 		return s.SetARNErr
 	}
 	s.ARNs[teamID+"/"+modelID] = arn
+	return nil
+}
+
+// RetireProfile implements team.Source.
+func (s *Source) RetireProfile(_ context.Context, teamID, modelID string, after time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Retired[teamID+"/"+modelID] = after
+	return nil
+}
+
+// DropProfile implements team.Source.
+func (s *Source) DropProfile(_ context.Context, teamID, modelID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Dropped = append(s.Dropped, teamID+"/"+modelID)
+	delete(s.Retired, teamID+"/"+modelID)
 	return nil
 }
 

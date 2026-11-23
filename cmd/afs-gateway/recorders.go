@@ -25,7 +25,14 @@ func (r usageDropRecorder) UsageRowsDropped(reason gateway.UsageDropReason, rows
 	}
 }
 
+// modelDenialRecorder binds gateway.ModelDenialRecorder to afs_gateway_model_denials_total{reason}.
+type modelDenialRecorder struct{ m *observability.Metrics }
+
+// ModelDenied implements gateway.ModelDenialRecorder.
+func (r modelDenialRecorder) ModelDenied(_, _, reason string) { r.m.ModelDenied(reason) }
+
 var (
-	_ gateway.SettleRecorder    = settleRecorder{}
-	_ gateway.UsageDropRecorder = usageDropRecorder{}
+	_ gateway.ModelDenialRecorder = modelDenialRecorder{}
+	_ gateway.SettleRecorder      = settleRecorder{}
+	_ gateway.UsageDropRecorder   = usageDropRecorder{}
 )

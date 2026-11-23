@@ -48,6 +48,8 @@ type agentStreamDeps struct {
 	NodeClassJSON string
 	// LinkVerifierARN is AFS_RECONCILER_ROLE_ARN (M4-A4).
 	LinkVerifierARN string
+	// Events publishes agent.model_unavailable from the agent and pool controllers.
+	Events agent.Events
 }
 
 // buildAgentStream builds the agent controller, its delete steps and the snapshot manager.
@@ -71,7 +73,7 @@ func buildAgentStream(d agentStreamDeps, log *slog.Logger) (*agentStream, error)
 	ctl, err := agent.NewController(agent.Config{
 		Source: src, Cluster: cluster, IAM: d.IAM, PodIdentity: pods, Volumes: cluster,
 		Snapshots: snapshot.Latest{Store: store}, AWS: d.AWS, Gateway: d.Gateway, Edge: d.Edge,
-		Hooks: agent.Hooks{Deleting: lifecycle.AgentDeleting(fin)}, LinkVerifierARN: d.LinkVerifierARN,
+		Hooks: agent.Hooks{Deleting: lifecycle.AgentDeleting(fin)}, LinkVerifierARN: d.LinkVerifierARN, Events: d.Events,
 	})
 	if err != nil {
 		return nil, err
@@ -93,12 +95,12 @@ func agentRoutes() []engine.Route {
 	var routes []engine.Route
 	routes = append(routes, engine.Route{Table: "agents", Targets: []engine.Target{{Kind: engine.KindAgent, Self: true}}})
 	for _, t := range []string{
-		"teams", "team_models", "agent_secret_bindings", "agent_config_values", "agent_role_links", "agent_identities",
+		"teams", "team_models", "agent_models", "team_inference_profiles", "agent_secret_bindings", "agent_config_values", "agent_role_links", "agent_identities",
 		"agent_external_access", "external_system_optouts", "secrets", "namespace_config_values", "team_tags",
 	} {
 		routes = append(routes, engine.Route{Table: t, Targets: children})
 	}
-	for _, t := range []string{"agent_templates", "external_systems", "service_tags", "storage_classes"} {
+	for _, t := range []string{"agent_templates", "external_systems", "service_tags", "storage_classes", "models", "model_prices", "service_settings"} {
 		routes = append(routes, engine.Route{Table: t, FanOut: []engine.Kind{engine.KindAgent}})
 	}
 	return routes

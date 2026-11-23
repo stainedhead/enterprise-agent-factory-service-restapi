@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Contract v1.3.1 (2026-11-22) corrects v1.3.0 after the `-db`, `-restapi`, `-website` and `-cli` PRD reviews (see §9). v1.3.0 (2026-11-22) adds Paperclip team collaboration (§4.4b, §4.4c, the `team_collaborator` role and the events of §7; see §9); v1.2.0, draft for implementation (2026-11-21); v1.2.0 records the decisions of `-restapi` milestone M0 (CD-1 to CD-10, see §9) and, as an amendment of 2026-11-22, those of the feature-complete build (CD-7 exemption list, CD-11, CD-12, swarm template secrets, `Me.servicePermissions`; see §9); v1.1.0 was revised after the `review-prd` pass (root PRD D23 to D57) |
+| **Status** | Contract **v1.4.0** (2026-11-23) adds the team orchestration agent and model access ([team-orchestration-agent-PRD.md](../../team-orchestration-agent-PRD.md), approved by J; §4.4d, changes to §3, §4.2, §4.4, §4.4a, §4.4c, §4.11 and §5 to §7; decisions CD-26 to CD-38, see §9); it ships with `-restapi` 1.1.0 and is not yet built. Contract v1.3.2 (2026-11-22) records decisions from the build of the Paperclip collaboration change (see §9). v1.3.1 (2026-11-22) corrects v1.3.0 after the `-db`, `-restapi`, `-website` and `-cli` PRD reviews (see §9). v1.3.0 (2026-11-22) adds Paperclip team collaboration (§4.4b, §4.4c, the `team_collaborator` role and the events of §7; see §9); v1.2.0, draft for implementation (2026-11-21); v1.2.0 records the decisions of `-restapi` milestone M0 (CD-1 to CD-10, see §9) and, as an amendment of 2026-11-22, those of the feature-complete build (CD-7 exemption list, CD-11, CD-12, swarm template secrets, `Me.servicePermissions`; see §9); v1.1.0 was revised after the `review-prd` pass (root PRD D23 to D57) |
 | **Provider** | [enterprise-agent-factory-service-restapi](https://github.com/stainedhead/enterprise-agent-factory-service-restapi) (`afs-api`) |
 | **Consumers** | [-cli](https://github.com/stainedhead/enterprise-agent-factory-service-cli) (`afs`), [-website](https://github.com/stainedhead/enterprise-agent-factory-service-website) (`@afs/sdk`, console) |
 | **Machine-readable form** | `-restapi/api/openapi.yaml` (OpenAPI 3.1). Built from this document; once an operation is in the YAML, the YAML wins and this document is updated to match in the same PR |
@@ -160,7 +160,21 @@ the table above, including the conditional ones** (`teams:get-kubeconfig` when `
 | `collaboration:contribute` | | ✓ | ✓ | ✓ | | Every method through the edge, including WebSocket client frames |
 | `collaboration:api` | | ✓ | ✓ | ✓ | | Use the REST API surface (`X-Afs-Authorization`); writes also need `collaboration:contribute` |
 
-`teams:set-guardrails` also covers `mayExposeCollaboration`. `ListCollaborationEndpoints` uses `admin:settings`. The new
+`teams:set-guardrails` also covers `mayExposeCollaboration`. `ListCollaborationEndpoints` uses `admin:settings`.
+
+**v1.4.0 scope changes (orchestration PRD §4, OR-D9).** No permission is added or renamed; these change scope:
+
+| Permission | Change |
+|---|---|
+| `collaboration:read` | Also `GetTeamOrchestration` |
+| `collaboration:manage` | Also `PutTeamOrchestration` (exposure levels, registration mode) and `ChangeCollaborationTool` |
+| `teams:set-guardrails` | Sets `maxCollaborationExposure` (replaces `mayExposeCollaboration`) and a team's model access (`PutTeamModels` with `access`, `CreateTeam.modelAccess`; OR-D16) |
+| `agents:write` | Still covers update, pause, resume, restart and snapshot of the orchestration agent, except its fixed fields (§4.4d), and an agent's `models`. It no longer creates or deletes an orchestration agent, for any role: only `CreateTeam`, `instantiate_work_order_team` and team deletion do |
+| `pools:write` | Also a pool's `models` |
+| `admin:models` | Also `PutServiceModelAccess` |
+| `admin:settings` | Also `ListOrchestrationEndpoints` and the `orchestration.*` and `models.*` settings | |
+
+The new
 permissions are a change in `internal/authz` and `domain/permission.ts` in the same cycle. Team-admins grant
 `team_collaborator` like the other team roles and cannot grant `service_admin` or `security_operator`.
 
@@ -217,6 +231,43 @@ emits `budget.ceiling_override_expired` (D34). `maxBudgetUsd` below the current 
 root PRD's TEAM-9 table says; on a suspended team every mutation except `ResumeTeam` and `DeleteTeam`
 → `409 Conflict` (`details.reason = team_suspended`).
 
+**v1.4.0: orchestration and model access on teams.** `CreateTeam` also creates the team's orchestration agent in the same
+transaction (§4.4d, ORC-2): `afs-api` generates the tool's boot secrets in Secrets Manager first (failure → `503
+Unavailable`, nothing is created), then writes the team, calls `afs.create_orchestration_agent` (database contract §7.3.7),
+records the boot secrets, and writes audit and outbox in one transaction. New optional body fields:
+
+- `orchestration {tool?, webUiExposure?, webApiExposure?, registrationMode?, models?{access, modelIds, defaultModelId},
+  modelId?, resources?{cpu, memory}, volume?{sizeGiB, onDelete?}}` (ORC-26). Defaults: the service default tool of
+  `orchestration.tools`; levels from `orchestration.default_web_ui_exposure` and `.default_web_api_exposure`, each lowered
+  to the team's limit (never refused for being above it, because they are defaults), and `off` for a surface the tool
+  lacks; `registrationMode` `manual` for Paperclip, `managed` for Buzz; `models` `{access: all}` with the default model of
+  §4.4 *Models*; `modelId` is shorthand for `models.defaultModelId` (CD-36); resources and volume size from
+  `orchestration.default_resources` and `.default_volume_gib`. Explicit levels above the limit → `ValidationError`
+  (`field: orchestration.webUiExposure`, `reason: exposure_above_limit`); a disabled tool → `ValidationError`
+  (`field: orchestration.tool`, `reason: tool_not_enabled`); a tool whose runtime is unset → `409 Conflict`
+  (`orchestration_runtime_unset`); no model the agent could default to → `ValidationError`
+  (`field: orchestration.models.defaultModelId`, `reason: no_model_available`).
+- `maxCollaborationExposure` (`off` \| `private` \| `public`; default `orchestration.default_limit`; guardrail field,
+  `teams:set-guardrails`). `UpdateTeam` sets it too; lowering it lowers the effective levels within 60 s and keeps the
+  team's choices (ORC-14). `mayExposeCollaboration` is its deprecated alias (§4.4d).
+- `modelAccess` (`all` \| `selected`; default `models.default_team_access`; guardrail field). With `selected`, the existing
+  `models[]` is the list (default `models.default_team_models`); `models[]` sent without `modelAccess` means `selected`, as a
+  1.0.1 client meant it (CD-30). Each listed model must be enabled for the service (`model_not_enabled_for_service`).
+  After create, `modelAccess` changes only through `PutTeamModels`; `UpdateTeam` does not take it.
+
+`Team` returns `orchestrationAgentId†` (null only while the backfill has not reached a 1.0.1 team), `maxCollaborationExposure`
+and `modelAccess`. `CreateTeam` emits `team.created`, `agent.created`, `orchestration.created` and one `secret.created` per
+boot secret. `DeleteTeam` deletes the orchestration agent last, after the workers (TEAM-9).
+
+**`ListTeamModels`** → `{access, modelIds, items: [TeamModel]}` (`ETag` is the team's `version`). `access` is the team's
+mode; `modelIds` is the stored selection (empty for `all`, and possibly naming models the service has since disabled);
+`items` is the team's allowed set (service ∩ team), each a `Model` (§5) with `callable†`, `priceState†` and
+`inferenceProfileState†` (`creating`, `active`, `retiring` or `null`). **`PutTeamModels`** body `{access, modelIds?}`:
+`selected` takes `modelIds` (0 to 100 distinct ids, each enabled for the service); `all` takes no `modelIds`
+(`ValidationError`, `reason: model_ids_not_allowed_for_all`) and keeps the stored selection for a later switch back; a body
+with only `modelIds` is `selected` (deprecated form). Narrowing never edits an agent's stored selection (MOD-6). Emits
+`team.models_changed` and, as in 1.0.1, `team.updated`.
+
 ### 4.3 Members and API keys
 
 | Op | Method and path | Perm | CLI | SDK | Screen | P |
@@ -261,6 +312,28 @@ Agent spec fields (create and update): `name` (create only), `description`, `tem
 {`sizeGiB` grow-only, `storageClass` create-only, `onDelete`, `snapshotSchedule`, `snapshotRetain`},
 `secretBindings[]` {`secretId`, `delivery` `env` \| `file`, `target`}. The agent has no replica count.
 
+**Models (v1.4.0, MOD-3, MOD-7).** Agents (workers and the orchestration agent) carry `models {access: all|selected,
+modelIds[], defaultModelId, effectiveModelIds†}`. `all` (the default on create) means every model the team may use, now and
+later; `selected` names 1 to 50 of them. `defaultModelId` is the model the runtime starts with. `effectiveModelIds†` is
+service ∩ team ∩ agent ∩ callable at read time; stored ids that dropped out stay in `modelIds` (the console strikes them
+through). Rules (CD-31):
+
+- Create: `models` optional. Its `defaultModelId`, else the deprecated `modelId`, else setting `models.default_model_id`
+  when the team allows it, else the team's first callable model by id; none → `ValidationError`
+  (`field: models.defaultModelId`, `reason: required`). `modelId` alone creates `{access: all, defaultModelId: modelId}`.
+- Update (`PATCH`): members of `models` that are sent replace the stored ones; omitted members are kept. `modelId` alone sets
+  only `defaultModelId`. `modelId` and `models.defaultModelId` with different values → `ValidationError`
+  (`reason: conflicting_fields`).
+- Refusals (`ValidationError`): a listed model not enabled for the service or not allowed for the team
+  (`field: models.modelIds[i]`, `reason: model_not_enabled_for_service` or `model_not_enabled_for_team`); `selected` with no
+  ids (`models_selection_empty`); a default outside the selection or the team's set (`default_model_not_allowed`). A model
+  with no approved price may be selected; the gateway refuses it until it is priced.
+- A change of `models` bumps `generation` and rolls the pod (MOD-4). An agent whose default leaves its effective set gets
+  condition `ModelUnavailable=True` (with the model and reason) and the event `agent.model_unavailable`; one whose effective
+  set is empty is `Degraded` (MOD-6). `ListAgents` and `GetAgent` show `models` to every role with `agents:read`.
+
+v1.4.0 makes the role and collaboration rules below historical: see §4.4d (*Agents and the orchestration agent*).
+
 v1.3.0 adds `role` and `collaboration` (§4.4b):
 
 - `role`: `worker` (default) or `collaboration`; set on create, immutable (`UpdateAgent` changing it → `ValidationError`).
@@ -283,11 +356,13 @@ v1.3.0 adds `role` and `collaboration` (§4.4b):
   `agent.created` and one `secret.created` per boot secret. `DeleteAgent` of the collaboration agent disables both surfaces,
   removes the route and disconnects every agent (COL-8).
 - `ListAgentTemplates` and `PutAgentTemplate` carry `capabilities[]` (values: `paperclip`); `ListAgentTemplates` accepts
-  `?capability=`.
+  `?capability=`. The admin listing `ListAdminAgentTemplates` has **no** `capability` filter (decision RCF-1, v1.3.2): each
+  item carries `capabilities[]`, so admin clients filter locally, and the CLI and PRD drop `afs admin list-agent-templates
+  --capability`.
 
 ### 4.4a Swarms: stages and pools
 
-Ephemeral teams only (`409 Conflict` on a persistent team). `afs-api` checks the team's `kind` before the write and returns `409`, because the database's guard would otherwise raise `23514` (`ValidationError`). Pool names share the team's agent names.
+Ephemeral teams only (`409 Conflict` on a persistent team). `afs-api` checks the team's `kind` before the write and returns `409`, because the database's guard would otherwise raise `23514` (`ValidationError`). Pool names share the team's agent names (v1.4.0: `orchestrator` is reserved, `name_reserved`). v1.4.0: `CreatePool` and `UpdatePool` take `models` with the rules of §4.4 *Models*; the gateway admits a pool worker's call only within the pool's effective set (service ∩ team ∩ pool ∩ callable).
 
 | Op | Method and path | Perm | CLI | SDK | Screen | P |
 |---|---|---|---|---|---|---|
@@ -327,6 +402,11 @@ inbox queue (`afs-<team ulid>-<short hash>`) that the reconciler creates. The re
 Only the roles of pools with a handoff to it may send (D22, D32).
 
 ### 4.4b Collaboration (Paperclip)
+
+**v1.4.0:** `GetTeamCollaboration`, `PutTeamCollaboration` and `ListCollaborationEndpoints` are deprecated aliases of §4.4d
+until 2.0.0 (mapping and headers there); the agent role and `CreateAgent` rules below are replaced by §4.4d; links and key
+rotation stay. `collaboration_agent_missing` can occur only for a 1.0.1 team the backfill has not reached, and then reads
+`orchestration_agent_pending`.
 
 Requirements: [Paperclip PRD](../../paperclip-team-collaboration-PRD.md) COL-1 to COL-36, SEC-7. A team has at most one
 collaboration agent (an agent with `role: collaboration`, created through `CreateAgent`); these operations configure
@@ -435,10 +515,35 @@ InvokeApi operation: …`, exit 254).
 ambiguous_credentials`). With neither, browser navigation (`Accept: text/html`, `Sec-Fetch-Mode: navigate`) is web UI
 traffic and is redirected to sign in; anything else is API traffic.
 
-**Credentials.** `X-Afs-Authorization` is an access token from the team's sign-in provider (same issuer, audience and
-expiry rules as `afs-api`, §2, so the CLI's SSO token works) or a team API key (`afsk_…`) whose role holds
+**Credentials.** `X-Afs-Authorization` is an access token from the team's sign-in provider (same issuer and expiry rules as `afs-api`, §2; the audience rules are below, so the CLI's SSO token works) or a team API key (`afsk_…`) whose role holds
 `collaboration:api`. The caller's Paperclip credential stays in `Authorization`. The edge validates and strips
 `X-Afs-Authorization`, decides with `internal/authz` (cached at most 60 s), and forwards.
+
+**Bearer audiences (v1.3.2).** The edge accepts a bearer token whose `aud` is one of three client ids of the team's provider: the console client id (`identity_providers.client_id`), the CLI client id (`cli_client_id`) or the collaboration client id (`collab_client_id`). The first two come from `afs.collab_routes()` (`-db` 000021). Any other audience is `401 token_invalid`.
+
+**Exposure levels and hostnames (v1.4.0, ORC-13 to ORC-19).** The edge has two entries in front of the same pods: the
+internet-facing ALB for **public** surfaces at `https://<slug>.<orchestration.public_base_domain>` (the 1.0.1
+`collab.base_domain`) and an **internal ALB** in private subnets for **private** surfaces at
+`https://<slug>.<orchestration.private_base_domain>`, resolvable only in a Route 53 private hosted zone associated with the
+environment VPC (or delegated from corporate DNS), reachable from networks routed to the VPC and never from the internet.
+Each ALB has its own certificate (apex and wildcard of its base domain) and listener rules that forward only its own base
+domain's hosts; the internal ALB's WAF has the core rule set, known bad inputs and the per-IP rate rule, and
+`collab.allowed_source_cidrs` applies to the public WAF only. The edge tells the level from `Host` alone and reads routes from
+`afs.orchestration_routes()` (database contract §7.3.6). For a team host at level *L*:
+
+| Case | Answer |
+|---|---|
+| No surface of the team is effective at *L* (including every Buzz host, a level switched off by a kill switch or the limit, and the other level's host) | `404 NotFound`, no detail |
+| The request's surface is effective at *L* | Served as before |
+| The request's surface is effective `off` and the other surface is effective at *L*, caller holds a binding | `403 AccessDenied`, `surface_disabled` (as 1.0.1) |
+| The request's surface is effective at the other level | `404 NotFound`, no detail (wrong-level host, CD-38) |
+
+Each base domain has its own apex callback `https://<base domain>/oauth2/callback` (identity providers register both
+redirect URIs; PC-D21 per apex). Sessions are host-only, so a session on the private host never serves the public host.
+Records and five-minute counts carry `exposure` (`public` or `private`, ORC-31). Exposure, limit and kill-switch changes take
+effect within 60 s (p95). Paths, credentials, scanning, limits and errors are otherwise unchanged; the forward target is the
+tool's Service and port from the route row (Paperclip `paperclip:3100`). `afs collaboration invoke-api` uses
+`GetTeamOrchestration.webApi.url` and exits 254 with "Web API is off (N/A for Buzz)" when it is `null` for a tool without one.
 
 **Hosts.** The ALB listener certificate covers `<collab.base_domain>` and `*.<collab.base_domain>`, Route 53 has an apex record and the wildcard, and listener rules forward only those host headers. The edge refuses any `Host` that is neither the apex nor a known team host (`404`); it does not check SNI, which the ALB terminates (G4).
 
@@ -483,6 +588,152 @@ fragment), at most once per team, person and pattern per five minutes with a `co
 **Records** (COL-31, G5): the edge writes one structured JSON line per sign-in, sign-out and denied request to stdout with the field `afs.team_id` (and no body, header value, cookie or token). The node log collector that already feeds each team's aggregator (the per-team Fluent Bit aggregator of the log delivery, D17) also routes the records of `afs-system/afs-edge` by `afs.team_id` to that team's aggregator, with the redaction of OPS-4; the platform keeps every line in CloudWatch for 13 months. The routing rule is part of the `-restapi` Helm chart and its Fluent Bit configuration; no new network path exists. Edge records have the same shape as agent sign-in records and are delivered the same way; five-minute counts go to the reports (§4.9); a sign-in held only through a service admin role is marked
 `serviceAdminEntry`. No request body, header value or raw path with ids is recorded. A Paperclip response that carries a once-only key is passed through unchanged, and the edge never logs bodies.
 
+### 4.4d Orchestration (v1.4.0)
+
+Requirements: [team orchestration agent PRD](../../team-orchestration-agent-PRD.md) ORC-1 to ORC-32 (decisions OR-D1 to
+OR-D12, approved by J on 2026-11-23); database contract §7.3. Every team has exactly one **orchestration agent** (an agent
+with `role: orchestration`), created with the team by `CreateTeam` (or `instantiate_work_order_team`) and deleted only
+with the team. It runs the team's **collaboration tool** (`paperclip`, shown as *Paperclip AI*, or `buzz`, shown as
+*Buzz*) and is the only thing in a team reachable from outside the cluster. Its agent configuration (models, persona,
+resources, volume, configuration values, secret bindings, pause, resume, restart, snapshot) uses the §4.4 operations;
+the operations here hold everything that belongs to the tool. Permissions are the `collaboration:*` ones (OR-D9). On a
+suspended team every mutation here → `409 Conflict` (`team_suspended`).
+
+A team created before 1.1.0 that the backfill has not reached yet has no orchestration agent: `GetTeamOrchestration` →
+`404 NotFound` with `details.reason = orchestration_agent_pending` (the console shows "Orchestration agent being created");
+the mutations → `409 Conflict` with the same reason (CD-26). After the backfill this cannot occur.
+
+| Op | Method and path | Perm | CLI | SDK | Screen | P |
+|---|---|---|---|---|---|---|
+| `GetTeamOrchestration` | `GET /v1/teams/{teamId}/orchestration` | `collaboration:read` | `orchestration describe-orchestration` | `orchestration.get()` | T17, T18, V4, T1, T2 | P0 |
+| `PutTeamOrchestration` | `PUT /v1/teams/{teamId}/orchestration` | `collaboration:manage` | `orchestration put-orchestration` | `orchestration.put()` | T17 | P0 |
+| `ChangeCollaborationTool` | `POST /v1/teams/{teamId}/orchestration:change-tool` | `collaboration:manage` | `orchestration change-collaboration-tool` | `orchestration.changeTool()` | T17 | P1 (O3) |
+| `ListOrchestrationEndpoints` | `GET /v1/admin/orchestration-endpoints?exposure&tool&teamId&state` *CSV* | `admin:settings` *svc* | `admin list-orchestration-endpoints` | `admin.orchestrationEndpoints.list()` | S12 | P0 |
+
+**Exposure.** Each surface (`webUi`, `webApi`) has an **exposure**: `off` (inside the namespace only), `private` (through the
+internal ALB from networks routed to the environment VPC) or `public` (through the internet-facing ALB). The team's
+**limit** (`Team.maxCollaborationExposure`, service admins only) caps both. The stored choice and the **effective** level
+can differ; the edge honours only the effective level. A surface is lowered, with these reasons in `reasons[]`:
+
+| Reason | Effect |
+|---|---|
+| `tool_not_supported` | The tool has no such surface (Buzz: neither). Always `off` |
+| `team_limit` | Choice above the limit: lowered to the limit |
+| `service_switch_public`, `service_switch_private` | Kill switch `orchestration.public_endpoints` / `orchestration.private_endpoints` is off: that level becomes `off` |
+| `base_domain_unset` | `orchestration.public_base_domain` / `orchestration.private_base_domain` unset: that level becomes `off` |
+| `provider_without_collab_client` | Web UI only: the team's sign-in provider has no `collabClientId` (as 1.0.1, CD-28): `off` |
+
+**`TeamOrchestration`** (singleton per team; `ETag` is its `version`):
+
+```json
+{
+  "teamId": "team_01J…", "agentId": "agt_01J…", "agentName": "orchestrator",
+  "phase": "Ready",
+  "tool": "paperclip", "toolVersion": "2026.11.2", "registrationMode": "managed",
+  "limit": "private",
+  "webUi":  {"supported": true, "exposure": "public", "effective": "private", "reasons": ["team_limit"],
+             "hostname": "payments-factory.collab.corp.example.com", "url": "https://payments-factory.collab.corp.example.com/"},
+  "webApi": {"supported": true, "exposure": "off", "effective": "off", "reasons": [], "hostname": null, "url": null},
+  "connectedAgents": 4,
+  "unmanagedToolAgents": [],
+  "version": 7, "generation": 7,
+  "status": {"...": "§1.1; conditions EndpointReady, ToolReady, RegistrationHealthy, UnmanagedToolAgents, ToolChanging, SnapshotTaken"},
+  "createdAt": "…", "createdBy": "…", "updatedAt": "…"
+}
+```
+
+`phase` is the orchestration agent's phase (§1.1). `toolVersion` is reported by the reconciler from the running image and is
+`null` until known. `supported` comes from the tool's profile (CD-28), so a client can render "N/A for Buzz" without
+guessing. `hostname` and `url` are those of the **effective** level and `null` when it is `off`; the Web UI `url` is
+`https://<hostname>/`, the Web API `url` is `https://<hostname>/api` for Paperclip. `connectedAgents` counts live workers
+with `connect: true`. Hostnames are `<slug>.<orchestration.public_base_domain>` for `public` and
+`<slug>.<orchestration.private_base_domain>` for `private` (ORC-16). The template and harness are never in this
+resource (ORC-6).
+
+**`PutTeamOrchestration`** body `{webUi: {exposure}, webApi: {exposure}, registrationMode?}` (both surfaces required;
+`registrationMode` omitted keeps the current value). `If-Match` optional (§1); a mismatch → `412`. Returns the resource
+with `status.phase` `Pending`; changes apply at the edge within 60 s (p95). Refusals, each `ValidationError` with
+`details.fields[]`:
+
+| `field` | `reason` | When |
+|---|---|---|
+| `webUi.exposure`, `webApi.exposure` | `exposure_above_limit` | Level above the team's limit (ORC-14) |
+| `webUi.exposure`, `webApi.exposure` | `surface_not_supported_by_tool` | Any level other than `off` for a surface the tool lacks (ORC-15; Buzz both) |
+| `registrationMode` | `registration_mode_not_supported` | `manual` for Buzz (ORC-10) |
+| `registrationMode` | `collaboration_agent_not_ready` | `managed` while the agent is not `Ready` (as 1.0.1) |
+
+An unset base domain, a kill switch that is off or a provider without a collaboration client does **not** refuse the
+write: the choice is stored and the effective level and reasons say why it is not served (CD-27). Emits
+`orchestration.updated`. A viewer, collaborator, security operator or workload caller → `403` and a denied audit record.
+
+**`ChangeCollaborationTool`** body `{tool}` (`paperclip` or `buzz`); accepts `Idempotency-Key`. `202 Accepted` with the
+`TeamOrchestration` (new `generation`, `status.phase` `Pending`, condition `ToolChanging=True`). In one transaction `afs-api`
+inserts a `pre_tool_change` snapshot request (kept 90 days, labelled with the old tool), sets the tool, the orchestration
+agent's template and image from `orchestration.tools`, sets every surface the new tool lacks to `off`, and writes the new
+tool's boot secrets (generated in Secrets Manager first; failure → `503 Unavailable`, nothing changes). The reconciler then
+takes the snapshot, starts the new tool with an empty data directory, revokes the old tool's agent keys and re-registers
+connected workers (ORC-11). Errors: same tool → `ValidationError` (`field: tool`, `reason: tool_unchanged`); tool not enabled
+→ `ValidationError` (`tool_not_enabled`); tool's runtime unset → `409` (`orchestration_runtime_unset`); a change already
+running → `409` (`tool_change_in_progress`); suspended team → `409` (`team_suspended`). The console asks the person to type
+the team slug first; the API does not. Emits `orchestration.tool_changed` and `agent.updated`.
+
+**`ListOrchestrationEndpoints`** → `{items: [OrchestrationEndpoint], nextToken?, migration}` (paginated, *CSV* without
+`migration`). One item per team and surface whose **stored** exposure is not `off`, so a surface lowered by the limit or a
+kill switch is still listed with its reasons; a Buzz team never has one (US-39) (CD-33):
+
+```json
+{"teamId": "team_01J…", "slug": "payments-factory", "teamState": "active", "agentId": "agt_01J…", "tool": "paperclip",
+ "surface": "webUi", "exposure": "public", "effective": "private", "reasons": ["team_limit"], "limit": "private",
+ "hostname": "payments-factory.collab.corp.example.com", "phase": "Ready", "lastAccessAt": "2026-11-23T09:41:00Z"}
+```
+
+Filters: `exposure` (effective level, `private` or `public`), `tool`, `teamId`, `state` (`Ready`, `Degraded`, `Failed`,
+`Pending`). `migration` reports the backfill for S12: `{state: running|complete|blocked, teamsTotal,
+teamsWithOrchestration, teamsPending, blocked: [{teamId, reason: orchestration_runtime_unset|no_model}]}`.
+
+**Agents and the orchestration agent** (changes to §4.4, ORC-2, ORC-4, ORC-6):
+
+- `Agent.role` is `worker` or `orchestration` (read-only; 1.0.1 `collaboration` reads as `orchestration`). `CreateAgent`
+  creates workers only: a body `role` other than `worker` (including `collaboration` and `orchestration`) →
+  `ValidationError` (`field: role`, `reason: role_reserved`); name `orchestrator` → `ValidationError` (`field: name`,
+  `reason: name_reserved`). The name rule also applies to `CreatePool`.
+- `DeleteAgent` on the orchestration agent → `409 Conflict` (`orchestration_agent_required`) and a denied audit record.
+- `UpdateAgent` on the orchestration agent changing `name`, `role`, `template`, `image` or `iamIdentity`, setting
+  `volume.snapshotSchedule: off`, or sending `collaboration` → `ValidationError` (`field` named,
+  `reason: orchestration_field_fixed`). Its `image` digest follows the template's current digest; the tool and runtime
+  change only through `ChangeCollaborationTool`. `models`, `persona`, `resources`, `volume.sizeGiB`, `volume.snapshotRetain`,
+  configuration values, secret bindings, pause, resume, restart and snapshots work as for any agent.
+- `Agent.runtime†` is `"orchestration"` on the orchestration agent and absent on workers. For callers who are not service
+  admins, the orchestration agent's `template` and `image` are `null` (CD-32); service admins see them. The tool's boot
+  secrets are listed by `ListSecrets` with `managedBy: afs` like any agent secret.
+- `ListAgents` returns every agent, including the orchestration agent; `?role=worker|orchestration` filters
+  (`?role=collaboration` is read as `orchestration` until 2.0.0). `Team.orchestrationAgentId†` names it.
+- `ListAgentTemplates` (team callers) never returns a template with the `orchestration` capability (AGT-11 change);
+  `ListAdminAgentTemplates` and `PutAgentTemplate` carry `capabilities[]` with values `orchestration`, `tool:paperclip`,
+  `tool:buzz` (a written `paperclip` is stored as `orchestration` + `tool:paperclip` until 2.0.0).
+- A worker's `collaboration` object is unchanged, except that `connect` now defaults to `true` on create (every team has an
+  orchestration agent, COL-10 change) and its `paperclipAgentId` is accepted only for Paperclip. A Buzz worker's link has no
+  tool-side id the caller sets; its public key is `CollaborationLink.toolAgentId` (read-only).
+
+**Deprecated aliases (kept until 2.0.0, ORC-27).** Each response of a deprecated operation, and each response to a request
+that sends a deprecated field, carries `Deprecation: @<unix time of the 1.1.0 release>`, `Sunset: <HTTP-date of the planned
+2.0.0 release>` and `Link: <successor>; rel="successor-version"` (CD-29).
+
+| Deprecated | Behaviour in 1.1.0 | Successor |
+|---|---|---|
+| `GetTeamCollaboration` | `webUiEnabled` / `restApiEnabled` = stored exposure ≠ `off`; `effective.webUi` / `restApi` = effective ≠ `off`; `effective.reasons[]` mapped (`team_limit` → `team_not_allowed`, `service_switch_*` → `service_endpoints_off`, `base_domain_unset`, `provider_without_collab_client` as is, `tool_not_supported` added); `hostname` of the effective level, else the public hostname | `GetTeamOrchestration` |
+| `PutTeamCollaboration` | `true` sets the highest level within the limit (`public` or `private`); `false` sets `off`. `true` with limit `off` → `ValidationError` (`collaboration_not_allowed_for_team`, as 1.0.1); `true` for a surface the tool lacks → `surface_not_supported_by_tool`. Emits `orchestration.updated` and `collaboration.updated` | `PutTeamOrchestration` |
+| `ListCollaborationEndpoints` | One row per team with a surface not `off` (booleans only, as 1.0.1), `effective` true only for `public` | `ListOrchestrationEndpoints` |
+| `Team.mayExposeCollaboration` | Read: limit ≠ `off`. Write (`CreateTeam`, `UpdateTeam`): `true` sets limit `public`, `false` sets `off`; with `maxCollaborationExposure` in the same body, that field wins | `Team.maxCollaborationExposure` |
+| `Agent.modelId`, `Pool.modelId` | Read: `models.defaultModelId`. Write: §4.4 *Models* | `models` |
+| `PutTeamModels` with only `modelIds` | Read as `{access: selected, modelIds}` | `{access, modelIds}` |
+| `SwarmTemplate.spec.collaboration` | Read as `spec.orchestration {tool: paperclip}` | `spec.orchestration` |
+| Event `collaboration.endpoint_state_changed` | Still emitted beside `orchestration.endpoint_state_changed` | `orchestration.endpoint_state_changed` |
+
+Link operations (`ListCollaborationLinks`, `ConnectAgentToCollaboration`, `DisconnectAgentFromCollaboration`) and
+`RotateCollaborationKeys` keep their names and paths (OR-D8) and now act on the orchestration agent's tool. A 1.0.1 client
+keeps working for every operation except creating a collaboration agent and deleting it, both refused with the reasons above.
+
 ### 4.5 Agent identity and AWS access
 
 | Op | Method and path | Perm | CLI | SDK | Screen | P |
@@ -518,7 +769,7 @@ secrets and, in `managed` registration, a connected agent's `paperclip-agent-api
 Paperclip itself under the reserved prefix `<service>/<namespace>/<agent>/paperclip/`, SEC-7; listed with metadata, never a
 value, refreshed hourly from Secrets Manager metadata; `name` is `paperclip-` plus the path suffix). `ListSecrets` accepts
 `?managedBy=user|afs|paperclip`. For `afs` and `paperclip` secrets `UpdateSecret`, `DeleteSecret` and `PutSecretValue` →
-`409 Conflict` (`details.reason = managed_secret`); `RotateSecret` on an `afs` secret takes no body (AFS generates the value) and is allowed except
+`409 Conflict` (`details.reason = managed_secret`; **planned addition, RCF-2, not yet implemented in `-restapi`:** `details.managedBy = afs|paperclip`, so a client can name who manages the secret; clients must treat it as optional until `-restapi` ships it); `RotateSecret` on an `afs` secret takes no body (AFS generates the value) and is allowed except
 `paperclip-secrets-master-key` (`ValidationError`, `reason: master_key_not_rotatable`) and a `paperclip` secret → `409 Conflict` (`managed_secret`). A
 `paperclip` secret cannot be bound (`ValidationError`). `CreateSecret` refuses the name `paperclip` and any name starting
 `paperclip-` except `paperclip-agent-api-key` on a worker agent (`ValidationError`, `reason: reserved_name`).
@@ -673,7 +924,7 @@ All *svc*. Screen S10 unless stated.
 
 | Op | Method and path | Perm | CLI | SDK | Screen | P |
 |---|---|---|---|---|---|---|
-| `GetSettings` | `GET /v1/admin/settings` (every key of root PRD §6.13 with value, default and range, including the seven `collab.*` keys of the Paperclip PRD §6.9 (`collab.base_domain` unset reads `null`); the database-only keys `work_orders.cost_center` and `work_orders.owner_email` are not exposed, CD-8) | `admin:settings` | `admin get-settings` | `admin.settings.get()` | S10 | P0 |
+| `GetSettings` | `GET /v1/admin/settings` (every key of root PRD §6.13 with value, default and range, including the seven `collab.*` keys of the Paperclip PRD §6.9 (`PutSetting` accepts the same seven keys in its key enum: `collab.base_domain`, `collab.public_endpoints`, `collab.session_ttl_minutes`, `collab.max_body_mb`, `collab.content_scan`, `collab.allowed_source_cidrs`, `collab.denied_spike_threshold`) (`collab.base_domain` unset reads `null`); the database-only keys `work_orders.cost_center` and `work_orders.owner_email` are not exposed, CD-8) | `admin:settings` | `admin get-settings` | `admin.settings.get()` | S10 | P0 |
 | `PutSetting` | `PUT /v1/admin/settings/{key}` `{value}` | `admin:settings` | `admin put-setting` | `admin.settings.put()` | S10, S9 | P0 |
 | `ListIdentityProviders` | `GET /v1/admin/identity-providers` | `admin:identity-providers` | `admin list-identity-providers` | `admin.identityProviders.list()` | S10 | P0 |
 | `CreateIdentityProvider` | `POST /v1/admin/identity-providers` (v1.3.0: optional `collabClientId` and `collabClientSecretArn`, a Secrets Manager reference, never the value; `collabClientSecretArn` needs `collabClientId`; `ListSignInProviders` never returns them) | `admin:identity-providers` | `admin create-identity-provider` | `admin.identityProviders.create()` | S10 | P0 |
@@ -687,10 +938,11 @@ All *svc*. Screen S10 unless stated.
 | `ListServiceTags` | `GET /v1/admin/service-tags` | `admin:service-tags` | `admin list-service-tags` | `admin.serviceTags.list()` | S9 | P1 |
 | `PutServiceTag` | `PUT /v1/admin/service-tags/{key}` | `admin:service-tags` | `admin put-service-tag` | `admin.serviceTags.put()` | S9 | P1 |
 | `DeleteServiceTag` | `DELETE /v1/admin/service-tags/{key}` | `admin:service-tags` | `admin delete-service-tag` | `admin.serviceTags.delete()` | S9 | P1 |
-| `ListModels` | `GET /v1/models` (not *svc*: enabled models for any signed-in caller) | `models:read` | `models list-models` | `models.list()` | T3 | P0 |
+| `ListModels` | `GET /v1/models` (not *svc*: models enabled for the service, for any signed-in caller; v1.4.0 adds `callable` and `priceState` per item) | `models:read` | `models list-models` | `models.list()` | T3 | P0 |
 | `ListAdminModels` | `GET /v1/admin/models` | `admin:models` | `admin list-models` | `admin.models.list()` | S4 | P0 |
 | `CreateModel` | `POST /v1/admin/models` (`maxOutputTokens` required, D28) | `admin:models` | `admin create-model` | `admin.models.create()` | S4 | P0 |
-| `UpdateModel` | `PATCH /v1/admin/models/{modelId}` | `admin:models` | `admin update-model` | `admin.models.update()` | S4 | P0 |
+| `UpdateModel` | `PATCH /v1/admin/models/{modelId}` (v1.4.0: changing `enabled` while service access is `all` → `409`, `service_model_access_all`) | `admin:models` | `admin update-model` | `admin.models.update()` | S4 | P0 |
+| `PutServiceModelAccess` | `PUT /v1/admin/model-access` `{access: all\|selected}` → `{access, enabledModels, callableModels, version}` (v1.4.0, MOD-1; `If-Match` optional on the setting's version) | `admin:models` | `admin put-service-model-access` | `admin.models.putServiceAccess()` | S4 | P0 |
 | `ListModelPrices` | `GET /v1/admin/models/{modelId}/prices` | `admin:pricing` | `admin list-model-prices` | `admin.prices.list()` | S4 | P0 |
 | `CreateModelPrice` | `POST /v1/admin/models/{modelId}/prices` | `admin:pricing` | `admin create-model-price` | `admin.prices.create()` | S4 | P0 |
 | `ListModelPriceProposals` | `GET /v1/admin/model-price-proposals?status=pending` | `admin:pricing` | `admin list-price-proposals` | `admin.priceProposals.list()` | S4, S1 | P1 |
@@ -717,6 +969,18 @@ All *svc*. Screen S10 unless stated.
 | `GetHealth` | `GET /healthz` | none | none (not a CLI operation) | `health.get()` | none | P0 |
 | `GetReadiness` | `GET /readyz` | none | none (not a CLI operation) | `health.getReadiness()` | none | P0 |
 
+**Model catalog (v1.4.0, MOD-1).** With `models.service_access = all` (default on a fresh install, `selected` on an
+upgraded one) every catalog model is enabled for the service, including models the reconciler's daily Bedrock sync adds
+(`origin: bedrock_sync`, only models the account can invoke, OR-D17); the per-model `enabled` flag is then ignored and
+read-only. With `selected` the flag decides and synced models start disabled. A model is **callable** while it is enabled for
+the service and has an approved price. `ListAdminModels` items add `serviceEnabled†`, `callable†`, `priceState†`
+(`approved`: a price is in effect; `pending`: none in effect but a pending proposal or a future-dated price; `none`),
+`origin†` and `teamsWithAccess†` (count). `GetSettings` and `PutSetting` include the `orchestration.*` and `models.*` keys of
+the orchestration PRD §6.8 (database contract §7.0); `PutSetting` on `collab.base_domain` or `collab.public_endpoints` →
+`ValidationError` (`reason: setting_renamed`, naming the new key); `PutSetting` on `models.service_access` has the same
+effect as `PutServiceModelAccess`. Service admins see `orchestration.tools` (tools, templates, image repositories) on S12;
+nothing else exposes it.
+
 Export and import (D49): `CreateExport` records the request; the reconciler builds the bundle, writes it
 to S3, and stores the checksum and a pre-signed download URL (valid 7 days) on the export row; after that a new
 export is needed. `afs-api` never reads or writes S3. `CreateImport`
@@ -727,7 +991,7 @@ With `dryRun=true` (the default) nothing is written. A bundle over 100 MB → `4
 
 ### 4.12 Mutations without an outbox event (exemption from the outbox rule)
 
-(v1.3.0 adds `ConnectAgentToCollaboration` and `DisconnectAgentFromCollaboration`, 71 operations; `PutTeamCollaboration` emits `collaboration.updated` and `RotateCollaborationKeys` emits `secret.rotated`, so neither is listed.)
+(v1.4.0 adds `PutServiceModelAccess`, 72 operations; v1.3.0 adds `ConnectAgentToCollaboration` and `DisconnectAgentFromCollaboration`, 71 operations; `PutTeamCollaboration` emits `collaboration.updated` and `RotateCollaborationKeys` emits `secret.rotated`, so neither is listed.)
 
 These mutations have no event type in §7. Each writes the row and one audit record in one transaction and
 no `outbox_events` row (CD-7). Adding an event type for one of them is a contract change (§8) and removes it
@@ -738,7 +1002,7 @@ list and fails when the two diverge.
 |---|---|
 | members | `AddMember`, `UpdateMember`, `RemoveMember`, `AddSecurityOperator`, `RemoveSecurityOperator` |
 | api-keys | `CreateApiKey`, `DeleteApiKey`, `CreateServiceApiKey`, `DeleteServiceApiKey` |
-| settings | `PutSetting`, `PutBudget`, `PutServiceTag`, `DeleteServiceTag`, `CreateIdentityProvider`, `UpdateIdentityProvider`, `DeleteIdentityProvider`, `CreateLogDestination`, `UpdateLogDestination`, `DeleteLogDestination`, `CreateNotificationChannel`, `UpdateNotificationChannel`, `DeleteNotificationChannel`, `CreateServiceNotificationChannel`, `UpdateServiceNotificationChannel`, `DeleteServiceNotificationChannel` |
+| settings | `PutSetting`, `PutServiceModelAccess` (v1.4.0), `PutBudget`, `PutServiceTag`, `DeleteServiceTag`, `CreateIdentityProvider`, `UpdateIdentityProvider`, `DeleteIdentityProvider`, `CreateLogDestination`, `UpdateLogDestination`, `DeleteLogDestination`, `CreateNotificationChannel`, `UpdateNotificationChannel`, `DeleteNotificationChannel`, `CreateServiceNotificationChannel`, `UpdateServiceNotificationChannel`, `DeleteServiceNotificationChannel` |
 | catalog | `CreateCatalogSystem`, `UpdateCatalogSystem`, `DeleteCatalogSystem`, `DeclareTeamExternalSystem`, `UpdateTeamExternalSystem`, `DeleteTeamExternalSystem`, `SetTeamExternalSystemState`, `SetAgentExternalSystemState`, `PutPoolExternalSystem`, `CreateModel`, `UpdateModel`, `CreateModelPrice`, `CreateStage`, `UpdateStage`, `DeleteStage`, `PutAgentTemplate`, `DeleteAgentTemplate`, `PutStorageClass`, `DeleteStorageClass` |
 | config | `ConnectAgentToCollaboration`, `DisconnectAgentFromCollaboration`, `PutNamespaceConfigValue`, `DeleteNamespaceConfigValue`, `PutAgentConfigValue`, `DeleteAgentConfigValue`, `PutPoolConfigValue`, `DeletePoolConfigValue`, `CreateAgentIdentity`, `DeleteAgentIdentity`, `CreateAgentRoleLink`, `DeleteAgentRoleLink`, `VerifyAgentRoleLink`, `CreatePoolRoleLink`, `DeletePoolRoleLink`, `VerifyPoolRoleLink`, `CreateAgentSnapshot`, `CreateExport`, `UpdateSecret` |
 | schedules | `CreateReportSchedule`, `UpdateReportSchedule`, `DeleteReportSchedule` |
@@ -758,21 +1022,23 @@ Team:        {slug, displayName, description, kind: persistent|ephemeral, state�
               effectiveCeilingUsd†, quotas{cpu,memory,pods,storage},
               isolationTier: shared|dedicated, viewerKubectl, expiresAt?, teardownRule?: at_expiry|at_cap_or_expiry|at_work_complete,
               tornDownAt†?, teardownReason†?, identityProviderId?, allowedAwsAccounts[], mayManageAwsAccounts,
-              mayAddExternalSystems, mayExposeCollaboration}
+              mayAddExternalSystems, mayExposeCollaboration (deprecated), maxCollaborationExposure: off|private|public,
+              modelAccess: all|selected, orchestrationAgentId†}
 TeamTags:    {tags: [{key, value?, source†: system|service|team|service_default|missing}],
               requestMetadataDroppedKeys†[]}       # PUT sends team-owned keys only; the read-only list names tag keys left out of the Bedrock requestMetadata because of its pair limit (D27)
 Member:      {role: team_admin|team_collaborator|team_viewer, subjectType: user|group, userId?, email†?, groupName?}
 ApiKey:      {name, role: team_admin|team_collaborator|team_viewer|security_operator, keyPrefix†, expiresAt (≤ 90 days), lastUsedAt†, secretKey† (create response only)}
-Agent:       {name, role: worker|collaboration (create-only), collaboration?{connect, paperclipAgentId?, linkState†, lastSyncedAt†?, lastError†?}, description, template, image, modelId, resources{cpu,memory}, iamIdentity, iamRoleArn†,
+Agent:       {name, role†: worker|orchestration (v1.4.0; create accepts only worker), runtime†?: orchestration,
+              models{access: all|selected, modelIds[], defaultModelId, effectiveModelIds†}, modelId (deprecated alias of models.defaultModelId), collaboration?{connect, paperclipAgentId?, linkState†, lastSyncedAt†?, lastError†?}, description, template (null for non-admins on the orchestration agent), image, resources{cpu,memory}, iamIdentity, iamRoleArn†,
               volume{sizeGiB, storageClass, onDelete: snapshot_then_delete|delete|retain, snapshotSchedule: off|daily|weekly, snapshotRetain},
               secretBindings[{secretId, delivery: env|file, target}], paused†}
 RoleLink:    {profileName, roleArn, accountId†, maxSessionSeconds, externalId†, status†: pending_trust|verified|failed|disabled,
               lastVerifiedAt†, trustPolicy†}
 Stage:       {name, position (1..50), description}
-Pool:        {name, description, stageId?, template, image, persona?, modelId, workers (0..200), resources{cpu,memory},
+Pool:        {name, description, stageId?, template, image, persona?, models{access, modelIds[], defaultModelId, effectiveModelIds†}, modelId (deprecated), workers (0..200), resources{cpu,memory},
               scratchSizeGiB (1..500), sharedVolume: none|efs, state†: enabled|paused|deleting|deleted, handoffs†[poolId]}
 PoolRoleLink: {roleName, accountId, profileName, roleArn†, externalId†, maxSessionSeconds, status†, lastVerifiedAt†}
-SwarmTemplate: {name, description, kind: cve_remediation|general, spec{stages[], pools[], handoffs[], secrets[{pool, name, description?, delivery?, target?}], configValues[], collaboration?{templateId}},
+SwarmTemplate: {name, description, kind: cve_remediation|general, spec{stages[], pools[], handoffs[], secrets[{pool, name, description?, delivery?, target?}], configValues[], orchestration?{tool?, webUiExposure?, webApiExposure?, defaultModelId?}, collaboration?{templateId} (deprecated)},
               budgetUsd, ttlHours, teardownRule, enabled}
 WorkOrder:   {kind: cve_remediation|general, cveId?, severity, title, source†: api|eventbridge, templateId, budgetUsd, slaDueAt,
               status†: open|assigned|in_progress|pr_opened|done|failed|cancelled, teamId†?, assignedAt†?, completedAt†?,
@@ -781,7 +1047,7 @@ WorkOrderRepo: {host, repo, owningTeamId?, owningContact?, ownerSource†? (Crea
               prUrl?, prNumber?, detail?, mergedAt†?, notifications†[{kind, recipient, sentAt}]}
 ReportSchedule: {name, report, query{}, cadence, channelId, format: csv, enabled, nextRunAt†, lastRunAt†, lastStatus†, lastError†}
 CostTagStatus: {key, seenInCur, firstSeenAt, lastSeenAt, awsStatus: active|inactive|unknown, checkedAt}
-Secret:      {managedBy†: user|afs|paperclip, scope: team|agent|pool, agentId?, poolId?, name, description, externalSystemId?, secretsManagerPath†, secretsManagerArn†,
+Secret:      {managedBy†: user|afs|paperclip|buzz, scope: team|agent|pool, agentId?, poolId?, name, description, externalSystemId?, secretsManagerPath†, secretsManagerArn†,
               versionId†, lastChangedAt†, rotation{enabled, days}, boundTo†[agentId]}               # no value field, ever
 ConfigValue: {name, value?, source: literal|namespace, resolvedValue†, usedBy†[agentId]}
 ExternalSystem: {slug, name, category, description, docsUrl, endpoints[], enabled, builtin†, owner?, purpose?,
@@ -790,12 +1056,19 @@ Budget:      {period: monthly|lifetime, amountUsd, thresholds[], onExhaust: bloc
               spentUsd†, reservedUsd†, percentUsed†, forecastUsd†, projectedCapAt†}
 ServiceTag:  {key, mode: fixed|required, value?, defaultValue?, allowedValues?[], description}
 IdentityProvider: {kind: okta|entra_id, name, issuerUrl, consoleClientId, cliClientId, collabClientId?, collabClientSecretArn?, clientSecretArn?, groupsClaim, isDefault, enabled}
-Model:       {id, provider, displayName, enabled, contextWindow, maxOutputTokens}
-AgentTemplate: {name, description, harness, capabilities[]: paperclip, defaultResources{cpu,memory}, allowedDigests[], currentDigest, enabled}
+Model:       {id, provider, displayName, enabled, contextWindow, maxOutputTokens, callable†, priceState†: approved|pending|none,
+              serviceEnabled†, origin†: manual|bedrock_sync, teamsWithAccess†? (admin list only)}
+TeamModels:  {access: all|selected, modelIds[], items[Model + inferenceProfileState†: creating|active|retiring|null]}
+ServiceModelAccess: {access: all|selected, enabledModels†, callableModels†, version†}
+AgentTemplate: {name, description, harness, capabilities[]: orchestration|tool:paperclip|tool:buzz, defaultResources{cpu,memory}, allowedDigests[], currentDigest, enabled}
 Export:      {status†: pending|running|succeeded|failed, schemaVersion†, sha256†, sizeBytes†, downloadUrl†?, finishedAt†?}
 TeamCollaboration: {teamId†, agentId†, hostname†?, webUiUrl†?, restApiUrl†?, webUiEnabled, restApiEnabled, registrationMode: manual|managed,
               effective†{webUi, restApi, reasons[]}, unmanagedPaperclipAgents†[]}     # §4.4b
-CollaborationLink: {agentId†, agentName†, connect, paperclipAgentId?, linkState†: pending|linked|failed|disabled, lastSyncedAt†?, lastError†?}
+CollaborationLink: {agentId†, agentName†, connect, paperclipAgentId?, toolAgentId†? (Buzz public key), linkState†: pending|linked|failed|disabled, lastSyncedAt†?, lastError†?}
+TeamOrchestration: {teamId†, agentId†, agentName†, phase†, tool†: paperclip|buzz, toolVersion†?, registrationMode: manual|managed,
+              limit†: off|private|public, webUi{supported†, exposure, effective†, reasons†[], hostname†?, url†?}, webApi{…},
+              connectedAgents†, unmanagedToolAgents†[]}     # §4.4d
+OrchestrationEndpoint: {teamId, slug, teamState, agentId, tool, surface: webUi|webApi, exposure, effective, reasons[], limit, hostname?, phase, lastAccessAt?}
 CollaborationEndpoint: {teamId, slug, teamState, hostname?, agentId, webUiEnabled, restApiEnabled, effective{webUi, restApi}, mayExposeCollaboration, phase, lastAccessAt?}
 TeamDirectoryEntry: {id, slug, displayName}
 PriceProposal: {modelId, effectiveFrom, inputUsdPerMtok, outputUsdPerMtok, cacheReadUsdPerMtok, cacheWriteUsdPerMtok,
@@ -803,7 +1076,7 @@ PriceProposal: {modelId, effectiveFrom, inputUsdPerMtok, outputUsdPerMtok, cache
 NotificationTestResult: {testId, delivered?, pending?, error?: string|null}     # 200: delivered true|false (+ error); 202: pending true
 RestoreResult: {dryRun, revision, changes[RestoreChange], skipped?[RestoreChange]}         # skipped: bindings or references that no longer resolve
 RestoreChange: {resourceKind, resourceId, action: create|update|delete|skip, fields?[{field, ...}], reason?}
-Snapshot:    {id†, agentId†, reason†: scheduled|manual|pre_delete|pre_change, state†: requested|pending|completed|failed|deleted,
+Snapshot:    {id†, agentId†, reason†: scheduled|manual|pre_delete|pre_change|pre_tool_change, tool†?, retainUntil†?, state†: requested|pending|completed|failed|deleted,
               sizeGiB†?, requestedAt†, requestedBy†?, completedAt†?}
 StorageClass: {name, description?, volumeType: gp3|io2, enabled, version†, createdAt†, updatedAt†}
 AuditEvent:  {id (integer), occurredAt, actorType: user|api_key|system|agent|pool, actorId, action, outcome: allowed|denied|failed,
@@ -822,12 +1095,12 @@ change; clients branch on `code` only. No error contains a secret value, token o
 
 | HTTP | `code` | When | Database origin (see [database contract](database-contract.md) §6) |
 |---|---|---|---|
-| 400 | `ValidationError` | Malformed or out-of-range input, a body over the size limit (`field: body`; there is no `413`), a page token issued to another caller or for another operation; `details.fields[]` lists `{field, reason}` | `23514`, `23502`, `22xxx` |
+| 400 | `ValidationError` | Malformed or out-of-range input, a body over the size limit (`field: body`; there is no `413`), a page token issued to another caller or for another operation; `details.fields[]` lists `{field, reason}`. v1.4.0 reasons: `role_reserved`, `name_reserved`, `orchestration_field_fixed`, `exposure_above_limit`, `surface_not_supported_by_tool`, `registration_mode_not_supported`, `tool_not_enabled`, `tool_unchanged`, `no_model_available`, `model_not_enabled_for_service`, `model_not_enabled_for_team`, `models_selection_empty`, `default_model_not_allowed`, `model_ids_not_allowed_for_all`, `conflicting_fields`, `setting_renamed` | `23514`, `23502`, `22xxx` |
 | 401 | `Unauthenticated` | Missing, expired or unknown credential | — |
 | 403 | `AccessDenied` | Valid caller without the permission, including a signed-in caller with no team binding on a route not scoped to one team (CD-10); `details.requiredPermission` | `42501` |
 | 404 | `NotFound` | No such resource, **or** a resource in a team the caller cannot see (never reveals existence), **or** an unknown path or `:verb` (error envelope, not a bare 404) | RLS hides the row |
 | 402 | `BudgetExceeded` | Returned by `afs-gateway` to agents only, never by `afs-api`; not retryable (see [gateway contract](gateway-contract.md)) | `reserve_spend_held` returned NULL |
-| 409 | `Conflict` | Duplicate name, idempotency body mismatch or in progress (these two are `details.reason` values, `idempotency_mismatch` and `idempotency_in_progress`, not separate codes; v1.3.0 adds `collaboration_agent_exists`, `collaboration_agent_missing`, `managed_secret` and `hostname_held`), dependent objects exist, invalid state transition (for example a suspended team) | `23505`, `23503` (on delete), `55000` |
+| 409 | `Conflict` | Duplicate name, idempotency body mismatch or in progress (these two are `details.reason` values, `idempotency_mismatch` and `idempotency_in_progress`, not separate codes; v1.3.0 adds `collaboration_agent_exists`, `collaboration_agent_missing`, `managed_secret` and `hostname_held`; v1.4.0 adds `orchestration_agent_required`, `orchestration_agent_exists`, `orchestration_agent_pending`, `orchestration_runtime_unset`, `tool_change_in_progress` and `service_model_access_all`), dependent objects exist, invalid state transition (for example a suspended team) | `23505`, `23503` (on delete), `55000` |
 | 412 | `PreconditionFailed` | `If-Match` does not match `version` | — |
 | 428 | `PreconditionRequired` | `If-Match` missing on `PATCH` or `DELETE` of an existing resource (optional on `PUT`) | — |
 | 429 | `Throttled` | Rate limit; `Retry-After` | — |
@@ -886,10 +1159,16 @@ delivers events to each team's notification channels through one EventBridge rul
 | `collaboration.unmanaged_agents_found` | reconciler | COL-13, once per new name; `data` `{teamId, agentId, paperclipAgentName, paperclipAgentId, reason: not_linked\|local_adapter}` |
 | `collaboration.bootstrap_completed` | reconciler | Paperclip's first-admin bootstrap finished; `data` `{teamId, agentId, mode: manual\|managed}`. Never the invite URL: the invite is a credential and goes only as a direct notification to the creating team-admin's email through the reconciler's notification delivery, never into events, audit or logs (G8) |
 | `agent.collaboration_linked`, `agent.collaboration_unlinked` | reconciler | An agent's `linkState` became `linked`, or left `linked`; `data` `{agentId, linkState, paperclipAgentId?, registrationMode}` (`unlinked` adds `reason`: `disconnected`, `agent_deleted`, `collaboration_agent_deleted`, `failed`) |
+| `orchestration.created` | api, db function | The team's orchestration agent was created (`CreateTeam`, backfill, work order team); `data` `{teamId, agentId, agentName, tool, limit, webUiExposure, webApiExposure}` |
+| `orchestration.updated` | api | `PutTeamOrchestration` (and the deprecated `PutTeamCollaboration`); `data` `{teamId, agentId, changes: {webUiExposure?: {from, to}, webApiExposure?: {from, to}, registrationMode?: {from, to}}}`. A limit change is in `team.updated` |
+| `orchestration.tool_changed` | api | `ChangeCollaborationTool`; `data` `{teamId, agentId, fromTool, toTool, snapshotId}` |
+| `orchestration.endpoint_state_changed` | reconciler | A surface's effective level or readiness changed; `data` `{teamId, agentId, surface: webUi\|webApi, exposure, effective, previousEffective, reasons[], hostname, ready}`. Replaces `collaboration.endpoint_state_changed`, which is still emitted until 2.0.0 |
+| `team.models_changed` | api | `PutTeamModels`; `data` `{teamId, from: {access, modelIds}, to: {access, modelIds}}` |
+| `agent.model_unavailable` | reconciler | An agent's or pool's default model left its effective set, or the set became empty; once per transition; `data` `{teamId, agentId?, poolId?, defaultModelId, reason: model_not_enabled_for_service\|model_not_enabled_for_team\|model_not_enabled_for_agent\|model_not_priced, effectiveModelIds}`; delivered to the team's channels |
 | `notification.delivery_failed` | reconciler | A channel's EventBridge target failed (D46) |
 | `notification.test_requested` | api | `TestNotificationChannel`; `data` has `channelId` and `testId`. The reconciler tests the channel and reports the result on the channel's status (condition `DeliveryHealthy`, `lastTestId`), which the API returns (CD-3) |
 
-`CreateAgent` for a collaboration agent also emits `secret.created` for each boot secret and `RotateCollaborationKeys` emits `secret.rotated` for each secret rotated (no value). A mutation with no type in this table (the list is §4.12) emits no event; its audit record is its trace (CD-7).
+v1.4.0: `collaboration.updated` is deprecated and emitted only by the deprecated `PutTeamCollaboration` (CD-34). `CreateTeam` emits `secret.created` for each boot secret of the orchestration agent. `CreateAgent` for a collaboration agent (1.0.1 only) also emits `secret.created` for each boot secret and `RotateCollaborationKeys` emits `secret.rotated` for each secret rotated (no value). A mutation with no type in this table (the list is §4.12) emits no event; its audit record is its trace (CD-7).
 
 Events written by database functions use the same envelope (`afs.event_detail`, database contract §4.2): `afs.instantiate_work_order_team` writes `team.created` (`data` `{teamId, kind: ephemeral, workOrderId}`), `pool.created` (`poolId` in the envelope, `data` `{poolId, teamId}`) and `work_order.assigned` (`data` `{workOrderId, teamId}`), and `afs.record_work_order_secret` writes `secret.created` (`data` `{secretId, name, scope: pool}`, `poolId` in the envelope). Rows written before `-db` 000019 hold the older flat payload; the reconciler's outbox publisher wraps them into the envelope (database contract §4.2), so a consumer never sees the flat shape. `PausePool` and `ResumePool` emit `pool.updated`. A future type is an additive change.
 
@@ -905,6 +1184,27 @@ Events written by database functions use the same envelope (`afs.event_detail`, 
 
 ## 9. Changelog
 
+- **v1.4.0 (2026-11-23), team orchestration agent and model access ([PRD](../../team-orchestration-agent-PRD.md) ORC-1 to ORC-32, MOD-1 to MOD-8, approved by J):** §4.4d (`GetTeamOrchestration`, `PutTeamOrchestration`, `ChangeCollaborationTool`, `ListOrchestrationEndpoints`); every team gets its orchestration agent from `CreateTeam` (`orchestration`, `maxCollaborationExposure`, `modelAccess`, `Team.orchestrationAgentId`); `CreateAgent` creates workers only (`role_reserved`, `name_reserved`), `DeleteAgent` refuses the orchestration agent (`orchestration_agent_required`), `UpdateAgent` refuses its fixed fields (`orchestration_field_fixed`); exposure levels `off`/`private`/`public` within a team limit, with `exposure_above_limit` and `surface_not_supported_by_tool` (Buzz: both surfaces N/A); the edge's private entry and wrong-level `404` (§4.4c); `Agent.models` and `Pool.models`; `ListTeamModels`/`PutTeamModels` with `access`; `ListModels` `callable` and `priceState`; `PutServiceModelAccess`; the `orchestration.*` and `models.*` settings; events `orchestration.created`, `orchestration.updated`, `orchestration.tool_changed`, `orchestration.endpoint_state_changed`, `team.models_changed`, `agent.model_unavailable`; permission scope changes in §3 (no new permission). Deprecated until 2.0.0 with `Deprecation` and `Sunset` headers: `GetTeamCollaboration`, `PutTeamCollaboration`, `ListCollaborationEndpoints`, `Team.mayExposeCollaboration`, `Agent.modelId`, `Pool.modelId`, `SwarmTemplate.spec.collaboration`, the event `collaboration.endpoint_state_changed` and `collaboration.updated`. Minor (1.1.0, OR-D10): refusing to create or delete a collaboration agent is accepted as a minor change because 1.0.1 has no production users.
+
+Contract decisions recorded with v1.4.0 (the database contract holds CD-13 to CD-25 and the gateway contract CD-39 and CD-40):
+
+| # | Decision |
+|---|---|
+| CD-26 | A 1.0.1 team the backfill has not reached answers `GetTeamOrchestration` with `404 orchestration_agent_pending` and the mutations with `409` and the same reason, so the console can show "being created" instead of an error |
+| CD-27 | `PutTeamOrchestration` refuses only what the team cannot change (limit, tool support, registration mode). An unset base domain, a kill switch or a provider without a collaboration client stores the choice and shows up in `effective` and `reasons[]`. The deprecated `PutTeamCollaboration` keeps the 1.0.1 refusal for limit `off` |
+| CD-28 | Each surface carries `supported`, so clients render "N/A for <tool>" from data. `provider_without_collab_client` stays a reason for the Web UI, as in 1.0.1, although the PRD's list omits it. `unmanagedPaperclipAgents` becomes `unmanagedToolAgents`; `CollaborationLink.toolAgentId` carries the Buzz public key shown on T17 |
+| CD-29 | Deprecation headers: `Deprecation: @<unix time of the 1.1.0 release>`, `Sunset: <HTTP-date>` and `Link: <successor path>; rel="successor-version"`. The Sunset date is a `-restapi` Helm value (`api.deprecationSunset`), default twelve months after the 1.1.0 release, until J sets the 2.0.0 date |
+| CD-30 | A team's model access changes only through `CreateTeam` and `PutTeamModels` (`UpdateTeam` does not take it). `models[]` without `modelAccess`, and `PutTeamModels` with only `modelIds`, mean `selected`, which is what a 1.0.1 client meant. `PutTeamModels` with `all` keeps the stored selection for a later switch back |
+| CD-31 | Agent and pool `models`: create defaults to `all`; the default model comes from the body, then `modelId`, then `models.default_model_id`, then the team's first callable model by id. On update, sent members replace stored ones and omitted members are kept; `modelId` alone changes only the default. A model without an approved price may be selected (the gateway refuses it as `model_not_priced`) |
+| CD-32 | `Agent.runtime` is `orchestration` on the orchestration agent and absent on workers; its `template` and `image` are `null` for callers who are not service admins, so no team screen or API response names the harness (ORC-6) |
+| CD-33 | `ListOrchestrationEndpoints` lists one row per team and surface whose stored exposure is not `off` (a lowered surface stays visible with its reasons), never a Buzz row, and carries the backfill's `migration` progress for S12 outside the CSV |
+| CD-34 | `PutTeamOrchestration` emits only `orchestration.updated`; `collaboration.updated` comes only from the deprecated `PutTeamCollaboration`, which emits both. `collaboration.endpoint_state_changed` is emitted beside its successor until 2.0.0 (ORC-28) |
+| CD-35 | `PutServiceModelAccess` writes a service setting, so like `PutSetting` it emits no event (§4.12). While service access is `all`, `UpdateModel` refuses a change of `enabled` (`409 service_model_access_all`) |
+| CD-36 | `CreateTeam.orchestration` takes `models` like any agent; `modelId` is shorthand for `models.defaultModelId` (the PRD names `modelId` in ORC-26 and `models` in MOD-3). Default exposure levels are lowered to the team's limit, never refused; explicit levels above it are refused |
+| CD-37 | Team callers never see orchestration templates in `ListAgentTemplates`; a worker's `collaboration.connect` defaults to `true` on create because every team now has an orchestration agent (COL-10 change) |
+| CD-38 | At the edge, a surface effective at the other level answers `404` on this host (wrong-level host, ORC-16); `403 surface_disabled` stays only for a surface that is `off` while the other surface is served on this host |
+
+- **v1.3.2 (2026-11-22), build of the Paperclip collaboration change:** `PutSetting` key enum includes the seven `collab.*` keys; `afs-edge` bearer audience rules (console, CLI or collaboration client id); RCF-1 decided (`ListAdminAgentTemplates` has no `capability` filter, `ListAgentTemplates` keeps `?capability=`; the CLI and PRD drop `afs admin list-agent-templates --capability`); RCF-2 planned (`details.managedBy` on the `managed_secret` error, not yet implemented in `-restapi`).
 - **v1.3.1 (2026-11-22), contract corrections (PC-D20 to PC-D31):** edge callback only on the apex, certificate and DNS cover apex and wildcard, every other apex path `404`; server-side edge sessions and single-use handoff (cookie holds an opaque id); SNI check dropped (`host_mismatch` removed); edge records go to stdout with `afs.team_id` and the node collector routes them to the team's log delivery; event `collaboration.bootstrap_completed`; `CreateTeam` `409 hostname_held`; `team_collaborator` inherits the conditional viewer grants; `RotateSecret` on an `afs` secret takes no body; priorities of `ListCollaborationLinks`, connect and disconnect (P0, C1) and `ListCollaborationEndpoints` (P0, C2); `SwarmTemplate.spec.collaboration`; `invoke-api` reads `GetTeamCollaboration` once and `restApiUrl` is `https://<hostname>/api`; 404 versus 403 `surface_disabled` stated; once-only Paperclip keys pass through unchanged. All additive or clarifying.
 - **v1.3.0 (2026-11-22), Paperclip team collaboration ([PRD](../../paperclip-team-collaboration-PRD.md), PC-D11 to PC-D19):** §4.4b (seven operations: `GetTeamCollaboration`, `PutTeamCollaboration`, `ListCollaborationLinks`, `ConnectAgentToCollaboration`, `DisconnectAgentFromCollaboration`, `RotateCollaborationKeys`, `ListCollaborationEndpoints`); §4.4c the edge's externally visible behaviour; role `team_collaborator` and permissions `collaboration:read|manage|access|contribute|api`; `Agent.role` and `Agent.collaboration`; `Team.mayExposeCollaboration`; `Secret.managedBy` and its filter; `AgentTemplate.capabilities`; identity provider `collabClientId` and `collabClientSecretArn`; seven `collab.*` settings; collaboration report kind; seven events; new `details.reason` values. All additive (minor).
 - **v1.2.0 (2026-11-21), `-restapi` M0 (CD-1 to CD-10):** delete status codes (`202` with body for resources that carry a status, `204` otherwise); `If-Match` optional on `PUT`; `NotificationTestResult` and event `notification.test_requested`; `RestoreResult`, `Snapshot`, `StorageClass`, `AuditEvent`, `Revision` and `CostRow` shapes; `TeamTags.requestMetadataDroppedKeys`; mutations without a §7 event type write no outbox row; identity provider client id mapping recorded as open; `403` for a signed-in caller with no binding on a route not scoped to one team; error notes: oversized body is `400`, unknown path or verb is `404` in the envelope, page tokens bound to operation and caller, CSV formula cells prefixed with `'`.

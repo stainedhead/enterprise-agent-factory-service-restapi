@@ -26,7 +26,9 @@ func NewPoolRepo() *PoolRepo { return &PoolRepo{} }
 var _ pools.Repository = (*PoolRepo)(nil)
 
 const poolSelect = `SELECT p.id, p.team_id, p.name, p.description, coalesce(p.stage_id, ''), p.template, p.image, p.persona,
-  p.model_id, p.workers, p.resources, p.scratch_size_gib, p.shared_volume, p.state, p.version, p.generation,
+  p.model_id, p.model_access, p.default_model_id,
+  coalesce((SELECT array_agg(x.model_id ORDER BY x.model_id) FROM afs.pool_models x WHERE x.team_id = p.team_id AND x.pool_id = p.id), '{}'),
+  p.workers, p.resources, p.scratch_size_gib, p.shared_volume, p.state, p.version, p.generation,
   p.created_at, p.created_by, p.updated_at,
   rs.phase, rs.observed_generation, rs.conditions, rs.last_reconciled_at
 FROM afs.agent_pools p
@@ -35,23 +37,29 @@ WHERE p.team_id = $1 AND p.state <> 'deleted' AND p.deleted_at IS NULL`
 
 func scanPool(row pgx.Row) (domain.Pool, error) {
 	var (
-		p          domain.Pool
-		name       string
-		image      string
-		state      string
-		res, conds []byte
-		ver, gen   int64
-		phase      *string
-		obs        *int64
-		lastRec    *time.Time
+		p           domain.Pool
+		name        string
+		image       string
+		state       string
+		res, conds  []byte
+		ver, gen    int64
+		phase       *string
+		obs         *int64
+		lastRec     *time.Time
+		access, def string
+		modelIDs    []string
 	)
 	err := row.Scan(&p.ID, &p.TeamID, &name, &p.Description, &p.StageID, &p.Template, &image, &p.Persona,
-		&p.ModelID, &p.Workers, &res, &p.ScratchSizeGiB, &p.SharedVolume, &state, &ver, &gen,
+		&p.ModelID, &access, &def, &modelIDs, &p.Workers, &res, &p.ScratchSizeGiB, &p.SharedVolume, &state, &ver, &gen,
 		&p.CreatedAt, &p.CreatedBy, &p.UpdatedAt, &phase, &obs, &conds, &lastRec)
 	if err != nil {
 		return domain.Pool{}, err
 	}
 	p.Name, p.Image, p.State = domain.Name(name), domain.ImageRef(image), domain.PoolState(state)
+	p.Models = domain.AgentModels{Access: domain.ModelAccess(access), ModelIDs: modelIDs, DefaultModelID: def, Effective: []string{}}
+	if modelIDs == nil {
+		p.Models.ModelIDs = []string{}
+	}
 	p.Version, p.Generation = domain.Version(ver), domain.Generation(gen)
 	if len(res) > 0 {
 		if err := json.Unmarshal(res, &p.Resources); err != nil {
@@ -175,11 +183,14 @@ func (*PoolRepo) Insert(ctx context.Context, tx port.Tx, p domain.Pool, template
 		return err
 	}
 	_, err = pt.Exec(ctx, `INSERT INTO afs.agent_pools (id, team_id, name, description, stage_id, template, template_id, image, persona,
-  model_id, workers, resources, scratch_size_gib, shared_volume, state, generation)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+  default_model_id, model_access, workers, resources, scratch_size_gib, shared_volume, state, generation)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
 		p.ID, p.TeamID, string(p.Name), p.Description, nullable(p.StageID), p.Template, nullable(templateID), string(p.Image), p.Persona,
-		p.ModelID, p.Workers, res, p.ScratchSizeGiB, p.SharedVolume, string(p.State), int64(p.Generation))
-	return MapError(err, OpWrite, "pool")
+		p.Models.DefaultModelID, string(accessOrAll(p.Models.Access)), p.Workers, res, p.ScratchSizeGiB, p.SharedVolume, string(p.State), int64(p.Generation))
+	if err != nil {
+		return MapError(err, OpWrite, "pool")
+	}
+	return replaceModels(ctx, pt, "pool_models", "pool_id", p.TeamID, p.ID, p.Models)
 }
 
 // Update implements pools.PoolRepository. template and image are named in the UPDATE only when the
@@ -193,12 +204,12 @@ func (*PoolRepo) Update(ctx context.Context, tx port.Tx, p domain.Pool, template
 	if err != nil {
 		return err
 	}
-	q := `UPDATE afs.agent_pools SET description=$3, stage_id=$4, persona=$5, model_id=$6, workers=$7, resources=$8,
+	q := `UPDATE afs.agent_pools SET description=$3, stage_id=$4, persona=$5, default_model_id=$6, model_access=$13, workers=$7, resources=$8,
   scratch_size_gib=$9, shared_volume=$10, state=$11, generation=$12`
-	args := []any{p.TeamID, p.ID, p.Description, nullable(p.StageID), p.Persona, p.ModelID, p.Workers, res,
-		p.ScratchSizeGiB, p.SharedVolume, string(p.State), int64(p.Generation)}
+	args := []any{p.TeamID, p.ID, p.Description, nullable(p.StageID), p.Persona, p.Models.DefaultModelID, p.Workers, res,
+		p.ScratchSizeGiB, p.SharedVolume, string(p.State), int64(p.Generation), string(accessOrAll(p.Models.Access))}
 	if templateChanged {
-		q += `, template=$13, template_id=$14, image=$15`
+		q += `, template=$14, template_id=$15, image=$16`
 		args = append(args, p.Template, templateID, string(p.Image))
 	}
 	q += ` WHERE team_id=$1 AND id=$2 AND deleted_at IS NULL AND version=$` + strconv.Itoa(len(args)+1)
@@ -210,7 +221,7 @@ func (*PoolRepo) Update(ctx context.Context, tx port.Tx, p domain.Pool, template
 	if tag.RowsAffected() == 0 {
 		return domain.PreconditionFailed()
 	}
-	return nil
+	return replaceModels(ctx, pt, "pool_models", "pool_id", p.TeamID, p.ID, p.Models)
 }
 
 // Touch implements pools.PoolRepository: a generation bump, which the version trigger and the change
@@ -239,16 +250,45 @@ func (*PoolRepo) Template(ctx context.Context, tx port.Tx, name string) (pools.T
 	return t, err == nil, MapError(err, OpRead, "agent template")
 }
 
-// ModelEnabled implements pools.PoolRepository.
-func (*PoolRepo) ModelEnabled(ctx context.Context, tx port.Tx, teamID, modelID string) (bool, error) {
+// ModelSets implements pools.PoolRepository.
+func (*PoolRepo) ModelSets(ctx context.Context, tx port.Tx, teamID string) (domain.ModelSets, error) {
 	pt, err := Unwrap(tx)
 	if err != nil {
-		return false, err
+		return domain.ModelSets{}, err
 	}
-	var ok bool
-	err = pt.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM afs.team_models tm JOIN afs.models m ON m.id = tm.model_id
-WHERE tm.team_id=$1 AND tm.model_id=$2 AND m.enabled)`, teamID, modelID).Scan(&ok)
-	return ok, MapError(err, OpRead, "model")
+	return loadModelSets(ctx, pt, teamID)
+}
+
+// EffectiveModels implements pools.PoolRepository: Models.Effective from afs.effective_agent_models.
+func (*PoolRepo) EffectiveModels(ctx context.Context, tx port.Tx, teamID string, list []domain.Pool) error {
+	if len(list) == 0 {
+		return nil
+	}
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return err
+	}
+	ids := make([]string, len(list))
+	idx := map[string]int{}
+	for i, p := range list {
+		ids[i], idx[p.ID] = p.ID, i
+		list[i].Models.Effective = []string{}
+	}
+	rows, err := pt.Query(ctx, `SELECT subject_id, model_id FROM afs.effective_agent_models
+WHERE team_id = $1 AND subject_kind = 'pool' AND subject_id = ANY($2) ORDER BY subject_id, is_default DESC, model_id`, teamID, ids)
+	if err != nil {
+		return MapError(err, OpRead, "models")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var pool, model string
+		if err := rows.Scan(&pool, &model); err != nil {
+			return MapError(err, OpRead, "models")
+		}
+		i := idx[pool]
+		list[i].Models.Effective = append(list[i].Models.Effective, model)
+	}
+	return MapError(rows.Err(), OpRead, "models")
 }
 
 // AgentNameTaken implements pools.PoolRepository.

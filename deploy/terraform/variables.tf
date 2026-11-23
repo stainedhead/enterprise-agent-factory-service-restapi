@@ -139,3 +139,39 @@ variable "collab_client_secret_name_pattern" {
   type        = string
   default     = ""
 }
+
+variable "orchestration_private_base_domain" {
+  description = "orchestration.private_base_domain: the apex of the private orchestration hostnames. Empty leaves the private entry (internal ALB, private zone, WAF) out."
+  type        = string
+  default     = ""
+}
+
+variable "orchestration_private_subnet_ids" {
+  description = "Private subnets (at least two availability zones) of the internal ALB. Required when orchestration_private_base_domain is set."
+  type        = list(string)
+  default     = []
+}
+
+variable "orchestration_private_certificate_arn" {
+  description = "Certificate for the private base domain and its wildcards. Required when orchestration_private_base_domain is set."
+  type        = string
+  default     = ""
+}
+
+variable "orchestration_private_ingress_cidrs" {
+  description = "Internal CIDR blocks allowed to reach the internal ALB. Required when orchestration_private_base_domain is set."
+  type        = list(string)
+  default     = []
+}
+
+variable "orchestration_private_extra_vpcs" {
+  description = "Further VPCs that resolve the private zone."
+  type        = list(object({ vpc_id = string, region = string }))
+  default     = []
+}
+
+variable "orchestration_private_access_log_bucket" {
+  description = "S3 bucket for the internal ALB's access logs. Empty turns them off."
+  type        = string
+  default     = ""
+}

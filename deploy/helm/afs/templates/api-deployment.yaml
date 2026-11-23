@@ -63,6 +63,14 @@ spec:
                 secretKeyRef:
                   name: {{ $c.keysSecret.name }}
                   key: idempotencyHmacKey
+            {{- with $c.deprecation.since }}
+            - name: AFS_DEPRECATION_SINCE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $c.deprecation.sunset }}
+            - name: AFS_DEPRECATION_SUNSET
+              value: {{ . | quote }}
+            {{- end }}
             {{- if $c.migrate.ownerUser }}
             - name: AFS_DATABASE_OWNER_URL
               value: {{ include "afs.databaseURL" (dict "root" $ "user" $c.migrate.ownerUser) | quote }}

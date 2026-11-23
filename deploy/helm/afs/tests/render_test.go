@@ -169,7 +169,7 @@ func TestContainersAreHardenedAndProbed(t *testing.T) {
 		if path(path(c, "readinessProbe"), "httpGet")["path"] != "/readyz" || path(path(c, "livenessProbe"), "httpGet")["path"] != "/healthz" {
 			t.Errorf("%s probes do not use /readyz and /healthz", name)
 		}
-		if !strings.HasPrefix(str(c, "image"), "111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-") || !strings.HasSuffix(str(c, "image"), ":v1.0.1") {
+		if !strings.HasPrefix(str(c, "image"), "111122223333.dkr.ecr.us-east-1.amazonaws.com/afs/afs-") || !strings.HasSuffix(str(c, "image"), ":v1.1.0") {
 			t.Errorf("%s image = %q", name, str(c, "image"))
 		}
 	}
@@ -475,5 +475,45 @@ func TestBillingReportJobs(t *testing.T) {
 		if got := str(path(cj, "spec"), "schedule"); got != schedule {
 			t.Errorf("%s schedule = %q, want %q", name, got, schedule)
 		}
+	}
+}
+
+// RA-US-21: the backfill is a post-install and post-upgrade hook that runs `afs-api orchestration-backfill`
+// with the API's service account and database login; it can be turned off.
+func TestOrchestrationBackfillHook(t *testing.T) {
+	docs := render(t, "")
+	var job obj
+	for _, d := range docs {
+		if str(d, "kind") == "Job" && strings.Contains(str(path(d, "metadata"), "name"), "orchestration-backfill") {
+			job = d
+		}
+	}
+	if job == nil {
+		t.Fatalf("no backfill job in %v", keys(docs))
+	}
+	if h := str(path(job, "metadata", "annotations"), "helm.sh/hook"); h != "post-install,post-upgrade" {
+		t.Errorf("hook = %q", h)
+	}
+	ps := podSpec(job)
+	c := ps["containers"].([]any)[0].(obj)
+	if args := c["args"].([]any); len(args) != 1 || args[0] != "orchestration-backfill" || ps["serviceAccountName"] != "afs-api" || ps["restartPolicy"] != "Never" {
+		t.Errorf("job: args %v sa %v", c["args"], ps["serviceAccountName"])
+	}
+	if env := envOf(c); !strings.Contains(env["AFS_DATABASE_URL"], "afs_app@") {
+		t.Errorf("database url = %q", env["AFS_DATABASE_URL"])
+	}
+	for _, d := range render(t, "api:\n  orchestrationBackfill:\n    enabled: false\n") {
+		if str(d, "kind") == "Job" {
+			t.Errorf("disabled backfill still renders %s", key(d))
+		}
+	}
+}
+
+// The deprecation window is configurable and reaches afs-api as environment.
+func TestDeprecationWindowEnv(t *testing.T) {
+	docs := render(t, "api:\n  deprecation:\n    since: \"2026-11-23T00:00:00Z\"\n    sunset: \"2027-11-23T00:00:00Z\"\n")
+	env := envOf(podSpec(find(t, docs, "Deployment", "afs-api"))["containers"].([]any)[0].(obj))
+	if env["AFS_DEPRECATION_SINCE"] != "2026-11-23T00:00:00Z" || env["AFS_DEPRECATION_SUNSET"] != "2027-11-23T00:00:00Z" {
+		t.Errorf("env: %v", env)
 	}
 }

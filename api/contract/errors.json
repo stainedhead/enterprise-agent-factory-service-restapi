@@ -2,7 +2,7 @@
   {
     "http": 400,
     "code": "ValidationError",
-    "when": "Malformed or out-of-range input, a body over the size limit (`field: body`; there is no `413`), a page token issued to another caller or for another operation; `details.fields[]` lists `{field, reason}`",
+    "when": "Malformed or out-of-range input, a body over the size limit (`field: body`; there is no `413`), a page token issued to another caller or for another operation; `details.fields[]` lists `{field, reason}`. v1.4.0 reasons: `role_reserved`, `name_reserved`, `orchestration_field_fixed`, `exposure_above_limit`, `surface_not_supported_by_tool`, `registration_mode_not_supported`, `tool_not_enabled`, `tool_unchanged`, `no_model_available`, `model_not_enabled_for_service`, `model_not_enabled_for_team`, `models_selection_empty`, `default_model_not_allowed`, `model_ids_not_allowed_for_all`, `conflicting_fields`, `setting_renamed`",
     "dbOrigin": "`23514`, `23502`, `22xxx`"
   },
   {
@@ -32,7 +32,7 @@
   {
     "http": 409,
     "code": "Conflict",
-    "when": "Duplicate name, idempotency body mismatch or in progress (these two are `details.reason` values, `idempotency_mismatch` and `idempotency_in_progress`, not separate codes; v1.3.0 adds `collaboration_agent_exists`, `collaboration_agent_missing`, `managed_secret` and `hostname_held`), dependent objects exist, invalid state transition (for example a suspended team)",
+    "when": "Duplicate name, idempotency body mismatch or in progress (these two are `details.reason` values, `idempotency_mismatch` and `idempotency_in_progress`, not separate codes; v1.3.0 adds `collaboration_agent_exists`, `collaboration_agent_missing`, `managed_secret` and `hostname_held`; v1.4.0 adds `orchestration_agent_required`, `orchestration_agent_exists`, `orchestration_agent_pending`, `orchestration_runtime_unset`, `tool_change_in_progress` and `service_model_access_all`), dependent objects exist, invalid state transition (for example a suspended team)",
     "dbOrigin": "`23505`, `23503` (on delete), `55000`"
   },
   {

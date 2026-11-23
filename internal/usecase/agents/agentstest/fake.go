@@ -25,6 +25,8 @@ type Repo struct {
 	Snaps     []domain.Snapshot
 	// Collab is the registration mode of teams that have a collaboration agent (by team id).
 	Collab map[string]domain.RegistrationMode
+	// Tools is the collaboration tool of a team (default paperclip).
+	Tools map[string]domain.CollabTool
 	// Links records SetCollaboration calls by agent id.
 	Links map[string]domain.AgentCollaboration
 	// Boot records the boot secrets stored by InsertBootSecret (secret id to env name).
@@ -48,7 +50,7 @@ func NewRepo() *Repo {
 }
 
 // List implements agents.Repository.
-func (r *Repo) List(_ context.Context, _ port.Tx, teamID, after string, limit int) ([]domain.Agent, error) {
+func (r *Repo) List(_ context.Context, _ port.Tx, teamID string, role domain.AgentRole, after string, limit int) ([]domain.Agent, error) {
 	if err := r.fail("List"); err != nil {
 		return nil, err
 	}
@@ -56,7 +58,7 @@ func (r *Repo) List(_ context.Context, _ port.Tx, teamID, after string, limit in
 	defer r.mu.Unlock()
 	var out []domain.Agent
 	for _, a := range r.Rows {
-		if a.TeamID == teamID && a.ID > after && a.State != domain.AgentDeleted {
+		if a.TeamID == teamID && a.ID > after && a.State != domain.AgentDeleted && (role == "" || a.IsOrchestration() == (role.Normalize() == domain.AgentRoleOrchestration)) {
 			out = append(out, a)
 		}
 	}
@@ -207,11 +209,32 @@ func (r *Repo) InsertCollaboration(_ context.Context, _ port.Tx, teamID, _ strin
 }
 
 // CollaborationMode implements agents.Repository.
-func (r *Repo) CollaborationMode(_ context.Context, _ port.Tx, teamID string) (domain.RegistrationMode, bool, error) {
+func (r *Repo) CollaborationMode(_ context.Context, _ port.Tx, teamID string) (domain.CollabTool, domain.RegistrationMode, bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	m, ok := r.Collab[teamID]
-	return m, ok, nil
+	tool := r.Tools[teamID]
+	if tool == "" {
+		tool = domain.ToolPaperclip
+	}
+	return tool, m, ok, nil
+}
+
+// ModelSets implements agents.Repository: the team's Models are the service, team and callable sets.
+func (r *Repo) ModelSets(_ context.Context, _ port.Tx, teamID string) (domain.ModelSets, error) {
+	if err := r.fail("ModelSets"); err != nil {
+		return domain.ModelSets{}, err
+	}
+	ids := r.Models[teamID]
+	return domain.ModelSets{Service: ids, Team: ids, Callable: ids}, nil
+}
+
+// EffectiveModels implements agents.Repository: the agent's own set within the team's.
+func (r *Repo) EffectiveModels(_ context.Context, _ port.Tx, teamID string, list []domain.Agent) error {
+	for i := range list {
+		list[i].Models.Effective = append([]string(nil), r.Models[teamID]...)
+	}
+	return nil
 }
 
 // SetCollaboration implements agents.Repository.

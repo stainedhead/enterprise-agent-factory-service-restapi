@@ -17,23 +17,28 @@ import (
 var now = time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC)
 
 type rig struct {
-	svc    *teams.Service
-	repo   *teamstest.Repo
-	audit  *fakes.Audit
-	outbox *fakes.Outbox
-	tx     *fakes.TxRunner
+	svc      *teams.Service
+	repo     *teamstest.Repo
+	audit    *fakes.Audit
+	outbox   *fakes.Outbox
+	tx       *fakes.TxRunner
+	settings *fakes.Settings
+	boot     *teamstest.Boot
 }
 
 func newRig(t *testing.T) *rig {
 	t.Helper()
 	r := &rig{repo: teamstest.New(), audit: &fakes.Audit{}, outbox: &fakes.Outbox{}, tx: &fakes.TxRunner{}}
+	set := &fakes.Settings{}
+	set.Set(domain.SettingOrchestrationTools, json.RawMessage(`{"paperclip":{"enabled":true,"default":true,"templateId":"tpl_p","imageRepository":"registry.example.com/paperclip"},"buzz":{"enabled":true,"default":false,"templateId":"tpl_b","imageRepository":"registry.example.com/buzz"}}`))
+	r.settings, r.boot = set, &teamstest.Boot{}
 	r.svc = &teams.Service{
 		Deps: acting.Deps{Tx: r.tx, Audit: r.audit, Outbox: r.outbox, Idem: &fakes.Idempotency{},
 			Clock: &fakes.Clock{T: now}, IDs: &fakes.IDGen{}},
-		Repo: r.repo, Settings: &fakes.Settings{},
+		Repo: r.repo, Settings: set, Boot: r.boot,
 	}
 	r.repo.Users["boss@example.com"] = "usr_01JD2Q3R4S5T6V7W8X9Y0Z0001"
-	r.repo.Catalog["m1"] = teams.ModelInfo{ID: "m1", Enabled: true}
+	r.repo.Catalog["m1"] = teams.ModelInfo{ID: "m1", Enabled: true, Callable: true}
 	r.repo.Catalog["off"] = teams.ModelInfo{ID: "off"}
 	return r
 }
@@ -426,27 +431,36 @@ func TestReadsAndVisibility(t *testing.T) {
 func TestModels(t *testing.T) {
 	r := newRig(t)
 	tm := r.create(t)
-	ms, v, err := r.svc.Models(t.Context(), teamCaller(tm.ID, authz.RoleTeamViewer), tm.ID)
-	if err != nil || len(ms) != 1 {
-		t.Fatalf("%v %v", ms, err)
+	ms, err := r.svc.Models(t.Context(), teamCaller(tm.ID, authz.RoleTeamViewer), tm.ID)
+	if err != nil || ms.Access != domain.ModelAccessSelected || len(ms.Items) != 1 {
+		t.Fatalf("%+v %v", ms, err)
 	}
+	v := ms.Version
 	admin := teamCaller(tm.ID, authz.RoleTeamAdmin)
-	if _, _, err := r.svc.PutModels(t.Context(), admin, tm.ID, nil, []string{"m1"}); domain.KindOf(err) != domain.KindAccessDenied {
+	if _, err := r.svc.PutModels(t.Context(), admin, tm.ID, nil, domain.ModelAccessSelected, []string{"m1"}); domain.KindOf(err) != domain.KindAccessDenied {
 		t.Fatalf("team-admin put: %v", err)
 	}
 	if len(r.audit.Entries) != 2 || !r.audit.Entries[1].Own {
 		t.Fatalf("denied audit: %+v", r.audit.Entries)
 	}
 	stale := v + 4
-	if _, _, err := r.svc.PutModels(t.Context(), svcAdmin, tm.ID, &stale, []string{"m1"}); domain.KindOf(err) != domain.KindPreconditionFailed {
+	if _, err := r.svc.PutModels(t.Context(), svcAdmin, tm.ID, &stale, domain.ModelAccessSelected, []string{"m1"}); domain.KindOf(err) != domain.KindPreconditionFailed {
 		t.Fatalf("stale: %v", err)
 	}
-	if _, _, err := r.svc.PutModels(t.Context(), svcAdmin, tm.ID, &v, []string{"off"}); domain.KindOf(err) != domain.KindValidation {
-		t.Fatalf("disabled: %v", err)
+	if _, err := r.svc.PutModels(t.Context(), svcAdmin, tm.ID, nil, domain.ModelAccessSelected, []string{"off"}); domain.KindOf(err) != domain.KindValidation {
+		t.Fatalf("not enabled for the service: %v", err)
 	}
-	got, nv, err := r.svc.PutModels(t.Context(), svcAdmin, tm.ID, &v, []string{})
-	if err != nil || len(got) != 0 || nv <= v {
-		t.Fatalf("%v %v %v", got, nv, err)
+	if _, err := r.svc.PutModels(t.Context(), svcAdmin, tm.ID, nil, domain.ModelAccessSelected, []string{}); domain.KindOf(err) != domain.KindValidation {
+		t.Fatalf("selected with nothing: %v", err)
+	}
+	r.outbox.Events = nil
+	got, err := r.svc.PutModels(t.Context(), svcAdmin, tm.ID, nil, domain.ModelAccessSelected, []string{"m1"})
+	if err != nil || got.Access != domain.ModelAccessSelected || len(got.ModelIDs) != 1 || len(r.outbox.Events) != 1 || r.outbox.Events[0].Type != domain.EventTeamModelsChanged {
+		t.Fatalf("%+v %v %+v", got, err, r.outbox.Events)
+	}
+	got, err = r.svc.PutModels(t.Context(), svcAdmin, tm.ID, nil, domain.ModelAccessAll, nil)
+	if err != nil || got.Access != domain.ModelAccessAll {
+		t.Fatalf("all: %+v %v", got, err)
 	}
 }
 

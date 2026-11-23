@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/netip"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -72,9 +73,12 @@ func (t *Tokens) Review(_ context.Context, token string) (gateway.TokenIdentity,
 
 // Store is a gateway.Store.
 type Store struct {
-	mu        sync.Mutex
-	Teams     map[string]gateway.TeamRecord
-	Models    map[string]gateway.ModelAccess // team + "\x00" + model
+	mu     sync.Mutex
+	Teams  map[string]gateway.TeamRecord
+	Models map[string]gateway.ModelAccess // team + "\x00" + model
+	// Admission holds the reason each model is refused for a subject, keyed "agent\x00<id>" or "pool\x00<id>"
+	// (an empty reason admits it). A subject without an entry admits every model.
+	Admission map[string]map[string]string
 	PriceRows map[string][]gateway.Price
 	Budgets   map[string]gateway.BudgetRecord
 	TagRows   map[string][]gateway.Tag
@@ -88,7 +92,7 @@ type Store struct {
 
 // NewStore returns an empty store.
 func NewStore() *Store {
-	return &Store{Teams: map[string]gateway.TeamRecord{}, Models: map[string]gateway.ModelAccess{}, PriceRows: map[string][]gateway.Price{},
+	return &Store{Teams: map[string]gateway.TeamRecord{}, Models: map[string]gateway.ModelAccess{}, Admission: map[string]map[string]string{}, PriceRows: map[string][]gateway.Price{},
 		Budgets: map[string]gateway.BudgetRecord{}, TagRows: map[string][]gateway.Tag{}, TagSets: map[string]string{}, Reads: map[string]int{}}
 }
 
@@ -116,6 +120,30 @@ func (s *Store) Team(ctx context.Context, id string) (gateway.TeamRecord, error)
 		return gateway.TeamRecord{}, gateway.ErrNotFound
 	}
 	return t, nil
+}
+
+// ModelAdmission implements gateway.Store.
+func (s *Store) ModelAdmission(ctx context.Context, kind, subjectID string) (map[string]string, error) {
+	if err := s.enter(ctx, "modelAdmission"); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, ok := s.Admission[kind+"\x00"+subjectID]
+	if !ok {
+		// Every model the fake knows of, admitted.
+		all := map[string]string{}
+		for k := range s.Models {
+			if i := strings.IndexByte(k, 0); i >= 0 {
+				all[k[i+1:]] = ""
+			}
+		}
+		for id := range s.PriceRows {
+			all[id] = ""
+		}
+		return all, nil
+	}
+	return m, nil
 }
 
 // TeamModel implements gateway.Store.

@@ -9,6 +9,7 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres/pgtest"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/housekeeping"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/links"
 )
 
@@ -278,5 +279,38 @@ VALUES ($1, $2, $3, '111122223333', 'arn:aws:iam::111122223333:role/r', 'p', 'af
 	var lastErr string
 	if err := admin.QueryRow(t.Context(), `SELECT status, coalesce(last_error, '') FROM afs.agent_role_links WHERE id = $1`, link).Scan(&status, &lastErr); err != nil || status != "disabled" || lastErr != "AccountNotAllowed" {
 		t.Fatalf("disabled: %s %q %v", status, lastErr, err)
+	}
+}
+
+// The model sync inserts new models disabled with origin bedrock_sync and only stamps synced_at on known ones.
+func TestModelSyncStore(t *testing.T) {
+	db := pgtest.Get(t)
+	runner, _ := reconcilerRunner(t, db)
+	store := postgres.NewModelSyncStore(runner)
+	admin := db.Admin(t)
+	if _, err := admin.Exec(t.Context(), `DELETE FROM afs.models WHERE id IN ('sync.new-model', 'sync.known-model')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(t.Context(), `INSERT INTO afs.models (id, provider, display_name, enabled) VALUES ('sync.known-model', 'acme', 'Known', true)`); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UTC().Truncate(time.Second)
+	res, err := store.Sync(t.Context(), []housekeeping.CatalogModel{
+		{ID: "sync.new-model", Provider: "acme", DisplayName: "New"},
+		{ID: "sync.known-model", Provider: "other", DisplayName: "Renamed"},
+	}, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Inserted) != 1 || res.Inserted[0] != "sync.new-model" || res.Touched != 1 {
+		t.Fatalf("result %+v", res)
+	}
+	var enabled bool
+	var origin, name string
+	if err := admin.QueryRow(t.Context(), `SELECT enabled, origin FROM afs.models WHERE id = 'sync.new-model'`).Scan(&enabled, &origin); err != nil || enabled || origin != "bedrock_sync" {
+		t.Fatalf("new: %v %v %v", enabled, origin, err)
+	}
+	if err := admin.QueryRow(t.Context(), `SELECT display_name FROM afs.models WHERE id = 'sync.known-model'`).Scan(&name); err != nil || name != "Known" {
+		t.Fatalf("known: %v %v", name, err)
 	}
 }

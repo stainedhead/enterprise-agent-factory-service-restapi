@@ -11,8 +11,8 @@ import (
 
 // wireCollab builds the Paperclip collaboration use cases (RA-17) on the database components and the
 // Secrets Manager writer wireSecrets built, and binds their handlers.
-func wireCollab(c *components) {
+func wireCollab(c *components, boot collab.BootSecretWriter) {
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
-	svc := &collab.Service{Deps: deps, Repo: postgres.NewCollabRepo(), Settings: c.Settings, Writer: c.SecretsWriter, Rand: crand.Reader}
+	svc := &collab.Service{Deps: deps, Repo: postgres.NewCollabRepo(), Settings: c.Settings, Writer: c.SecretsWriter, Boot: boot, Rand: crand.Reader}
 	c.bind(httpapi.BindCollaboration(&httpapi.CollaborationAPI{Svc: svc, Pages: httpapi.NewPageTokens(c.PageKey, nil)}))
 }

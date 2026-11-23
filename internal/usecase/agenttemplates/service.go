@@ -51,6 +51,9 @@ func audit(t domain.AgentTemplate) map[string]any {
 
 func (s *Service) list(ctx context.Context, c acting.Caller, enabledOnly bool, capability string, p acting.Page) ([]domain.AgentTemplate, string, error) {
 	p = p.Normalized()
+	if capability == domain.CapabilityPaperclip {
+		capability = domain.CapabilityToolPaperclip // stored form of the deprecated value
+	}
 	var rows []domain.AgentTemplate
 	err := s.Tx.ReadTx(ctx, c.Session(), func(ctx context.Context, tx port.Tx) error {
 		var err error
@@ -59,6 +62,9 @@ func (s *Service) list(ctx context.Context, c acting.Caller, enabledOnly bool, c
 	})
 	if err != nil {
 		return nil, "", err
+	}
+	if enabledOnly { // ListAgentTemplates never offers an orchestration image to a team (AGT-11)
+		rows = slices.DeleteFunc(rows, func(t domain.AgentTemplate) bool { return domain.HasOrchestrationCapability(t.Capabilities) })
 	}
 	page, next := acting.Slice(rows, p.Limit, func(t domain.AgentTemplate) string { return t.Name })
 	return page, next, nil
@@ -126,7 +132,7 @@ func (s *Service) Put(ctx context.Context, c acting.Caller, in domain.PutAgentTe
 			}
 		}
 		t.ID = cur.ID
-		if cur.Enabled && !t.Enabled || slices.Contains(cur.Capabilities, domain.CapabilityPaperclip) && !slices.Contains(t.Capabilities, domain.CapabilityPaperclip) {
+		if cur.Enabled && !t.Enabled || domain.HasOrchestrationCapability(cur.Capabilities) && !domain.HasOrchestrationCapability(t.Capabilities) {
 			if err := s.notReferenced(ctx, tx, cur.ID); err != nil {
 				return err
 			}

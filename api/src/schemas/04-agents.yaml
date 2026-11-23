@@ -53,12 +53,12 @@ Agent:
   - name
   - template
   - image
-  - modelId
   - iamIdentity
   - paused
   - version
   - generation
   - status
+  - models
   properties:
     id:
       type: string
@@ -93,20 +93,28 @@ Agent:
       type: string
       enum:
       - worker
-      - collaboration
-      description: worker or collaboration; set on create, immutable
+      - orchestration
+      readOnly: true
+      description: worker or orchestration; read-only (a 1.0.1 collaboration reads as orchestration)
     collaboration:
       $ref: '#/components/schemas/AgentCollaboration'
     description:
       type: string
       maxLength: 1000
     template:
-      type: string
-      description: Agent template name
+      type:
+      - string
+      - 'null'
+      description: Agent template name; null on the orchestration agent for callers who are not service admins
     image:
-      $ref: '#/components/schemas/ImageRef'
+      oneOf:
+      - $ref: '#/components/schemas/ImageRef'
+      - type: 'null'
+      description: Null on the orchestration agent for callers who are not service admins
     modelId:
       type: string
+      deprecated: true
+      description: 'Deprecated: models.defaultModelId'
     resources:
       $ref: '#/components/schemas/Resources'
     iamIdentity:
@@ -126,6 +134,13 @@ Agent:
     paused:
       type: boolean
       readOnly: true
+    models:
+      $ref: '#/components/schemas/AgentModels'
+    runtime:
+      type: string
+      enum:
+      - orchestration
+      description: Present only on the orchestration agent
 AgentList:
   type: object
   description: A page of Agent resources
@@ -145,16 +160,15 @@ CreateAgentRequest:
   - name
   - template
   - image
-  - modelId
   properties:
     name:
       $ref: '#/components/schemas/Name'
+      description: The name orchestrator is reserved (name_reserved)
     role:
       type: string
       enum:
       - worker
-      - collaboration
-      description: Set on create; immutable
+      description: Workers only; any other value is refused (role_reserved)
     collaboration:
       $ref: '#/components/schemas/AgentCollaborationInput'
     description:
@@ -167,6 +181,8 @@ CreateAgentRequest:
       $ref: '#/components/schemas/ImageRef'
     modelId:
       type: string
+      deprecated: true
+      description: 'Deprecated: models.defaultModelId'
     resources:
       $ref: '#/components/schemas/Resources'
     iamIdentity:
@@ -180,6 +196,8 @@ CreateAgentRequest:
       type: array
       items:
         $ref: '#/components/schemas/SecretBinding'
+    models:
+      $ref: '#/components/schemas/AgentModelsInput'
 UpdateAgentRequest:
   type: object
   properties:
@@ -195,6 +213,8 @@ UpdateAgentRequest:
       $ref: '#/components/schemas/ImageRef'
     modelId:
       type: string
+      deprecated: true
+      description: 'Deprecated: models.defaultModelId'
     resources:
       $ref: '#/components/schemas/Resources'
     iamIdentity:
@@ -208,6 +228,11 @@ UpdateAgentRequest:
       type: array
       items:
         $ref: '#/components/schemas/SecretBinding'
+    models:
+      $ref: '#/components/schemas/AgentModelsInput'
+    name:
+      $ref: '#/components/schemas/Name'
+      description: Refused on the orchestration agent (orchestration_field_fixed)
 Snapshot:
   type: object
   required:
@@ -356,6 +381,9 @@ AgentTemplate:
         type: string
         enum:
         - paperclip
+        - orchestration
+        - tool:paperclip
+        - tool:buzz
     enabled:
       type: boolean
     version:
@@ -422,3 +450,41 @@ AgentCollaborationInput:
       type: string
       pattern: ^[A-Za-z0-9._:-]{1,128}$
       description: Accepted only while registrationMode is manual
+AgentModels:
+  type: object
+  description: Which models an agent may call and its default
+  required:
+  - access
+  - defaultModelId
+  properties:
+    access:
+      type: string
+      enum:
+      - all
+      - selected
+      description: all follows the team list
+    modelIds:
+      type: array
+      items:
+        type: string
+    defaultModelId:
+      type: string
+    effectiveModelIds:
+      type: array
+      items:
+        type: string
+      readOnly: true
+AgentModelsInput:
+  type: object
+  properties:
+    access:
+      type: string
+      enum:
+      - all
+      - selected
+    modelIds:
+      type: array
+      items:
+        type: string
+    defaultModelId:
+      type: string

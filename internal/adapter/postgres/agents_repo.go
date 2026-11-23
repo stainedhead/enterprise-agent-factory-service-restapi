@@ -23,7 +23,8 @@ func NewAgentRepo() *AgentRepo { return &AgentRepo{} }
 
 var _ agents.Repository = (*AgentRepo)(nil)
 
-const agentSelect = `SELECT a.id, a.team_id, a.name, a.description, a.template, a.image, a.model_id, a.resources,
+const agentSelect = `SELECT a.id, a.team_id, a.name, a.description, a.template, a.image, a.model_id, a.model_access, a.default_model_id,
+  coalesce((SELECT array_agg(x.model_id ORDER BY x.model_id) FROM afs.agent_models x WHERE x.team_id = a.team_id AND x.agent_id = a.id), '{}'), a.resources,
   a.iam_identity, coalesce(ident.external_ref, ''),
   a.storage_size_gib, a.storage_class, a.storage_on_delete, a.snapshot_schedule, a.snapshot_retain_count,
   a.state, a.version, a.generation, a.created_at, a.created_by, a.updated_at,
@@ -50,11 +51,13 @@ func scanAgent(row pgx.Row) (domain.Agent, error) {
 		sizeGiB, retain            int
 		class, onDelete, scheduled string
 		role                       string
+		access, defModel           string
+		modelIDs                   []string
 		cConnect                   *bool
 		cPC, cState, cErr          *string
 		cSynced                    *time.Time
 	)
-	err := row.Scan(&a.ID, &a.TeamID, &name, &a.Description, &a.Template, &image, &a.ModelID, &res,
+	err := row.Scan(&a.ID, &a.TeamID, &name, &a.Description, &a.Template, &image, &a.ModelID, &access, &defModel, &modelIDs, &res,
 		&iam, &a.IAMRoleARN, &sizeGiB, &class, &onDelete, &scheduled, &retain,
 		&state, &ver, &gen, &a.CreatedAt, &a.CreatedBy, &a.UpdatedAt, &phase, &obs, &conds, &lastRec,
 		&role, &cConnect, &cPC, &cState, &cSynced, &cErr)
@@ -71,6 +74,10 @@ func scanAgent(row pgx.Row) (domain.Agent, error) {
 		}
 	}
 	a.Role = domain.AgentRole(role)
+	a.Models = domain.AgentModels{Access: domain.ModelAccess(access), ModelIDs: modelIDs, DefaultModelID: defModel, Effective: []string{}}
+	if modelIDs == nil {
+		a.Models.ModelIDs = []string{}
+	}
 	if cConnect != nil {
 		c := &domain.AgentCollaboration{Connect: *cConnect, LastSyncedAt: cSynced}
 		if cPC != nil {
@@ -134,12 +141,12 @@ WHERE team_id=$1 AND agent_id = ANY($2) ORDER BY agent_id, target`, teamID, ids)
 }
 
 // List implements agents.Repository.
-func (*AgentRepo) List(ctx context.Context, tx port.Tx, teamID, after string, limit int) ([]domain.Agent, error) {
+func (*AgentRepo) List(ctx context.Context, tx port.Tx, teamID string, role domain.AgentRole, after string, limit int) ([]domain.Agent, error) {
 	pt, err := Unwrap(tx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := pt.Query(ctx, agentSelect+` AND a.id > $2 ORDER BY a.id LIMIT $3`, teamID, after, limit)
+	rows, err := pt.Query(ctx, agentSelect+` AND ($2 = '' OR a.role = $2) AND a.id > $3 ORDER BY a.id LIMIT $4`, teamID, string(role.Normalize()), after, limit)
 	if err != nil {
 		return nil, MapError(err, OpRead, "agent")
 	}
@@ -187,6 +194,58 @@ func roleOrWorker(r domain.AgentRole) string {
 	return string(r)
 }
 
+func accessOrAll(a domain.ModelAccess) domain.ModelAccess {
+	if a == "" {
+		return domain.ModelAccessAll
+	}
+	return a
+}
+
+// replaceModels makes the stored selection of an agent or pool (table agent_models or pool_models)
+// exactly m.ModelIDs while the access is selected, and empty while it is all (stored ids that the
+// access all would hide are dropped, as the contract's replace semantics say). Rows are compared first
+// so an unchanged set writes nothing.
+func replaceModels(ctx context.Context, pt pgx.Tx, table, col, teamID, id string, m domain.AgentModels) error {
+	want := []string{}
+	if accessOrAll(m.Access) == domain.ModelAccessSelected {
+		want = m.ModelIDs
+	}
+	rows, err := pt.Query(ctx, `SELECT model_id FROM afs.`+table+` WHERE team_id = $1 AND `+col+` = $2`, teamID, id)
+	if err != nil {
+		return MapError(err, OpRead, "models")
+	}
+	have := map[string]bool{}
+	for rows.Next() {
+		var mid string
+		if err := rows.Scan(&mid); err != nil {
+			rows.Close()
+			return MapError(err, OpRead, "models")
+		}
+		have[mid] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return MapError(err, OpRead, "models")
+	}
+	keep := map[string]bool{}
+	for _, mid := range want {
+		keep[mid] = true
+		if !have[mid] {
+			if _, err := pt.Exec(ctx, `INSERT INTO afs.`+table+` (team_id, `+col+`, model_id) VALUES ($1, $2, $3)`, teamID, id, mid); err != nil {
+				return MapError(err, OpWrite, "models")
+			}
+		}
+	}
+	for mid := range have {
+		if !keep[mid] {
+			if _, err := pt.Exec(ctx, `DELETE FROM afs.`+table+` WHERE team_id = $1 AND `+col+` = $2 AND model_id = $3`, teamID, id, mid); err != nil {
+				return MapError(err, OpWrite, "models")
+			}
+		}
+	}
+	return nil
+}
+
 func agentResourcesJSON(r domain.AgentResources) ([]byte, error) { return json.Marshal(r) }
 
 func replaceBindings(ctx context.Context, pt pgx.Tx, a domain.Agent) error {
@@ -212,14 +271,17 @@ func (*AgentRepo) Insert(ctx context.Context, tx port.Tx, a domain.Agent, templa
 	if err != nil {
 		return err
 	}
-	_, err = pt.Exec(ctx, `INSERT INTO afs.agents (id, team_id, name, description, template, template_id, image, model_id, resources,
+	_, err = pt.Exec(ctx, `INSERT INTO afs.agents (id, team_id, name, description, template, template_id, image, default_model_id, model_access, resources,
   iam_identity, storage_size_gib, storage_class, storage_on_delete, snapshot_schedule, snapshot_retain_count, state, generation, role)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
-		a.ID, a.TeamID, string(a.Name), a.Description, a.Template, nullable(templateID), string(a.Image), a.ModelID, res,
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+		a.ID, a.TeamID, string(a.Name), a.Description, a.Template, nullable(templateID), string(a.Image), a.Models.DefaultModelID, string(accessOrAll(a.Models.Access)), res,
 		string(a.IAMIdentity), a.Volume.SizeGiB, a.Volume.StorageClass, a.Volume.OnDelete, a.Volume.SnapshotSchedule,
 		a.Volume.SnapshotRetain, string(a.State), int64(a.Generation), roleOrWorker(a.Role))
 	if err != nil {
 		return MapError(err, OpWrite, "agent")
+	}
+	if err := replaceModels(ctx, pt, "agent_models", "agent_id", a.TeamID, a.ID, a.Models); err != nil {
+		return err
 	}
 	return replaceBindings(ctx, pt, a)
 }
@@ -235,13 +297,14 @@ func (*AgentRepo) Update(ctx context.Context, tx port.Tx, a domain.Agent, templa
 	if err != nil {
 		return err
 	}
-	q := `UPDATE afs.agents SET description=$3, model_id=$4, resources=$5, iam_identity=$6,
+	q := `UPDATE afs.agents SET description=$3, default_model_id=$4, model_access=$14, resources=$5, iam_identity=$6,
   storage_size_gib=$7, storage_class=$8, storage_on_delete=$9, snapshot_schedule=$10, snapshot_retain_count=$11,
   state=$12, generation=$13`
-	args := []any{a.TeamID, a.ID, a.Description, a.ModelID, res, string(a.IAMIdentity), a.Volume.SizeGiB, a.Volume.StorageClass,
+	args := []any{a.TeamID, a.ID, a.Description, a.Models.DefaultModelID, res, string(a.IAMIdentity), a.Volume.SizeGiB, a.Volume.StorageClass,
 		a.Volume.OnDelete, a.Volume.SnapshotSchedule, a.Volume.SnapshotRetain, string(a.State), int64(a.Generation)}
+	args = append(args, string(accessOrAll(a.Models.Access)))
 	if templateChanged {
-		q += `, template=$14, template_id=$15, image=$16`
+		q += `, template=$15, template_id=$16, image=$17`
 		args = append(args, a.Template, templateID, string(a.Image))
 	}
 	q += ` WHERE team_id=$1 AND id=$2 AND version=$` + strconv.Itoa(len(args)+1)
@@ -252,6 +315,9 @@ func (*AgentRepo) Update(ctx context.Context, tx port.Tx, a domain.Agent, templa
 	}
 	if tag.RowsAffected() == 0 {
 		return domain.PreconditionFailed()
+	}
+	if err := replaceModels(ctx, pt, "agent_models", "agent_id", a.TeamID, a.ID, a.Models); err != nil {
+		return err
 	}
 	// Bindings are replaced only when they differ from the stored set.
 	var stored []domain.SecretBinding
@@ -305,15 +371,14 @@ func (*AgentRepo) Template(ctx context.Context, tx port.Tx, name string) (agents
 	return t, err == nil, MapError(err, OpRead, "agent template")
 }
 
-// ModelEnabled implements agents.Repository.
+// ModelEnabled implements agents.Repository: enabled for the service and allowed for the team.
 func (*AgentRepo) ModelEnabled(ctx context.Context, tx port.Tx, teamID, modelID string) (bool, error) {
 	pt, err := Unwrap(tx)
 	if err != nil {
 		return false, err
 	}
 	var ok bool
-	err = pt.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM afs.team_models tm JOIN afs.models m ON m.id = tm.model_id
-WHERE tm.team_id=$1 AND tm.model_id=$2 AND m.enabled)`, teamID, modelID).Scan(&ok)
+	err = pt.QueryRow(ctx, `SELECT afs.model_enabled_for_service($2) AND afs.model_allowed_for_team($1, $2)`, teamID, modelID).Scan(&ok)
 	return ok, MapError(err, OpRead, "model")
 }
 
@@ -387,29 +452,60 @@ func (*AgentRepo) InsertSnapshot(ctx context.Context, tx port.Tx, teamID string,
 	return MapError(err, OpWrite, "snapshot")
 }
 
-// InsertCollaboration implements agents.Repository: the team's collaboration resource with the contract
-// defaults (web UI on, REST API off, manual registration).
-func (*AgentRepo) InsertCollaboration(ctx context.Context, tx port.Tx, teamID, agentID string) error {
+// CollaborationMode implements agents.Repository.
+func (*AgentRepo) CollaborationMode(ctx context.Context, tx port.Tx, teamID string) (domain.CollabTool, domain.RegistrationMode, bool, error) {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return "", "", false, err
+	}
+	var tool, m string
+	err = pt.QueryRow(ctx, `SELECT tool, registration_mode FROM afs.team_collaboration WHERE team_id = $1`, teamID).Scan(&tool, &m)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", false, nil
+	}
+	return domain.CollabTool(tool), domain.RegistrationMode(m), err == nil, MapError(err, OpRead, "orchestration")
+}
+
+// ModelSets implements agents.Repository.
+func (*AgentRepo) ModelSets(ctx context.Context, tx port.Tx, teamID string) (domain.ModelSets, error) {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return domain.ModelSets{}, err
+	}
+	return loadModelSets(ctx, pt, teamID)
+}
+
+// EffectiveModels implements agents.Repository: Models.Effective from afs.effective_agent_models, the
+// default first, then by id.
+func (*AgentRepo) EffectiveModels(ctx context.Context, tx port.Tx, teamID string, list []domain.Agent) error {
+	if len(list) == 0 {
+		return nil
+	}
 	pt, err := Unwrap(tx)
 	if err != nil {
 		return err
 	}
-	_, err = pt.Exec(ctx, `INSERT INTO afs.team_collaboration (team_id, agent_id) VALUES ($1, $2)`, teamID, agentID)
-	return MapError(err, OpWrite, "collaboration")
-}
-
-// CollaborationMode implements agents.Repository.
-func (*AgentRepo) CollaborationMode(ctx context.Context, tx port.Tx, teamID string) (domain.RegistrationMode, bool, error) {
-	pt, err := Unwrap(tx)
+	ids := make([]string, len(list))
+	idx := map[string]int{}
+	for i, a := range list {
+		ids[i], idx[a.ID] = a.ID, i
+		list[i].Models.Effective = []string{}
+	}
+	rows, err := pt.Query(ctx, `SELECT subject_id, model_id FROM afs.effective_agent_models
+WHERE team_id = $1 AND subject_kind = 'agent' AND subject_id = ANY($2) ORDER BY subject_id, is_default DESC, model_id`, teamID, ids)
 	if err != nil {
-		return "", false, err
+		return MapError(err, OpRead, "models")
 	}
-	var m string
-	err = pt.QueryRow(ctx, `SELECT registration_mode FROM afs.team_collaboration WHERE team_id = $1`, teamID).Scan(&m)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", false, nil
+	defer rows.Close()
+	for rows.Next() {
+		var agent, model string
+		if err := rows.Scan(&agent, &model); err != nil {
+			return MapError(err, OpRead, "models")
+		}
+		i := idx[agent]
+		list[i].Models.Effective = append(list[i].Models.Effective, model)
 	}
-	return domain.RegistrationMode(m), err == nil, MapError(err, OpRead, "collaboration")
+	return MapError(rows.Err(), OpRead, "models")
 }
 
 // SetCollaboration implements agents.Repository.

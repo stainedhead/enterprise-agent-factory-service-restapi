@@ -51,7 +51,7 @@ func init() {
 			w.exec(t, `UPDATE afs.teams SET description = 'matrix ' || clock_timestamp() WHERE id = $1`, w.TeamA.ID)
 			return map[string]string{"rev": ver(t, w, `SELECT max(id) FROM afs.config_revisions WHERE team_id = $1`, w.TeamA.ID)}
 		}})
-	Register(Case{Op: "CreateTeam", Path: "/v1/teams",
+	Register(Case{Op: "CreateTeam", Path: "/v1/teams", NoAudit: "CreateTeam also audits the orchestration agent and its boot secrets, in the same transaction (ORC-2)",
 		Body:    `{"slug":"mx{slug}","displayName":"Matrix","kind":"persistent","costCenter":"CC1","ownerEmail":"o@example.com","maxBudgetUsd":"1000","firstAdmin":{"subjectType":"group","groupName":"mx-first-{slug}"},"tags":[]}`,
 		Prepare: func(*testing.T, *World) map[string]string { return map[string]string{"slug": fmt5(nextSeq())} }})
 	Register(Case{Op: "UpdateTeam", Path: "/v1/teams/{teamId}", Body: `{"displayName":"Matrix"}`, Headers: map[string]string{"If-Match": ifMatch},
@@ -64,7 +64,7 @@ func init() {
 		}})
 	Register(Case{Op: "DeleteTeam", Path: "/v1/teams/{teamId}", Headers: map[string]string{"If-Match": ifMatch},
 		Prepare: func(t *testing.T, w *World) map[string]string { return map[string]string{"ver": w.teamVersion(t)} }})
-	Register(Case{Op: "PutTeamModels", Path: "/v1/teams/{teamId}/models", Body: `{"modelIds":[]}`})
+	Register(Case{Op: "PutTeamModels", Path: "/v1/teams/{teamId}/models", Body: `{"access":"all"}`})
 	Register(Case{Op: "PutTeamTags", Path: "/v1/teams/{teamId}/tags", Body: `{"tags":[]}`})
 
 	// Members.

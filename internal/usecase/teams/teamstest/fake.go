@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port/fakes"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/teams"
@@ -17,19 +18,23 @@ import (
 
 // Repo implements teams.Repository.
 type Repo struct {
-	mu          sync.Mutex
-	Teams       map[string]domain.Team
-	Budgets     map[string]domain.Money
-	Users       map[string]string // email -> id
-	Bindings    map[string]domain.NewMemberParams
-	Catalog     map[string]teams.ModelInfo
-	TeamModels  map[string][]string
-	TeamModelV  map[string]int64
-	Service     []domain.ServiceTag
-	Tags        map[string][]domain.TagValue
-	TagV        map[string]int64
-	InsertErr   error
-	BindingTeam map[string]string
+	mu         sync.Mutex
+	guarded    map[*fakes.Tx]bool
+	Teams      map[string]domain.Team
+	Budgets    map[string]domain.Money
+	Users      map[string]string // email -> id
+	Bindings   map[string]domain.NewMemberParams
+	Catalog    map[string]teams.ModelInfo
+	TeamModels map[string][]string
+	TeamModelV map[string]int64
+	Service    []domain.ServiceTag
+	Tags       map[string][]domain.TagValue
+	TagV       map[string]int64
+	InsertErr  error
+	// OrchErr makes InsertOrchestration fail; Orchestrations records each call.
+	OrchErr        error
+	Orchestrations []teams.OrchestrationAgent
+	BindingTeam    map[string]string
 }
 
 // New returns an empty Repo.
@@ -43,9 +48,13 @@ func New() *Repo {
 // guard registers a rollback that restores the state as it was at the first write of the transaction.
 func (r *Repo) guard(tx port.Tx) {
 	ft, ok := tx.(*fakes.Tx)
-	if !ok {
+	if !ok || r.guarded[ft] {
 		return
 	}
+	if r.guarded == nil {
+		r.guarded = map[*fakes.Tx]bool{}
+	}
+	r.guarded[ft] = true
 	snap := struct {
 		t  map[string]domain.Team
 		b  map[string]domain.Money
@@ -176,14 +185,110 @@ func (r *Repo) InsertAdminBinding(_ context.Context, tx port.Tx, bid, teamID str
 }
 
 // Models implements teams.Repository.
-func (r *Repo) Models(_ context.Context, _ port.Tx, teamID string) ([]teams.ModelInfo, domain.Version, error) {
+func (r *Repo) Models(_ context.Context, _ port.Tx, teamID string) (teams.TeamModels, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	var out []teams.ModelInfo
-	for _, id := range r.TeamModels[teamID] {
-		out = append(out, r.Catalog[id])
+	t := r.Teams[teamID]
+	out := teams.TeamModels{Access: t.ModelAccess, ModelIDs: slices.Clone(r.TeamModels[teamID]), Version: domain.Version(r.TeamModelV[teamID] + 1)}
+	if out.Access == "" {
+		out.Access = domain.ModelAccessAll
 	}
-	return out, domain.Version(r.TeamModelV[teamID] + 1), nil
+	if out.ModelIDs == nil {
+		out.ModelIDs = []string{}
+	}
+	out.Items = []teams.ModelInfo{}
+	for _, id := range r.serviceIDs() {
+		if out.Access == domain.ModelAccessAll || slices.Contains(r.TeamModels[teamID], id) {
+			out.Items = append(out.Items, r.Catalog[id])
+		}
+	}
+	return out, nil
+}
+
+// serviceIDs are the catalog ids enabled for the service, in id order (the caller holds the lock).
+func (r *Repo) serviceIDs() []string {
+	var ids []string
+	for id, m := range r.Catalog {
+		if m.Enabled {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// ServiceModelIDs implements teams.Repository.
+func (r *Repo) ServiceModelIDs(context.Context, port.Tx) ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.serviceIDs(), nil
+}
+
+// SetModelAccess implements teams.Repository.
+func (r *Repo) SetModelAccess(_ context.Context, tx port.Tx, teamID string, access domain.ModelAccess) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.guard(tx)
+	t := r.Teams[teamID]
+	t.ModelAccess = access
+	r.Teams[teamID] = t
+	return nil
+}
+
+// ModelSets implements teams.Repository.
+func (r *Repo) ModelSets(_ context.Context, _ port.Tx, teamID string) (domain.ModelSets, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	t := r.Teams[teamID]
+	sets := domain.ModelSets{Service: r.serviceIDs()}
+	for _, id := range sets.Service {
+		if t.ModelAccess != domain.ModelAccessSelected || slices.Contains(r.TeamModels[teamID], id) {
+			sets.Team = append(sets.Team, id)
+		}
+		if r.Catalog[id].Callable {
+			sets.Callable = append(sets.Callable, id)
+		}
+	}
+	return sets, nil
+}
+
+// InsertOrchestration implements teams.Repository.
+func (r *Repo) InsertOrchestration(_ context.Context, tx port.Tx, in teams.OrchestrationAgent) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.guard(tx)
+	if r.OrchErr != nil {
+		return r.OrchErr
+	}
+	r.Orchestrations = append(r.Orchestrations, in)
+	t := r.Teams[in.TeamID]
+	t.OrchestrationAgentID = in.AgentID
+	r.Teams[in.TeamID] = t
+	return nil
+}
+
+// WithoutOrchestration implements teams.Repository: live teams whose OrchestrationAgentID is empty.
+func (r *Repo) WithoutOrchestration(_ context.Context, _ port.Tx, limit int) ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var ids []string
+	for id, t := range r.Teams {
+		if t.OrchestrationAgentID == "" && t.State != domain.TeamStateDeleting && t.State != domain.TeamStateDeleted {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	if len(ids) > limit {
+		ids = ids[:limit]
+	}
+	return ids, nil
+}
+
+// HasOrchestration implements teams.Repository.
+func (r *Repo) HasOrchestration(_ context.Context, _ port.Tx, teamID string) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.Teams[teamID].OrchestrationAgentID != "", nil
 }
 
 // ModelsByID implements teams.Repository.
@@ -234,3 +339,37 @@ func (r *Repo) ReplaceTeamTags(_ context.Context, tx port.Tx, teamID string, v [
 }
 
 var _ teams.Repository = (*Repo)(nil)
+
+// Boot is a fake teams.BootProvisioner: it records the tool and agent each call provisioned and the ARNs
+// it was asked to compensate.
+type Boot struct {
+	mu          sync.Mutex
+	Tools       map[string]domain.CollabTool // agent id to tool
+	Compensated []string
+	// Err makes CreateBootSecrets fail.
+	Err error
+}
+
+// CreateBootSecrets implements teams.BootProvisioner.
+func (b *Boot) CreateBootSecrets(_ context.Context, _ port.Tx, _ acting.Caller, _, agentID string, tool domain.CollabTool, _ *acting.Idem, created *[]string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.Err != nil {
+		return b.Err
+	}
+	if b.Tools == nil {
+		b.Tools = map[string]domain.CollabTool{}
+	}
+	b.Tools[agentID] = tool
+	for _, s := range tool.BootSecrets() {
+		*created = append(*created, "arn:"+s.Name)
+	}
+	return nil
+}
+
+// Compensate implements teams.BootProvisioner.
+func (b *Boot) Compensate(_ context.Context, arns []string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.Compensated = append(b.Compensated, arns...)
+}

@@ -366,13 +366,15 @@ SwarmTemplateSpec:
   properties:
     collaboration:
       type: object
-      description: Optional collaboration agent of the remediation team (PC-D29); the template must be enabled and carry capability paperclip
+      description: Optional collaboration agent of the remediation team (PC-D29); the template must be enabled and carry capability
+        paperclip
       required:
       - templateId
       properties:
         templateId:
           type: string
           pattern: ^tpl_[0-9A-HJKMNP-TV-Z]{26}$
+      deprecated: true
     stages:
       type: array
       items:
@@ -414,12 +416,32 @@ SwarmTemplateSpec:
             default: env
           target:
             type: string
-            description: An env variable name (^[A-Z_][A-Z0-9_]{0,127}$, default the upper-case name with underscores)
-              or, for file delivery, an absolute path (^/[A-Za-z0-9._/-]{1,255}$). Unique within the pool.
+            description: An env variable name (^[A-Z_][A-Z0-9_]{0,127}$, default the upper-case name with underscores) or,
+              for file delivery, an absolute path (^/[A-Za-z0-9._/-]{1,255}$). Unique within the pool.
     configValues:
       type: array
       items:
         type: object
+    orchestration:
+      type: object
+      description: The remediation team orchestration agent
+      properties:
+        tool:
+          type: string
+          enum:
+          - paperclip
+          - buzz
+        webUiExposure:
+          type: string
+          enum: &id001
+          - 'off'
+          - private
+          - public
+        webApiExposure:
+          type: string
+          enum: *id001
+        defaultModelId:
+          type: string
 SwarmTemplate:
   type: object
   required:

@@ -20,7 +20,7 @@ func PodTemplateHash(d Desired, inboxURL string, handoffURLs map[string]string) 
 	w := func(format string, args ...any) { _, _ = io.WriteString(h, fmt.Sprintf(format, args...)+"\n") }
 	w("image=%s", d.Image)
 	w("persona=%s", d.Persona)
-	w("model=%s", d.ModelID)
+	w("model=%s models=%v", d.ModelID, d.Models)
 	w("cpu=%s memory=%s", d.Resources.CPU, d.Resources.Memory)
 	w("scratch=%d shared=%s", d.ScratchGiB, d.SharedVolume)
 	w("tier=%s workorder=%t", d.Team.IsolationTier, d.Team.WorkOrderAssigned)

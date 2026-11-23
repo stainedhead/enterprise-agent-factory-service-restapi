@@ -157,12 +157,15 @@ func TestErrors(t *testing.T) {
 		code   string
 		hdr    string
 	}{
-		"bad json":          {nil, modelPath("converse"), `[1]`, 400, "ValidationError", ""},
-		"bad model id":      {nil, "/model/not%20valid/converse", `{}`, 400, "ValidationError", ""},
-		"missing max":       {nil, "/anthropic/v1/messages", `{"model":"` + gwtest.Model + `"}`, 400, "ValidationError", ""},
-		"too large":         {nil, modelPath("converse"), big, 413, "ValidationError", ""},
-		"unknown path":      {nil, "/model/x/frobnicate", `{}`, 404, "NotFound", ""},
-		"model not enabled": {func(r *gwtest.Rig) { delete(r.Store.Models, gwtest.TeamA+"\x00"+gwtest.Model) }, modelPath("converse"), converseBody, 403, "AccessDenied", ""},
+		"bad json":     {nil, modelPath("converse"), `[1]`, 400, "ValidationError", ""},
+		"bad model id": {nil, "/model/not%20valid/converse", `{}`, 400, "ValidationError", ""},
+		"missing max":  {nil, "/anthropic/v1/messages", `{"model":"` + gwtest.Model + `"}`, 400, "ValidationError", ""},
+		"too large":    {nil, modelPath("converse"), big, 413, "ValidationError", ""},
+		"unknown path": {nil, "/model/x/frobnicate", `{}`, 404, "NotFound", ""},
+		"model not enabled": {func(r *gwtest.Rig) {
+			r.Store.Admission["agent\x00agt_01"] = map[string]string{gwtest.Model: "model_not_enabled_for_agent"}
+		}, modelPath("converse"), converseBody, 403, "AccessDenied", ""},
+		"model provisioning": {func(r *gwtest.Rig) { delete(r.Store.Models, gwtest.TeamA+"\x00"+gwtest.Model) }, modelPath("converse"), converseBody, 503, "Unavailable", "Retry-After"},
 		"suspended": {func(r *gwtest.Rig) {
 			tm := r.Store.Teams[gwtest.TeamA]
 			tm.State = "suspended"

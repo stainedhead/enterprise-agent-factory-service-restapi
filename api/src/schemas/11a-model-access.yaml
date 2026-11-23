@@ -1,0 +1,37 @@
+# OpenAPI fragment (API contract §4.4d). Bundled into api/openapi.yaml by make openapi.
+ServiceModelAccess:
+  type: object
+  description: Service-wide model access (API contract §4.4d)
+  required:
+  - access
+  - enabledModels
+  - callableModels
+  - version
+  properties:
+    access:
+      type: string
+      enum:
+      - all
+      - selected
+      description: all makes every model enabled at the service level; selected uses each model enabled flag
+    enabledModels:
+      type: integer
+      minimum: 0
+    callableModels:
+      type: integer
+      minimum: 0
+      description: Enabled and priced
+    version:
+      type: integer
+      minimum: 1
+      readOnly: true
+PutServiceModelAccessRequest:
+  type: object
+  required:
+  - access
+  properties:
+    access:
+      type: string
+      enum:
+      - all
+      - selected

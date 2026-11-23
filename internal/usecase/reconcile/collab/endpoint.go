@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
@@ -32,34 +33,72 @@ const (
 	ReasonRouteNotPublish = "RouteNotPublished"
 )
 
-// TeamState is a team's collaboration as the reconciler reads it.
+// TeamState is a team's orchestration as the reconciler reads it.
 type TeamState struct {
 	TeamID, AgentID, TeamSlug string
 	TeamState, AgentState     string
-	// PodReady is true when the collaboration agent's pod is ready and the Service `paperclip` has ready
-	// endpoints (the agent controller's observation).
-	PodReady         bool
-	BaseDomain       string
-	PublicEndpoints  bool
-	MayExpose        bool
-	WebUIEnabled     bool
-	RESTAPIEnabled   bool
-	ProviderClient   bool
-	Mode             domain.RegistrationMode
-	Generation       int64
+	// Tool is the collaboration tool the orchestration agent runs.
+	Tool domain.CollabTool
+	// PodReady is true when the orchestration agent's pod is ready and its Service has ready endpoints
+	// (the agent controller's observation).
+	PodReady bool
+	// Settings are the orchestration.* switches and base domains.
+	Settings domain.OrchestrationSettings
+	// WebUIExposure and WebAPIExposure are the team's stored choices; Limit is maxCollaborationExposure.
+	WebUIExposure  domain.Exposure
+	WebAPIExposure domain.Exposure
+	Limit          domain.Exposure
+	ProviderClient bool
+	Mode           domain.RegistrationMode
+	Generation     int64
+	// ToolChanging forces the change open (tests, callers that know better); the source normally leaves it
+	// false and the change is computed from the snapshot (ComputeToolChange).
+	ToolChanging bool
+	// SnapshotID and SnapshotState are the latest pre_tool_change snapshot of the agent ("" when none).
+	SnapshotID, SnapshotState string
+	// PodStale is true while the agent's status was observed before its latest generation (the pod may still be
+	// the old tool's).
+	PodStale bool
+	// PendingLinks counts connected workers whose link is not yet registered with the tool.
+	PendingLinks int
+	// PrevClosedSnapshot is the snapshot id the ToolChanging condition recorded when the last change closed.
+	PrevClosedSnapshot string
+	// PrevToolVersion is the message of the last ToolReady condition ("version ...").
+	PrevToolVersion  string
 	PrevReady        *bool  // nil when no status row exists yet
 	PrevReason       string // the last EndpointReady reason
 	PrevPaperclip    *bool
 	PaperclipHealthy *bool // nil when not probed
-	Unmanaged        []string
+	// PrevSurfaces is the last reported effective level and readiness of each surface (webUi, webApi).
+	PrevSurfaces map[domain.Surface]PrevSurface
+	Unmanaged    []string
 }
 
-// Hostname is the team's collaboration hostname, empty while the base domain is unset.
+// PrevSurface is a surface's last reported state.
+type PrevSurface struct {
+	Effective domain.Exposure
+	Ready     bool
+}
+
+// Surfaces computes the two surfaces of the team under its settings.
+func (s TeamState) Surfaces() (webUI, webAPI domain.SurfaceState) {
+	return domain.ComputeSurface(s.Tool, domain.SurfaceWebUI, s.WebUIExposure, s.Limit, s.ProviderClient, s.TeamSlug, s.Settings),
+		domain.ComputeSurface(s.Tool, domain.SurfaceWebAPI, s.WebAPIExposure, s.Limit, s.ProviderClient, s.TeamSlug, s.Settings)
+}
+
+// Hostname is the hostname the deprecated endpoint event reports: that of the Web UI's effective level,
+// else the Web API's, else the public one while the public base domain is set, else empty.
 func (s TeamState) Hostname() string {
-	if s.BaseDomain == "" {
-		return ""
+	ui, api := s.Surfaces()
+	switch {
+	case ui.Hostname != "":
+		return ui.Hostname
+	case api.Hostname != "":
+		return api.Hostname
+	case s.Settings.PublicBaseDomain != "":
+		return s.TeamSlug + "." + s.Settings.PublicBaseDomain
 	}
-	return s.TeamSlug + "." + s.BaseDomain
+	return ""
 }
 
 // Endpoint is the computed EndpointReady condition.
@@ -71,27 +110,32 @@ type Endpoint struct {
 }
 
 // ComputeEndpoint decides EndpointReady and its reason (RC-24). The order is the order in which a person
-// fixes things: the team, the agent, the pod, then the service-level switches and the team's choices.
+// fixes things: the team, the agent, the pod, then the service-level switches and the team's choices. A
+// tool without a web surface (Buzz) is ready when its pod is; it has no route to publish.
 func ComputeEndpoint(s TeamState) Endpoint {
-	shared := s.MayExpose && s.PublicEndpoints && s.BaseDomain != ""
-	e := Endpoint{WebUI: s.WebUIEnabled && shared && s.ProviderClient, REST: s.RESTAPIEnabled && shared}
+	ui, api := s.Surfaces()
+	e := Endpoint{WebUI: ui.Effective != domain.ExposureOff, REST: api.Effective != domain.ExposureOff}
+	has := func(r string) bool { return slices.Contains(ui.Reasons, r) || slices.Contains(api.Reasons, r) }
+	noSurface := !s.Tool.Supports(domain.SurfaceWebUI) && !s.Tool.Supports(domain.SurfaceWebAPI)
 	switch {
 	case s.TeamState == "suspended":
 		e.Reason = ReasonTeamSuspended
 	case s.AgentState == string(domain.AgentPaused):
 		e.Reason = ReasonPaused
-	case !s.PodReady:
+	case !s.PodReady || s.ToolChanging || ComputeToolChange(s).Open:
 		e.Reason = ReasonStarting
-	case !s.PublicEndpoints:
-		e.Reason = ReasonServiceOff
-	case !s.MayExpose:
-		e.Reason = ReasonGuardrailOff
-	case s.BaseDomain == "":
-		e.Reason = ReasonBaseDomainUnset
-	case !e.WebUI && !e.REST:
-		e.Reason = ReasonRouteNotPublish
-	default:
+	case noSurface:
 		e.Reason, e.Ready = ReasonReady, true
+	case e.WebUI || e.REST:
+		e.Reason, e.Ready = ReasonReady, true
+	case has(domain.ReasonServiceSwitchPublic) || has(domain.ReasonServiceSwitchPrivate):
+		e.Reason = ReasonServiceOff
+	case has(domain.ReasonTeamLimit) || s.Limit == domain.ExposureOff:
+		e.Reason = ReasonGuardrailOff
+	case has(domain.ReasonBaseDomainUnsetNew):
+		e.Reason = ReasonBaseDomainUnset
+	default:
+		e.Reason = ReasonRouteNotPublish
 	}
 	return e
 }
@@ -149,6 +193,15 @@ func (c *Controller) syncOne(ctx context.Context, s TeamState) error {
 	if s.PaperclipHealthy != nil {
 		conds = append(conds, condition(ConditionPaperclipReady, *s.PaperclipHealthy, boolReason(*s.PaperclipHealthy, "Healthy", "NotAnswering"), "", now))
 	}
+	tc := ComputeToolChange(s)
+	if s.ToolChanging && !tc.Open {
+		tc.Open, tc.Step = true, StepStarting
+	}
+	conds = append(conds, toolChangeConditions(s, tc, now)...)
+	uiState, apiState := s.Surfaces()
+	for _, sf := range surfaceStates(s, ep, uiState, apiState) {
+		conds = append(conds, condition(sf.cond, sf.ready, string(sf.state.Effective), sf.state.Hostname, now))
+	}
 	phase := domain.PhaseReady
 	if !ep.Ready {
 		phase = domain.PhasePending
@@ -158,6 +211,9 @@ func (c *Controller) syncOne(ctx context.Context, s TeamState) error {
 		Phase: phase, Conditions: conds, ReconciledAt: now}); err != nil {
 		return err
 	}
+	if err := c.surfaceEvents(ctx, s, ep, uiState, apiState); err != nil {
+		return err
+	}
 	if s.PrevReady != nil && *s.PrevReady == ep.Ready && s.PrevReason == ep.Reason {
 		return nil
 	}
@@ -165,9 +221,60 @@ func (c *Controller) syncOne(ctx context.Context, s TeamState) error {
 		return nil // a new endpoint that is starting has not changed state
 	}
 	prev := s.PrevReady != nil && *s.PrevReady
+	// The deprecated event is still emitted until 2.0.0.
 	return c.Events.Publish(ctx, domain.EventCollaborationEndpointStateChanged, s.TeamID, string(KindTeamCollaboration), s.TeamID, s.AgentID,
 		map[string]any{"teamId": s.TeamID, "agentId": s.AgentID, "hostname": s.Hostname(), "ready": ep.Ready, "previousReady": prev,
 			"reason": ep.Reason, "effective": map[string]any{"webUi": ep.WebUI, "restApi": ep.REST}})
+}
+
+// Condition types that carry each surface's last reported effective level (the reason) and readiness.
+const (
+	ConditionWebUIEndpoint  = "WebUiEndpoint"
+	ConditionWebAPIEndpoint = "WebApiEndpoint"
+)
+
+type surfaceReport struct {
+	surface domain.Surface
+	cond    string
+	state   domain.SurfaceState
+	ready   bool
+}
+
+func surfaceStates(s TeamState, ep Endpoint, ui, api domain.SurfaceState) []surfaceReport {
+	ready := func(st domain.SurfaceState) bool { return ep.Ready && st.Effective != domain.ExposureOff }
+	return []surfaceReport{
+		{domain.SurfaceWebUI, ConditionWebUIEndpoint, ui, ready(ui)},
+		{domain.SurfaceWebAPI, ConditionWebAPIEndpoint, api, ready(api)},
+	}
+}
+
+// surfaceEvents publishes orchestration.endpoint_state_changed for each surface whose effective level or
+// readiness changed since the last report. A surface the tool lacks that was never reported stays quiet.
+func (c *Controller) surfaceEvents(ctx context.Context, s TeamState, ep Endpoint, ui, api domain.SurfaceState) error {
+	for _, sf := range surfaceStates(s, ep, ui, api) {
+		prev, had := s.PrevSurfaces[sf.surface]
+		if had && prev.Effective == sf.state.Effective && prev.Ready == sf.ready {
+			continue
+		}
+		if !had && (sf.state.Effective == domain.ExposureOff || ep.Reason == ReasonStarting) {
+			continue // never reported and nothing to announce: off, or a new endpoint that is still starting
+		}
+		prevEff := domain.ExposureOff
+		if had {
+			prevEff = prev.Effective
+		}
+		reasons := sf.state.Reasons
+		if reasons == nil {
+			reasons = []string{}
+		}
+		if err := c.Events.Publish(ctx, domain.EventOrchestrationEndpointStateChanged, s.TeamID, string(KindTeamCollaboration), s.TeamID, s.AgentID,
+			map[string]any{"teamId": s.TeamID, "agentId": s.AgentID, "surface": string(sf.surface), "exposure": string(sf.state.Exposure),
+				"effective": string(sf.state.Effective), "previousEffective": string(prevEff), "reasons": reasons,
+				"hostname": sf.state.Hostname, "ready": sf.ready}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func hostMessage(s TeamState, ep Endpoint) string {
@@ -190,4 +297,28 @@ func condition(typ string, ok bool, reason, msg string, at time.Time) domain.Con
 		st = domain.ConditionTrue
 	}
 	return domain.Condition{Type: typ, Status: st, Reason: reason, Message: msg, LastTransitionTime: at.UTC()}
+}
+
+// toolChangeConditions are ToolChanging (reason: the step; message: the closed snapshot id once over),
+// SnapshotTaken (only while a snapshot exists) and ToolReady (message: the tool version, carried over).
+func toolChangeConditions(s TeamState, c ToolChange, now time.Time) []domain.Condition {
+	conds := []domain.Condition{condition(ConditionToolChanging, c.Open, c.Step, c.Closed, now)}
+	if c.SnapshotTaken != "" {
+		reason := "Pending"
+		switch {
+		case c.SnapshotTaken == "True":
+			reason = "Completed"
+		case s.SnapshotState == "failed":
+			reason = "Failed"
+		}
+		conds = append(conds, condition(ConditionSnapshotTaken, c.SnapshotTaken == "True", reason, s.SnapshotID, now))
+	}
+	reason := "Ready"
+	if !c.ToolReady {
+		reason = "Starting"
+		if c.Open {
+			reason = "ToolChanging"
+		}
+	}
+	return append(conds, condition(ConditionToolReady, c.ToolReady, reason, s.PrevToolVersion, now))
 }

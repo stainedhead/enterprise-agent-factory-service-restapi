@@ -45,6 +45,9 @@ type teamBody struct {
 	MayManageAwsAccounts     bool          `json:"mayManageAwsAccounts"`
 	MayAddExternalSystems    bool          `json:"mayAddExternalSystems"`
 	MayExposeCollaboration   bool          `json:"mayExposeCollaboration"`
+	MaxCollabExposure        string        `json:"maxCollaborationExposure"`
+	ModelAccess              string        `json:"modelAccess"`
+	OrchestrationAgentID     *string       `json:"orchestrationAgentId"`
 	Version                  int64         `json:"version"`
 	Generation               int64         `json:"generation"`
 	CreatedAt                string        `json:"createdAt"`
@@ -64,6 +67,11 @@ func (a *TeamsAPI) teamBody(t domain.Team) teamBody {
 		AllowedAwsAccounts: t.AllowedAwsAccounts, MayManageAwsAccounts: t.MayManageAwsAccounts,
 		MayAddExternalSystems: t.MayAddExternalSystems, MayExposeCollaboration: t.MayExposeCollaboration, Version: int64(t.Version), Generation: int64(t.Generation),
 		CreatedAt: w2Time(t.CreatedAt), CreatedBy: t.CreatedBy, UpdatedAt: w2Time(t.UpdatedAt), Status: t.Status,
+	}
+	b.MaxCollabExposure, b.ModelAccess = string(t.MaxCollaborationExposure), string(t.ModelAccess)
+	if t.OrchestrationAgentID != "" {
+		id := t.OrchestrationAgentID
+		b.OrchestrationAgentID = &id
 	}
 	if b.AllowedAwsAccounts == nil {
 		b.AllowedAwsAccounts = []string{}
@@ -160,27 +168,73 @@ func (a *TeamsAPI) status(w http.ResponseWriter, r *http.Request) {
 }
 
 type createTeamRequest struct {
-	Slug                   string             `json:"slug"`
-	DisplayName            string             `json:"displayName"`
-	Description            string             `json:"description"`
-	Kind                   string             `json:"kind"`
-	CostCenter             string             `json:"costCenter"`
-	OwnerEmail             string             `json:"ownerEmail"`
-	MaxBudgetUsd           *domain.Money      `json:"maxBudgetUsd"`
-	Quotas                 domain.Quotas      `json:"quotas"`
-	IsolationTier          string             `json:"isolationTier"`
-	ViewerKubectl          bool               `json:"viewerKubectl"`
-	ExpiresAt              *string            `json:"expiresAt"`
-	TeardownRule           string             `json:"teardownRule"`
-	IdentityProviderID     string             `json:"identityProviderId"`
-	AllowedAwsAccounts     []string           `json:"allowedAwsAccounts"`
-	MayManageAwsAccounts   bool               `json:"mayManageAwsAccounts"`
-	MayAddExternalSystems  bool               `json:"mayAddExternalSystems"`
-	MayExposeCollaboration *bool              `json:"mayExposeCollaboration"`
-	FirstAdmin             *firstAdminRequest `json:"firstAdmin"`
-	Models                 []string           `json:"models"`
-	Tags                   []tagValueBody     `json:"tags"`
-	Budget                 *teamBudgetRequest `json:"budget"`
+	Slug                   string                `json:"slug"`
+	DisplayName            string                `json:"displayName"`
+	Description            string                `json:"description"`
+	Kind                   string                `json:"kind"`
+	CostCenter             string                `json:"costCenter"`
+	OwnerEmail             string                `json:"ownerEmail"`
+	MaxBudgetUsd           *domain.Money         `json:"maxBudgetUsd"`
+	Quotas                 domain.Quotas         `json:"quotas"`
+	IsolationTier          string                `json:"isolationTier"`
+	ViewerKubectl          bool                  `json:"viewerKubectl"`
+	ExpiresAt              *string               `json:"expiresAt"`
+	TeardownRule           string                `json:"teardownRule"`
+	IdentityProviderID     string                `json:"identityProviderId"`
+	AllowedAwsAccounts     []string              `json:"allowedAwsAccounts"`
+	MayManageAwsAccounts   bool                  `json:"mayManageAwsAccounts"`
+	MayAddExternalSystems  bool                  `json:"mayAddExternalSystems"`
+	MayExposeCollaboration *bool                 `json:"mayExposeCollaboration"`
+	MaxCollabExposure      *string               `json:"maxCollaborationExposure"`
+	ModelAccess            string                `json:"modelAccess"`
+	Orchestration          *orchestrationRequest `json:"orchestration"`
+	FirstAdmin             *firstAdminRequest    `json:"firstAdmin"`
+	Models                 []string              `json:"models"`
+	Tags                   []tagValueBody        `json:"tags"`
+	Budget                 *teamBudgetRequest    `json:"budget"`
+}
+
+// orchestrationRequest is the orchestration object of CreateTeam (ORC-26); every member is optional.
+type orchestrationRequest struct {
+	Tool  string `json:"tool"`
+	WebUI *struct {
+		Exposure *string `json:"exposure"`
+	} `json:"webUi"`
+	WebAPI *struct {
+		Exposure *string `json:"exposure"`
+	} `json:"webApi"`
+	RegistrationMode string         `json:"registrationMode"`
+	Models           *modelsRequest `json:"models"`
+	ModelID          string         `json:"modelId"`
+	Resources        *struct {
+		CPU    string `json:"cpu"`
+		Memory string `json:"memory"`
+	} `json:"resources"`
+	Volume *struct {
+		SizeGiB  int    `json:"sizeGiB"`
+		OnDelete string `json:"onDelete"`
+	} `json:"volume"`
+}
+
+func (q *orchestrationRequest) input() *teams.OrchestrationInput {
+	if q == nil {
+		return nil
+	}
+	in := &teams.OrchestrationInput{Tool: domain.CollabTool(q.Tool), RegistrationMode: domain.RegistrationMode(q.RegistrationMode),
+		Models: q.Models.input(), ModelID: q.ModelID}
+	if q.WebUI != nil && q.WebUI.Exposure != nil {
+		in.WebUIExposure = domain.Exposure(*q.WebUI.Exposure)
+	}
+	if q.WebAPI != nil && q.WebAPI.Exposure != nil {
+		in.WebAPIExposure = domain.Exposure(*q.WebAPI.Exposure)
+	}
+	if q.Resources != nil {
+		in.Resources = &domain.AgentResources{CPU: q.Resources.CPU, Memory: q.Resources.Memory}
+	}
+	if q.Volume != nil {
+		in.VolumeSizeGiB, in.VolumeOnDelete = q.Volume.SizeGiB, q.Volume.OnDelete
+	}
+	return in
 }
 
 type firstAdminRequest struct {
@@ -236,10 +290,18 @@ func (a *TeamsAPI) create(w http.ResponseWriter, r *http.Request) {
 			TeardownRule: domain.TeardownRule(req.TeardownRule), IdentityProviderID: req.IdentityProviderID,
 			AllowedAwsAccounts: req.AllowedAwsAccounts, MayManageAwsAccounts: req.MayManageAwsAccounts,
 			MayAddExternalSystems: req.MayAddExternalSystems, MayExposeCollaboration: req.MayExposeCollaboration,
+			ModelAccess: domain.ModelAccess(req.ModelAccess),
 		},
 		FirstAdmin: domain.NewMemberParams{SubjectType: domain.SubjectType(req.FirstAdmin.SubjectType), UserID: req.FirstAdmin.UserID,
 			Email: req.FirstAdmin.Email, GroupName: req.FirstAdmin.GroupName},
-		Models: req.Models,
+		Models: req.Models, Orchestration: req.Orchestration.input(),
+	}
+	if req.MaxCollabExposure != nil {
+		e := domain.Exposure(*req.MaxCollabExposure)
+		in.Params.MaxCollaborationExposure = &e
+	}
+	if req.MayExposeCollaboration != nil {
+		DefaultDeprecation.Apply(w, "")
 	}
 	if req.ExpiresAt != nil {
 		t, err := w2ParseTime("expiresAt", *req.ExpiresAt)
@@ -301,6 +363,7 @@ type updateTeamRequest struct {
 	MayManageAwsAccounts     *bool                    `json:"mayManageAwsAccounts"`
 	MayAddExternalSystems    *bool                    `json:"mayAddExternalSystems"`
 	MayExposeCollaboration   *bool                    `json:"mayExposeCollaboration"`
+	MaxCollabExposure        *string                  `json:"maxCollaborationExposure"`
 	AllowedAwsAccounts       *[]string                `json:"allowedAwsAccounts"`
 }
 
@@ -310,6 +373,10 @@ func (q updateTeamRequest) patch() (domain.TeamPatch, error) {
 		MaxBudget: q.MaxBudgetUsd, CeilingOverrideReason: q.CeilingOverrideReason, Quotas: q.Quotas,
 		ViewerKubectl: q.ViewerKubectl, MayManageAwsAccounts: q.MayManageAwsAccounts,
 		MayAddExternalSystems: q.MayAddExternalSystems, MayExposeCollaboration: q.MayExposeCollaboration, AllowedAwsAccounts: q.AllowedAwsAccounts,
+	}
+	if q.MaxCollabExposure != nil {
+		e := domain.Exposure(*q.MaxCollabExposure)
+		p.MaxCollaborationExposure = &e
 	}
 	if q.Kind != nil {
 		k := domain.TeamKind(*q.Kind)
@@ -446,15 +513,44 @@ type modelBody struct {
 	MaxOutputTokens int    `json:"maxOutputTokens"`
 	Version         int64  `json:"version"`
 	UpdatedAt       string `json:"updatedAt"`
+	// v1.4.0 (API contract §5 Model): callable and priceState on every list; serviceEnabled, origin and
+	// teamsWithAccess on the admin list; inferenceProfileState on a team's list.
+	Callable              bool    `json:"callable"`
+	PriceState            string  `json:"priceState"`
+	ServiceEnabled        *bool   `json:"serviceEnabled,omitempty"`
+	Origin                string  `json:"origin,omitempty"`
+	TeamsWithAccess       *int    `json:"teamsWithAccess,omitempty"`
+	InferenceProfileState *string `json:"inferenceProfileState,omitempty"`
 }
 
 func modelBodies(ms []teams.ModelInfo) []modelBody {
 	out := make([]modelBody, 0, len(ms))
 	for _, m := range ms {
-		out = append(out, modelBody{ID: m.ID, Provider: m.Provider, DisplayName: m.DisplayName, Enabled: m.Enabled,
-			ContextWindow: m.ContextWindow, MaxOutputTokens: m.MaxOutputTokens, Version: m.Version, UpdatedAt: w2Time(m.UpdatedAt)})
+		b := modelBody{ID: m.ID, Provider: m.Provider, DisplayName: m.DisplayName, Enabled: m.Enabled,
+			ContextWindow: m.ContextWindow, MaxOutputTokens: m.MaxOutputTokens, Version: m.Version, UpdatedAt: w2Time(m.UpdatedAt),
+			Callable: m.Callable, PriceState: m.PriceState}
+		if m.InferenceProfileState != "" {
+			st := m.InferenceProfileState
+			b.InferenceProfileState = &st
+		}
+		out = append(out, b)
 	}
 	return out
+}
+
+// teamModelsBody is the response of ListTeamModels and PutTeamModels.
+type teamModelsBody struct {
+	Access   string      `json:"access"`
+	ModelIDs []string    `json:"modelIds"`
+	Items    []modelBody `json:"items"`
+}
+
+func toTeamModelsBody(m teams.TeamModels) teamModelsBody {
+	ids := m.ModelIDs
+	if ids == nil {
+		ids = []string{}
+	}
+	return teamModelsBody{Access: string(m.Access), ModelIDs: ids, Items: modelBodies(m.Items)}
 }
 
 func (a *TeamsAPI) models(w http.ResponseWriter, r *http.Request) {
@@ -463,13 +559,13 @@ func (a *TeamsAPI) models(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
-	ms, v, err := a.Svc.Models(r.Context(), c, r.PathValue("teamId"))
+	m, err := a.Svc.Models(r.Context(), c, r.PathValue("teamId"))
 	if err != nil {
 		WriteError(w, r, err)
 		return
 	}
-	w2Etag(w, v)
-	WriteJSON(w, http.StatusOK, w2ListBody[modelBody]{Items: modelBodies(ms)})
+	w2Etag(w, m.Version)
+	WriteJSON(w, http.StatusOK, toTeamModelsBody(m))
 }
 
 func (a *TeamsAPI) putModels(w http.ResponseWriter, r *http.Request) {
@@ -484,23 +580,36 @@ func (a *TeamsAPI) putModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
+		Access   *string   `json:"access"`
 		ModelIDs *[]string `json:"modelIds"`
 	}
 	if err := Decode(r, &req); err != nil {
 		WriteError(w, r, err)
 		return
 	}
-	if req.ModelIDs == nil {
-		WriteError(w, r, bad("modelIds", "is required"))
+	// A body with only modelIds is the deprecated form: it means selected (§4.4d).
+	var access domain.ModelAccess
+	switch {
+	case req.Access != nil:
+		access = domain.ModelAccess(*req.Access)
+	case req.ModelIDs != nil:
+		access = domain.ModelAccessSelected
+		DefaultDeprecation.Apply(w, r.URL.Path)
+	default:
+		WriteError(w, r, bad("access", "is required"))
 		return
 	}
-	ms, v, err := a.Svc.PutModels(r.Context(), c, r.PathValue("teamId"), expect, *req.ModelIDs)
+	var ids []string
+	if req.ModelIDs != nil {
+		ids = *req.ModelIDs
+	}
+	m, err := a.Svc.PutModels(r.Context(), c, r.PathValue("teamId"), expect, access, ids)
 	if err != nil {
 		WriteError(w, r, err)
 		return
 	}
-	w2Etag(w, v)
-	WriteJSON(w, http.StatusOK, w2ListBody[modelBody]{Items: modelBodies(ms)})
+	w2Etag(w, m.Version)
+	WriteJSON(w, http.StatusOK, toTeamModelsBody(m))
 }
 
 type teamTagBody struct {

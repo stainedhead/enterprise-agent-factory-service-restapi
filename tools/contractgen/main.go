@@ -22,7 +22,7 @@ import (
 )
 
 // ContractVersion is the API contract version the extract is built from.
-const contractVersion = "1.3.1"
+const contractVersion = "1.4.0"
 
 const (
 	contractPath = "docs/contracts/api-contract.md"
@@ -93,7 +93,7 @@ func generate(root string) (map[string][]byte, error) {
 	return render(ex)
 }
 
-var versionRE = regexp.MustCompile(`Contract v(\d+\.\d+\.\d+)`)
+var versionRE = regexp.MustCompile(`Contract \**v(\d+\.\d+\.\d+)`)
 
 // extract parses both sources.
 func extract(contract, prd []byte) (*Extract, error) {

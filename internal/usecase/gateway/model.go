@@ -142,7 +142,13 @@ type Tag struct {
 // Store reads the desired state the gateway needs (afs_gateway role; database contract §2).
 type Store interface {
 	Team(ctx context.Context, teamID string) (TeamRecord, error)
+	// TeamModel returns the team's inference profile for the model (team_inference_profiles); ErrNotFound when
+	// none exists yet.
 	TeamModel(ctx context.Context, teamID, modelID string) (ModelAccess, error)
+	// ModelAdmission answers, for one agent or pool (kind "agent" or "pool"), why each catalog model is refused:
+	// the map holds every model, with an empty reason for an admitted one (afs.model_admission). ErrNotFound
+	// when the subject does not exist.
+	ModelAdmission(ctx context.Context, kind, subjectID string) (map[string]string, error)
 	// Prices returns the model's prices, newest effective_from first.
 	Prices(ctx context.Context, modelID string) ([]Price, error)
 	// Budget returns the team's budget, or ErrNotFound.
@@ -150,6 +156,12 @@ type Store interface {
 	Tags(ctx context.Context, teamID string) ([]Tag, error)
 	// TagSetID returns the id of the team's current tag set (afs.current_team_tag_set).
 	TagSetID(ctx context.Context, teamID string) (string, error)
+}
+
+// ModelDenialRecorder is told of every call refused by model admission; the composition root binds it to
+// afs_gateway_model_denials_total{reason} (gateway contract §7).
+type ModelDenialRecorder interface {
+	ModelDenied(teamID, modelID, reason string)
 }
 
 // Hold is the result of a reservation attempt.

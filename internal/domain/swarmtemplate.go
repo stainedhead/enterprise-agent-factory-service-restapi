@@ -230,6 +230,15 @@ func ValidateSwarmSpec(field string, spec map[string]any) []FieldError {
 		}
 	}
 
+	if v, ok := spec["orchestration"]; ok && v != nil {
+		o, isMap := v.(map[string]any)
+		if !isMap {
+			bad(".orchestration", "must be an object {tool, webUiExposure, webApiExposure, defaultModelId}")
+		} else {
+			validateSwarmOrchestration(o, bad)
+		}
+	}
+
 	stages := map[string]bool{}
 	stageList := listOf(spec, "stages")
 	if len(stageList) > MaxTemplateStages {
@@ -499,3 +508,32 @@ const ReasonCollaborationTemplate = "swarm_collaboration_template"
 // ReasonReferencedBySwarm is details.reason when an agent template cannot change because a swarm template
 // names it as its collaboration agent.
 const ReasonReferencedBySwarm = "referenced_by_swarm_template"
+
+// validateSwarmOrchestration checks spec.orchestration of a swarm template (ORC-7): every member optional, the
+// tool and levels well formed. Limits and tool profiles are checked when the template is instantiated.
+func validateSwarmOrchestration(o map[string]any, bad func(path, reason string)) {
+	for k := range o {
+		switch k {
+		case "tool", "webUiExposure", "webApiExposure", "defaultModelId":
+		default:
+			bad(".orchestration."+k, "is not a known member")
+		}
+	}
+	if v, ok := o["tool"]; ok {
+		if t, isStr := v.(string); !isStr || !CollabTool(t).Valid() {
+			bad(".orchestration.tool", "must be paperclip or buzz")
+		}
+	}
+	for _, k := range []string{"webUiExposure", "webApiExposure"} {
+		if v, ok := o[k]; ok {
+			if e, isStr := v.(string); !isStr || !Exposure(e).Valid() {
+				bad(".orchestration."+k, "must be off, private or public")
+			}
+		}
+	}
+	if v, ok := o["defaultModelId"]; ok {
+		if m, isStr := v.(string); !isStr || m == "" || len(m) > 256 {
+			bad(".orchestration.defaultModelId", "must be a model id")
+		}
+	}
+}

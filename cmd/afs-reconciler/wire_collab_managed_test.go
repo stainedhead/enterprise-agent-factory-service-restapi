@@ -120,3 +120,25 @@ func TestWireCollabManagedRegistersTheJobs(t *testing.T) {
 		}
 	}
 }
+
+func TestBuzzTargetsReadTheAdminKeyFile(t *testing.T) {
+	read := func(string) ([]byte, error) { return []byte(" admin-value\n"), nil }
+	b := &buzzTargets{src: fakeTargets{t: postgres.PaperclipTarget{Namespace: "team-a"}}, keyFile: "/k", read: read}
+	tg, err := b.Target(t.Context(), "team_a")
+	if err != nil || tg.BaseURL != "http://buzz.team-a.svc.cluster.local:3000" || tg.AdminKey.Reveal() != "admin-value" {
+		t.Fatalf("%+v %v", tg, err)
+	}
+	b.read = func(string) ([]byte, error) { return nil, errors.New("open /k: denied") }
+	if _, err := b.Target(t.Context(), "team_a"); err == nil || strings.Contains(err.Error(), "/k") {
+		t.Errorf("read failure: %v", err)
+	}
+	b.read = func(string) ([]byte, error) { return []byte("\n"), nil }
+	if _, err := b.Target(t.Context(), "team_a"); err == nil {
+		t.Error("empty key accepted")
+	}
+	b.read = read
+	b.src = fakeTargets{err: errors.New("no team")}
+	if _, err := b.Target(t.Context(), "team_a"); err == nil {
+		t.Error("unknown team")
+	}
+}

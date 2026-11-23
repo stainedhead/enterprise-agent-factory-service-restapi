@@ -57,7 +57,7 @@ func seedGateway(t *testing.T, amount string) gwWorld {
 	exec(`INSERT INTO afs.model_prices (model_id, effective_from, input_usd_per_mtok, output_usd_per_mtok, cache_read_usd_per_mtok, cache_write_usd_per_mtok)
 VALUES ($1, now() - interval '2 days', 1, 5, 0, 0), ($1, now() - interval '1 hour', 3, 15, 0.3, 3.75), ($1, now() + interval '1 day', 99, 99, 0, 0)`, w.model)
 	exec(`INSERT INTO afs.team_models (team_id, model_id) VALUES ($1, $2)`, w.team, w.model)
-	exec(`UPDATE afs.team_models SET inference_profile_arn = $3 WHERE team_id = $1 AND model_id = $2`, w.team, w.model, w.profile)
+	exec(`INSERT INTO afs.team_inference_profiles (team_id, model_id, inference_profile_arn, state) VALUES ($1, $2, $3, 'active')`, w.team, w.model, w.profile)
 	// Other tests read the outbox as a whole, so what the gateway tests publish is removed afterwards.
 	t.Cleanup(func() {
 		_, _ = adm.Exec(context.Background(), `DELETE FROM afs.outbox_events WHERE team_id = $1`, w.team)
@@ -297,7 +297,12 @@ func TestServiceAgainstTheRealDatabase(t *testing.T) {
 	uw := postgres.NewUsageWriter(w.pool, nil, postgres.UsageWriterConfig{FlushEvery: 100 * time.Millisecond})
 	uw.Run(t.Context())
 	defer uw.Close()
-	dir := staticDir{team: w.team}
+	agent := pgtest.NewID("agt")
+	if _, err := w.db.Admin(t).Exec(t.Context(), `INSERT INTO afs.agents (id, team_id, name, template, image, model_id)
+VALUES ($1, $2, 'gw', 'claude-code', 'registry.example.com/agents/coder@`+testDigest+`', $3)`, agent, w.team, w.model); err != nil {
+		t.Fatal(err)
+	}
+	dir := staticDir{team: w.team, agent: agent}
 	svc := gateway.NewService(gateway.Deps{Pods: dir, Store: st, Spend: postgres.NewSpendStore(w.pool), Thresholds: thr, Usage: uw},
 		gateway.Config{Partition: "aws", AccountID: "111122223333"})
 	var mu sync.Mutex
@@ -353,5 +358,62 @@ func TestServiceAgainstTheRealDatabase(t *testing.T) {
 	_ = w.db.Admin(t).QueryRow(t.Context(), `SELECT count(*) FILTER (WHERE outcome = 'rejected_budget'), count(*) FILTER (WHERE outcome = 'ok') FROM afs.usage_events WHERE team_id = $1`, w.team).Scan(&rej, &oks)
 	if rej != refused || oks != okCalls {
 		t.Fatalf("usage rows: rejected %d ok %d, want %d and %d", rej, oks, refused, okCalls)
+	}
+}
+
+// TestGatewayModelAdmission: afs.model_admission names the first failing level (service, team, agent, price),
+// and a profile still being created is not usable yet (CD-40).
+func TestGatewayModelAdmission(t *testing.T) {
+	db := pgtest.Get(t)
+	gw := gatewayPool(t, db)
+	st := postgres.NewGatewayStore(gw)
+	ctx := t.Context()
+	ag := seedFullAgent(t, db)
+	adm := db.Admin(t)
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := adm.Exec(ctx, sql, args...); err != nil {
+			t.Fatalf("%v\n%s", err, sql)
+		}
+	}
+	id := strings.ToLower(pgtest.NewID("m")[4:12])
+	priced, unpriced, offModel := "adm.priced-"+id, "adm.unpriced-"+id, "adm.off-"+id
+	for _, m := range []string{priced, unpriced, offModel} {
+		exec(`INSERT INTO afs.models (id, provider, display_name, max_output_tokens) VALUES ($1, 'test', $1, 1024)`, m)
+	}
+	exec(`INSERT INTO afs.model_prices (model_id, effective_from, input_usd_per_mtok, output_usd_per_mtok) VALUES ($1, now() - interval '1 day', 1, 2), ($2, now() - interval '1 day', 1, 2)`, priced, offModel)
+	exec(`UPDATE afs.models SET enabled = false WHERE id = $1`, offModel)
+	exec(`INSERT INTO afs.service_settings (key, value) VALUES ('models.service_access', '"selected"') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`)
+	t.Cleanup(func() {
+		_, _ = adm.Exec(context.WithoutCancel(ctx), `UPDATE afs.service_settings SET value = '"all"' WHERE key = 'models.service_access'`)
+	})
+	// Under selected service access a disabled model is refused for the service; under all it is not.
+	got, err := st.ModelAdmission(ctx, "agent", ag.agentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[offModel] != "model_not_enabled_for_service" || got[unpriced] != "model_not_priced" {
+		t.Errorf("service level: %v", map[string]string{offModel: got[offModel], unpriced: got[unpriced]})
+	}
+	// The team's selection: only models in team_models pass the team level.
+	exec(`UPDATE afs.teams SET model_access = 'selected' WHERE id = $1`, ag.team.ID)
+	exec(`INSERT INTO afs.team_models (team_id, model_id) VALUES ($1, $2)`, ag.team.ID, priced)
+	if got, err = st.ModelAdmission(ctx, "agent", ag.agentID); err != nil || got[priced] != "" || got[unpriced] != "model_not_enabled_for_team" {
+		t.Errorf("team level: %v %v", got, err)
+	}
+	// The agent's selection.
+	exec(`INSERT INTO afs.agent_models (team_id, agent_id, model_id) VALUES ($1, $2, 'claude-sonnet')`, ag.team.ID, ag.agentID)
+	exec(`UPDATE afs.agents SET model_access = 'selected' WHERE id = $1`, ag.agentID)
+	if got, err = st.ModelAdmission(ctx, "agent", ag.agentID); err != nil || got[priced] != "model_not_enabled_for_agent" || got["claude-sonnet"] != "model_not_priced" {
+		t.Errorf("agent level: %v %v", got, err)
+	}
+	// A subject that does not exist.
+	if _, err := st.ModelAdmission(ctx, "agent", pgtest.NewID("agt")); !errors.Is(err, gateway.ErrNotFound) {
+		t.Errorf("missing subject: %v", err)
+	}
+	// A profile being created has no usable ARN.
+	exec(`INSERT INTO afs.team_inference_profiles (team_id, model_id, state) VALUES ($1, $2, 'creating')`, ag.team.ID, priced)
+	if m, err := st.TeamModel(ctx, ag.team.ID, priced); err != nil || m.ProfileARN != "" {
+		t.Errorf("creating profile: %+v %v", m, err)
 	}
 }

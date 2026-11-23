@@ -29,7 +29,7 @@ func BindCatalog(a *CatalogAPI) Registrar { return a.Register }
 // Register binds the catalog operations.
 func (a *CatalogAPI) Register(g *Registry) error {
 	return w2Bind(g, map[string]http.HandlerFunc{
-		"ListModels": a.listModels, "ListAdminModels": a.listAdminModels, "CreateModel": a.createModel, "UpdateModel": a.updateModel,
+		"ListModels": a.listModels, "ListAdminModels": a.listAdminModels, "PutServiceModelAccess": a.putServiceModelAccess, "CreateModel": a.createModel, "UpdateModel": a.updateModel,
 		"ListModelPrices": a.listPrices, "CreateModelPrice": a.createPrice,
 		"ListStorageClasses": a.listStorageClasses, "ListStorageClassesAdmin": a.listStorageClassesAdmin,
 		"PutStorageClass": a.putStorageClass, "DeleteStorageClass": a.deleteStorageClass,
@@ -80,7 +80,47 @@ func (a *CatalogAPI) listModels(w http.ResponseWriter, r *http.Request) {
 func (a *CatalogAPI) listAdminModels(w http.ResponseWriter, r *http.Request) {
 	listOf(a, w, r, func(c acting.Caller, p acting.Page) ([]domain.Model, string, error) {
 		return a.Models.ListAll(r.Context(), c, p)
-	}, toModelBody)
+	}, toAdminModelBody)
+}
+
+// serviceModelAccessBody is ServiceModelAccess (API contract §5).
+type serviceModelAccessBody struct {
+	Access         string `json:"access"`
+	EnabledModels  int    `json:"enabledModels"`
+	CallableModels int    `json:"callableModels"`
+	Version        int64  `json:"version"`
+}
+
+func (a *CatalogAPI) putServiceModelAccess(w http.ResponseWriter, r *http.Request) {
+	c, err := w2Caller(r)
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	expect, err := w2IfMatchOptional(r)
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	var req struct {
+		Access *string `json:"access"`
+	}
+	if err := Decode(r, &req); err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	if req.Access == nil {
+		WriteError(w, r, bad("access", "is required"))
+		return
+	}
+	out, err := a.Models.PutServiceAccess(r.Context(), c, *req.Access, expect)
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	w2Etag(w, out.Version)
+	WriteJSON(w, http.StatusOK, serviceModelAccessBody{Access: string(out.Access), EnabledModels: out.EnabledModels,
+		CallableModels: out.CallableModels, Version: int64(out.Version)})
 }
 
 func (a *CatalogAPI) createModel(w http.ResponseWriter, r *http.Request) {

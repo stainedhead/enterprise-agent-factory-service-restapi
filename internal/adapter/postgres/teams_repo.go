@@ -28,7 +28,8 @@ const teamSelect = `SELECT t.id, t.slug, t.display_name, t.description, t.kind, 
   t.owner_email, t.max_budget_usd::text, t.ceiling_override_usd::text, t.ceiling_override_expires_at, t.quotas,
   t.isolation_tier, t.viewer_kubectl, t.expires_at, coalesce(t.teardown_rule, ''), t.torn_down_at,
   coalesce(t.teardown_reason, ''), coalesce(t.identity_provider_id, ''), t.allowed_aws_accounts,
-  t.may_manage_aws_accounts, t.may_add_external_systems, t.may_expose_collaboration, t.version, t.generation, t.created_at, t.created_by,
+  t.may_manage_aws_accounts, t.may_add_external_systems, t.max_collaboration_exposure, t.model_access,
+  coalesce((SELECT a.id FROM afs.agents a WHERE a.team_id = t.id AND a.role = 'orchestration' AND a.deleted_at IS NULL), ''), t.version, t.generation, t.created_at, t.created_by,
   t.updated_at, rs.phase, rs.observed_generation, rs.conditions, rs.last_reconciled_at
 FROM afs.teams t
 LEFT JOIN afs.resource_status rs ON rs.resource_kind = '` + teamStatusKind + `' AND rs.resource_id = t.id`
@@ -45,16 +46,19 @@ func scanTeam(row pgx.Row) (domain.Team, error) {
 		obs                     *int64
 		lastRec                 *time.Time
 		version, generation     int64
+		limit, access           string
 	)
 	err := row.Scan(&t.ID, &slug, &t.DisplayName, &t.Description, &kind, &state, &t.Namespace, &t.CostCenter,
 		&t.OwnerEmail, &maxB, &ceil, &t.CeilingOverrideExpiresAt, &quotas,
 		&tier, &t.ViewerKubectl, &t.ExpiresAt, &rule, &t.TornDownAt,
 		&reason, &t.IdentityProviderID, &t.AllowedAwsAccounts,
-		&t.MayManageAwsAccounts, &t.MayAddExternalSystems, &t.MayExposeCollaboration, &version, &generation, &t.CreatedAt, &t.CreatedBy,
+		&t.MayManageAwsAccounts, &t.MayAddExternalSystems, &limit, &access, &t.OrchestrationAgentID, &version, &generation, &t.CreatedAt, &t.CreatedBy,
 		&t.UpdatedAt, &phase, &obs, &conds, &lastRec)
 	if err != nil {
 		return domain.Team{}, err
 	}
+	t.MaxCollaborationExposure, t.ModelAccess = domain.Exposure(limit), domain.ModelAccess(access)
+	t.MayExposeCollaboration = t.MaxCollaborationExposure != domain.ExposureOff
 	t.Slug, t.Kind, t.State = domain.Name(slug), domain.TeamKind(kind), domain.TeamState(state)
 	t.IsolationTier, t.TeardownRule, t.TeardownReason = domain.IsolationTier(tier), domain.TeardownRule(rule), domain.TeardownReason(reason)
 	t.Version, t.Generation = domain.Version(version), domain.Generation(generation)
@@ -125,11 +129,11 @@ func (*TeamRepo) Insert(ctx context.Context, tx port.Tx, t domain.Team) error {
 	}
 	_, err = pt.Exec(ctx, `INSERT INTO afs.teams (id, slug, display_name, description, kind, state, cost_center, owner_email,
   max_budget_usd, quotas, isolation_tier, viewer_kubectl, expires_at, teardown_rule, identity_provider_id,
-  allowed_aws_accounts, may_manage_aws_accounts, may_add_external_systems, generation, may_expose_collaboration)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::numeric,$10::jsonb,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+  allowed_aws_accounts, may_manage_aws_accounts, may_add_external_systems, generation, max_collaboration_exposure, model_access)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::numeric,$10::jsonb,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
 		t.ID, string(t.Slug), t.DisplayName, t.Description, string(t.Kind), string(t.State), t.CostCenter, t.OwnerEmail,
 		t.MaxBudget.String(), q, string(t.IsolationTier), t.ViewerKubectl, t.ExpiresAt, nullable(string(t.TeardownRule)),
-		nullable(t.IdentityProviderID), accounts, t.MayManageAwsAccounts, t.MayAddExternalSystems, int64(t.Generation), t.MayExposeCollaboration)
+		nullable(t.IdentityProviderID), accounts, t.MayManageAwsAccounts, t.MayAddExternalSystems, int64(t.Generation), string(t.MaxCollaborationExposure), string(accessOrAll(t.ModelAccess)))
 	if err != nil {
 		return MapError(err, OpWrite, "team")
 	}
@@ -191,13 +195,13 @@ func (*TeamRepo) Update(ctx context.Context, tx port.Tx, t domain.Team, expect d
 	tag, err := pt.Exec(ctx, `UPDATE afs.teams SET display_name=$3, description=$4, state=$5, cost_center=$6, owner_email=$7,
   max_budget_usd=$8::numeric, ceiling_override_usd=$9::numeric, ceiling_override_expires_at=$10, quotas=$11::jsonb,
   isolation_tier=$12, viewer_kubectl=$13, expires_at=$14, identity_provider_id=$15, allowed_aws_accounts=$16,
-  may_manage_aws_accounts=$17, may_add_external_systems=$18, generation=$19, may_expose_collaboration=$20,
+  may_manage_aws_accounts=$17, may_add_external_systems=$18, generation=$19, max_collaboration_exposure=$20, model_access=$21,
   deleted_at = CASE WHEN $5 = 'deleted' THEN coalesce(deleted_at, now()) ELSE NULL END
 WHERE id=$1 AND version=$2`,
 		t.ID, int64(expect), t.DisplayName, t.Description, string(t.State), t.CostCenter, t.OwnerEmail,
 		t.MaxBudget.String(), moneyPtr(t.CeilingOverride), t.CeilingOverrideExpiresAt, q,
 		string(t.IsolationTier), t.ViewerKubectl, t.ExpiresAt, nullable(t.IdentityProviderID), accounts,
-		t.MayManageAwsAccounts, t.MayAddExternalSystems, int64(t.Generation), t.MayExposeCollaboration)
+		t.MayManageAwsAccounts, t.MayAddExternalSystems, int64(t.Generation), string(t.MaxCollaborationExposure), string(accessOrAll(t.ModelAccess)))
 	if err != nil {
 		return domain.Team{}, MapError(err, OpWrite, "team")
 	}
@@ -297,34 +301,217 @@ func revisionVersion(ctx context.Context, pt *Tx, table, teamID string) (domain.
 	return domain.Version(n + 1), MapError(err, OpRead, table)
 }
 
-// Models implements teams.Repository.
-func (*TeamRepo) Models(ctx context.Context, tx port.Tx, teamID string) ([]teams.ModelInfo, domain.Version, error) {
+func toModelInfo(m domain.Model) teams.ModelInfo {
+	return teams.ModelInfo{ID: m.ID, Provider: m.Provider, DisplayName: m.DisplayName, Enabled: m.Enabled, ContextWindow: m.ContextWindow,
+		MaxOutputTokens: m.MaxOutputTokens, Version: int64(m.Version), UpdatedAt: m.UpdatedAt, Callable: m.Callable, PriceState: string(m.PriceState)}
+}
+
+// Models implements teams.Repository: the access, the stored selection and the models the team may use
+// now (service and team), each with callable and priceState. The version is the team's revision count.
+func (*TeamRepo) Models(ctx context.Context, tx port.Tx, teamID string) (teams.TeamModels, error) {
+	var out teams.TeamModels
 	pt, err := Unwrap(tx)
 	if err != nil {
-		return nil, 0, err
+		return out, err
 	}
-	rows, err := pt.Query(ctx, `SELECT m.id, m.provider, m.display_name, m.enabled, coalesce(m.context_window, 0), coalesce(m.max_output_tokens, 0), m.version, m.updated_at
-FROM afs.team_models tm JOIN afs.models m ON m.id = tm.model_id WHERE tm.team_id=$1 ORDER BY m.id`, teamID)
+	var access string
+	if err := pt.QueryRow(ctx, `SELECT model_access FROM afs.teams WHERE id = $1`, teamID).Scan(&access); err != nil {
+		return out, MapError(err, OpRead, "team")
+	}
+	out.Access = domain.ModelAccess(access)
+	out.ModelIDs = []string{}
+	rows, err := pt.Query(ctx, `SELECT model_id FROM afs.team_models WHERE team_id = $1 ORDER BY model_id`, teamID)
 	if err != nil {
-		return nil, 0, MapError(err, OpRead, "model")
+		return out, MapError(err, OpRead, "model")
 	}
-	defer rows.Close()
-	out := []teams.ModelInfo{}
 	for rows.Next() {
-		var m teams.ModelInfo
-		var v int64
-		if err := rows.Scan(&m.ID, &m.Provider, &m.DisplayName, &m.Enabled, &m.ContextWindow, &m.MaxOutputTokens, &v, &m.UpdatedAt); err != nil {
-			return nil, 0, MapError(err, OpRead, "model")
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return out, MapError(err, OpRead, "model")
 		}
-		m.Version = v
-		out = append(out, m)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, 0, MapError(err, OpRead, "model")
+		out.ModelIDs = append(out.ModelIDs, id)
 	}
 	rows.Close()
-	v, err := revisionVersion(ctx, pt, "team_models", teamID)
-	return out, v, err
+	if err := rows.Err(); err != nil {
+		return out, MapError(err, OpRead, "model")
+	}
+	items, err := pt.Query(ctx, modelSelect(false)+` WHERE (m.enabled OR `+svcAccessSQL+` = 'all')
+  AND ($2 = 'all' OR EXISTS (SELECT 1 FROM afs.team_models tm WHERE tm.team_id = $1 AND tm.model_id = m.id)) ORDER BY m.id`, teamID, access)
+	if err != nil {
+		return out, MapError(err, OpRead, "model")
+	}
+	out.Items = []teams.ModelInfo{}
+	for items.Next() {
+		m, err := scanModel(items)
+		if err != nil {
+			items.Close()
+			return out, MapError(err, OpRead, "model")
+		}
+		out.Items = append(out.Items, toModelInfo(m))
+	}
+	items.Close()
+	if err := items.Err(); err != nil {
+		return out, MapError(err, OpRead, "model")
+	}
+	profiles, err := pt.Query(ctx, `SELECT model_id, state FROM afs.team_inference_profiles WHERE team_id = $1`, teamID)
+	if err != nil {
+		return out, MapError(err, OpRead, "model")
+	}
+	state := map[string]string{}
+	for profiles.Next() {
+		var id, st string
+		if err := profiles.Scan(&id, &st); err != nil {
+			profiles.Close()
+			return out, MapError(err, OpRead, "model")
+		}
+		state[id] = st
+	}
+	profiles.Close()
+	if err := profiles.Err(); err != nil {
+		return out, MapError(err, OpRead, "model")
+	}
+	for i := range out.Items {
+		out.Items[i].InferenceProfileState = state[out.Items[i].ID]
+	}
+	out.Version, err = revisionVersion(ctx, pt, "team_models", teamID)
+	return out, err
+}
+
+// ServiceModelIDs implements teams.Repository.
+func (*TeamRepo) ServiceModelIDs(ctx context.Context, tx port.Tx) ([]string, error) {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return nil, err
+	}
+	return serviceModelIDs(ctx, pt)
+}
+
+func serviceModelIDs(ctx context.Context, pt *Tx) ([]string, error) {
+	rows, err := pt.Query(ctx, `SELECT m.id FROM afs.models m WHERE m.enabled OR `+svcAccessSQL+` = 'all' ORDER BY m.id`)
+	if err != nil {
+		return nil, MapError(err, OpRead, "model")
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, MapError(err, OpRead, "model")
+		}
+		out = append(out, id)
+	}
+	return out, MapError(rows.Err(), OpRead, "model")
+}
+
+// SetModelAccess implements teams.Repository.
+func (*TeamRepo) SetModelAccess(ctx context.Context, tx port.Tx, teamID string, access domain.ModelAccess) error {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return err
+	}
+	_, err = pt.Exec(ctx, `UPDATE afs.teams SET model_access = $2 WHERE id = $1`, teamID, string(access))
+	return MapError(err, OpWrite, "team")
+}
+
+// ModelSets implements teams.Repository.
+func (*TeamRepo) ModelSets(ctx context.Context, tx port.Tx, teamID string) (domain.ModelSets, error) {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return domain.ModelSets{}, err
+	}
+	return loadModelSets(ctx, pt, teamID)
+}
+
+// loadModelSets reads the sets the models of an agent or pool are checked against: the service's
+// models, the team's within them, the ones with a price in force, and models.default_model_id.
+func loadModelSets(ctx context.Context, pt *Tx, teamID string) (domain.ModelSets, error) {
+	var out domain.ModelSets
+	var err error
+	if out.Service, err = serviceModelIDs(ctx, pt); err != nil {
+		return out, err
+	}
+	err = pt.QueryRow(ctx, `SELECT coalesce(array_agg(m.id ORDER BY m.id), '{}') FROM afs.models m
+WHERE (m.enabled OR `+svcAccessSQL+` = 'all')
+  AND (afs.model_allowed_for_team($1, m.id))`, teamID).Scan(&out.Team)
+	if err != nil {
+		return out, MapError(err, OpRead, "model")
+	}
+	err = pt.QueryRow(ctx, `SELECT coalesce(array_agg(m.id ORDER BY m.id), '{}') FROM afs.models m
+WHERE EXISTS (SELECT 1 FROM afs.model_prices p WHERE p.model_id = m.id AND p.effective_from <= now())`).Scan(&out.Callable)
+	if err != nil {
+		return out, MapError(err, OpRead, "model")
+	}
+	err = pt.QueryRow(ctx, `SELECT coalesce((SELECT s.value #>> '{}' FROM afs.service_settings s
+  WHERE s.key = 'models.default_model_id' AND jsonb_typeof(s.value) = 'string'), '')`).Scan(&out.SettingDefault)
+	return out, MapError(err, OpRead, "model")
+}
+
+// InsertOrchestration implements teams.Repository: afs.create_orchestration_agent (service admins), which
+// also writes the agent's models, the audit record and both outbox events.
+func (*TeamRepo) InsertOrchestration(ctx context.Context, tx port.Tx, in teams.OrchestrationAgent) error {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return err
+	}
+	var res []byte
+	if in.Resources != nil {
+		if res, err = json.Marshal(in.Resources); err != nil {
+			return domain.Internal(err)
+		}
+	}
+	ids := in.Models.ModelIDs
+	if ids == nil {
+		ids = []string{}
+	}
+	var vol *int
+	if in.VolumeSizeGiB > 0 {
+		vol = &in.VolumeSizeGiB
+	}
+	var access *string
+	if in.Models.Access != "" {
+		a := string(in.Models.Access)
+		access = &a
+	}
+	_, err = pt.Exec(ctx, `SELECT afs.create_orchestration_agent($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13)`,
+		in.TeamID, in.AgentID, nullable(in.Name), nullable(string(in.Tool)), nullable(string(in.WebUIExposure)), nullable(string(in.WebAPIExposure)),
+		nullable(string(in.RegistrationMode)), access, ids, nullable(in.Models.DefaultModelID), res, vol, nullable(in.VolumeOnDelete))
+	return MapError(err, OpWrite, "orchestration")
+}
+
+// WithoutOrchestration implements teams.Repository.
+func (*TeamRepo) WithoutOrchestration(ctx context.Context, tx port.Tx, limit int) ([]string, error) {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := pt.Query(ctx, `SELECT t.id FROM afs.teams t WHERE t.state NOT IN ('deleting', 'deleted')
+  AND NOT EXISTS (SELECT 1 FROM afs.agents a WHERE a.team_id = t.id AND a.role = 'orchestration' AND a.deleted_at IS NULL)
+ORDER BY t.id LIMIT $1`, limit)
+	if err != nil {
+		return nil, MapError(err, OpRead, "team")
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, MapError(err, OpRead, "team")
+		}
+		out = append(out, id)
+	}
+	return out, MapError(rows.Err(), OpRead, "team")
+}
+
+// HasOrchestration implements teams.Repository.
+func (*TeamRepo) HasOrchestration(ctx context.Context, tx port.Tx, teamID string) (bool, error) {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return false, err
+	}
+	var ok bool
+	err = pt.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM afs.agents WHERE team_id = $1 AND role = 'orchestration' AND deleted_at IS NULL)`, teamID).Scan(&ok)
+	return ok, MapError(err, OpRead, "team")
 }
 
 // ModelsByID implements teams.Repository.

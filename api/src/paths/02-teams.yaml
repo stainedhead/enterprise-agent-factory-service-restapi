@@ -1,4 +1,4 @@
-# OpenAPI fragment (API contract §4.2). Bundled into api/openapi.yaml by make openapi.
+
 /v1/teams:
   get:
     operationId: ListTeams
@@ -753,6 +753,12 @@
                 maxOutputTokens: 64000
                 version: 1
                 updatedAt: '2026-11-21T18:00:00Z'
+                callable: true
+                priceState: approved
+                inferenceProfileState: ready
+              access: selected
+              modelIds:
+              - anthropic.claude-sonnet-4-5
       '400':
         $ref: '#/components/responses/BadRequest'
       '401':
@@ -791,9 +797,9 @@
           schema:
             $ref: '#/components/schemas/PutTeamModelsRequest'
           example:
-            modelIds:
+            access: selected
+            modelIds: &id001
             - anthropic.claude-sonnet-4-5
-            - anthropic.claude-haiku-4-5
     responses:
       '200':
         description: Success
@@ -818,6 +824,11 @@
                 maxOutputTokens: 64000
                 version: 1
                 updatedAt: '2026-11-21T18:00:00Z'
+                callable: true
+                priceState: approved
+                inferenceProfileState: ready
+              access: selected
+              modelIds: *id001
       '400':
         $ref: '#/components/responses/BadRequest'
       '401':
@@ -1046,25 +1057,11 @@
           application/yaml:
             schema:
               type: string
-            example: |
-              apiVersion: v1
-              kind: Config
-              clusters:
-                - name: afs
-                  cluster:
-                    server: https://EXAMPLE0123456789.gr7.us-east-1.eks.amazonaws.com
-                    certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCkVYQU1QTEUKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
-              contexts:
-                - name: afs-payments
-                  context: {cluster: afs, namespace: afs-payments, user: afs}
-              current-context: afs-payments
-              users:
-                - name: afs
-                  user:
-                    exec:
-                      apiVersion: client.authentication.k8s.io/v1beta1
-                      command: aws
-                      args: [eks, get-token, --cluster-name, afs, --region, us-east-1]
+            example: "apiVersion: v1\nkind: Config\nclusters:\n  - name: afs\n    cluster:\n      server: https://EXAMPLE0123456789.gr7.us-east-1.eks.amazonaws.com\n\
+              \      certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCkVYQU1QTEUKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=\n\
+              contexts:\n  - name: afs-payments\n    context: {cluster: afs, namespace: afs-payments, user: afs}\ncurrent-context:\
+              \ afs-payments\nusers:\n  - name: afs\n    user:\n      exec:\n        apiVersion: client.authentication.k8s.io/v1beta1\n\
+              \        command: aws\n        args: [eks, get-token, --cluster-name, afs, --region, us-east-1]\n"
       '400':
         $ref: '#/components/responses/BadRequest'
       '401':

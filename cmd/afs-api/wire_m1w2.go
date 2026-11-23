@@ -74,6 +74,7 @@ func wireM1W2(c *components, cfg *httpapi.Config, log *slog.Logger) {
 	setRepo := postgres.NewSettingsRepo()
 
 	teamSvc := &teams.Service{Deps: deps, Repo: postgres.NewTeamRepo(), Settings: c.Settings}
+	c.teamSvc = teamSvc
 	lookup := m1w2Teams{teamSvc}
 	cfg.Teams, cfg.TeamState = lookup, lookup
 

@@ -80,7 +80,7 @@ func PoolTagsJSON(d pool.Desired) string { return TagsJSON(asAgent(d)) }
 // /etc/afs/aws/config.
 func PoolAWSConfigMap(d pool.Desired) *unstructured.Unstructured {
 	u := New("v1", "ConfigMap", d.Team.Namespace, pool.AWSConfigMapName(d.Name))
-	data := map[string]any{tagsKey: PoolTagsJSON(d)}
+	data := map[string]any{tagsKey: PoolTagsJSON(d), modelsKey: ModelsJSON(d.ModelID, d.Models)}
 	if cfg := PoolAWSConfig(d); cfg != "" {
 		data[awsConfigKey] = cfg
 	}
@@ -191,8 +191,9 @@ func PoolPodTemplate(env pool.Environment) corev1.PodTemplateSpec {
 		{Name: volumeScratch, MountPath: ScratchDir},
 		{Name: volumeConfig, MountPath: ConfigDir, ReadOnly: true},
 	}
-	awsItems := []corev1.KeyToPath{{Key: tagsKey, Path: tagsKey}}
-	mounts = append(mounts, corev1.VolumeMount{Name: volumeAWS, MountPath: TagsPath, SubPath: tagsKey, ReadOnly: true})
+	awsItems := []corev1.KeyToPath{{Key: tagsKey, Path: tagsKey}, {Key: modelsKey, Path: modelsKey}}
+	mounts = append(mounts, corev1.VolumeMount{Name: volumeAWS, MountPath: TagsPath, SubPath: tagsKey, ReadOnly: true},
+		corev1.VolumeMount{Name: volumeAWS, MountPath: ModelsPath, SubPath: modelsKey, ReadOnly: true})
 
 	envVars := append([]corev1.EnvVar{}, GatewayEnv(env.Gateway.URL())...)
 	envVars = append(envVars,
@@ -202,6 +203,8 @@ func PoolPodTemplate(env pool.Environment) corev1.PodTemplateSpec {
 		corev1.EnvVar{Name: "AFS_POOL_NAME", Value: d.Name},
 		corev1.EnvVar{Name: "AFS_WORKER_POD", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		corev1.EnvVar{Name: "AFS_MODEL_ID", Value: d.ModelID},
+		corev1.EnvVar{Name: "AFS_DEFAULT_MODEL", Value: d.ModelID},
+		corev1.EnvVar{Name: "AFS_MODELS", Value: ModelsEnv(d.Models)},
 		corev1.EnvVar{Name: "AFS_SCRATCH_DIR", Value: ScratchDir},
 		corev1.EnvVar{Name: "AWS_REGION", Value: env.Region},
 		corev1.EnvVar{Name: "AWS_DEFAULT_REGION", Value: env.Region},

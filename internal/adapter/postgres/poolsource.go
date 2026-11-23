@@ -88,6 +88,21 @@ func (s *PoolSource) LoadPool(ctx context.Context, id string) (pool.Desired, err
 }
 
 func (s *PoolSource) loadChildren(ctx context.Context, t *Tx, d *pool.Desired) error {
+	if err := collect(ctx, t, "pool models", `SELECT model_id FROM afs.effective_agent_models WHERE subject_kind = 'pool' AND subject_id = $1 ORDER BY model_id`,
+		[]any{d.ID}, func(rows pgx.Rows) error {
+			var m string
+			if err := rows.Scan(&m); err != nil {
+				return err
+			}
+			d.Models = append(d.Models, m)
+			return nil
+		}); err != nil {
+		return err
+	}
+	var err error
+	if d.ModelReason, d.PrevModelUnavailable, err = modelState(ctx, t, "pool", d.ID, d.ModelID, d.Models); err != nil {
+		return err
+	}
 	if err := collect(ctx, t, "pool bindings", loadPoolBindingsSQL, []any{d.ID}, func(rows pgx.Rows) error {
 		var b agent.Binding
 		if err := rows.Scan(&b.SecretID, &b.SecretName, &b.SecretARN, &b.VersionID, &b.Delivery, &b.Target, &b.ExternalSystemID, &b.SystemOff); err != nil {

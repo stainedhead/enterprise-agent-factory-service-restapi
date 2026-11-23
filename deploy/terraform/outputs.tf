@@ -76,3 +76,18 @@ output "collab_state_key_secret_arn" {
   description = "Secret holding the edge's sign-in state sealing keys (written by the operator)."
   value       = one(module.collab_edge[*].state_key_secret_arn)
 }
+
+output "orchestration_private_target_group_arn" {
+  description = "The Helm chart's edge.privateTargetGroupArn; empty when the private entry is not deployed."
+  value       = one(module.orchestration_private[*].target_group_arn)
+}
+
+output "orchestration_private_alb_security_group_id" {
+  description = "Allow this group to reach the afs-edge pods' security groups on the edge and health check ports."
+  value       = one(module.orchestration_private[*].alb_security_group_id)
+}
+
+output "orchestration_private_zone_id" {
+  description = "The private hosted zone of the private base domain."
+  value       = one(module.orchestration_private[*].private_zone_id)
+}

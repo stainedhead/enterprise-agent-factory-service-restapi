@@ -93,7 +93,7 @@ func (c *AgentCluster) ApplyAgent(ctx context.Context, env agent.Environment) (a
 		return res, firstErr
 	}
 	if d.IsCollaboration() {
-		apply(render.PaperclipService(d))
+		apply(render.CollabService(d))
 		apply(render.PaperclipIngress(d, env.Edge))
 		apply(render.PaperclipEgress(d))
 		if firstErr != nil {
@@ -177,7 +177,9 @@ func (c *AgentCluster) DeleteAgent(ctx context.Context, d agent.Desired) error {
 	del(gvkConfigMap, agent.AWSConfigMapName(d.Name))
 	del(gvkServiceAcct, agent.ServiceAccountName(d.Name))
 	if d.IsCollaboration() {
+		// Both names: a tool change leaves the old tool's Service behind, and a delete must leave nothing.
 		del(gvkService, render.PaperclipServiceName)
+		del(gvkService, render.BuzzServiceName)
 		del(gvkCiliumNetworkPolicy, render.PaperclipIngressPolicyName)
 		del(gvkCiliumNetworkPolicy, render.PaperclipEgressPolicyName)
 	}

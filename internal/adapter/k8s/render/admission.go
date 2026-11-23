@@ -154,9 +154,9 @@ func policyDefs(s admission.Spec) []policyDef {
 			name:  AdmissionPolicyNames[6],
 			rules: []map[string]any{rule(all, []any{""}, []any{"*"}, []any{"services"})},
 			validation: []map[string]any{validation(
-				"request.userInfo.username in "+users+" || (object.metadata.name != '"+PaperclipServiceName+"' && (!has(object.spec.selector) || size(object.spec.selector) == 0 || "+
+				"request.userInfo.username in "+users+" || (!(object.metadata.name in ['"+PaperclipServiceName+"', '"+BuzzServiceName+"']) && (!has(object.spec.selector) || size(object.spec.selector) == 0 || "+
 					"!(['app.kubernetes.io/name', '"+LabelTeamID+"', '"+LabelAgentID+"'].exists(k, k in object.spec.selector))))",
-				"a Service named paperclip, or one that selects the collaboration pod, is managed by the AFS reconciler only")},
+				"a Service named paperclip or buzz, or one that selects the orchestration pod, is managed by the AFS reconciler only")},
 		},
 	}
 }

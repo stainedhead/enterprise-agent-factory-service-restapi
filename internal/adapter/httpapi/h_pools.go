@@ -191,8 +191,11 @@ func (a *PoolsAPI) create(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
+	if req.ModelID != "" {
+		DefaultDeprecation.Apply(w, "")
+	}
 	in := domain.NewPoolParams{Name: req.Name, Description: req.Description, Template: req.Template, Image: req.Image,
-		Persona: req.Persona, ModelID: req.ModelID, Workers: *req.Workers, Resources: req.Resources,
+		Persona: req.Persona, ModelID: req.ModelID, Models: req.Models.input(), Workers: *req.Workers, Resources: req.Resources,
 		ScratchSizeGiB: req.ScratchSizeGiB, SharedVolume: req.SharedVolume}
 	if req.StageID != nil {
 		in.StageID = *req.StageID
@@ -226,6 +229,9 @@ func (a *PoolsAPI) update(w http.ResponseWriter, r *http.Request) {
 	if err := Decode(r, &req); err != nil {
 		WriteError(w, r, err)
 		return
+	}
+	if req.ModelID != nil {
+		DefaultDeprecation.Apply(w, "")
 	}
 	p, err := a.Svc.Update(r.Context(), c, r.PathValue("teamId"), r.PathValue("poolId"), expect, req.patch())
 	if err != nil {

@@ -33,6 +33,7 @@ var writers = map[string][]string{
 	MetricGatewayReservationsExpired: {"GatewayReservationsExpired"},
 	MetricGatewaySettleFailures:      {"GatewaySettleFailures.", "SettleFailed("},
 	MetricGatewayUsageRowsDropped:    {"GatewayUsageRowsDropped.", "UsageRowDropped("},
+	MetricGatewayModelDenials:        {"GatewayModelDenials.", "ModelDenied("},
 	MetricEdgeRequests:               {"EdgeRequests."},
 	MetricEdgeRequestSeconds:         {"EdgeRequestSecs."},
 	MetricEdgeRefreshFailed:          {"EdgeRefreshFailed."},

@@ -1,0 +1,62 @@
+{{- /* Creates the orchestration agent of every team that has none (RA-US-21): once after an install or upgrade,
+idempotent and resumable (a failed run is retried; a rerun continues). Runs `afs-api orchestration-backfill` as the
+afs-api service account, so it has the same database login and Secrets Manager access as the API. */}}
+{{- $name := "api" }}
+{{- $c := include "afs.component" (dict "root" $ "name" $name) | fromYaml }}
+{{- if and $c.enabled $c.orchestrationBackfill.enabled }}
+{{- $ctx := dict "root" $ "name" $name "c" $c }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "afs-api-orchestration-backfill-%d" .Release.Revision }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "afs.labels" $ctx | nindent 4 }}
+    afs.io/job: orchestration-backfill
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: {{ $c.orchestrationBackfill.backoffLimit }}
+  activeDeadlineSeconds: {{ $c.orchestrationBackfill.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "afs.labels" $ctx | nindent 8 }}
+        afs.io/job: orchestration-backfill
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ $c.serviceAccount.name }}
+      {{- with .Values.global.image.pullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "afs.podSecurityContext" $ | nindent 8 }}
+      containers:
+        - name: orchestration-backfill
+          image: {{ include "afs.image" $ctx | quote }}
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          args: ["orchestration-backfill"]
+          env:
+            {{- include "afs.env" $ctx | nindent 12 }}
+            - name: AFS_API_REPLICAS
+              value: "1"
+            - name: AFS_PAGE_TOKEN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $c.keysSecret.name }}
+                  key: pageTokenKey
+            - name: AFS_IDEMPOTENCY_HMAC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $c.keysSecret.name }}
+                  key: idempotencyHmacKey
+            {{- if $c.migrate.ownerUser }}
+            - name: AFS_DATABASE_OWNER_URL
+              value: {{ include "afs.databaseURL" (dict "root" $ "user" $c.migrate.ownerUser) | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml $c.resources | nindent 12 }}
+          securityContext:
+            {{- include "afs.containerSecurityContext" $ | nindent 12 }}
+{{- end }}

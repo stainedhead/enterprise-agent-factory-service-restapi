@@ -69,6 +69,23 @@ module "collab_edge" {
   kms_key_arn             = module.buckets.kms_key_arn
 }
 
+# The private entry of the orchestration agent (ORC-13): an internal ALB, a private zone and a WAF in front of
+# afs-edge. Optional: leave orchestration_private_base_domain empty to serve public hostnames only.
+module "orchestration_private" {
+  count  = var.orchestration_private_base_domain == "" ? 0 : 1
+  source = "./modules/orchestration-private"
+
+  name                    = var.name
+  vpc_id                  = var.vpc_id
+  private_subnet_ids      = var.orchestration_private_subnet_ids
+  private_base_domain     = var.orchestration_private_base_domain
+  certificate_arn         = var.orchestration_private_certificate_arn
+  allowed_ingress_cidrs   = var.orchestration_private_ingress_cidrs
+  additional_zone_vpc_ids = var.orchestration_private_extra_vpcs
+  edge_security_group_ids = var.collab_edge_security_group_ids
+  access_log_bucket       = var.orchestration_private_access_log_bucket
+}
+
 module "pod_identity" {
   source = "./modules/pod-identity"
 

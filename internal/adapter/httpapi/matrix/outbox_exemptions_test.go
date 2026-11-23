@@ -61,6 +61,7 @@ var contractOutboxExempt = map[string]string{
 	"PutPoolConfigValue":               "config",
 	"PutPoolExternalSystem":            "catalog",
 	"PutServiceTag":                    "settings",
+	"PutServiceModelAccess":            "settings",
 	"PutSetting":                       "settings",
 	"PutStorageClass":                  "catalog",
 	"RemoveMember":                     "members",

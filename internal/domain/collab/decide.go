@@ -51,12 +51,16 @@ type Principal struct {
 }
 
 // Decide applies the order of API contract 4.4c to a request for a team that has a route:
+//  0. the class's surface is effective at the other level only: 404 (CD-38);
 //  1. neither surface effective: 404 (no team detail);
 //  2. no binding on the team: 403 no_team_role;
 //  3. the class's surface is not effective: 403 surface_disabled;
 //  4. the route is not ready: 503 with the reason;
 //  5. permissions: safe methods need access, others contribute; API traffic needs api as well.
 func Decide(r Route, c Class, method string, p Principal) Decision {
+	if !r.Effective(c.Surface()) && r.OtherLevel(c.Surface()) {
+		return Decision{Status: http.StatusNotFound, Code: "NotFound"}
+	}
 	if !r.WebUIEffective && !r.RESTAPIEffective {
 		return Decision{Status: http.StatusNotFound, Code: "NotFound"}
 	}

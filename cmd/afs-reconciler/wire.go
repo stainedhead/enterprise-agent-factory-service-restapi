@@ -63,6 +63,12 @@ func routes(extra ...engine.Route) (*engine.Registry, error) {
 		{Table: "teams", Targets: []engine.Target{{Kind: engine.KindTeam, Self: true}}},
 		{Table: "team_models", Targets: []engine.Target{{Kind: engine.KindTeam}}},
 		{Table: "models", FanOut: []engine.Kind{engine.KindTeam}},
+		{Table: "agent_models", Targets: []engine.Target{{Kind: engine.KindTeam}}},
+		{Table: "pool_models", Targets: []engine.Target{{Kind: engine.KindTeam}}},
+		{Table: "agents", Targets: []engine.Target{{Kind: engine.KindTeam}}},
+		{Table: "agent_pools", Targets: []engine.Target{{Kind: engine.KindTeam}}},
+		{Table: "model_prices", FanOut: []engine.Kind{engine.KindTeam}},
+		{Table: "service_settings", FanOut: []engine.Kind{engine.KindTeam}},
 	}
 	// Several controllers route the same tables (teams, agents, ...); every route list goes through the one
 	// mergeRoutes so the registry sees each table once.
@@ -160,6 +166,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 		Gateway: agent.Gateway{Namespace: s.GatewayNamespace, Name: s.GatewayName},
 		Edge:    agent.EdgeRef{Namespace: s.EdgeNamespace, Name: s.EdgeName, ReconcilerName: "afs-reconciler"},
 		Cluster: s.ClusterName, AWSCfg: awsCfg, NodeClassJSON: env("AFS_NODECLASS_JSON"), LinkVerifierARN: env("AFS_RECONCILER_ROLE_ARN"),
+		Events: postgres.NewCollabReconcile(runner, outbox, ids, clock, nil),
 	}, log)
 	if err != nil {
 		return fail(err)
@@ -170,6 +177,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 			PermissionsBoundaryARN: s.PermissionsBoundaryARN, ClusterARN: clusterARN, ESORoleARN: s.ESORoleARN, SecretsPrefix: s.SecretsPrefix, KMSKeyARN: s.KMSKeyARN},
 		Gateway: agent.Gateway{Namespace: s.GatewayNamespace, Name: s.GatewayName},
 		Cluster: s.ClusterName, AWSCfg: awsCfg, NodeClassJSON: env("AFS_NODECLASS_JSON"), LinkVerifierARN: env("AFS_RECONCILER_ROLE_ARN"),
+		Events: postgres.NewCollabReconcile(runner, outbox, ids, clock, nil),
 	}, env("AFS_EFS_STORAGE_CLASS"))
 	if err != nil {
 		return fail(err)
@@ -256,6 +264,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	wireRollup(r.Engine, hk, m, log)
 	registerOrphanSweep(r.Engine, sm, runner, audit, clock.Now, log)
 	registerOrgMirror(r.Engine, awsCfg, runner, env, clock.Now, log)
+	registerModelSync(r.Engine, awsCfg, runner, env, clock.Now, log)
 	if err := wireTraffic(r.Engine, runner, outbox, ids, env, clock.Now, log); err != nil {
 		return fail(err)
 	}
