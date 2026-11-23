@@ -51,6 +51,14 @@ feed and converges the cluster and AWS, then writes status back for clients to r
 
 ![Per-tenant isolation](docs/images/tenant-isolation.svg)
 
+## The orchestration agent and model access (1.1.0)
+
+`afs-api` creates each team's orchestration agent in the `CreateTeam` transaction. `afs-edge` forwards its public or
+private hostname at the effective exposure level, and `afs-gateway` admits a model call only when the model is in
+the service, team and agent lists and has an approved price.
+
+![Orchestration agent, endpoint exposure and model admission](docs/images/orchestration-agent.svg)
+
 ## Build and test
 
 Requires Go 1.27 (pinned in `go.mod`; older Go fetches it) and `make`.
