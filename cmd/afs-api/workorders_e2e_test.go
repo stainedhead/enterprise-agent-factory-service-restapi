@@ -99,8 +99,11 @@ func TestWorkOrdersEndToEnd(t *testing.T) {
 		}
 		return s + `}`
 	}
+	// One due date for every create: an idempotent replay must send the same body, and
+	// time.Now per call changes it when the calls straddle a second boundary.
+	slaDue := time.Now().Add(7 * 24 * time.Hour).UTC().Format(time.RFC3339)
 	create := func(cve string, r string) string {
-		return `{"cveId":"` + cve + `","severity":"critical","title":"OpenSSL RCE","slaDueAt":"` + time.Now().Add(7*24*time.Hour).UTC().Format(time.RFC3339) +
+		return `{"cveId":"` + cve + `","severity":"critical","title":"OpenSSL RCE","slaDueAt":"` + slaDue +
 			`","templateId":"` + tpl + `","repos":` + r + `}`
 	}
 	before := count(`SELECT count(*) FROM afs.work_orders`)
