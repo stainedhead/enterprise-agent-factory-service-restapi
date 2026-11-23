@@ -447,3 +447,77 @@ func exampleResponse(t *testing.T, code, mediaType string, ex *pyaml.Node) *http
 	h.Set("X-Afs-Contract-Version", api.ContractVersion)
 	return &http.Response{StatusCode: status, Header: h, Body: io.NopCloser(bytes.NewReader(body))}
 }
+
+// paramEnum returns the enum of the named parameter of an operation.
+func paramEnum(t *testing.T, opID, name string) []string {
+	t.Helper()
+	for _, p := range operations(t)[opID]["parameters"].([]any) {
+		pm := p.(map[string]any)
+		if pm["name"] != name {
+			continue
+		}
+		var out []string
+		for _, e := range pm["schema"].(map[string]any)["enum"].([]any) {
+			out = append(out, e.(string))
+		}
+		return out
+	}
+	t.Fatalf("%s has no parameter %s", opID, name)
+	return nil
+}
+
+// TestSettingsMatchRegistry: the PutSetting key enum is the registry of settings afs-api accepts (every key of
+// domain.AllSettingSpecs except the read-only deprecated aliases), and Setting.type covers every registry type.
+func TestSettingsMatchRegistry(t *testing.T) {
+	var want []string
+	types := map[string]bool{}
+	for _, s := range domain.AllSettingSpecs() {
+		types[s.Type] = true
+		if _, alias := domain.RenamedSettings[s.Key]; !alias {
+			want = append(want, s.Key)
+		}
+	}
+	got := paramEnum(t, "PutSetting", "key")
+	sort.Strings(want)
+	sort.Strings(got)
+	if !slices.Equal(got, want) {
+		t.Errorf("PutSetting key enum = %v, want %v", got, want)
+	}
+	for _, k := range got {
+		if _, alias := domain.RenamedSettings[k]; alias {
+			t.Errorf("PutSetting key enum lists the read-only alias %s", k)
+		}
+	}
+	setting := model(t).Components.Schemas.GetOrZero("Setting").Schema().Properties.GetOrZero("type").Schema()
+	have := map[string]bool{}
+	for _, e := range setting.Enum {
+		have[e.Value] = true
+	}
+	for ty := range types {
+		if !have[ty] {
+			t.Errorf("Setting.type enum lacks %q, which the registry uses", ty)
+		}
+	}
+	// The deprecated aliases are documented where a client looks for them.
+	d := operations(t)["PutSetting"]["description"].(string)
+	for old, next := range domain.RenamedSettings {
+		if !strings.Contains(d, old) || !strings.Contains(d, next) || !strings.Contains(d, "setting_renamed") {
+			t.Errorf("PutSetting description does not document %s -> %s (setting_renamed)", old, next)
+		}
+	}
+}
+
+// TestAgentRoleFilterMatchesDomain: the ListAgents role filter takes every role the handler accepts, the
+// deprecated collaboration alias included.
+func TestAgentRoleFilterMatchesDomain(t *testing.T) {
+	var want []string
+	for _, r := range []domain.AgentRole{domain.AgentRoleWorker, domain.AgentRoleOrchestration, domain.AgentRoleCollaboration} {
+		if !r.Valid() {
+			t.Fatalf("role %s is not valid in the domain", r)
+		}
+		want = append(want, string(r))
+	}
+	if got := paramEnum(t, "ListAgents", "role"); !slices.Equal(got, want) {
+		t.Errorf("ListAgents role enum = %v, want %v", got, want)
+	}
+}

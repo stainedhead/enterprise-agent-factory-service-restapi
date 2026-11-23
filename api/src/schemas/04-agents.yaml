@@ -201,6 +201,14 @@ CreateAgentRequest:
 UpdateAgentRequest:
   type: object
   properties:
+    role:
+      type: string
+      enum:
+      - worker
+      - orchestration
+      - collaboration
+      description: Immutable; a value that differs from the agent's role is a ValidationError (collaboration reads as
+        orchestration until 2.0.0)
     collaboration:
       $ref: '#/components/schemas/AgentCollaborationInput'
     description:

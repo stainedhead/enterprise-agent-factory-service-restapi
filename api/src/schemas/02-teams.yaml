@@ -315,6 +315,32 @@ CreateTeamRequest:
           enum:
           - paperclip
           - buzz
+        webUiExposure:
+          type: string
+          enum: *id001
+          description: Flat form of webUi.exposure (contract section 4.4d); both forms may be sent when they agree, otherwise
+            ValidationError on this field. Above the team limit is exposure_above_limit
+        webApiExposure:
+          type: string
+          enum: *id001
+          description: Flat form of webApi.exposure; same rules as webUiExposure
+        modelId:
+          type: string
+          description: Shorthand for models.defaultModelId (CD-36)
+        volume:
+          type: object
+          description: Volume of the orchestration agent; defaults from orchestration.default_volume_gib
+          properties:
+            sizeGiB:
+              type: integer
+              minimum: 10
+              maximum: 1000
+            onDelete:
+              type: string
+              enum:
+              - snapshot_then_delete
+              - delete
+              - retain
         webUi:
           type: object
           required:

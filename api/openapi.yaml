@@ -1979,6 +1979,9 @@ components:
         orchestration:
           description: The orchestration agent created with the team; every field optional
           properties:
+            modelId:
+              description: Shorthand for models.defaultModelId (CD-36)
+              type: string
             models:
               $ref: '#/components/schemas/AgentModelsInput'
             registrationMode:
@@ -1993,6 +1996,20 @@ components:
                 - paperclip
                 - buzz
               type: string
+            volume:
+              description: Volume of the orchestration agent; defaults from orchestration.default_volume_gib
+              properties:
+                onDelete:
+                  enum:
+                    - snapshot_then_delete
+                    - delete
+                    - retain
+                  type: string
+                sizeGiB:
+                  maximum: 1000
+                  minimum: 10
+                  type: integer
+              type: object
             webApi:
               properties:
                 exposure:
@@ -2004,6 +2021,13 @@ components:
               required:
                 - exposure
               type: object
+            webApiExposure:
+              description: Flat form of webApi.exposure; same rules as webUiExposure
+              enum:
+                - "off"
+                - private
+                - public
+              type: string
             webUi:
               properties:
                 exposure:
@@ -2015,6 +2039,13 @@ components:
               required:
                 - exposure
               type: object
+            webUiExposure:
+              description: Flat form of webUi.exposure (contract section 4.4d); both forms may be sent when they agree, otherwise ValidationError on this field. Above the team limit is exposure_above_limit
+              enum:
+                - "off"
+                - private
+                - public
+              type: string
           type: object
         ownerEmail:
           format: email
@@ -4570,6 +4601,7 @@ components:
             - boolean
             - integer
             - array
+            - object
           type: string
         updatedAt:
           oneOf:
@@ -5462,6 +5494,13 @@ components:
           description: Refused on the orchestration agent (orchestration_field_fixed)
         resources:
           $ref: '#/components/schemas/Resources'
+        role:
+          description: Immutable; a value that differs from the agent's role is a ValidationError (collaboration reads as orchestration until 2.0.0)
+          enum:
+            - worker
+            - orchestration
+            - collaboration
+          type: string
         secretBindings:
           items:
             $ref: '#/components/schemas/SecretBinding'
@@ -9175,7 +9214,7 @@ paths:
       x-afs-sdk: admin.settings.get()
   /v1/admin/settings/{key}:
     put:
-      description: '{value}'
+      description: 'Sets one service setting to {value}. The key enum lists every writable key, including the orchestration.* and models.* keys of contract v1.4.0 (orchestration.tools is an object, a write to models.service_access has the effect of PutServiceModelAccess). collab.base_domain and collab.public_endpoints are deprecated read-only aliases of orchestration.public_base_domain and orchestration.public_endpoints until 2.0.0: GetSettings still returns them, and a PutSetting on either is a 400 ValidationError with details.reason setting_renamed and details.newKey naming the new key. The other five collab.* keys are unchanged.'
       operationId: PutSetting
       parameters:
         - in: path
@@ -9195,8 +9234,20 @@ paths:
               - egress.denied_spike_threshold
               - gateway.reservation_ttl_seconds
               - api.cors_origins
-              - collab.base_domain
-              - collab.public_endpoints
+              - orchestration.tools
+              - orchestration.public_base_domain
+              - orchestration.private_base_domain
+              - orchestration.public_endpoints
+              - orchestration.private_endpoints
+              - orchestration.default_limit
+              - orchestration.default_web_ui_exposure
+              - orchestration.default_web_api_exposure
+              - orchestration.default_resources
+              - orchestration.default_volume_gib
+              - models.service_access
+              - models.default_team_access
+              - models.default_team_models
+              - models.default_model_id
               - collab.allowed_source_cidrs
               - collab.session_ttl_minutes
               - collab.content_scan
@@ -11214,11 +11265,13 @@ paths:
     get:
       operationId: ListAgents
       parameters:
-        - in: query
+        - description: collaboration is the deprecated 1.0.1 name of orchestration and reads as orchestration until 2.0.0
+          in: query
           name: role
           schema:
             enum:
               - worker
+              - orchestration
               - collaboration
             type: string
         - $ref: '#/components/parameters/TeamId'

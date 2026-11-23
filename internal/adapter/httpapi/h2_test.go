@@ -348,3 +348,46 @@ func TestCollaborationReportBodyCarriesPrincipalAndFlag(t *testing.T) {
 		t.Error("principal on a usage row")
 	}
 }
+
+// createTeamWith posts w2CreateBody with an orchestration object spliced in.
+func (r *w2Rig) createTeamWith(t *testing.T, orchestration string) *httptest.ResponseRecorder {
+	t.Helper()
+	body := strings.Replace(w2CreateBody, `"tags":[]`, `"tags":[],"orchestration":`+orchestration, 1)
+	return r.do(t, http.MethodPost, "/v1/teams", "svc", body)
+}
+
+// TestCreateTeamOrchestrationFields: the orchestration object takes the default model, the volume and the flat
+// exposure levels of API contract §4.4d and reaches the use case.
+func TestCreateTeamOrchestrationFields(t *testing.T) {
+	r := newW2Rig(t)
+	w2Code(t, r.createTeamWith(t, `{"tool":"paperclip","webUiExposure":"off","webApiExposure":"off","modelId":"m1",
+"resources":{"cpu":"2","memory":"8Gi"},"volume":{"sizeGiB":50,"onDelete":"delete"}}`), 201)
+	if len(r.teams.Orchestrations) != 1 {
+		t.Fatalf("orchestration agents = %d", len(r.teams.Orchestrations))
+	}
+	oa := r.teams.Orchestrations[0]
+	if oa.VolumeSizeGiB != 50 || oa.VolumeOnDelete != "delete" || oa.Models.DefaultModelID != "m1" ||
+		oa.WebUIExposure != domain.ExposureOff || oa.WebAPIExposure != domain.ExposureOff || oa.Resources == nil || oa.Resources.CPU != "2" {
+		t.Errorf("orchestration = %+v", oa)
+	}
+}
+
+// TestCreateTeamOrchestrationLevelForms: the nested form of the OpenAPI document and the flat form of the contract
+// both set a level; two different values for one level are refused.
+func TestCreateTeamOrchestrationLevelForms(t *testing.T) {
+	r := newW2Rig(t)
+	w2Code(t, r.createTeamWith(t, `{"modelId":"m1","webUi":{"exposure":"off"},"webApi":{"exposure":"off"}}`), 201)
+	if oa := r.teams.Orchestrations[0]; oa.WebUIExposure != domain.ExposureOff {
+		t.Errorf("nested level = %q", oa.WebUIExposure)
+	}
+	for _, body := range []string{
+		`{"modelId":"m1","webUi":{"exposure":"off"},"webUiExposure":"private"}`,
+		`{"modelId":"m1","webApi":{"exposure":"private"},"webApiExposure":"off"}`,
+	} {
+		rec := r.createTeamWith(t, body)
+		w2Code(t, rec, 400)
+		if !strings.Contains(rec.Body.String(), "orchestration.web") {
+			t.Errorf("error does not name the field: %s", rec.Body)
+		}
+	}
+}
