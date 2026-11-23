@@ -12,7 +12,9 @@
         type: string
         enum:
         - worker
+        - orchestration
         - collaboration
+      description: collaboration is the deprecated 1.0.1 name of orchestration and reads as orchestration until 2.0.0
     - $ref: '#/components/parameters/TeamId'
     - $ref: '#/components/parameters/MaxResults'
     - $ref: '#/components/parameters/NextToken'

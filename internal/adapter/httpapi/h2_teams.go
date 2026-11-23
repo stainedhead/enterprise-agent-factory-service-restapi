@@ -203,6 +203,10 @@ type orchestrationRequest struct {
 	WebAPI *struct {
 		Exposure *string `json:"exposure"`
 	} `json:"webApi"`
+	// WebUIExposure and WebAPIExposure are the flat form of API contract §4.4d; the nested form above is
+	// the one of PutTeamOrchestration. Both may be sent when they agree.
+	WebUIExposure    *string        `json:"webUiExposure"`
+	WebAPIExposure   *string        `json:"webApiExposure"`
 	RegistrationMode string         `json:"registrationMode"`
 	Models           *modelsRequest `json:"models"`
 	ModelID          string         `json:"modelId"`
@@ -216,17 +220,38 @@ type orchestrationRequest struct {
 	} `json:"volume"`
 }
 
-func (q *orchestrationRequest) input() *teams.OrchestrationInput {
+// level merges the nested and the flat form of one exposure level; two different values are refused.
+func level(field string, nested, flat *string) (domain.Exposure, error) {
+	switch {
+	case nested != nil && flat != nil && *nested != *flat:
+		return "", bad("orchestration."+field+"Exposure", "differs from orchestration."+field+".exposure")
+	case nested != nil:
+		return domain.Exposure(*nested), nil
+	case flat != nil:
+		return domain.Exposure(*flat), nil
+	}
+	return "", nil
+}
+
+func (q *orchestrationRequest) input() (*teams.OrchestrationInput, error) {
 	if q == nil {
-		return nil
+		return nil, nil
 	}
 	in := &teams.OrchestrationInput{Tool: domain.CollabTool(q.Tool), RegistrationMode: domain.RegistrationMode(q.RegistrationMode),
 		Models: q.Models.input(), ModelID: q.ModelID}
-	if q.WebUI != nil && q.WebUI.Exposure != nil {
-		in.WebUIExposure = domain.Exposure(*q.WebUI.Exposure)
+	var nestedUI, nestedAPI *string
+	if q.WebUI != nil {
+		nestedUI = q.WebUI.Exposure
 	}
-	if q.WebAPI != nil && q.WebAPI.Exposure != nil {
-		in.WebAPIExposure = domain.Exposure(*q.WebAPI.Exposure)
+	if q.WebAPI != nil {
+		nestedAPI = q.WebAPI.Exposure
+	}
+	var err error
+	if in.WebUIExposure, err = level("webUi", nestedUI, q.WebUIExposure); err != nil {
+		return nil, err
+	}
+	if in.WebAPIExposure, err = level("webApi", nestedAPI, q.WebAPIExposure); err != nil {
+		return nil, err
 	}
 	if q.Resources != nil {
 		in.Resources = &domain.AgentResources{CPU: q.Resources.CPU, Memory: q.Resources.Memory}
@@ -234,7 +259,7 @@ func (q *orchestrationRequest) input() *teams.OrchestrationInput {
 	if q.Volume != nil {
 		in.VolumeSizeGiB, in.VolumeOnDelete = q.Volume.SizeGiB, q.Volume.OnDelete
 	}
-	return in
+	return in, nil
 }
 
 type firstAdminRequest struct {
@@ -282,6 +307,11 @@ func (a *TeamsAPI) create(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, domain.Validation(missing...))
 		return
 	}
+	orch, err := req.Orchestration.input()
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
 	in := teams.CreateTeamInput{
 		Params: domain.NewTeamParams{
 			Slug: req.Slug, DisplayName: req.DisplayName, Description: req.Description, Kind: domain.TeamKind(req.Kind),
@@ -294,7 +324,7 @@ func (a *TeamsAPI) create(w http.ResponseWriter, r *http.Request) {
 		},
 		FirstAdmin: domain.NewMemberParams{SubjectType: domain.SubjectType(req.FirstAdmin.SubjectType), UserID: req.FirstAdmin.UserID,
 			Email: req.FirstAdmin.Email, GroupName: req.FirstAdmin.GroupName},
-		Models: req.Models, Orchestration: req.Orchestration.input(),
+		Models: req.Models, Orchestration: orch,
 	}
 	if req.MaxCollabExposure != nil {
 		e := domain.Exposure(*req.MaxCollabExposure)

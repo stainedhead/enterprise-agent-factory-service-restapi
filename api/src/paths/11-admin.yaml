@@ -150,7 +150,13 @@
     summary: Put setting
     tags:
     - admin
-    description: '{value}'
+    description: >-
+      Sets one service setting to {value}. The key enum lists every writable key, including the orchestration.* and
+      models.* keys of contract v1.4.0 (orchestration.tools is an object, a write to models.service_access has the
+      effect of PutServiceModelAccess). collab.base_domain and collab.public_endpoints are deprecated read-only aliases
+      of orchestration.public_base_domain and orchestration.public_endpoints until 2.0.0: GetSettings still returns
+      them, and a PutSetting on either is a 400 ValidationError with details.reason setting_renamed and details.newKey
+      naming the new key. The other five collab.* keys are unchanged.
     parameters:
     - name: key
       in: path
@@ -170,8 +176,20 @@
         - egress.denied_spike_threshold
         - gateway.reservation_ttl_seconds
         - api.cors_origins
-        - collab.base_domain
-        - collab.public_endpoints
+        - orchestration.tools
+        - orchestration.public_base_domain
+        - orchestration.private_base_domain
+        - orchestration.public_endpoints
+        - orchestration.private_endpoints
+        - orchestration.default_limit
+        - orchestration.default_web_ui_exposure
+        - orchestration.default_web_api_exposure
+        - orchestration.default_resources
+        - orchestration.default_volume_gib
+        - models.service_access
+        - models.default_team_access
+        - models.default_team_models
+        - models.default_model_id
         - collab.allowed_source_cidrs
         - collab.session_ttl_minutes
         - collab.content_scan
