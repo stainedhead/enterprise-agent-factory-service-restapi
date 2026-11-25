@@ -497,5 +497,89 @@
       "api"
     ],
     "when": "`TestNotificationChannel`; `data` has `channelId` and `testId`. The reconciler tests the channel and reports the result on the channel's status (condition `DeliveryHealthy`, `lastTestId`), which the API returns (CD-3)"
+  },
+  {
+    "type": "model_endpoint.created",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "§4.13 (v1.5.0)"
+  },
+  {
+    "type": "model_endpoint.updated",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "§4.13 (v1.5.0)"
+  },
+  {
+    "type": "model_endpoint.deleted",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "§4.13 (v1.5.0)"
+  },
+  {
+    "type": "model_endpoint.enabled",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "§4.13 (v1.5.0)"
+  },
+  {
+    "type": "model_endpoint.disabled",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "§4.13 (v1.5.0)"
+  },
+  {
+    "type": "model_endpoint.credential_set",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "§4.13 (v1.5.0)"
+  },
+  {
+    "type": "model_endpoint.selected",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "§4.13 (v1.5.0)"
+  },
+  {
+    "type": "model_endpoint.deselected",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "§4.13 (v1.5.0)"
+  },
+  {
+    "type": "model_endpoint.degraded",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "§4.13 (v1.5.0)"
+  },
+  {
+    "type": "model_endpoint.recovered",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "§4.13 (v1.5.0)"
+  },
+  {
+    "type": "inference_provider.enabled",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "§4.13 (v1.5.0)"
+  },
+  {
+    "type": "inference_provider.disabled",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "§4.13 (v1.5.0)"
   }
 ]

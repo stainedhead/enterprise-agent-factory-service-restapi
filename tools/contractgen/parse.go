@@ -325,7 +325,7 @@ func parseOperations(lines []string) ([]Operation, error) {
 			inOpTable = false
 			continue
 		}
-		if strings.HasPrefix(l, "| Op |") {
+		if strings.HasPrefix(l, "| Op |") || strings.HasPrefix(l, "| Operation |") {
 			inOpTable = true
 			continue
 		}
@@ -375,6 +375,14 @@ func expandRow(row []string, sec string, svcSection bool) ([]Operation, error) {
 			mps = append(mps, mp{mps[0].method, base + extra})
 		}
 	}
+	if len(ids) == 1 && len(pathCodes) == 2 && methodRE.MatchString(pathCodes[1]) && len(codes(row[3])) == 2 {
+		// v1.5.0: one row naming a service path "and" a team path, with one CLI command each
+		// (GetInferenceReport). OpenAPI needs one operationId per path, so the team form gets the
+		// operationId of its CLI command (reports get-team-inference-report → GetTeamInferenceReport).
+		parts := strings.SplitN(pathCodes[1], " ", 2)
+		mps = append(mps, mp{parts[0], parts[1]})
+		ids = append(ids, operationIDOf(codes(row[3])[1]))
+	}
 	if len(mps) != len(ids) {
 		// The first code of the path cell may be followed by codes that are not paths (bodies).
 		if len(ids) == 1 {
@@ -386,7 +394,7 @@ func expandRow(row []string, sec string, svcSection bool) ([]Operation, error) {
 	perms := permAlternatives(row[2], len(ids))
 	clis := expandList(row[3], len(ids), " ")
 	sdks := expandList(row[4], len(ids), ".")
-	csv := strings.Contains(row[1], "*CSV*")
+	csv := strings.Contains(row[1], "*CSV*") || strings.Contains(row[1], ", CSV)")
 	var out []Operation
 	for i, id := range ids {
 		path, query := cleanPath(mps[i].path)
@@ -398,6 +406,19 @@ func expandRow(row []string, sec string, svcSection bool) ([]Operation, error) {
 		out = append(out, op)
 	}
 	return out, nil
+}
+
+// operationIDOf turns a CLI command ("reports get-team-inference-report") into its operationId
+// ("GetTeamInferenceReport").
+func operationIDOf(cli string) string {
+	f := strings.Fields(cli)
+	var b strings.Builder
+	for _, w := range strings.Split(f[len(f)-1], "-") {
+		if w != "" {
+			b.WriteString(strings.ToUpper(w[:1]) + w[1:])
+		}
+	}
+	return b.String()
 }
 
 // splitPathCell returns the backtick spans of the method/path cell (paths and action suffixes)
@@ -503,6 +524,13 @@ func applyPermission(op *Operation, cell string, svcSection bool) {
 	switch {
 	case strings.HasPrefix(op.Path, "/v1/teams/{teamId}"):
 		op.Scope = "team"
+	case op.Section == "4.13" && strings.HasPrefix(op.Path, "/v1/admin/teams/{teamId}"):
+		// v1.5.0 PutTeamGatewaySettings: a team guardrail under /v1/admin, scoped to the team in the
+		// path like PutTeamModels (teams:set-guardrails).
+		op.Scope = "team"
+	case op.Section == "4.13" && (strings.HasPrefix(op.Permission, "admin:") || strings.HasPrefix(op.Path, "/v1/admin/")):
+		// §4.13 has no *svc* markers: its admin permissions and /v1/admin paths are service routes.
+		op.Scope = "service"
 	case svc:
 		op.Scope = "service"
 	default:
@@ -564,7 +592,35 @@ func parseEvents(lines []string) ([]EventEntry, error) {
 	if len(out) == 0 {
 		return nil, fmt.Errorf("§7 has no rows")
 	}
-	return out, nil
+	return append(out, proseEvents(lines)...), nil
+}
+
+var proseEventGroupRE = regexp.MustCompile("((?:`[a-z_.]+`(?:, )?)+) \\(([a-z]+)\\)")
+
+// proseEvents parses the "New events (§7):" paragraph of v1.5.0 §4.13, which lists event types with
+// their emitter in parentheses instead of adding rows to the §7 table.
+func proseEvents(lines []string) []EventEntry {
+	sec := section(lines, "### 4.13")
+	var para strings.Builder
+	in := false
+	for _, l := range sec {
+		if strings.HasPrefix(l, "New events (§7):") {
+			in = true
+		}
+		if in {
+			if strings.TrimSpace(l) == "" {
+				break
+			}
+			para.WriteString(l + " ")
+		}
+	}
+	var out []EventEntry
+	for _, m := range proseEventGroupRE.FindAllStringSubmatch(para.String(), -1) {
+		for _, t := range codes(m[1]) {
+			out = append(out, EventEntry{Type: t, EmittedBy: []string{m[2]}, When: "§4.13 (v1.5.0)"})
+		}
+	}
+	return out
 }
 
 var rangeRE = regexp.MustCompile(`^(-?\d+) to (-?\d+)`)

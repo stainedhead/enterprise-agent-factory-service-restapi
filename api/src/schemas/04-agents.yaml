@@ -477,11 +477,42 @@ AgentModels:
         type: string
     defaultModelId:
       type: string
+      description: A Bedrock model id, or (v1.5.0) a route model as <route>/<model> or, with defaultRoute, the route's model name
+    routeAccess:
+      type: string
+      enum:
+      - all
+      - selected
+      description: 'v1.5.0: all follows the team''s routes; selected narrows them to routes'
+    routes:
+      type: array
+      items:
+        type: string
+        pattern: ^[a-z][a-z0-9-]{1,30}$
+      description: 'v1.5.0: route slugs selected when routeAccess is selected'
+    defaultRoute:
+      type:
+      - string
+      - 'null'
+      pattern: ^[a-z][a-z0-9-]{1,30}$
+      description: 'v1.5.0: set when the default model is a route model; defaultModelId then holds the model name'
     effectiveModelIds:
       type: array
       items:
         type: string
       readOnly: true
+    effectiveRoutes:
+      type: array
+      items:
+        type: string
+      readOnly: true
+      description: 'v1.5.0: route slugs the agent can call (service routes the team opted in to and team routes, narrowed by routes, on providers that are on), default first'
+    env:
+      type: object
+      additionalProperties:
+        type: string
+      readOnly: true
+      description: 'v1.5.0: the AFS_LLM_*, OPENAI_BASE_URL and OPENAI_API_KEY variables the agent receives on its next roll (names and non-secret values; OPENAI_API_KEY is the afs-gateway placeholder)'
 AgentModelsInput:
   type: object
   properties:
@@ -496,3 +527,24 @@ AgentModelsInput:
         type: string
     defaultModelId:
       type: string
+      description: A Bedrock model id or (v1.5.0) <route>/<model>
+    routeAccess:
+      type: string
+      enum:
+      - all
+      - selected
+      description: v1.5.0; create defaults to all
+    routes:
+      type: array
+      maxItems: 50
+      uniqueItems: true
+      items:
+        type: string
+        pattern: ^[a-z][a-z0-9-]{1,30}$
+      description: v1.5.0; route slugs of the team's set (400 agent_routes_team otherwise)
+    defaultRoute:
+      type:
+      - string
+      - 'null'
+      pattern: ^[a-z][a-z0-9-]{1,30}$
+      description: v1.5.0; with defaultModelId as the route's model name. Sending both defaultRoute and a <route>/<model> defaultModelId that disagree → 400 conflicting_fields

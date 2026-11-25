@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"encoding/json"
+
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
 )
@@ -52,9 +54,12 @@ func toAgentModelsBody(m domain.AgentModels) agentModelsBody {
 
 // modelsRequest is the models object of an agent or pool create or update body; a nil member is omitted.
 type modelsRequest struct {
-	Access         *string   `json:"access"`
-	ModelIDs       *[]string `json:"modelIds"`
-	DefaultModelID *string   `json:"defaultModelId"`
+	Access         *string         `json:"access"`
+	ModelIDs       *[]string       `json:"modelIds"`
+	DefaultModelID *string         `json:"defaultModelId"`
+	RouteAccess    *string         `json:"routeAccess"`
+	Routes         *[]string       `json:"routes"`
+	DefaultRoute   json.RawMessage `json:"defaultRoute"`
 }
 
 func (q *modelsRequest) input() *domain.ModelsInput {
@@ -62,6 +67,14 @@ func (q *modelsRequest) input() *domain.ModelsInput {
 		return nil
 	}
 	in := &domain.ModelsInput{ModelIDs: q.ModelIDs, DefaultModelID: q.DefaultModelID}
+	if q.RouteAccess != nil || q.Routes != nil || q.DefaultRoute != nil {
+		r := &domain.RoutesInput{Access: q.RouteAccess, Routes: q.Routes}
+		var s *string
+		if q.DefaultRoute != nil && json.Unmarshal(q.DefaultRoute, &s) == nil {
+			r.DefaultRoute, r.DefaultRouteNull = s, s == nil
+		}
+		in.Routes = r
+	}
 	if q.Access != nil {
 		a := domain.ModelAccess(*q.Access)
 		in.Access = &a

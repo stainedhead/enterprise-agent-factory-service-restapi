@@ -316,3 +316,47 @@ func TestPrincipalTeams(t *testing.T) {
 		t.Errorf("TeamRoles = %v", got)
 	}
 }
+
+// TestModelEndpointPermissions: the four v1.5.0 permissions (API contract §3), allowed and denied per role.
+func TestModelEndpointPermissions(t *testing.T) {
+	collab := authz.Principal{ID: "usr_c", Type: authz.PrincipalUser, Bindings: []authz.Binding{{Role: authz.RoleTeamCollaborator, TeamID: teamA}}}
+	ta := team(teamA, authz.TeamFlags{})
+	cases := []struct {
+		name string
+		p    authz.Principal
+		perm authz.Permission
+		res  authz.Resource
+		want authz.Outcome
+	}{
+		{"viewer reads routes", viewer, authz.ModelEndpointsRead, ta, authz.Allow},
+		{"collaborator reads routes", collab, authz.ModelEndpointsRead, ta, authz.Allow},
+		{"viewer cannot opt in", viewer, authz.ModelEndpointsWrite, ta, authz.Deny},
+		{"collaborator cannot opt in", collab, authz.ModelEndpointsWrite, ta, authz.Deny},
+		{"team-admin reads routes", admin, authz.ModelEndpointsRead, ta, authz.Allow},
+		{"team-admin opts in", admin, authz.ModelEndpointsWrite, ta, authz.Allow},
+		{"team-admin of another team is not found", admin, authz.ModelEndpointsWrite, team(teamB, authz.TeamFlags{}), authz.NotFound},
+		{"team-admin cannot set gateway settings", admin, authz.TeamsSetGuardrails, ta, authz.Deny},
+		{"service admin writes any team's routes", svcAdmin, authz.ModelEndpointsWrite, team(teamB, authz.TeamFlags{}), authz.Allow},
+		{"service admin manages endpoints", svcAdmin, authz.AdminModelEndpoints, service, authz.Allow},
+		{"service admin switches providers", svcAdmin, authz.AdminInferenceProviders, service, authz.Allow},
+		{"team-admin cannot manage service endpoints", admin, authz.AdminModelEndpoints, service, authz.Deny},
+		{"team-admin cannot switch providers", admin, authz.AdminInferenceProviders, service, authz.Deny},
+		{"viewer cannot manage service endpoints", viewer, authz.AdminModelEndpoints, service, authz.Deny},
+		{"team key cannot switch providers", teamKey, authz.AdminInferenceProviders, service, authz.Deny},
+		{"security operator cannot manage endpoints", secOp, authz.AdminModelEndpoints, service, authz.Deny},
+		{"security operator cannot read team routes", secOp, authz.ModelEndpointsRead, ta, authz.Deny},
+		{"workload cannot read routes", workload, authz.ModelEndpointsRead, ta, authz.Deny},
+		{"unbound is not found", unbound, authz.ModelEndpointsRead, ta, authz.NotFound},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			d := authz.Authorize(c.p, c.perm, c.res)
+			if d.Outcome != c.want {
+				t.Fatalf("outcome = %v, want %v", d.Outcome, c.want)
+			}
+			if c.want == authz.Deny && d.RequiredPermission != c.perm {
+				t.Errorf("required = %s, want %s", d.RequiredPermission, c.perm)
+			}
+		})
+	}
+}

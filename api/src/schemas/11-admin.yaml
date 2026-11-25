@@ -327,6 +327,12 @@ Model:
     callable:
       type: boolean
       description: Enabled at the service, priced and (for a team list) allowed
+    providerState:
+      type: string
+      enum:
+      - 'on'
+      - 'off'
+      description: 'v1.5.0: off while the model''s provider (bedrock) is switched off by provider policy'
     priceState:
       type: string
       enum:

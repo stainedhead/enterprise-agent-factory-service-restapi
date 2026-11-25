@@ -1,0 +1,1982 @@
+# API contract v1.5.0 §4.13: model endpoints, routes and providers. Generated once from the contract, then hand-maintained.
+/v1/admin/model-endpoints:
+  get:
+    operationId: ListModelEndpoints
+    summary: List model endpoints
+    tags:
+    - model-endpoints
+    parameters:
+    - name: includeTeams
+      in: query
+      schema:
+        type: boolean
+        default: false
+      description: Also list team-declared endpoints
+    - name: provider
+      in: query
+      schema:
+        type: string
+        pattern: ^[a-z][a-z0-9_]{1,30}$
+    - name: location
+      in: query
+      schema:
+        type: string
+        enum:
+        - external
+        - corporate
+        - in_namespace
+    - name: pricingMode
+      in: query
+      schema:
+        type: string
+        enum:
+        - per_token
+        - capacity
+        - free
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelEndpointList'
+            example:
+              items:
+              - &id008
+                id: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                teamId: null
+                slug: openai-prod
+                displayName: OpenAI production
+                description: OpenAI organization project per team
+                owner: null
+                purpose: null
+                provider: openai
+                protocols: &id001
+                - openai_chat
+                - openai_responses
+                - openai_embeddings
+                location: external
+                baseUrl: https://api.openai.com/v1
+                caBundle: null
+                authKind: bearer
+                authHeader: null
+                metricsPort: null
+                credentialMode: per_team
+                pricingMode: per_token
+                requiresTerms: false
+                useProviderCost: false
+                enabled: true
+                timeoutSeconds: 300
+                maxBodyMib: 20
+                externalSystemId: null
+                builtin: false
+                providerState: 'on'
+                metered: true
+                capped: true
+                models: &id010
+                - &id016
+                  modelName: gpt-4.1
+                  maxOutputTokens: 32768
+                  contextTokens: 1047576
+                  enabled: true
+                  callable: true
+                  priceState: approved
+                  price:
+                    inputUsdPerMtok: '2.00'
+                    outputUsdPerMtok: '8.00'
+                    cachedInputUsdPerMtok: '0.50'
+                    requestFeeUsd: '0'
+                teamsSelected: 3
+                health: &id011
+                  state: Ready
+                  reason: null
+                  since: '2026-11-25T18:00:00Z'
+                version: 4
+                createdAt: '2026-11-25T18:00:00Z'
+                createdBy: usr_admin
+                updatedAt: '2026-11-25T18:00:00Z'
+      '400': &id002
+        $ref: '#/components/responses/BadRequest'
+      '401': &id003
+        $ref: '#/components/responses/Unauthenticated'
+      '403': &id004
+        $ref: '#/components/responses/AccessDenied'
+      '429': &id005
+        $ref: '#/components/responses/Throttled'
+      '500': &id006
+        $ref: '#/components/responses/InternalError'
+      '503': &id007
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: admin:model-endpoints
+    x-afs-scope: service
+    x-afs-cli: model-endpoints list-model-endpoints
+    x-afs-sdk: admin.modelEndpoints.list()
+    x-afs-screen: '56'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateModelEndpoint
+    summary: Create model endpoint
+    tags:
+    - model-endpoints
+    description: Created off (enabled false). A slug equal to bedrock is reserved (slug_reserved); a slug in use → 409 slug_taken;
+      a provider that is off → 400 provider_disabled
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateModelEndpointRequest'
+          example:
+            slug: openai-prod
+            displayName: OpenAI production
+            provider: openai
+            protocols:
+            - openai_chat
+            - openai_responses
+            - openai_embeddings
+            location: external
+            baseUrl: https://api.openai.com/v1
+            authKind: bearer
+            credentialMode: per_team
+            pricingMode: per_token
+            models:
+            - modelName: gpt-4.1
+              maxOutputTokens: 32768
+              contextTokens: 1047576
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelEndpoint'
+            example:
+              id: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: null
+              slug: openai-prod
+              displayName: OpenAI production
+              description: OpenAI organization project per team
+              owner: null
+              purpose: null
+              provider: openai
+              protocols: *id001
+              location: external
+              baseUrl: https://api.openai.com/v1
+              caBundle: null
+              authKind: bearer
+              authHeader: null
+              metricsPort: null
+              credentialMode: per_team
+              pricingMode: per_token
+              requiresTerms: false
+              useProviderCost: false
+              enabled: false
+              timeoutSeconds: 300
+              maxBodyMib: 20
+              externalSystemId: null
+              builtin: false
+              providerState: 'on'
+              metered: true
+              capped: true
+              models:
+              - modelName: gpt-4.1
+                maxOutputTokens: 32768
+                contextTokens: 1047576
+                enabled: true
+                callable: false
+                priceState: none
+                price: null
+              teamsSelected: 0
+              health:
+                state: Unknown
+                reason: null
+                since: null
+              version: 1
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '409': &id013
+        $ref: '#/components/responses/Conflict'
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:model-endpoints
+    x-afs-scope: service
+    x-afs-cli: model-endpoints create-model-endpoint
+    x-afs-sdk: admin.modelEndpoints.create()
+    x-afs-screen: '57'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.created
+/v1/admin/model-endpoints/{endpointId}:
+  get:
+    operationId: GetModelEndpoint
+    summary: Get model endpoint
+    tags:
+    - model-endpoints
+    parameters:
+    - &id009
+      name: endpointId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mep_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelEndpoint'
+            example: *id008
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': &id012
+        $ref: '#/components/responses/NotFound'
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:model-endpoints
+    x-afs-scope: service
+    x-afs-cli: model-endpoints describe-model-endpoint
+    x-afs-sdk: admin.modelEndpoints.get()
+    x-afs-screen: '58'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  patch:
+    operationId: UpdateModelEndpoint
+    summary: Update model endpoint
+    tags:
+    - model-endpoints
+    parameters:
+    - *id009
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateModelEndpointRequest'
+          example:
+            enabled: true
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelEndpoint'
+            example:
+              id: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: null
+              slug: openai-prod
+              displayName: OpenAI production
+              description: OpenAI organization project per team
+              owner: null
+              purpose: null
+              provider: openai
+              protocols: *id001
+              location: external
+              baseUrl: https://api.openai.com/v1
+              caBundle: null
+              authKind: bearer
+              authHeader: null
+              metricsPort: null
+              credentialMode: per_team
+              pricingMode: per_token
+              requiresTerms: false
+              useProviderCost: false
+              enabled: true
+              timeoutSeconds: 300
+              maxBodyMib: 20
+              externalSystemId: null
+              builtin: false
+              providerState: 'on'
+              metered: true
+              capped: true
+              models: *id010
+              teamsSelected: 3
+              health: *id011
+              version: 5
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '412': &id014
+        $ref: '#/components/responses/PreconditionFailed'
+      '428': &id015
+        $ref: '#/components/responses/PreconditionRequired'
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:model-endpoints
+    x-afs-scope: service
+    x-afs-cli: model-endpoints update-model-endpoint
+    x-afs-sdk: admin.modelEndpoints.update()
+    x-afs-screen: 56, 58
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.updated
+    - model_endpoint.enabled
+    - model_endpoint.disabled
+  delete:
+    operationId: DeleteModelEndpoint
+    summary: Delete model endpoint
+    tags:
+    - model-endpoints
+    description: Refused while enabled (409 endpoint_enabled); a built-in endpoint cannot be deleted
+    parameters:
+    - *id009
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '412': *id014
+      '428': *id015
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:model-endpoints
+    x-afs-scope: service
+    x-afs-cli: model-endpoints delete-model-endpoint
+    x-afs-sdk: admin.modelEndpoints.delete()
+    x-afs-screen: '58'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.deleted
+/v1/admin/model-endpoints/{endpointId}/models:
+  put:
+    operationId: PutEndpointModels
+    summary: Put endpoint models
+    tags:
+    - model-endpoints
+    parameters:
+    - *id009
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutEndpointModelsRequest'
+          example:
+            models:
+            - modelName: gpt-4.1
+              maxOutputTokens: 32768
+              contextTokens: 1047576
+            - modelName: gpt-4.1-mini
+              maxOutputTokens: 32768
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointModelList'
+            example:
+              endpointId: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              items:
+              - *id016
+              - modelName: gpt-4.1-mini
+                maxOutputTokens: 32768
+                contextTokens: null
+                enabled: true
+                callable: false
+                priceState: none
+                price: null
+              version: 5
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '412': *id014
+      '428': *id015
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:model-endpoints
+    x-afs-scope: service
+    x-afs-cli: model-endpoints put-endpoint-models
+    x-afs-sdk: admin.modelEndpoints.putModels()
+    x-afs-screen: '57'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.updated
+/v1/admin/model-endpoints/{endpointId}/prices:
+  post:
+    operationId: CreateEndpointModelPrice
+    summary: Create endpoint model price
+    tags:
+    - model-endpoints
+    description: Append-only, effective-dated; the model must be listed on the endpoint
+    parameters:
+    - *id009
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateEndpointModelPriceRequest'
+          example:
+            modelName: gpt-4.1
+            effectiveFrom: '2026-12-01T00:00:00Z'
+            inputUsdPerMtok: '2.00'
+            outputUsdPerMtok: '8.00'
+            cachedInputUsdPerMtok: '0.50'
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointModelPrice'
+            example:
+              endpointId: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              modelName: gpt-4.1
+              effectiveFrom: '2026-12-01T00:00:00Z'
+              inputUsdPerMtok: '2.00'
+              outputUsdPerMtok: '8.00'
+              cachedInputUsdPerMtok: '0.50'
+              requestFeeUsd: '0'
+              source: manual
+              approvedBy: usr_admin
+              createdAt: '2026-11-25T18:00:00Z'
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:pricing
+    x-afs-scope: service
+    x-afs-cli: model-endpoints create-endpoint-model-price
+    x-afs-sdk: admin.modelEndpoints.createPrice()
+    x-afs-screen: '57'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.updated
+/v1/admin/endpoint-price-proposals:
+  get:
+    operationId: ListEndpointPriceProposals
+    summary: List endpoint price proposals
+    tags:
+    - model-endpoints
+    parameters:
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum:
+        - pending
+        - approved
+        - rejected
+        - superseded
+    - name: endpointId
+      in: query
+      schema:
+        type: string
+        pattern: ^mep_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointPriceProposalList'
+            example:
+              items:
+              - id: epp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                endpointId: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                slug: openai-prod
+                modelName: gpt-4.1-mini
+                effectiveFrom: '2026-12-01T00:00:00Z'
+                inputUsdPerMtok: '0.40'
+                outputUsdPerMtok: '1.60'
+                cachedInputUsdPerMtok: '0.10'
+                requestFeeUsd: '0'
+                source: price_list
+                status: pending
+                fetchedAt: '2026-11-25T18:00:00Z'
+                decidedBy: null
+                decidedAt: null
+                note: null
+                version: 1
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:pricing
+    x-afs-scope: service
+    x-afs-cli: model-endpoints list-endpoint-price-proposals
+    x-afs-sdk: admin.endpointPriceProposals.list()
+    x-afs-screen: '56'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/endpoint-price-proposals/{proposalId}:approve:
+  post:
+    operationId: ApproveEndpointPriceProposal
+    summary: Approve endpoint price proposal
+    tags:
+    - model-endpoints
+    description: A proposal is decided once; a decided one → 409. Approving writes an endpoint_model_prices row (source price_list
+      or provider)
+    parameters:
+    - &id017
+      name: proposalId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^epp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: epp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DecidePriceProposalRequest'
+          example:
+            note: Matches the provider's page
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointPriceProposal'
+            example:
+              id: epp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              endpointId: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              slug: openai-prod
+              modelName: gpt-4.1-mini
+              effectiveFrom: '2026-12-01T00:00:00Z'
+              inputUsdPerMtok: '0.40'
+              outputUsdPerMtok: '1.60'
+              cachedInputUsdPerMtok: '0.10'
+              requestFeeUsd: '0'
+              source: price_list
+              status: approved
+              fetchedAt: '2026-11-25T18:00:00Z'
+              decidedBy: usr_admin
+              decidedAt: '2026-11-25T18:00:00Z'
+              note: Matches the provider's page
+              version: 2
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:pricing
+    x-afs-scope: service
+    x-afs-cli: model-endpoints approve-endpoint-price-proposal
+    x-afs-sdk: admin.endpointPriceProposals.approve()
+    x-afs-screen: '56'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - pricing.proposal_decided
+/v1/admin/endpoint-price-proposals/{proposalId}:reject:
+  post:
+    operationId: RejectEndpointPriceProposal
+    summary: Reject endpoint price proposal
+    tags:
+    - model-endpoints
+    description: A proposal is decided once; a decided one → 409. Approving writes an endpoint_model_prices row (source price_list
+      or provider)
+    parameters:
+    - *id017
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DecidePriceProposalRequest'
+          example:
+            note: Matches the provider's page
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointPriceProposal'
+            example:
+              id: epp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              endpointId: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              slug: openai-prod
+              modelName: gpt-4.1-mini
+              effectiveFrom: '2026-12-01T00:00:00Z'
+              inputUsdPerMtok: '0.40'
+              outputUsdPerMtok: '1.60'
+              cachedInputUsdPerMtok: '0.10'
+              requestFeeUsd: '0'
+              source: price_list
+              status: rejected
+              fetchedAt: '2026-11-25T18:00:00Z'
+              decidedBy: usr_admin
+              decidedAt: '2026-11-25T18:00:00Z'
+              note: Matches the provider's page
+              version: 2
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:pricing
+    x-afs-scope: service
+    x-afs-cli: model-endpoints reject-endpoint-price-proposal
+    x-afs-sdk: admin.endpointPriceProposals.reject()
+    x-afs-screen: '56'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - pricing.proposal_decided
+/v1/admin/model-endpoints/{endpointId}/teams:
+  get:
+    operationId: ListEndpointTeams
+    summary: List endpoint teams
+    tags:
+    - model-endpoints
+    parameters:
+    - *id009
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointTeamList'
+            example:
+              items:
+              - teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                teamSlug: payments
+                teamDisplayName: Payments
+                selected: true
+                selectedBy: team_admin
+                credentialState: set
+                credentialRotatedAt: '2026-11-25T18:00:00Z'
+                federationState: not_required
+                gatewayDeployment: per_namespace
+                gatewayVersion: 1.2.0
+                spendMtdUsd: '41.20'
+                health: *id011
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:model-endpoints
+    x-afs-scope: service
+    x-afs-cli: model-endpoints list-endpoint-teams
+    x-afs-sdk: admin.modelEndpoints.teams()
+    x-afs-screen: '58'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/model-endpoints/{endpointId}/credentials/{scope}:
+  put:
+    operationId: PutModelEndpointCredential
+    summary: Put model endpoint credential
+    tags:
+    - model-endpoints
+    description: Writes the value to Secrets Manager at <prefix>/<namespace>/_gateway/<route> (per_team) or <prefix>/_service/gateway/<route>
+      (_shared, credentialMode shared only); never stored, returned or logged
+    parameters:
+    - *id009
+    - &id018
+      name: scope
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^(team_[0-9A-HJKMNP-TV-Z]{26}|_shared)$
+        example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      description: A team id (per_team credentials) or _shared
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ModelEndpointCredentialRequest'
+          example:
+            value: sk-example-not-a-real-key
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelEndpointCredential'
+            example: &id019
+              endpointId: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              scope: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              state: set
+              rotatedAt: '2026-11-25T18:00:00Z'
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '412': *id014
+      '428': *id015
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:model-endpoints
+    x-afs-scope: service
+    x-afs-cli: model-endpoints put-model-endpoint-credential
+    x-afs-sdk: admin.modelEndpoints.putCredential()
+    x-afs-screen: '58'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.credential_set
+/v1/admin/model-endpoints/{endpointId}/credentials/{scope}:rotate:
+  post:
+    operationId: RotateModelEndpointCredential
+    summary: Rotate model endpoint credential
+    tags:
+    - model-endpoints
+    description: Writes a new version; team gateways pick it up from the mounted file without a restart. 404 when no credential
+      is set
+    parameters:
+    - *id009
+    - *id018
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ModelEndpointCredentialRequest'
+          example:
+            value: sk-example-not-a-real-key-2
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelEndpointCredential'
+            example: *id019
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:model-endpoints
+    x-afs-scope: service
+    x-afs-cli: model-endpoints rotate-model-endpoint-credential
+    x-afs-sdk: admin.modelEndpoints.rotateCredential()
+    x-afs-screen: '58'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.credential_set
+/v1/admin/model-endpoints/{endpointId}/federations/{teamId}:
+  put:
+    operationId: PutEndpointFederation
+    summary: Put endpoint federation
+    tags:
+    - model-endpoints
+    description: Only for azure_federated and google_federated endpoints; metadata only
+    parameters:
+    - *id009
+    - name: teamId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+        example: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+      description: The team whose gateway is federated
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/EndpointFederationRequest'
+          example:
+            tenantId: 11111111-2222-3333-4444-555555555555
+            clientId: 66666666-7777-8888-9999-000000000000
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointFederation'
+            example:
+              endpointId: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              kind: azure
+              tenantId: 11111111-2222-3333-4444-555555555555
+              clientId: 66666666-7777-8888-9999-000000000000
+              projectNumber: null
+              poolId: null
+              providerId: null
+              projectId: null
+              location: null
+              status: pending
+              lastError: null
+              checkedAt: null
+              expectedIssuer: https://oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE
+              expectedSubject: system:serviceaccount:afs-t-payments:afs-gateway
+              expectedAudience: api://AzureADTokenExchange
+              expectedRoleArn: null
+              version: 1
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '412': *id014
+      '428': *id015
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:model-endpoints
+    x-afs-scope: service
+    x-afs-cli: model-endpoints put-endpoint-federation
+    x-afs-sdk: admin.modelEndpoints.putFederation()
+    x-afs-screen: '58'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.updated
+/v1/admin/model-endpoints/{endpointId}/statements:
+  post:
+    operationId: ImportProviderStatement
+    summary: Import provider statement
+    tags:
+    - model-endpoints
+    description: One statement per endpoint, period and source (a repeat → 409). afs-billing reconciles it monthly
+    parameters:
+    - *id009
+    - name: period
+      in: query
+      schema:
+        type: string
+        pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
+      description: With a text/csv body
+    - name: source
+      in: query
+      schema:
+        type: string
+        enum:
+        - nous_statement
+        - opencode_csv
+      description: With a text/csv body
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ImportProviderStatementRequest'
+          example:
+            period: 2026-11
+            source: nous_statement
+            rows:
+            - teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              model: Hermes-4-405B
+              amountUsd: '212.40'
+              tokens: 48100000
+        text/csv:
+          schema:
+            type: string
+          example: |
+            teamId,model,amountUsd,tokens
+            team_01JD2Q3R4S5T6V7W8X9Y0Z0001,Hermes-4-405B,212.40,48100000
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderStatement'
+            example:
+              id: pst_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              endpointId: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              period: 2026-11
+              source: nous_statement
+              rowCount: 1
+              totalUsd: '212.40'
+              importedBy: usr_admin
+              importedAt: '2026-11-25T18:00:00Z'
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:pricing
+    x-afs-scope: service
+    x-afs-cli: model-endpoints import-provider-statement
+    x-afs-sdk: admin.modelEndpoints.importStatement()
+    x-afs-screen: '59'
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.updated
+/v1/admin/inference-providers:
+  get:
+    operationId: ListInferenceProviders
+    summary: List inference providers
+    tags:
+    - model-endpoints
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InferenceProviderList'
+            example:
+              items:
+              - provider: bedrock
+                displayName: Amazon Bedrock
+                hosts:
+                - bedrock-runtime.*.amazonaws.com
+                enabled: true
+                teamSelection: team_admin
+                disabledReason: null
+                fallbackModel: null
+                routes: 1
+                teams: 12
+                directSystems: 0
+                changedBy: null
+                changedAt: null
+                version: 1
+              - provider: azure
+                displayName: Azure
+                hosts: &id020
+                - '*.openai.azure.com'
+                - '*.services.ai.azure.com'
+                - '*.cognitiveservices.azure.com'
+                enabled: false
+                teamSelection: service_admin
+                disabledReason: null
+                fallbackModel: null
+                routes: 1
+                teams: 0
+                directSystems: 0
+                changedBy: null
+                changedAt: null
+                version: 1
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:model-endpoints
+    x-afs-scope: service
+    x-afs-cli: model-endpoints list-inference-providers
+    x-afs-sdk: admin.inferenceProviders.list()
+    x-afs-screen: '68'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/admin/inference-providers/{provider}:
+  patch:
+    operationId: UpdateInferenceProvider
+    summary: Update inference provider
+    tags:
+    - model-endpoints
+    description: One provider on or off with a reason. Bedrock off needs fallbackModel (or models.default_model_id) naming
+      an enabled route model selected for every team, else 400 no_fallback_model; selectForAllTeams selects it in the same
+      transaction
+    parameters:
+    - name: provider
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[a-z][a-z0-9_]{1,30}$
+        example: azure
+    - name: dryRun
+      in: query
+      schema:
+        type: boolean
+        default: false
+      description: Return the impact without writing
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateInferenceProviderRequest'
+          example:
+            enabled: true
+            reason: Approved by the AI governance board
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InferenceProvider'
+            example:
+              provider: azure
+              displayName: Azure
+              hosts: *id020
+              enabled: true
+              teamSelection: service_admin
+              disabledReason: null
+              fallbackModel: null
+              routes: 1
+              teams: 0
+              directSystems: 0
+              changedBy: usr_admin
+              changedAt: '2026-11-25T18:00:00Z'
+              version: 2
+              impact:
+                routes: 1
+                teams: 0
+                agents: 0
+                agentsMovingToFallback: 0
+                agentsDegraded: 0
+                directSystems: 0
+                teamsToSelect: 0
+                fallbackModel: null
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '412': *id014
+      '428': *id015
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:inference-providers
+    x-afs-scope: service
+    x-afs-cli: model-endpoints update-inference-provider
+    x-afs-sdk: admin.inferenceProviders.update()
+    x-afs-screen: 68, 68a
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - inference_provider.enabled
+    - inference_provider.disabled
+    - model_endpoint.selected
+/v1/admin/teams/{teamId}/gateway-settings:
+  put:
+    operationId: PutTeamGatewaySettings
+    summary: Put team gateway settings
+    tags:
+    - model-endpoints
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutTeamGatewaySettingsRequest'
+          example:
+            deployment: per_namespace
+            mayAddModelEndpoints: true
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamGatewaySettings'
+            example:
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              deployment: per_namespace
+              mayAddModelEndpoints: true
+              gatewayUrl: null
+              gatewayState: provisioning
+              version: 7
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '412': *id014
+      '428': *id015
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: teams:set-guardrails
+    x-afs-scope: team
+    x-afs-cli: teams put-team-gateway-settings
+    x-afs-sdk: admin.teams.putGatewaySettings()
+    x-afs-screen: '60'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - team.updated
+/v1/teams/{teamId}/model-endpoints:
+  get:
+    operationId: ListTeamModelEndpoints
+    summary: List team model endpoints
+    tags:
+    - model-endpoints
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: relation
+      in: query
+      schema:
+        type: string
+        enum:
+        - selected
+        - own
+        - available
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamModelEndpointList'
+            example:
+              items:
+              - id: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                teamId: null
+                slug: openai-prod
+                displayName: OpenAI production
+                description: null
+                owner: null
+                purpose: null
+                provider: openai
+                protocols:
+                - openai_chat
+                - openai_responses
+                location: external
+                baseUrl: null
+                authKind: bearer
+                pricingMode: per_token
+                requiresTerms: false
+                enabled: true
+                relation: selected
+                selectedBy: team_admin
+                selectableBy: team_admin
+                credentialMode: per_team
+                credentialState: set
+                federationState: not_required
+                providerState: 'on'
+                offReason: null
+                metered: true
+                capped: true
+                baseUrlEnv: AFS_LLM_OPENAI_PROD_BASE_URL
+                models:
+                - *id016
+                health: *id011
+                version: 4
+              gatewayDeployment: per_namespace
+              mayAddModelEndpoints: true
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: model-endpoints:read
+    x-afs-scope: team
+    x-afs-cli: model-endpoints list-team-model-endpoints
+    x-afs-sdk: teams.modelEndpoints.list()
+    x-afs-screen: 61, 66
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateTeamModelEndpoint
+    summary: Create team model endpoint
+    tags:
+    - model-endpoints
+    description: Needs the team's mayAddModelEndpoints (403 team_endpoints_not_allowed)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateTeamModelEndpointRequest'
+          example:
+            slug: coder-vllm
+            displayName: Coder vLLM
+            owner: payments-platform
+            purpose: Code completion for the payments agents
+            protocols:
+            - openai_chat
+            location: in_namespace
+            baseUrl: http://vllm.afs-t-payments.svc:8000/v1
+            authKind: none
+            metricsPort: 8000
+            pricingMode: capacity
+            models:
+            - modelName: qwen3-coder-30b
+              maxOutputTokens: 8192
+              contextTokens: 131072
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+          Idempotent-Replayed:
+            $ref: '#/components/headers/IdempotentReplayed'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelEndpoint'
+            example:
+              id: mep_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              slug: coder-vllm
+              displayName: Coder vLLM
+              description: Self-hosted coder model
+              owner: payments-platform
+              purpose: Code completion for the payments agents
+              provider: internal
+              protocols: &id021
+              - openai_chat
+              location: in_namespace
+              baseUrl: http://vllm.afs-t-payments.svc:8000/v1
+              caBundle: null
+              authKind: none
+              authHeader: null
+              metricsPort: 8000
+              credentialMode: per_team
+              pricingMode: capacity
+              requiresTerms: false
+              useProviderCost: false
+              enabled: false
+              timeoutSeconds: 300
+              maxBodyMib: 20
+              externalSystemId: null
+              builtin: false
+              providerState: 'on'
+              metered: true
+              capped: false
+              models: &id022
+              - modelName: qwen3-coder-30b
+                maxOutputTokens: 8192
+                contextTokens: 131072
+                enabled: true
+                callable: true
+                priceState: not_required
+                price: null
+              teamsSelected: 1
+              health: *id011
+              version: 1
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: model-endpoints:write
+    x-afs-scope: team
+    x-afs-cli: model-endpoints create-team-model-endpoint
+    x-afs-sdk: teams.modelEndpoints.create()
+    x-afs-screen: '62'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.created
+/v1/teams/{teamId}/model-endpoint-selections:
+  put:
+    operationId: PutTeamModelEndpoints
+    summary: Put team model endpoints
+    tags:
+    - model-endpoints
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutTeamModelEndpointsRequest'
+          example:
+            endpointIds:
+            - mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamModelEndpointSelections'
+            example:
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              endpointIds:
+              - mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              selections:
+              - endpointId: mep_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                slug: openai-prod
+                selectedBy: team_admin
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '412': *id014
+      '428': *id015
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: model-endpoints:write
+    x-afs-scope: team
+    x-afs-cli: teams put-team-model-endpoints
+    x-afs-sdk: teams.modelEndpoints.putSelections()
+    x-afs-screen: 60, 61
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.selected
+    - model_endpoint.deselected
+/v1/teams/{teamId}/model-endpoints/{endpointId}:
+  patch:
+    operationId: UpdateTeamModelEndpoint
+    summary: Update team model endpoint
+    tags:
+    - model-endpoints
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - *id009
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateTeamModelEndpointRequest'
+          example:
+            enabled: true
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelEndpoint'
+            example:
+              id: mep_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              slug: coder-vllm
+              displayName: Coder vLLM
+              description: Self-hosted coder model
+              owner: payments-platform
+              purpose: Code completion for the payments agents
+              provider: internal
+              protocols: *id021
+              location: in_namespace
+              baseUrl: http://vllm.afs-t-payments.svc:8000/v1
+              caBundle: null
+              authKind: none
+              authHeader: null
+              metricsPort: 8000
+              credentialMode: per_team
+              pricingMode: capacity
+              requiresTerms: false
+              useProviderCost: false
+              enabled: true
+              timeoutSeconds: 300
+              maxBodyMib: 20
+              externalSystemId: null
+              builtin: false
+              providerState: 'on'
+              metered: true
+              capped: false
+              models: *id022
+              teamsSelected: 1
+              health: *id011
+              version: 2
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '412': *id014
+      '428': *id015
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: model-endpoints:write
+    x-afs-scope: team
+    x-afs-cli: model-endpoints update-team-model-endpoint
+    x-afs-sdk: teams.modelEndpoints.update()
+    x-afs-screen: '61'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.updated
+    - model_endpoint.enabled
+    - model_endpoint.disabled
+  delete:
+    operationId: DeleteTeamModelEndpoint
+    summary: Delete team model endpoint
+    tags:
+    - model-endpoints
+    description: Refused while enabled (409 endpoint_enabled)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - *id009
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '412': *id014
+      '428': *id015
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: model-endpoints:write
+    x-afs-scope: team
+    x-afs-cli: model-endpoints delete-team-model-endpoint
+    x-afs-sdk: teams.modelEndpoints.delete()
+    x-afs-screen: '61'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.deleted
+/v1/teams/{teamId}/model-endpoints/{endpointId}/models:
+  put:
+    operationId: PutTeamEndpointModels
+    summary: Put team endpoint models
+    tags:
+    - model-endpoints
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - *id009
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutTeamEndpointModelsRequest'
+          example:
+            models:
+            - modelName: qwen3-coder-30b
+              maxOutputTokens: 8192
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointModelList'
+            example:
+              endpointId: mep_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              items: *id022
+              version: 2
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '412': *id014
+      '428': *id015
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: model-endpoints:write
+    x-afs-scope: team
+    x-afs-cli: model-endpoints put-team-endpoint-models
+    x-afs-sdk: teams.modelEndpoints.putModels()
+    x-afs-screen: '62'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.updated
+/v1/teams/{teamId}/model-endpoints/{endpointId}/credential:
+  put:
+    operationId: PutTeamModelEndpointCredential
+    summary: Put team model endpoint credential
+    tags:
+    - model-endpoints
+    description: For the team's own endpoints and the team's credential of a per_team service endpoint; write-only
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - *id009
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ModelEndpointCredentialRequest'
+          example:
+            value: sk-example-not-a-real-key
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelEndpointCredential'
+            example: *id019
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '409': *id013
+      '412': *id014
+      '428': *id015
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: model-endpoints:write
+    x-afs-scope: team
+    x-afs-cli: model-endpoints put-team-model-endpoint-credential
+    x-afs-sdk: teams.modelEndpoints.putCredential()
+    x-afs-screen: 61, 62
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - model_endpoint.credential_set
+/v1/reports/inference:
+  get:
+    operationId: GetInferenceReport
+    summary: Get inference report
+    tags:
+    - model-endpoints
+    description: 'All teams; percentiles from usage_events (PRD §10.5). Also Accept: text/csv'
+    parameters:
+    - $ref: '#/components/parameters/TeamIdFilter'
+    - &id023
+      $ref: '#/components/parameters/From'
+    - &id024
+      $ref: '#/components/parameters/To'
+    - &id025
+      $ref: '#/components/parameters/Range'
+    - &id026
+      name: groupBy
+      in: query
+      schema:
+        type: string
+        pattern: ^(route|model|agent|pool|team|hour|day)(,(route|model|agent|pool|team|hour|day))*$
+      description: 'Comma-separated: route, model, agent, hour, day (and team on the service report, pool in ephemeral teams)'
+    - &id027
+      name: route
+      in: query
+      schema:
+        type: string
+        pattern: ^[a-z][a-z0-9-]{1,30}$
+      description: Filter by route (bedrock for Bedrock)
+    - &id028
+      $ref: '#/components/parameters/ModelIdFilter'
+    - &id029
+      $ref: '#/components/parameters/AgentIdFilter'
+    - &id030
+      $ref: '#/components/parameters/PoolIdFilter'
+    - &id031
+      $ref: '#/components/parameters/MaxResults'
+    - &id032
+      $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InferenceReport'
+            example: &id033
+              range:
+                from: '2026-11-24T00:00:00Z'
+                to: '2026-11-25T00:00:00Z'
+              groupBy:
+              - route
+              - model
+              rows:
+              - route: openai-prod
+                model: gpt-4.1
+                calls: 1520
+                errors: 12
+                throttled: 3
+                refused: 1
+                errorRatePct: 0.79
+                latencyP50Ms: 1840
+                latencyP95Ms: 6120
+                latencyP99Ms: 9800
+                ttftP50Ms: 420
+                ttftP95Ms: 1310
+                ttftP99Ms: 2400
+                gatewayP99Ms: 9
+                inputTokens: 4200000
+                outputTokens: 910000
+                cachedTokens: 1200000
+                reasoningTokens: 150000
+                outputTokensPerSecond: 61.5
+                estimatedPct: 0.0
+                costUsd: '14.03'
+                costUsdPerHour: '0.58'
+                effectiveUsdPerMtok: null
+                pricingMode: per_token
+              totals:
+                calls: 1520
+                errors: 12
+                throttled: 3
+                refused: 1
+                errorRatePct: 0.79
+                latencyP50Ms: 1840
+                latencyP95Ms: 6120
+                latencyP99Ms: 9800
+                ttftP50Ms: 420
+                ttftP95Ms: 1310
+                ttftP99Ms: 2400
+                gatewayP99Ms: 9
+                inputTokens: 4200000
+                outputTokens: 910000
+                cachedTokens: 1200000
+                reasoningTokens: 150000
+                outputTokensPerSecond: 61.5
+                estimatedPct: 0.0
+                costUsd: '14.03'
+                costUsdPerHour: '0.58'
+                effectiveUsdPerMtok: null
+                pricingMode: per_token
+              notes: []
+          text/csv:
+            schema:
+              type: string
+            example: 'route,model,calls,errors,latencyP50Ms,latencyP95Ms,latencyP99Ms,ttftP50Ms,ttftP95Ms,ttftP99Ms,inputTokens,outputTokens,costUsd
+
+              openai-prod,gpt-4.1,1520,12,1840,6120,9800,420,1310,2400,4200000,910000,14.03
+
+              '
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: admin:reports
+    x-afs-scope: service
+    x-afs-cli: reports get-inference-report
+    x-afs-sdk: reports.inference()
+    x-afs-screen: 59, 64
+    x-afs-priority: P0
+    x-afs-csv: true
+    x-afs-events: []
+/v1/teams/{teamId}/reports/inference:
+  get:
+    operationId: GetTeamInferenceReport
+    summary: Get team inference report
+    tags:
+    - model-endpoints
+    description: 'The team''s own calls, including on service routes. Also Accept: text/csv'
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - *id023
+    - *id024
+    - *id025
+    - *id026
+    - *id027
+    - *id028
+    - *id029
+    - *id030
+    - *id031
+    - *id032
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InferenceReport'
+            example: *id033
+          text/csv:
+            schema:
+              type: string
+            example: 'route,model,calls,errors,latencyP50Ms,latencyP95Ms,latencyP99Ms,ttftP50Ms,ttftP95Ms,ttftP99Ms,inputTokens,outputTokens,costUsd
+
+              openai-prod,gpt-4.1,1520,12,1840,6120,9800,420,1310,2400,4200000,910000,14.03
+
+              '
+      '400': *id002
+      '401': *id003
+      '403': *id004
+      '404': *id012
+      '429': *id005
+      '500': *id006
+      '503': *id007
+    x-afs-permission: reports:read
+    x-afs-scope: team
+    x-afs-cli: reports get-team-inference-report
+    x-afs-sdk: reports.inference()
+    x-afs-screen: 59, 64
+    x-afs-priority: P0
+    x-afs-csv: true
+    x-afs-events: []

@@ -2,6 +2,7 @@ package fakebedrock_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -58,30 +59,64 @@ func TestConverseReportsUsageAndRecordsTheCall(t *testing.T) {
 	}
 }
 
+// Checked on the wire, like TestStreamFailsPartWay: the SDK's event stream reader closes the connection
+// once it has the last frame, and under load its decoder goroutine can report "use of closed network
+// connection" before the metadata event is delivered (seen in CI). The behavior under test is the fake's:
+// text deltas, then a metadata frame with the usage last.
 func TestConverseStreamEndsWithMetadata(t *testing.T) {
-	f, c := newClient(t)
+	f := fakebedrock.New()
 	f.SetUsage(fakebedrock.Usage{Input: 5, Output: 11})
-	out, err := c.ConverseStream(context.Background(), &bedrockruntime.ConverseStreamInput{ModelId: aws.String(profile), Messages: converseIn().Messages})
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost,
+		srv.URL+"/model/"+url.PathEscape(profile)+"/converse-stream", strings.NewReader(`{"messages":[{"role":"user","content":[{"text":"hi"}]}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var text strings.Builder
-	var meta *types.ConverseStreamMetadataEvent
-	for ev := range out.GetStream().Events() {
-		switch v := ev.(type) {
-		case *types.ConverseStreamOutputMemberContentBlockDelta:
-			text.WriteString(v.Value.Delta.(*types.ContentBlockDeltaMemberText).Value)
-		case *types.ConverseStreamOutputMemberMetadata:
-			meta = &v.Value
-		}
-	}
-	// Once the metadata event (the last frame) has arrived the SDK may close the connection before its decoder
-	// goroutine reads the end of the body; on a loaded runner that surfaces as "use of closed network connection" (the SDK wraps it, so errors.Is does not match). It is not a stream failure.
-	if err := out.GetStream().Err(); err != nil && (meta == nil || !strings.Contains(err.Error(), "use of closed network connection")) {
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20260101/us-east-1/bedrock/aws4_request, SignedHeaders=host, Signature=00")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if text.String() != "Hello from the fake Bedrock runtime" || meta == nil || *meta.Usage.OutputTokens != 11 {
-		t.Fatalf("text %q meta %+v", text.String(), meta)
+	defer func() { _ = resp.Body.Close() }()
+	dec := eventstream.NewDecoder()
+	var text strings.Builder
+	var last string
+	var usage struct {
+		Usage struct {
+			InputTokens  int `json:"inputTokens"`
+			OutputTokens int `json:"outputTokens"`
+		} `json:"usage"`
+	}
+	for {
+		msg, err := dec.Decode(resp.Body, nil)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		last = msg.Headers.Get(":event-type").String()
+		switch last {
+		case "contentBlockDelta":
+			var d struct {
+				Delta struct {
+					Text string `json:"text"`
+				} `json:"delta"`
+			}
+			if err := json.Unmarshal(msg.Payload, &d); err != nil {
+				t.Fatal(err)
+			}
+			text.WriteString(d.Delta.Text)
+		case "metadata":
+			if err := json.Unmarshal(msg.Payload, &usage); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if text.String() != "Hello from the fake Bedrock runtime" || last != "metadata" || usage.Usage.OutputTokens != 11 || usage.Usage.InputTokens != 5 {
+		t.Fatalf("text %q last %q usage %+v", text.String(), last, usage)
 	}
 }
 
