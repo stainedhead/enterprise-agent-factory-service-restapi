@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/httpapi"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/httpapi/matrix"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres/pgtest"
 )
@@ -33,9 +34,25 @@ func TestAuthorizationMatrix(t *testing.T) {
 		have[id] = true
 	}
 	for id := range contract.Operations {
-		if !have[id] {
+		if !have[id] && !pendingMcp[id] {
 			t.Errorf("operation %s still answers the 501 not_implemented placeholder", id)
+		}
+	}
+	for id := range pendingMcp {
+		if have[id] {
+			t.Errorf("operation %s is implemented: remove it from httpapi.PendingMcpOps", id)
 		}
 	}
 	matrix.Run(t, w, c.Handler)
 }
+
+// pendingMcp is httpapi.PendingMcpOps: the v1.6.0 §4.14 operations whose handlers land in the implementation
+// change of release 1.3.0 (specs/261125-mcp-gateway). The list may only shrink. The v1.5.0 §4.13 operations
+// are all implemented in 1.2.0.
+var pendingMcp = func() map[string]bool {
+	m := map[string]bool{}
+	for _, op := range httpapi.PendingMcpOps {
+		m[op] = true
+	}
+	return m
+}()

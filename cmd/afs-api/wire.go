@@ -325,6 +325,8 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 		wireWorkload(c, s)
 		wireWorkOrders(c, log)
 		wireModelEndpoints(c, s)
+		// v1.6.0 §4.14 contract first: its handlers follow in the 1.3.0 implementation change.
+		c.bind(httpapi.BindMcpPending())
 		// The areas the wire functions bound are added next to the sign-in handlers wireAuth registered.
 		// With a database every operation must be bound: httpapi.New refuses an unbound one.
 		cfg.Registrars = append(cfg.Registrars, c.Registrars...)

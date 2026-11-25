@@ -113,8 +113,8 @@ func errOf(t *testing.T, rec *httptest.ResponseRecorder) errorBody {
 
 // M0-D1: every route declares a permission or is explicitly public or any-signed-in.
 func TestEveryRouteDeclaresAPermission(t *testing.T) {
-	if len(Routes) != 221 {
-		t.Fatalf("routes = %d, want the 221 contract operations", len(Routes))
+	if len(Routes) != 276 {
+		t.Fatalf("routes = %d, want the 276 contract operations", len(Routes))
 	}
 	for _, rt := range Routes {
 		explicit := rt.Scope == authz.ScopePublic || rt.Scope == authz.ScopeAny

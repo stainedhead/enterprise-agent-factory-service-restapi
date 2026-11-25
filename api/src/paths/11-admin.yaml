@@ -157,6 +157,8 @@
       of orchestration.public_base_domain and orchestration.public_endpoints until 2.0.0: GetSettings still returns
       them, and a PutSetting on either is a 400 ValidationError with details.reason setting_renamed and details.newKey
       naming the new key. The other five collab.* keys are unchanged.
+      v1.6.0 adds the MCP keys (mcp.*, gateway.mcp.placement_default, federation.allowed_audiences): writing them also
+      needs mcp-settings:write, and unlike other settings a change is audited and emits mcp_settings.changed (CD-49).
     parameters:
     - name: key
       in: path
@@ -195,6 +197,20 @@
         - collab.content_scan
         - collab.max_body_mb
         - collab.denied_spike_threshold
+        - mcp.enabled
+        - mcp.team_server_approval
+        - mcp.host_deny_list
+        - mcp.corporate_domains
+        - mcp.allowed_image_registries
+        - mcp.image_signature_policy
+        - mcp.default_agent_mode
+        - mcp.search_limit_max
+        - mcp.refresh_interval_minutes
+        - mcp.limits
+        - mcp.query_capture_max_days
+        - mcp.events_retention_months
+        - gateway.mcp.placement_default
+        - federation.allowed_audiences
     - $ref: '#/components/parameters/XRequestId'
     - $ref: '#/components/parameters/IfMatchPut'
     requestBody:
@@ -256,7 +272,8 @@
     x-afs-screen: S10, S9
     x-afs-priority: P0
     x-afs-csv: false
-    x-afs-events: []
+    x-afs-events:
+    - mcp_settings.changed
 /v1/admin/identity-providers:
   get:
     operationId: ListIdentityProviders

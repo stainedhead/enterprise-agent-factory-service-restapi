@@ -1,0 +1,1729 @@
+# API contract v1.6.0 §4.14: governed MCP servers and federated identities. Generated once from the contract, then hand-maintained.
+McpLimits:
+  type: object
+  description: Per-server limits; members left out take mcp.limits
+  properties:
+    requestBytes:
+      type: integer
+      minimum: 1024
+      maximum: 16777216
+    responseBytes:
+      type: integer
+      minimum: 1024
+      maximum: 67108864
+    timeoutSeconds:
+      type: integer
+      minimum: 1
+      maximum: 600
+    concurrentPerAgent:
+      type: integer
+      minimum: 1
+      maximum: 64
+McpFederation:
+  type: object
+  description: workload_federation only (PRD §9)
+  required:
+  - issuer
+  - audience
+  - tokenEndpoint
+  properties:
+    issuer:
+      type: string
+      description: The issuer the upstream trusts (the cluster OIDC issuer or the IdP)
+      maxLength: 500
+    audience:
+      type: string
+      maxLength: 300
+    subjectTemplate:
+      type: string
+      description: For example system:serviceaccount:afs-t-{teamSlug}:afs-gateway
+      maxLength: 300
+    tokenEndpoint:
+      type: string
+      pattern: ^https://
+      maxLength: 500
+McpHostedSpec:
+  type: object
+  description: A server AFS runs in the team namespace behind afs-mcp-bridge (PRD §10.2)
+  required:
+  - imageDigest
+  properties:
+    imageDigest:
+      type: string
+      pattern: ^[^@\s]+@sha256:[0-9a-f]{64}$
+      description: Pinned by digest (400 image_not_pinned); the registry must be in mcp.allowed_image_registries
+    args:
+      type: array
+      items:
+        type: string
+        maxLength: 1000
+      maxItems: 64
+    envNames:
+      type: array
+      items:
+        type: string
+        pattern: ^[A-Z_][A-Z0-9_]{0,63}$
+      maxItems: 64
+      description: Names only; values are secret references delivered to the pod
+    instanceMode:
+      type: string
+      enum:
+      - per_team
+      - per_agent
+    egressHosts:
+      type: array
+      items:
+        type: string
+        maxLength: 253
+      maxItems: 50
+    resources:
+      type: object
+      properties:
+        cpu:
+          type: string
+        memory:
+          type: string
+    needsAws:
+      type: boolean
+      default: false
+McpCheck:
+  type: object
+  required:
+  - name
+  - outcome
+  - checkedAt
+  properties:
+    name:
+      type: string
+      description: reachability, tls, protocol_version, host_policy, inventory, description_injection, image_signature, image_digest,
+        image_scan
+    outcome:
+      type: string
+      enum:
+      - pass
+      - warn
+      - fail
+    detail:
+      type:
+      - string
+      - 'null'
+      maxLength: 500
+    checkedAt:
+      $ref: '#/components/schemas/Timestamp'
+McpAdoption:
+  type: object
+  required:
+  - teams
+  - agents
+  properties:
+    teams:
+      type: integer
+      minimum: 0
+    agents:
+      type: integer
+      minimum: 0
+  readOnly: true
+McpServer:
+  type: object
+  description: An MCP server of the catalog. Never holds a credential value (credentialState only)
+  required:
+  - id
+  - teamId
+  - scope
+  - slug
+  - displayName
+  - dataClassification
+  - transport
+  - location
+  - authKind
+  - reviewStatus
+  - published
+  - driftPolicy
+  - credentialState
+  - version
+  - createdAt
+  - createdBy
+  - updatedAt
+  properties:
+    id:
+      type: string
+      pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+      readOnly: true
+    teamId:
+      type:
+      - string
+      - 'null'
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+      description: null for an enterprise server
+    scope:
+      type: string
+      enum:
+      - enterprise
+      - team
+    slug:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{1,30}$
+      description: The route /mcp/<slug> and the prefix of its tool names; afs is reserved
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 100
+    owner:
+      type: string
+      maxLength: 200
+    purpose:
+      type: string
+      maxLength: 1000
+    docUrl:
+      type:
+      - string
+      - 'null'
+      pattern: ^https://
+      maxLength: 500
+    dataClassification:
+      type: string
+      enum:
+      - public
+      - internal
+      - confidential
+      - restricted
+    transport:
+      type: string
+      enum:
+      - streamable_http
+      - hosted
+    location:
+      type: string
+      enum:
+      - external
+      - corporate
+      - in_namespace
+    url:
+      type:
+      - string
+      - 'null'
+      pattern: ^https://
+      maxLength: 500
+    hosted:
+      oneOf:
+      - $ref: '#/components/schemas/McpHostedSpec'
+      - type: 'null'
+    authKind:
+      type: string
+      enum:
+      - none
+      - static
+      - oauth_client
+      - workload_federation
+      - oauth_user
+      - aws_sigv4
+    authHeader:
+      type:
+      - string
+      - 'null'
+      pattern: ^[A-Za-z][A-Za-z0-9-]{0,63}$
+    credentialMode:
+      type: string
+      enum:
+      - shared
+      - per_team
+    federation:
+      oneOf:
+      - $ref: '#/components/schemas/McpFederation'
+      - type: 'null'
+    protocolVersion:
+      type:
+      - string
+      - 'null'
+      maxLength: 20
+      readOnly: true
+    reviewStatus:
+      type: string
+      enum:
+      - draft
+      - pending_review
+      - approved
+      - rejected
+      - suspended
+    published:
+      type: boolean
+    riskTier:
+      type:
+      - string
+      - 'null'
+      enum:
+      - low
+      - elevated
+      - high
+      - null
+      readOnly: true
+    riskReasons:
+      type: array
+      items:
+        type: string
+      readOnly: true
+    approver:
+      type:
+      - string
+      - 'null'
+      enum:
+      - team_admin
+      - security
+      - null
+      readOnly: true
+      description: Who decides the pending review, from mcp.team_server_approval
+    checks:
+      type: array
+      items:
+        $ref: '#/components/schemas/McpCheck'
+      readOnly: true
+    driftPolicy:
+      type: string
+      enum:
+      - hold
+      - auto_approve_compatible
+    defaultForNewTeams:
+      type: boolean
+    allowSampling:
+      type: boolean
+    trustAnnotations:
+      type: boolean
+    limits:
+      $ref: '#/components/schemas/McpLimits'
+    credentialState:
+      type: string
+      enum:
+      - set
+      - missing
+      - expired
+      - not_required
+    suspendedReason:
+      type:
+      - string
+      - 'null'
+      maxLength: 500
+      readOnly: true
+    adoption:
+      $ref: '#/components/schemas/McpAdoption'
+    version:
+      type: integer
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+McpServerList:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/McpServer'
+    nextToken:
+      type:
+      - string
+      - 'null'
+      maxLength: 2048
+CreateMcpServerRequest:
+  type: object
+  description: An enterprise server; created draft
+  required:
+  - slug
+  - displayName
+  - dataClassification
+  - transport
+  - location
+  - authKind
+  properties:
+    slug:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{1,30}$
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 100
+    owner:
+      type: string
+      maxLength: 200
+    purpose:
+      type: string
+      maxLength: 1000
+    docUrl:
+      type: string
+      pattern: ^https://
+      maxLength: 500
+    dataClassification:
+      type: string
+      enum:
+      - public
+      - internal
+      - confidential
+      - restricted
+    transport:
+      type: string
+      enum:
+      - streamable_http
+      - hosted
+    location:
+      type: string
+      enum:
+      - external
+      - corporate
+      - in_namespace
+    url:
+      type: string
+      pattern: ^https://
+      maxLength: 500
+    caBundle:
+      type: string
+      maxLength: 16384
+      description: PEM certificates for a corporate host
+    hosted:
+      $ref: '#/components/schemas/McpHostedSpec'
+    authKind:
+      type: string
+      enum:
+      - none
+      - static
+      - oauth_client
+      - workload_federation
+      - oauth_user
+      - aws_sigv4
+    authHeader:
+      type: string
+      pattern: ^[A-Za-z][A-Za-z0-9-]{0,63}$
+    federation:
+      $ref: '#/components/schemas/McpFederation'
+    limits:
+      $ref: '#/components/schemas/McpLimits'
+    credentialMode:
+      type: string
+      enum:
+      - shared
+      - per_team
+    driftPolicy:
+      type: string
+      enum:
+      - hold
+      - auto_approve_compatible
+    allowSampling:
+      type: boolean
+    trustAnnotations:
+      type: boolean
+  additionalProperties: false
+UpdateMcpServerRequest:
+  type: object
+  description: Members sent replace stored ones; a change of url, hosted.imageDigest, location, transport, authKind or federation returns
+    an approved server to pending_review
+  properties:
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 100
+    owner:
+      type: string
+      maxLength: 200
+    purpose:
+      type: string
+      maxLength: 1000
+    docUrl:
+      type: string
+      pattern: ^https://
+      maxLength: 500
+    dataClassification:
+      type: string
+      enum:
+      - public
+      - internal
+      - confidential
+      - restricted
+    transport:
+      type: string
+      enum:
+      - streamable_http
+      - hosted
+    location:
+      type: string
+      enum:
+      - external
+      - corporate
+      - in_namespace
+    url:
+      type: string
+      pattern: ^https://
+      maxLength: 500
+    caBundle:
+      type: string
+      maxLength: 16384
+      description: PEM certificates for a corporate host
+    hosted:
+      $ref: '#/components/schemas/McpHostedSpec'
+    authKind:
+      type: string
+      enum:
+      - none
+      - static
+      - oauth_client
+      - workload_federation
+      - oauth_user
+      - aws_sigv4
+    authHeader:
+      type: string
+      pattern: ^[A-Za-z][A-Za-z0-9-]{0,63}$
+    federation:
+      $ref: '#/components/schemas/McpFederation'
+    limits:
+      $ref: '#/components/schemas/McpLimits'
+    credentialMode:
+      type: string
+      enum:
+      - shared
+      - per_team
+    driftPolicy:
+      type: string
+      enum:
+      - hold
+      - auto_approve_compatible
+    defaultForNewTeams:
+      type: boolean
+    allowSampling:
+      type: boolean
+    trustAnnotations:
+      type: boolean
+  additionalProperties: false
+CreateTeamMcpServerRequest:
+  type: object
+  description: A team server; needs the team's mayAddMcpServers (403 team_servers_not_allowed); created draft
+  required:
+  - slug
+  - displayName
+  - owner
+  - purpose
+  - dataClassification
+  - transport
+  - location
+  - authKind
+  properties:
+    slug:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{1,30}$
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 100
+    owner:
+      type: string
+      maxLength: 200
+    purpose:
+      type: string
+      maxLength: 1000
+    docUrl:
+      type: string
+      pattern: ^https://
+      maxLength: 500
+    dataClassification:
+      type: string
+      enum:
+      - public
+      - internal
+      - confidential
+      - restricted
+    transport:
+      type: string
+      enum:
+      - streamable_http
+      - hosted
+    location:
+      type: string
+      enum:
+      - external
+      - corporate
+      - in_namespace
+    url:
+      type: string
+      pattern: ^https://
+      maxLength: 500
+    caBundle:
+      type: string
+      maxLength: 16384
+      description: PEM certificates for a corporate host
+    hosted:
+      $ref: '#/components/schemas/McpHostedSpec'
+    authKind:
+      type: string
+      enum:
+      - none
+      - static
+      - oauth_client
+      - workload_federation
+      - oauth_user
+      - aws_sigv4
+    authHeader:
+      type: string
+      pattern: ^[A-Za-z][A-Za-z0-9-]{0,63}$
+    federation:
+      $ref: '#/components/schemas/McpFederation'
+    limits:
+      $ref: '#/components/schemas/McpLimits'
+  additionalProperties: false
+UpdateTeamMcpServerRequest:
+  type: object
+  description: Team servers only (403 not_team_server); a change of url, image, location or auth returns it to pending_review
+  properties:
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 100
+    owner:
+      type: string
+      maxLength: 200
+    purpose:
+      type: string
+      maxLength: 1000
+    docUrl:
+      type: string
+      pattern: ^https://
+      maxLength: 500
+    dataClassification:
+      type: string
+      enum:
+      - public
+      - internal
+      - confidential
+      - restricted
+    transport:
+      type: string
+      enum:
+      - streamable_http
+      - hosted
+    location:
+      type: string
+      enum:
+      - external
+      - corporate
+      - in_namespace
+    url:
+      type: string
+      pattern: ^https://
+      maxLength: 500
+    caBundle:
+      type: string
+      maxLength: 16384
+      description: PEM certificates for a corporate host
+    hosted:
+      $ref: '#/components/schemas/McpHostedSpec'
+    authKind:
+      type: string
+      enum:
+      - none
+      - static
+      - oauth_client
+      - workload_federation
+      - oauth_user
+      - aws_sigv4
+    authHeader:
+      type: string
+      pattern: ^[A-Za-z][A-Za-z0-9-]{0,63}$
+    federation:
+      $ref: '#/components/schemas/McpFederation'
+    limits:
+      $ref: '#/components/schemas/McpLimits'
+  additionalProperties: false
+ImportMcpServerManifestRequest:
+  type: object
+  required:
+  - manifest
+  properties:
+    manifest:
+      type: object
+      description: An MCP Registry server.json (preview format). Pre-fills a draft; never counts as approval
+    slug:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{1,30}$
+      description: Overrides the slug derived from the manifest name
+McpReasonRequest:
+  type: object
+  required:
+  - reason
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 500
+McpReviewNoteRequest:
+  type: object
+  description: An optional note
+  properties:
+    note:
+      type: string
+      maxLength: 500
+McpPrimitiveDecision:
+  type: object
+  required:
+  - primitiveId
+  - decision
+  properties:
+    primitiveId:
+      type: string
+      pattern: ^mpr_[0-9A-HJKMNP-TV-Z]{26}$
+    decision:
+      type: string
+      enum:
+      - approve
+      - block
+McpServerReviewRequest:
+  type: object
+  required:
+  - note
+  properties:
+    note:
+      type: string
+      minLength: 1
+      maxLength: 500
+    primitives:
+      type: array
+      items:
+        $ref: '#/components/schemas/McpPrimitiveDecision'
+      maxItems: 2000
+McpDecision:
+  type: object
+  required:
+  - allowed
+  - level
+  - reason
+  properties:
+    allowed:
+      type: boolean
+    level:
+      type:
+      - string
+      - 'null'
+      enum:
+      - service
+      - team
+      - agent
+      - pool
+      - null
+    reason:
+      type:
+      - string
+      - 'null'
+      maxLength: 64
+McpPrimitive:
+  type: object
+  required:
+  - id
+  - serverId
+  - kind
+  - name
+  - digest
+  - approvedDigest
+  - status
+  - firstSeen
+  - lastSeen
+  properties:
+    id:
+      type: string
+      pattern: ^mpr_[0-9A-HJKMNP-TV-Z]{26}$
+    serverId:
+      type: string
+      pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+    kind:
+      type: string
+      enum:
+      - tool
+      - resource
+      - resource_template
+      - prompt
+    name:
+      type: string
+      minLength: 1
+      maxLength: 500
+    title:
+      type:
+      - string
+      - 'null'
+      maxLength: 200
+    annotations:
+      type: object
+      description: As the server declared them (readOnlyHint, destructiveHint, openWorldHint, idempotentHint)
+    digest:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+      description: RFC 8785 canonical JSON, sha256
+    approvedDigest:
+      type:
+      - string
+      - 'null'
+      pattern: ^sha256:[0-9a-f]{64}$
+    status:
+      type: string
+      enum:
+      - approved
+      - pending_review
+      - blocked
+    change:
+      type:
+      - string
+      - 'null'
+      enum:
+      - new
+      - compatible
+      - incompatible
+      - null
+    firstSeen:
+      $ref: '#/components/schemas/Timestamp'
+    lastSeen:
+      $ref: '#/components/schemas/Timestamp'
+    decision:
+      $ref: '#/components/schemas/McpDecision'
+  readOnly: true
+McpPrimitiveList:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/McpPrimitive'
+    nextToken:
+      type:
+      - string
+      - 'null'
+      maxLength: 2048
+McpFieldDiff:
+  type: object
+  required:
+  - field
+  properties:
+    field:
+      type: string
+    before: {}
+    after: {}
+McpPrimitiveChange:
+  type: object
+  required:
+  - primitive
+  - approvedDefinition
+  - pendingDefinition
+  - diff
+  - checks
+  - crossesRiskLine
+  properties:
+    primitive:
+      $ref: '#/components/schemas/McpPrimitive'
+    approvedDefinition:
+      type:
+      - object
+      - 'null'
+      description: null for a new primitive
+    pendingDefinition:
+      type: object
+    diff:
+      type: array
+      items:
+        $ref: '#/components/schemas/McpFieldDiff'
+    checks:
+      type: array
+      items:
+        $ref: '#/components/schemas/McpCheck'
+    crossesRiskLine:
+      type: boolean
+      description: 'A new destructive tool or a new host: a team server''s change then needs security'
+  readOnly: true
+McpPolicyRule:
+  type: object
+  description: Exactly one of name and class (400 invalid_policy_rule)
+  required:
+  - effect
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 500
+      description: An exact primitive name or a glob (* matches any run)
+    class:
+      type: string
+      enum:
+      - read_only
+      - destructive
+      - open_world
+    effect:
+      type: string
+      enum:
+      - allow
+      - block
+    rateLimitPerMinute:
+      type:
+      - integer
+      - 'null'
+      minimum: 1
+      maximum: 100000
+McpPolicy:
+  type: object
+  required:
+  - serverId
+  - level
+  - teamId
+  - rules
+  - version
+  properties:
+    serverId:
+      type: string
+      pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+    level:
+      type: string
+      enum:
+      - service
+      - team
+    teamId:
+      type:
+      - string
+      - 'null'
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+    rules:
+      type: array
+      items:
+        $ref: '#/components/schemas/McpPolicyRule'
+      maxItems: 500
+    driftPolicy:
+      type: string
+      enum:
+      - hold
+      - auto_approve_compatible
+    allowSampling:
+      type: boolean
+    trustAnnotations:
+      type: boolean
+    version:
+      type: integer
+  readOnly: true
+PutMcpPolicyRequest:
+  type: object
+  description: The service rules replace the stored ones
+  required:
+  - rules
+  properties:
+    rules:
+      type: array
+      items:
+        $ref: '#/components/schemas/McpPolicyRule'
+      maxItems: 500
+    driftPolicy:
+      type: string
+      enum:
+      - hold
+      - auto_approve_compatible
+    allowSampling:
+      type: boolean
+    trustAnnotations:
+      type: boolean
+PutTeamMcpPolicyRequest:
+  type: object
+  description: The team rules replace the stored ones
+  required:
+  - rules
+  properties:
+    rules:
+      type: array
+      items:
+        $ref: '#/components/schemas/McpPolicyRule'
+      maxItems: 500
+McpCredentialRequest:
+  type: object
+  description: Either value, or clientId and clientSecret. Written to Secrets Manager; the database keeps the ARN
+  properties:
+    value:
+      type: string
+      minLength: 1
+      maxLength: 16384
+      writeOnly: true
+      description: A static credential; never returned
+    clientId:
+      type: string
+      minLength: 1
+      maxLength: 500
+    clientSecret:
+      type: string
+      minLength: 1
+      maxLength: 16384
+      writeOnly: true
+      description: An OAuth client secret; never returned
+McpCredential:
+  type: object
+  description: Credential metadata only; never a value
+  required:
+  - scope
+  - state
+  - scopes
+  properties:
+    scope:
+      type: string
+      description: _shared or the team id
+    kind:
+      type: string
+      enum:
+      - static
+      - oauth_client
+      - oauth_user
+    state:
+      type: string
+      enum:
+      - set
+      - missing
+      - expired
+      - not_required
+    subject:
+      type:
+      - string
+      - 'null'
+      maxLength: 300
+      description: 'oauth_user: the service account that connected'
+    scopes:
+      type: array
+      items:
+        type: string
+    expiresAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+    rotatedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+  readOnly: true
+McpReviewItem:
+  type: object
+  required:
+  - kind
+  - serverId
+  - teamId
+  - slug
+  - approver
+  - since
+  properties:
+    kind:
+      type: string
+      enum:
+      - server
+      - primitive
+    serverId:
+      type: string
+      pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+    teamId:
+      type:
+      - string
+      - 'null'
+    slug:
+      type: string
+    primitiveId:
+      type:
+      - string
+      - 'null'
+    name:
+      type:
+      - string
+      - 'null'
+    riskTier:
+      type:
+      - string
+      - 'null'
+      enum:
+      - low
+      - elevated
+      - high
+      - null
+    riskReasons:
+      type: array
+      items:
+        type: string
+    approver:
+      type: string
+      enum:
+      - team_admin
+      - security
+    since:
+      $ref: '#/components/schemas/Timestamp'
+  readOnly: true
+McpReviewList:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/McpReviewItem'
+    nextToken:
+      type:
+      - string
+      - 'null'
+      maxLength: 2048
+McpEvent:
+  type: object
+  description: One MCP request through the gateway (database contract §7.5.5). Never holds arguments or results
+  required:
+  - id
+  - at
+  - requestId
+  - teamId
+  - method
+  - outcome
+  properties:
+    id:
+      type: integer
+    at:
+      $ref: '#/components/schemas/Timestamp'
+    requestId:
+      type: string
+    teamId:
+      type: string
+    agentId:
+      type:
+      - string
+      - 'null'
+    poolId:
+      type:
+      - string
+      - 'null'
+    workerPod:
+      type:
+      - string
+      - 'null'
+    serverId:
+      type:
+      - string
+      - 'null'
+    serverKind:
+      type:
+      - string
+      - 'null'
+      enum:
+      - enterprise
+      - team
+      - afs
+      - null
+    method:
+      type: string
+      description: JSON-RPC method, for example tools/call
+    name:
+      type:
+      - string
+      - 'null'
+    primitiveId:
+      type:
+      - string
+      - 'null'
+    digest:
+      type:
+      - string
+      - 'null'
+    outcome:
+      type: string
+      enum:
+      - ok
+      - tool_error
+      - protocol_error
+      - refused
+      - upstream_unavailable
+      - timeout
+      - cancelled
+    reason:
+      type:
+      - string
+      - 'null'
+    jsonrpcCode:
+      type:
+      - integer
+      - 'null'
+    httpStatus:
+      type:
+      - integer
+      - 'null'
+    gatewayMs:
+      type:
+      - integer
+      - 'null'
+    upstreamMs:
+      type:
+      - integer
+      - 'null'
+    requestBytes:
+      type:
+      - integer
+      - 'null'
+    responseBytes:
+      type:
+      - integer
+      - 'null'
+    authKind:
+      type:
+      - string
+      - 'null'
+    protocolDownstream:
+      type:
+      - string
+      - 'null'
+    protocolUpstream:
+      type:
+      - string
+      - 'null'
+    argsSha256:
+      type:
+      - string
+      - 'null'
+      description: Only when the server has argument hashing on
+    searchResults:
+      type:
+      - array
+      - 'null'
+      items:
+        type: string
+    searchHit:
+      type:
+      - boolean
+      - 'null'
+    queryText:
+      type:
+      - string
+      - 'null'
+      description: Only inside a query capture window (CD-50)
+  readOnly: true
+McpEventList:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/McpEvent'
+    nextToken:
+      type:
+      - string
+      - 'null'
+      maxLength: 2048
+McpUsageRow:
+  type: object
+  required:
+  - key
+  - label
+  - calls
+  - errors
+  - refusals
+  properties:
+    key:
+      type: string
+    label:
+      type: string
+    calls:
+      type: integer
+    errors:
+      type: integer
+    refusals:
+      type: integer
+    p50Ms:
+      type:
+      - integer
+      - 'null'
+    p95Ms:
+      type:
+      - integer
+      - 'null'
+    teams:
+      type:
+      - integer
+      - 'null'
+      description: adoption view
+    agents:
+      type:
+      - integer
+      - 'null'
+      description: adoption view
+    searches:
+      type:
+      - integer
+      - 'null'
+      description: discovery view
+    searchHitRate:
+      type:
+      - number
+      - 'null'
+      description: discovery view, 0 to 1
+    lastUsedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+McpUsageReport:
+  type: object
+  required:
+  - groupBy
+  - view
+  - from
+  - to
+  - rows
+  properties:
+    groupBy:
+      type: string
+      enum:
+      - server
+      - primitive
+      - team
+      - agent
+      - day
+    view:
+      type: string
+      enum:
+      - usage
+      - unused
+      - refusals
+      - discovery
+      - adoption
+    from:
+      $ref: '#/components/schemas/Timestamp'
+    to:
+      $ref: '#/components/schemas/Timestamp'
+    windowDays:
+      type:
+      - integer
+      - 'null'
+      enum:
+      - 30
+      - 90
+      - null
+    rows:
+      type: array
+      items:
+        $ref: '#/components/schemas/McpUsageRow'
+  readOnly: true
+McpQueryCapture:
+  type: object
+  required:
+  - id
+  - startedBy
+  - startedAt
+  - until
+  - reason
+  - stoppedAt
+  properties:
+    id:
+      type: string
+      pattern: ^mqc_[0-9A-HJKMNP-TV-Z]{26}$
+    startedBy:
+      type: string
+    startedAt:
+      $ref: '#/components/schemas/Timestamp'
+    until:
+      $ref: '#/components/schemas/Timestamp'
+    reason:
+      type: string
+      maxLength: 500
+    stoppedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+    stoppedBy:
+      type:
+      - string
+      - 'null'
+  readOnly: true
+McpQueryCaptureState:
+  type: object
+  description: The open window, or null
+  required:
+  - capture
+  properties:
+    capture:
+      oneOf:
+      - $ref: '#/components/schemas/McpQueryCapture'
+      - type: 'null'
+  readOnly: true
+StartMcpQueryCaptureRequest:
+  type: object
+  required:
+  - days
+  - reason
+  properties:
+    days:
+      type: integer
+      minimum: 1
+      maximum: 14
+      description: At most mcp.query_capture_max_days (400 capture_window_too_long)
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 500
+TeamMcpServer:
+  type: object
+  description: 'A server as one team sees it: the switch and mode for enterprise servers, or a team server'
+  required:
+  - server
+  - enabled
+  - mode
+  - state
+  - managed
+  properties:
+    server:
+      $ref: '#/components/schemas/McpServer'
+    enabled:
+      type: boolean
+    mode:
+      type: string
+      enum:
+      - full
+      - read_only
+    state:
+      type: string
+      enum:
+      - 'on'
+      - 'off'
+      - pending
+    managed:
+      type: string
+      enum:
+      - enterprise
+      - team
+    credential:
+      oneOf:
+      - $ref: '#/components/schemas/McpCredential'
+      - type: 'null'
+    federationState:
+      type:
+      - string
+      - 'null'
+      enum:
+      - unknown
+      - ok
+      - failed
+      - null
+    updatedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+  readOnly: true
+TeamMcpServerList:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/TeamMcpServer'
+    nextToken:
+      type:
+      - string
+      - 'null'
+      maxLength: 2048
+PutTeamMcpServerRequest:
+  type: object
+  description: An enterprise server must be published (409 server_not_published); 409 team_gateway_required while the team gateway is
+    shared
+  required:
+  - enabled
+  properties:
+    enabled:
+      type: boolean
+    mode:
+      type: string
+      enum:
+      - full
+      - read_only
+McpOAuthStart:
+  type: object
+  required:
+  - authorizationUrl
+  - state
+  - expiresAt
+  properties:
+    authorizationUrl:
+      type: string
+      pattern: ^https://
+    state:
+      type: string
+      description: Opaque, single use
+    expiresAt:
+      $ref: '#/components/schemas/Timestamp'
+  readOnly: true
+EffectiveMcpPrimitive:
+  type: object
+  required:
+  - name
+  - kind
+  - allowed
+  - level
+  - reason
+  properties:
+    name:
+      type: string
+    kind:
+      type: string
+      enum:
+      - tool
+      - resource
+      - resource_template
+      - prompt
+    allowed:
+      type: boolean
+    level:
+      type:
+      - string
+      - 'null'
+      enum:
+      - service
+      - team
+      - agent
+      - pool
+      - null
+    reason:
+      type:
+      - string
+      - 'null'
+    rateLimitPerMinute:
+      type:
+      - integer
+      - 'null'
+EffectiveMcpServer:
+  type: object
+  required:
+  - serverId
+  - slug
+  - scope
+  - mode
+  - url
+  - primitives
+  properties:
+    serverId:
+      type: string
+    slug:
+      type: string
+    scope:
+      type: string
+      enum:
+      - enterprise
+      - team
+    mode:
+      type: string
+      enum:
+      - full
+      - read_only
+    url:
+      type: string
+      description: The gateway path agents use, /mcp/<slug>
+    primitives:
+      type: array
+      items:
+        $ref: '#/components/schemas/EffectiveMcpPrimitive'
+EffectiveMcp:
+  type: object
+  description: From afs.mcp_admission (CD-51)
+  required:
+  - subjectKind
+  - subjectId
+  - access
+  - mode
+  - servers
+  - env
+  properties:
+    subjectKind:
+      type: string
+      enum:
+      - agent
+      - pool
+    subjectId:
+      type: string
+    access:
+      type: string
+      enum:
+      - all
+      - selected
+    mode:
+      type: string
+      enum:
+      - search
+      - full
+    servers:
+      type: array
+      items:
+        $ref: '#/components/schemas/EffectiveMcpServer'
+    env:
+      type: array
+      items:
+        type: string
+        pattern: ^AFS_MCP_[A-Z_]+$
+      description: The AFS_MCP_* variable names the agent gets
+  readOnly: true
+FederatedIdentity:
+  type: object
+  required:
+  - name
+  - audience
+  - expirationSeconds
+  - filePath
+  - envVar
+  - issuer
+  - subject
+  - version
+  - createdAt
+  - createdBy
+  properties:
+    name:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{0,30}$
+    audience:
+      type: string
+      minLength: 1
+      maxLength: 300
+    expirationSeconds:
+      type: integer
+      minimum: 600
+      maximum: 86400
+    filePath:
+      type: string
+      pattern: ^/var/run/secrets/afs/federation/
+    envVar:
+      type: string
+      pattern: ^[A-Z_][A-Z0-9_]{0,63}$
+    issuer:
+      type: string
+      description: The cluster OIDC issuer, for the target IdP's trust setup
+    subject:
+      type: string
+      description: system:serviceaccount:afs-t-<slug>:<service account>
+    version:
+      type: integer
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+    createdBy:
+      type: string
+  readOnly: true
+FederatedIdentityList:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/FederatedIdentity'
+    nextToken:
+      type:
+      - string
+      - 'null'
+      maxLength: 2048
+PutFederatedIdentityRequest:
+  type: object
+  description: At most 10 per agent or pool (409 federated_identity_limit)
+  required:
+  - audience
+  properties:
+    audience:
+      type: string
+      minLength: 1
+      maxLength: 300
+      description: Must match federation.allowed_audiences (400 audience_not_allowed); sts.amazonaws.com and afs-gateway are reserved
+    expirationSeconds:
+      type: integer
+      minimum: 600
+      maximum: 86400
+      default: 3600
+    filePath:
+      type: string
+      pattern: ^/var/run/secrets/afs/federation/[a-z0-9-]+/[A-Za-z0-9._-]+$
+    envVar:
+      type: string
+      pattern: ^[A-Z_][A-Z0-9_]{0,63}$
+McpBlockRule:
+  type: object
+  description: 'An agent-level rule: exactly one of name and class'
+  required:
+  - serverId
+  - effect
+  properties:
+    serverId:
+      type: string
+      pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+    name:
+      type: string
+      maxLength: 500
+    class:
+      type: string
+      enum:
+      - read_only
+      - destructive
+      - open_world
+    effect:
+      type: string
+      enum:
+      - block
+AgentMcpInput:
+  type: object
+  description: v1.6.0 MCP access of an agent or pool
+  properties:
+    access:
+      type: string
+      enum:
+      - all
+      - selected
+    serverIds:
+      type: array
+      items:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+      maxItems: 200
+      uniqueItems: true
+      description: With access selected; each must be on for the team (400 mcp_server_not_enabled_for_team)
+    mode:
+      type: string
+      enum:
+      - search
+      - full
+      description: Defaults to mcp.default_agent_mode
+    blocks:
+      type: array
+      items:
+        $ref: '#/components/schemas/McpBlockRule'
+      maxItems: 500
+AgentMcp:
+  type: object
+  description: v1.6.0 MCP access of an agent or pool
+  required:
+  - access
+  - mode
+  properties:
+    access:
+      type: string
+      enum:
+      - all
+      - selected
+    serverIds:
+      type: array
+      items:
+        type: string
+    mode:
+      type: string
+      enum:
+      - search
+      - full
+    blocks:
+      type: array
+      items:
+        $ref: '#/components/schemas/McpBlockRule'
+    effectiveServers:
+      type: array
+      items:
+        type: string
+      readOnly: true
+      description: Ids of the servers the agent reaches
+    env:
+      type: array
+      items:
+        type: string
+      readOnly: true
+      description: The AFS_MCP_* names

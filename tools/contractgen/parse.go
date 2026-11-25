@@ -284,6 +284,11 @@ func grantCondition(cell string) string {
 		return ""
 	case strings.HasPrefix(rest, "when "):
 		if c := codes(rest); len(c) == 1 {
+			if c[0] == "mcp.team_server_approval" {
+				// v1.6.0: the grant depends on the setting and the risk tier; the condition is named
+				// mcpApprovalPolicy and decided in the use case (CD-45).
+				return "mcpApprovalPolicy"
+			}
 			return c[0]
 		}
 		return strings.TrimPrefix(rest, "when ")
@@ -531,6 +536,10 @@ func applyPermission(op *Operation, cell string, svcSection bool) {
 	case op.Section == "4.13" && (strings.HasPrefix(op.Permission, "admin:") || strings.HasPrefix(op.Path, "/v1/admin/")):
 		// §4.13 has no *svc* markers: its admin permissions and /v1/admin paths are service routes.
 		op.Scope = "service"
+	case op.Section == "4.14":
+		// §4.14 has no *svc* markers: its paths outside /v1/teams/{teamId} are service paths for service
+		// admins and security operators (CD-45).
+		op.Scope = "service"
 	case svc:
 		op.Scope = "service"
 	default:
@@ -592,7 +601,48 @@ func parseEvents(lines []string) ([]EventEntry, error) {
 	if len(out) == 0 {
 		return nil, fmt.Errorf("§7 has no rows")
 	}
-	return append(out, proseEvents(lines)...), nil
+	out = append(out, proseEvents(lines)...)
+	return append(out, tableEvents(lines, "### 4.14", "§4.14 (v1.6.0)")...), nil
+}
+
+// tableEvents parses the "New events (§7):" table of a §4 section (v1.6.0 §4.14), whose rows have the
+// §7 shape but sit in the section instead of the §7 table.
+func tableEvents(lines []string, heading, since string) []EventEntry {
+	var tbl []string
+	in := false
+	for _, l := range section(lines, heading) {
+		switch {
+		case strings.HasPrefix(l, "New events (§7):"):
+			in = true
+		case in && strings.HasPrefix(l, "|"):
+			tbl = append(tbl, l)
+		case in && len(tbl) > 0 && strings.TrimSpace(l) == "":
+			in = false
+		}
+	}
+	var out []EventEntry
+	for _, row := range tableRows(tbl) {
+		if len(row) != 3 {
+			continue
+		}
+		var by []string
+		for _, b := range strings.Split(row[1], ",") {
+			if b = strings.TrimSpace(b); b != "" {
+				by = append(by, b)
+			}
+		}
+		resource := ""
+		for _, t := range codes(row[0]) {
+			// `mcp_server.created`, `.updated`: a leading dot repeats the resource of the first type.
+			if strings.HasPrefix(t, ".") {
+				t = resource + t
+			} else if i := strings.Index(t, "."); i > 0 {
+				resource = t[:i]
+			}
+			out = append(out, EventEntry{Type: t, EmittedBy: by, When: row[2] + " " + since})
+		}
+	}
+	return out
 }
 
 var proseEventGroupRE = regexp.MustCompile("((?:`[a-z_.]+`(?:, )?)+) \\(([a-z]+)\\)")

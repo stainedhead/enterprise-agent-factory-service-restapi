@@ -164,6 +164,8 @@ Pool:
       readOnly: true
     models:
       $ref: '#/components/schemas/AgentModels'
+    mcp:
+      $ref: '#/components/schemas/AgentMcp'
 PoolList:
   type: object
   description: A page of Pool resources
@@ -224,6 +226,8 @@ CreatePoolRequest:
       - efs
     models:
       $ref: '#/components/schemas/AgentModelsInput'
+    mcp:
+      $ref: '#/components/schemas/AgentMcpInput'
 UpdatePoolRequest:
   type: object
   properties:
@@ -264,6 +268,8 @@ UpdatePoolRequest:
       - efs
     models:
       $ref: '#/components/schemas/AgentModelsInput'
+    mcp:
+      $ref: '#/components/schemas/AgentMcpInput'
 ScalePoolRequest:
   type: object
   required:

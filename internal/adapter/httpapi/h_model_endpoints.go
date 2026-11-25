@@ -873,8 +873,14 @@ func (a *ModelEndpointsAPI) putGateway(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Deployment           *string `json:"deployment"`
 		MayAddModelEndpoints *bool   `json:"mayAddModelEndpoints"`
+		MayAddMcpServers     *bool   `json:"mayAddMcpServers"`
+		McpPlacement         *string `json:"mcpPlacement"`
 	}
 	if err := Decode(r, &req); err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	if err := gatewayMcpFields(req.MayAddMcpServers, req.McpPlacement); err != nil {
 		WriteError(w, r, err)
 		return
 	}
@@ -890,6 +896,20 @@ func (a *ModelEndpointsAPI) putGateway(w http.ResponseWriter, r *http.Request) {
 	}
 	w2Etag(w, g.Version)
 	WriteJSON(w, http.StatusOK, toTeamGatewayBody(g))
+}
+
+// gatewayMcpFields checks the v1.6.0 MCP fields of PutTeamGatewaySettings. Release 1.2.0 has no MCP servers
+// (the settings are stored from -db 000024 in release 1.3.0), so a request is accepted when it asks for the only
+// state 1.2.0 has (mayAddMcpServers false, no placement) and refused, never silently dropped, otherwise.
+func gatewayMcpFields(mayAdd *bool, placement *string) error {
+	if placement != nil && *placement != "combined" && *placement != "separate" {
+		return domain.Validation(domain.FieldError{Field: "mcpPlacement", Reason: "must be combined or separate"})
+	}
+	if (mayAdd != nil && *mayAdd) || placement != nil {
+		return domain.Validation(domain.FieldError{Field: "mayAddMcpServers",
+			Reason: "MCP server settings take effect with MCP servers (release 1.3.0); this release accepts only mayAddMcpServers false"})
+	}
+	return nil
 }
 
 func (a *ModelEndpointsAPI) listTeamEndpoints(w http.ResponseWriter, r *http.Request) {
