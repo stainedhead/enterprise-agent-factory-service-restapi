@@ -34,9 +34,9 @@ type settings struct {
 	EdgeName               string   // AFS_EDGE_NAME, default afs-edge
 	// TeamGateway configures per-namespace gateways (gateway contract §12.1): AFS_TEAM_GATEWAY_IMAGE,
 	// AFS_TEAM_GATEWAY_DB_SECRET_ARN, AFS_TEAM_GATEWAY_DB_HOST, AFS_TEAM_GATEWAY_DB_PORT, AFS_TEAM_GATEWAY_TLS_ISSUER.
-	TeamGateway team.TeamGatewaySpec
-	PollInterval           time.Duration
-	ResyncInterval         time.Duration
+	TeamGateway    team.TeamGatewaySpec
+	PollInterval   time.Duration
+	ResyncInterval time.Duration
 }
 
 func settingsFrom(env func(string) string, hostname func() (string, error)) (settings, error) {
