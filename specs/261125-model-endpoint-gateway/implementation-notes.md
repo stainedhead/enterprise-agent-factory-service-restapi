@@ -37,3 +37,9 @@
   (it refuses unbound operations) and the authorization matrix skips them (`pendingV150`, which may only shrink).
 - The agent and pool `models` route members are decoded and refused with `models.routeAccess: not_implemented`,
   never ignored.
+
+## Root contract pin
+
+CI checks the root repository out at the commit in `api/contract/ROOT_REF` (root PR #28 merge
+`ef3af265`, API contract v1.5.0) instead of root `main`, which moved on to v1.6.0 (the MCP release). A later
+release moves the pin together with `contractVersion` and the extracted contract.
