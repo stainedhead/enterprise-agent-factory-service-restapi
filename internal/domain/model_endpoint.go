@@ -154,7 +154,7 @@ var (
 	routeSlugRE    = regexp.MustCompile(`^[a-z][a-z0-9-]{1,30}$`)
 	providerKeyRE  = regexp.MustCompile(`^[a-z][a-z0-9_]{1,30}$`)
 	placeholderRE  = regexp.MustCompile(`<[A-Za-z_-]+>`)
-	authHeaderRE   = regexp.MustCompile(`^[A-Za-z0-9-]{1,100}$`)
+	authHeaderRE   = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)
 	hostGlobRE     = regexp.MustCompile(`^(\*\.|\*-)?[a-z0-9.-]+$`)
 	isEnum         = func(v string, vals ...string) bool { return slices.Contains(vals, v) }
 	protocolValues = []string{string(ProtocolChat), string(ProtocolResponses), string(ProtocolEmbeddings)}
@@ -236,11 +236,11 @@ func (e ModelEndpoint) Validate() error {
 	if f := ValidRouteSlug(e.Slug); f != nil {
 		fe = append(fe, *f)
 	}
-	if strings.TrimSpace(e.DisplayName) == "" || len(e.DisplayName) > 200 {
-		fe = append(fe, FieldError{Field: "displayName", Reason: "required, at most 200 characters"})
+	if strings.TrimSpace(e.DisplayName) == "" || len(e.DisplayName) > 100 {
+		fe = append(fe, FieldError{Field: "displayName", Reason: "required, at most 100 characters"})
 	}
-	if len(e.Description) > 2000 {
-		fe = append(fe, FieldError{Field: "description", Reason: "at most 2000 characters"})
+	if len(e.Description) > 1000 {
+		fe = append(fe, FieldError{Field: "description", Reason: "at most 1000 characters"})
 	}
 	if e.IsTeam() {
 		if strings.TrimSpace(e.Owner) == "" || len(e.Owner) > 200 {

@@ -68,7 +68,7 @@ func TestModelEndpointValidate(t *testing.T) {
 		{"body", func(e *ModelEndpoint) { e.MaxBodyMiB = 101 }, "maxBodyMib"},
 		{"ca", func(e *ModelEndpoint) { e.CABundle = "nope" }, "caBundle"},
 		{"name", func(e *ModelEndpoint) { e.DisplayName = " " }, "displayName"},
-		{"description", func(e *ModelEndpoint) { e.Description = strings.Repeat("x", 2001) }, "description"},
+		{"description", func(e *ModelEndpoint) { e.Description = strings.Repeat("x", 1001) }, "description"},
 		{"slug", func(e *ModelEndpoint) { e.Slug = "bedrock" }, ReasonSlugReserved},
 		{"team without owner", func(e *ModelEndpoint) { e.TeamID = "team_1" }, "owner:required"},
 		{"team shared", func(e *ModelEndpoint) {

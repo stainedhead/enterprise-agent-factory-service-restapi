@@ -189,10 +189,10 @@ ModelEndpoint:
     displayName: &id001
       type: string
       minLength: 1
-      maxLength: 200
+      maxLength: 100
     description: &id002
       type: string
-      maxLength: 2000
+      maxLength: 1000
     protocols: &id003
       type: array
       items:
@@ -227,8 +227,8 @@ ModelEndpoint:
       type:
       - string
       - 'null'
-      maxLength: 100
-      pattern: ^[A-Za-z0-9-]{1,100}$
+      maxLength: 64
+      pattern: ^[A-Za-z0-9-]{1,64}$
       description: Header name, required when authKind is header
     pricingMode: &id008
       type: string
@@ -413,10 +413,10 @@ UpdateModelEndpointRequest:
     displayName:
       type: string
       minLength: 1
-      maxLength: 200
+      maxLength: 100
     description:
       type: string
-      maxLength: 2000
+      maxLength: 1000
     protocols:
       type: array
       items:
@@ -451,8 +451,8 @@ UpdateModelEndpointRequest:
       type:
       - string
       - 'null'
-      maxLength: 100
-      pattern: ^[A-Za-z0-9-]{1,100}$
+      maxLength: 64
+      pattern: ^[A-Za-z0-9-]{1,64}$
       description: Header name, required when authKind is header
     pricingMode:
       type: string
@@ -554,10 +554,10 @@ UpdateTeamModelEndpointRequest:
     displayName:
       type: string
       minLength: 1
-      maxLength: 200
+      maxLength: 100
     description:
       type: string
-      maxLength: 2000
+      maxLength: 1000
     protocols:
       type: array
       items:
@@ -592,8 +592,8 @@ UpdateTeamModelEndpointRequest:
       type:
       - string
       - 'null'
-      maxLength: 100
-      pattern: ^[A-Za-z0-9-]{1,100}$
+      maxLength: 64
+      pattern: ^[A-Za-z0-9-]{1,64}$
       description: Header name, required when authKind is header
     pricingMode:
       type: string
@@ -749,6 +749,7 @@ EndpointPriceProposal:
       - pending
       - approved
       - rejected
+      - superseded
       readOnly: true
     fetchedAt:
       $ref: '#/components/schemas/Timestamp'
@@ -920,7 +921,7 @@ EndpointFederationRequest:
       description: Google
     location:
       type: string
-      pattern: ^[a-z0-9-]{2,40}$
+      pattern: ^[a-z][a-z0-9-]{1,30}$
       description: Google, for example us-central1 or global
 EndpointFederation:
   type: object

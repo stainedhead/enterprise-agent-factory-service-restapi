@@ -555,6 +555,7 @@
         - pending
         - approved
         - rejected
+        - superseded
     - name: endpointId
       in: query
       schema:

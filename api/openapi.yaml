@@ -1695,8 +1695,8 @@ components:
       properties:
         authHeader:
           description: Header name, required when authKind is header
-          maxLength: 100
-          pattern: ^[A-Za-z0-9-]{1,100}$
+          maxLength: 64
+          pattern: ^[A-Za-z0-9-]{1,64}$
           type:
             - string
             - "null"
@@ -1726,10 +1726,10 @@ components:
             - per_team
           type: string
         description:
-          maxLength: 2000
+          maxLength: 1000
           type: string
         displayName:
-          maxLength: 200
+          maxLength: 100
           minLength: 1
           type: string
         externalSystemId:
@@ -2106,8 +2106,8 @@ components:
       properties:
         authHeader:
           description: Header name, required when authKind is header
-          maxLength: 100
-          pattern: ^[A-Za-z0-9-]{1,100}$
+          maxLength: 64
+          pattern: ^[A-Za-z0-9-]{1,64}$
           type:
             - string
             - "null"
@@ -2131,10 +2131,10 @@ components:
             - string
             - "null"
         description:
-          maxLength: 2000
+          maxLength: 1000
           type: string
         displayName:
-          maxLength: 200
+          maxLength: 100
           minLength: 1
           type: string
         location:
@@ -2583,7 +2583,7 @@ components:
           type: string
         location:
           description: Google, for example us-central1 or global
-          pattern: ^[a-z0-9-]{2,40}$
+          pattern: ^[a-z][a-z0-9-]{1,30}$
           type: string
         poolId:
           description: Google workload identity pool
@@ -2798,6 +2798,7 @@ components:
             - pending
             - approved
             - rejected
+            - superseded
           readOnly: true
           type: string
         version:
@@ -3904,8 +3905,8 @@ components:
       properties:
         authHeader:
           description: Header name, required when authKind is header
-          maxLength: 100
-          pattern: ^[A-Za-z0-9-]{1,100}$
+          maxLength: 64
+          pattern: ^[A-Za-z0-9-]{1,64}$
           type:
             - string
             - "null"
@@ -3948,10 +3949,10 @@ components:
             - per_team
           type: string
         description:
-          maxLength: 2000
+          maxLength: 1000
           type: string
         displayName:
-          maxLength: 200
+          maxLength: 100
           minLength: 1
           type: string
         enabled:
@@ -7268,8 +7269,8 @@ components:
       properties:
         authHeader:
           description: Header name, required when authKind is header
-          maxLength: 100
-          pattern: ^[A-Za-z0-9-]{1,100}$
+          maxLength: 64
+          pattern: ^[A-Za-z0-9-]{1,64}$
           type:
             - string
             - "null"
@@ -7298,10 +7299,10 @@ components:
             - per_team
           type: string
         description:
-          maxLength: 2000
+          maxLength: 1000
           type: string
         displayName:
-          maxLength: 200
+          maxLength: 100
           minLength: 1
           type: string
         enabled:
@@ -7500,8 +7501,8 @@ components:
       properties:
         authHeader:
           description: Header name, required when authKind is header
-          maxLength: 100
-          pattern: ^[A-Za-z0-9-]{1,100}$
+          maxLength: 64
+          pattern: ^[A-Za-z0-9-]{1,64}$
           type:
             - string
             - "null"
@@ -7525,10 +7526,10 @@ components:
             - string
             - "null"
         description:
-          maxLength: 2000
+          maxLength: 1000
           type: string
         displayName:
-          maxLength: 200
+          maxLength: 100
           minLength: 1
           type: string
         enabled:
@@ -8799,6 +8800,7 @@ paths:
               - pending
               - approved
               - rejected
+              - superseded
             type: string
         - in: query
           name: endpointId
