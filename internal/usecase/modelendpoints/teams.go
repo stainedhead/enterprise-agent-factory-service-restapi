@@ -239,15 +239,9 @@ func (s *Service) CreateTeamEndpoint(ctx context.Context, c acting.Caller, teamI
 			return errDenied{perm: authz.AdminModelEndpoints, reason: domain.ReasonTeamEndpointsNotAllowed,
 				msg: "this team may not declare its own model endpoints; ask a service admin"}
 		}
-		providers, err := s.Repo.ListProviders(ctx, tx)
+		ps, err := s.providerList(ctx, tx)
 		if err != nil {
 			return err
-		}
-		ps := make([]domain.InferenceProvider, 0, len(providers))
-		for _, p := range providers {
-			if p.Provider != domain.ProviderOther {
-				ps = append(ps, p.InferenceProvider)
-			}
 		}
 		e.Provider = domain.ProviderFor(ps, e)
 		if err := e.Validate(); err != nil {
@@ -308,17 +302,11 @@ func (s *Service) UpdateTeamEndpoint(ctx context.Context, c acting.Caller, teamI
 			return err
 		}
 		if p.BaseURL != nil || p.Location != nil {
-			providers, err := s.Repo.ListProviders(ctx, tx)
+			ps, err := s.providerList(ctx, tx)
 			if err != nil {
 				return err
 			}
 			next, _ := p.apply(cur.ModelEndpoint)
-			ps := make([]domain.InferenceProvider, 0, len(providers))
-			for _, pr := range providers {
-				if pr.Provider != domain.ProviderOther {
-					ps = append(ps, pr.InferenceProvider)
-				}
-			}
 			prov := domain.ProviderFor(ps, next)
 			p.Provider = &prov
 		}

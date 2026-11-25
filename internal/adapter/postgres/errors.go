@@ -116,6 +116,10 @@ func MapError(err error, op Op, resource string) error {
 var uniqueReasons = map[string]string{
 	"agents_team_collaboration_uq": domain.ReasonCollaborationAgentExists,
 	"collab_hostname_held":         domain.ReasonHostnameHeld,
+	// 000023: a route slug is unique per scope, and a team slug may not take a service slug.
+	"model_endpoints_slug_taken":      domain.ReasonSlugTaken,
+	"model_endpoints_service_slug_uq": domain.ReasonSlugTaken,
+	"model_endpoints_team_slug_uq":    domain.ReasonSlugTaken,
 }
 
 type conflictReason struct{ reason string }
@@ -144,9 +148,53 @@ var constraintRefusals = map[string]string{
 	"agent_models_team":                domain.ReasonModelNotEnabledForTeam,
 	"agents_default_model_allowed":     domain.ReasonDefaultModelNotAllowed,
 	"service_settings_alias_read_only": "setting_renamed",
+	// 000023 model endpoint guards (database contract §7.4).
+	"provider_disabled":                  domain.ReasonProviderDisabled,
+	"no_fallback_model":                  domain.ReasonNoFallbackModel,
+	"endpoint_base_url_placeholder":      domain.ReasonEndpointBaseURLPlaceholder,
+	"endpoint_credential_path":           domain.ReasonEndpointCredentialPath,
+	"agent_routes_team":                  domain.ReasonAgentRoutesTeam,
+	"pool_routes_team":                   domain.ReasonAgentRoutesTeam,
+	"agents_default_route_allowed":       domain.ReasonAgentsDefaultRouteAllowed,
+	"agent_pools_default_route_allowed":  domain.ReasonAgentsDefaultRouteAllowed,
+	"agent_model_endpoints_limit":        "route_limit",
+	"pool_model_endpoints_limit":         "route_limit",
+	"endpoint_models_limit":              "model_limit",
+	"endpoint_credentials_auth_kind":     "credential_not_required",
+	"endpoint_credentials_scope":         "credential_scope",
+	"model_endpoints_in_namespace_host":  "in_namespace_host",
+	"model_endpoints_auth_kind_provider": "auth_kind_provider",
+	"model_endpoints_provider_check":     "provider_invalid",
+	"team_model_endpoints_service_only":  "not_service_endpoint",
+	"endpoint_federations_kind":          "federation_kind",
+}
+
+// endpointRefusalFields names the request field of each 000023 refusal.
+var endpointRefusalFields = map[string]string{
+	"provider_disabled":                  "enabled",
+	"no_fallback_model":                  "fallbackModel",
+	"endpoint_base_url_placeholder":      "baseUrl",
+	"endpoint_credential_path":           "value",
+	"agent_routes_team":                  "routes",
+	"pool_routes_team":                   "routes",
+	"agents_default_route_allowed":       "defaultModel",
+	"agent_pools_default_route_allowed":  "defaultModel",
+	"agent_model_endpoints_limit":        "routes",
+	"pool_model_endpoints_limit":         "routes",
+	"endpoint_models_limit":              "models",
+	"endpoint_credentials_auth_kind":     "authKind",
+	"endpoint_credentials_scope":         "credentialMode",
+	"model_endpoints_in_namespace_host":  "baseUrl",
+	"model_endpoints_auth_kind_provider": "authKind",
+	"model_endpoints_provider_check":     "provider",
+	"team_model_endpoints_service_only":  "endpointIds",
+	"endpoint_federations_kind":          "kind",
 }
 
 func constraintFieldOf(pe *pgconn.PgError) string {
+	if f, ok := endpointRefusalFields[pe.ConstraintName]; ok {
+		return f
+	}
 	switch pe.ConstraintName {
 	case "agents_role_reserved":
 		return "role"

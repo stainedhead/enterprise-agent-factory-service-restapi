@@ -226,6 +226,10 @@ func (s *Service) CreateEndpoint(ctx context.Context, c acting.Caller, in NewEnd
 	e := in.Endpoint
 	e.TeamID, e.Enabled, e.Builtin = "", false, false
 	defaults(&e)
+	derive := e.Provider == ""
+	if derive {
+		e.Provider = domain.ProviderOther // replaced from the host inside the transaction
+	}
 	if err := e.Validate(); err != nil {
 		return res, err
 	}
@@ -244,6 +248,11 @@ func (s *Service) CreateEndpoint(ctx context.Context, c acting.Caller, in NewEnd
 			res.Replay = replay
 			return err
 		}
+		ps, err := s.providerList(ctx, tx)
+		if err != nil {
+			return err
+		}
+		e.Provider = serviceProvider(ps, e, derive)
 		out, err := s.insert(ctx, tx, e, in.Models)
 		if err != nil {
 			return err
@@ -512,4 +521,37 @@ func (s *Service) putModels(ctx context.Context, tx port.Tx, c acting.Caller, ac
 		return ModelList{}, err
 	}
 	return ModelList{EndpointID: cur.ID, Models: after.Models, Version: after.Version()}, nil
+}
+
+// providerList returns the provider switches with hosts, other left out (it matches no host).
+func (s *Service) providerList(ctx context.Context, tx port.Tx) ([]domain.InferenceProvider, error) {
+	providers, err := s.Repo.ListProviders(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	ps := make([]domain.InferenceProvider, 0, len(providers))
+	for _, p := range providers {
+		if p.Provider != domain.ProviderOther {
+			ps = append(ps, p.InferenceProvider)
+		}
+	}
+	return ps, nil
+}
+
+// serviceProvider mirrors the database rule for a service endpoint: a listed provider's host decides;
+// otherwise the provider given, or internal for a corporate endpoint and other for an external one.
+func serviceProvider(ps []domain.InferenceProvider, e domain.ModelEndpoint, derive bool) string {
+	if e.Location == domain.LocationInNamespace {
+		return domain.ProviderInternal
+	}
+	if d := domain.ProviderForHost(ps, e.Host()); d != domain.ProviderOther {
+		return d
+	}
+	if !derive {
+		return e.Provider
+	}
+	if e.Location == domain.LocationCorporate {
+		return domain.ProviderInternal
+	}
+	return domain.ProviderOther
 }
