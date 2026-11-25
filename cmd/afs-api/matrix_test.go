@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/httpapi"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/httpapi/matrix"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres/pgtest"
 )
@@ -34,24 +33,9 @@ func TestAuthorizationMatrix(t *testing.T) {
 		have[id] = true
 	}
 	for id := range contract.Operations {
-		if !have[id] && !pendingV150[id] {
+		if !have[id] {
 			t.Errorf("operation %s still answers the 501 not_implemented placeholder", id)
-		}
-	}
-	for id := range pendingV150 {
-		if have[id] {
-			t.Errorf("operation %s is implemented: remove it from pendingV150", id)
 		}
 	}
 	matrix.Run(t, w, c.Handler)
 }
-
-// pendingV150 is httpapi.PendingModelEndpointOps: the v1.5.0 §4.13 operations whose handlers land in the
-// implementation change of release 1.2.0 (specs/261125-model-endpoint-gateway). The list may only shrink.
-var pendingV150 = func() map[string]bool {
-	m := map[string]bool{}
-	for _, op := range httpapi.PendingModelEndpointOps {
-		m[op] = true
-	}
-	return m
-}()

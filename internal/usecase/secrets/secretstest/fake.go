@@ -190,7 +190,7 @@ func (w *Writer) Create(_ context.Context, name string, v domain.SecretValue, to
 		return secrets.Created{}, secrets.ErrNameTaken
 	}
 	w.n++
-	c := secrets.Created{ARN: fmt.Sprintf("arn:aws:secretsmanager:us-east-1:111122223333:secret:%s-AbC%03d", name, w.n), VersionID: fmt.Sprintf("v%d", w.n)}
+	c := secrets.Created{ARN: fmt.Sprintf("arn:aws:secretsmanager:us-east-1:111122223333:secret:%s-AbC%03d", name, w.n%1000), VersionID: fmt.Sprintf("v%d", w.n)}
 	w.ByName[name], w.Tokens[token], w.Tags[name] = c, name, tags
 	w.Written = append(w.Written, v.Expose())
 	return c, nil

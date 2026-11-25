@@ -109,6 +109,9 @@ type settings struct {
 	// ClusterOIDCIssuer is the EKS cluster's service account issuer URL (AFS_CLUSTER_OIDC_ISSUER):
 	// workload tokens (RA-2b) are validated against its keys. Empty: workload tokens are refused.
 	ClusterOIDCIssuer string
+	// SharedGatewayURL is the shared afs-gateway's in-cluster URL shown on a shared team's gateway settings
+	// (AFS_SHARED_GATEWAY_URL). Empty: gatewayUrl is null for shared teams.
+	SharedGatewayURL string
 }
 
 func settingsFrom(env func(string) string) (settings, error) {
@@ -197,6 +200,9 @@ func settingsFrom(env func(string) string) (settings, error) {
 		return s, err
 	}
 	if err := workloadSettings(env, &s); err != nil {
+		return s, err
+	}
+	if err := gatewaySettings(env, &s); err != nil {
 		return s, err
 	}
 	return s, nil
@@ -318,8 +324,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings) (*components, error
 		wireSecOps(c, log)
 		wireWorkload(c, s)
 		wireWorkOrders(c, log)
-		// v1.5.0 §4.13 contract first: its handlers follow in the 1.2.0 implementation change.
-		c.bind(httpapi.BindModelEndpointsPending())
+		wireModelEndpoints(c, s)
 		// The areas the wire functions bound are added next to the sign-in handlers wireAuth registered.
 		// With a database every operation must be bound: httpapi.New refuses an unbound one.
 		cfg.Registrars = append(cfg.Registrars, c.Registrars...)
