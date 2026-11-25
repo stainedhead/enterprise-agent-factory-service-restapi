@@ -7,7 +7,7 @@
 | 2 Research and data modeling | Complete (database contract §7.5) |
 | 3 Architecture and planning | Complete (plan.md, architecture.md) |
 | 4 Task breakdown | Complete (tasks.md) |
-| 5 Implementation | In progress: T1 done |
+| 5 Implementation | In progress: T1, T2, T3, T8a done |
 | 6 Completion | Not started |
 
 ## Deferred (no AWS environment yet, J 2026-11-25)
