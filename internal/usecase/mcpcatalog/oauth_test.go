@@ -25,7 +25,7 @@ type fakeAS struct {
 	discoveredFor []string
 }
 
-var testAS = mcpcatalog.OAuthServer{Issuer: "https://login.saas.example", AuthorizationEndpoint: "https://login.saas.example/authorize",
+var testAS = mcpcatalog.OAuthServer{Issuer: "https://login.saas.example", AuthorizationEndpoint: "https://login.saas.example/authorize", //nolint:gosec // fixture endpoints, no secret
 	TokenEndpoint: "https://login.saas.example/token", Resource: "https://issues.corp.example/mcp", Scopes: []string{"read", "write"}}
 
 func (f *fakeAS) Discover(_ context.Context, u string) (mcpcatalog.OAuthServer, error) {
