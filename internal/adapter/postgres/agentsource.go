@@ -26,10 +26,10 @@ var _ agent.Source = (*AgentSource)(nil)
 // nonce is the id of the newest agent.restarted outbox event of the agent: every RestartAgent writes one, so
 // the value changes on each restart and never otherwise.
 const loadAgentSQL = `
-SELECT a.id, a.name, a.description, a.template, a.image, a.persona, a.model_id, a.state, a.generation,
+SELECT a.id, a.name, a.description, a.template, a.image, a.persona, a.model_id, coalesce(a.default_route, ''), a.state, a.generation,
        a.resources, a.iam_identity, a.role,
        a.storage_size_gib, a.storage_class, a.storage_on_delete, a.snapshot_schedule, a.snapshot_retain_count,
-       t.id, t.slug, t.namespace, t.state, t.isolation_tier,
+       t.id, t.slug, t.namespace, t.state, t.isolation_tier, t.gateway_deployment,
        EXISTS (SELECT 1 FROM afs.work_orders w WHERE w.team_id = t.id AND w.status IN ('assigned', 'in_progress', 'pr_opened')),
        CASE WHEN tpl.id IS NULL THEN NULL
             WHEN NOT tpl.enabled THEN 'agent template ' || tpl.name || ' is disabled'
@@ -62,10 +62,10 @@ func (s *AgentSource) LoadAgent(ctx context.Context, id string) (agent.Desired, 
 		}
 		var resources []byte
 		var reason *string
-		err = t.QueryRow(ctx, loadAgentSQL, id).Scan(&d.ID, &d.Name, &d.Description, &d.Template, &d.Image, &d.Persona, &d.ModelID, &d.State, &d.Generation,
-			&resources, &d.IAMIdentity, &d.Role,
+		err = t.QueryRow(ctx, loadAgentSQL, id).Scan(&d.ID, &d.Name, &d.Description, &d.Template, &d.Image, &d.Persona, &d.ModelID, &d.Routes.DefaultRoute,
+			&d.State, &d.Generation, &resources, &d.IAMIdentity, &d.Role,
 			&d.Volume.SizeGiB, &d.Volume.StorageClass, &d.Volume.OnDelete, &d.Volume.SnapshotSchedule, &d.Volume.SnapshotRetain,
-			&d.Team.ID, &d.Team.Slug, &d.Team.Namespace, &d.Team.State, &d.Team.IsolationTier, &d.Team.WorkOrderAssigned,
+			&d.Team.ID, &d.Team.Slug, &d.Team.Namespace, &d.Team.State, &d.Team.IsolationTier, &d.Team.GatewayDeployment, &d.Team.WorkOrderAssigned,
 			&reason, &d.RestartNonce)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.NotFound("agent")
@@ -112,7 +112,10 @@ WHERE team_id = $1 AND agent_id = $2 AND connect AND link_state <> 'disabled'`, 
 		return err
 	}
 	var err error
-	if d.ModelReason, d.PrevModelUnavailable, err = modelState(ctx, t, "agent", d.ID, d.ModelID, d.Models); err != nil {
+	if d.ModelID, err = loadRoutes(ctx, t, "agent", d.ID, d.ModelID, &d.Routes); err != nil {
+		return err
+	}
+	if d.ModelReason, d.PrevModelUnavailable, err = modelState(ctx, t, "agent", d.ID, d.ModelID, d.Routes.Effective(d.Models)); err != nil {
 		return err
 	}
 	if d.IsCollaboration() {

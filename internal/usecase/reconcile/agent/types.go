@@ -125,6 +125,8 @@ type Team struct {
 	// WorkOrderAssigned is true when the team has an assigned work order, which is when the afs-api token is
 	// projected (D29).
 	WorkOrderAssigned bool
+	// GatewayDeployment is shared or per_namespace (teams.gateway_deployment, v1.2.0).
+	GatewayDeployment string
 }
 
 // Suspended reports whether the team's workloads must be at zero replicas.
@@ -147,6 +149,8 @@ type Desired struct {
 	// ModelUnavailable status of the last reconcile (nil when there was none).
 	ModelReason          string
 	PrevModelUnavailable *bool
+	// Routes are the agent's effective model routes and route default (v1.2.0).
+	Routes LLMRoutes
 	// State is enabled, paused, deleting or deleted.
 	State      string
 	Generation int64

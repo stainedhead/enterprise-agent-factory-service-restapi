@@ -25,9 +25,9 @@ var _ pool.Source = (*PoolSource)(nil)
 // The template is retired when the pool references one that is disabled or whose allowed digest list no longer
 // holds the pool's image digest (D54); a pool without a template reference is never flagged.
 const loadPoolSQL = `
-SELECT p.id, p.name, p.description, p.template, p.image, p.persona, p.model_id, p.state, p.generation,
+SELECT p.id, p.name, p.description, p.template, p.image, p.persona, p.model_id, coalesce(p.default_route, ''), p.state, p.generation,
        p.workers, p.resources, p.scratch_size_gib, p.shared_volume,
-       t.id, t.slug, t.namespace, t.state, t.isolation_tier,
+       t.id, t.slug, t.namespace, t.state, t.isolation_tier, t.gateway_deployment,
        EXISTS (SELECT 1 FROM afs.work_orders w WHERE w.team_id = t.id AND w.status IN ('assigned', 'in_progress', 'pr_opened')),
        CASE WHEN tpl.id IS NULL THEN NULL
             WHEN NOT tpl.enabled THEN 'agent template ' || tpl.name || ' is disabled'
@@ -67,9 +67,9 @@ func (s *PoolSource) LoadPool(ctx context.Context, id string) (pool.Desired, err
 		}
 		var resources []byte
 		var reason *string
-		err = t.QueryRow(ctx, loadPoolSQL, id).Scan(&d.ID, &d.Name, &d.Description, &d.Template, &d.Image, &d.Persona, &d.ModelID, &d.State, &d.Generation,
+		err = t.QueryRow(ctx, loadPoolSQL, id).Scan(&d.ID, &d.Name, &d.Description, &d.Template, &d.Image, &d.Persona, &d.ModelID, &d.Routes.DefaultRoute, &d.State, &d.Generation,
 			&d.Workers, &resources, &d.ScratchGiB, &d.SharedVolume,
-			&d.Team.ID, &d.Team.Slug, &d.Team.Namespace, &d.Team.State, &d.Team.IsolationTier, &d.Team.WorkOrderAssigned, &reason)
+			&d.Team.ID, &d.Team.Slug, &d.Team.Namespace, &d.Team.State, &d.Team.IsolationTier, &d.Team.GatewayDeployment, &d.Team.WorkOrderAssigned, &reason)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.NotFound("pool")
 		}
@@ -100,7 +100,10 @@ func (s *PoolSource) loadChildren(ctx context.Context, t *Tx, d *pool.Desired) e
 		return err
 	}
 	var err error
-	if d.ModelReason, d.PrevModelUnavailable, err = modelState(ctx, t, "pool", d.ID, d.ModelID, d.Models); err != nil {
+	if d.ModelID, err = loadRoutes(ctx, t, "pool", d.ID, d.ModelID, &d.Routes); err != nil {
+		return err
+	}
+	if d.ModelReason, d.PrevModelUnavailable, err = modelState(ctx, t, "pool", d.ID, d.ModelID, d.Routes.Effective(d.Models)); err != nil {
 		return err
 	}
 	if err := collect(ctx, t, "pool bindings", loadPoolBindingsSQL, []any{d.ID}, func(rows pgx.Rows) error {

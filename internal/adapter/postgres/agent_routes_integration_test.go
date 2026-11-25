@@ -35,6 +35,7 @@ VALUES ($1, $2, 'Routes', 'external', 'https://llm.example.com/v1', 'none', 'fre
 		mustExec(t, admin, `INSERT INTO afs.team_model_endpoints (team_id, endpoint_id) VALUES ($1, $2)`, tm.ID, id)
 	}
 
+	mustExec(t, admin, `UPDATE afs.teams SET gateway_deployment = 'per_namespace' WHERE id = $1`, tm.ID)
 	repo := postgres.NewAgentRepo()
 	var sets domain.ModelSets
 	if err := inTx(t, db, teamSession(tm.ID), func(ctx context.Context, tx port.Tx) error {

@@ -159,7 +159,7 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 
 	pol, polErr := egress.PolicyFor(d.Team.ID, egress.Agent{ID: d.ID, State: d.State, Systems: d.Systems})
 	env := Environment{
-		Pool: d, RoleARN: roleARN, Region: c.cfg.AWS.Region, Gateway: c.cfg.Gateway, Replicas: d.Replicas(),
+		Pool: d, RoleARN: roleARN, Region: c.cfg.AWS.Region, Gateway: c.cfg.Gateway.For(d.Team), Replicas: d.Replicas(),
 		Hash: PodTemplateHash(d, inboxURL, handoffURLs), InboxURL: inboxURL, HandoffURLs: handoffURLs,
 		NodePool: nodePool(d), EFSStorageClass: c.cfg.EFSStorageClass, Egress: pol,
 	}
@@ -202,7 +202,7 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 	}
 	conds = append(conds, templateCondition(d))
 	conds = append(conds, agent.ReportModel(ctx, c.cfg.Events, slog.Default(), agent.ModelState{TeamID: d.Team.ID, Kind: "pools", ID: d.ID,
-		Default: d.ModelID, Effective: d.Models, Reason: d.ModelReason, Prev: d.PrevModelUnavailable}))
+		Default: d.ModelID, Effective: d.Routes.Effective(d.Models), Reason: d.ModelReason, Prev: d.PrevModelUnavailable}))
 
 	out := engine.Outcome{Generation: d.Generation, Conditions: conds, Changed: changed, Phase: phase, Requeue: requeue}
 	if len(errs) > 0 {

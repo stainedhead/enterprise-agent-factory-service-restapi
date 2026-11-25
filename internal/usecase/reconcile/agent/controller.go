@@ -121,7 +121,7 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 		d.Collab = &cc
 	}
 	env := Environment{
-		Agent: d, RoleARN: roleARN, Region: c.cfg.AWS.Region, Gateway: c.cfg.Gateway, Edge: c.cfg.Edge,
+		Agent: d, RoleARN: roleARN, Region: c.cfg.AWS.Region, Gateway: c.cfg.Gateway.For(d.Team), Edge: c.cfg.Edge,
 		Replicas: d.Replicas(), Hash: PodTemplateHash(d),
 		NodePool: nodePool(d),
 	}
@@ -151,7 +151,7 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 	}
 	conds = append(conds, templateCondition(d))
 	conds = append(conds, ReportModel(ctx, c.cfg.Events, slog.Default(), ModelState{TeamID: d.Team.ID, Kind: "agents", ID: d.ID,
-		Default: d.ModelID, Effective: d.Models, Reason: d.ModelReason, Prev: d.PrevModelUnavailable}))
+		Default: d.ModelID, Effective: d.Routes.Effective(d.Models), Reason: d.ModelReason, Prev: d.PrevModelUnavailable}))
 	if d.Link != nil {
 		conds = append(conds, keyCondition(d))
 	}

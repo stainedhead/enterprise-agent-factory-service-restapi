@@ -7,6 +7,8 @@ import (
 	"io"
 	"slices"
 	"sort"
+
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/agent"
 )
 
 // PodTemplateHash is the hash of everything the worker pod is built from that a person or a rotation can
@@ -24,6 +26,9 @@ func PodTemplateHash(d Desired, inboxURL string, handoffURLs map[string]string) 
 	w("cpu=%s memory=%s", d.Resources.CPU, d.Resources.Memory)
 	w("scratch=%d shared=%s", d.ScratchGiB, d.SharedVolume)
 	w("tier=%s workorder=%t", d.Team.IsolationTier, d.Team.WorkOrderAssigned)
+	if l := agent.RoutesHash(d.Team, d.Routes); l != "" {
+		w("%s", l)
+	}
 	w("inbox=%s", inboxURL)
 	names := make([]string, 0, len(handoffURLs))
 	for n := range handoffURLs {

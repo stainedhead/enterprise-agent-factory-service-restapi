@@ -54,8 +54,11 @@ WHERE e.slug = ANY($3) AND (e.team_id IS NULL OR e.team_id = $1)
 // effectiveRoutes fills EffectiveRoutes (default first, then by slug) and Env of each subject from
 // afs.effective_agent_routes and the Bedrock switch. at returns the models of the subject with an id.
 func effectiveRoutes(ctx context.Context, pt *Tx, teamID, kind string, ids []string, at func(id string) *domain.AgentModels) error {
-	var bedrockOn bool
-	if err := pt.QueryRow(ctx, `SELECT afs.provider_enabled('bedrock')`).Scan(&bedrockOn); err != nil {
+	// Routes are served only by team gateways (gateway contract §12.1): a team on the shared gateway gets no
+	// route variables, though its effective routes are listed.
+	var bedrockOn, own bool
+	if err := pt.QueryRow(ctx, `SELECT afs.provider_enabled('bedrock'),
+  coalesce((SELECT t.gateway_deployment = 'per_namespace' FROM afs.teams t WHERE t.id = $1), false)`, teamID).Scan(&bedrockOn, &own); err != nil {
 		return MapError(err, OpRead, "routes")
 	}
 	rows, err := pt.Query(ctx, `SELECT DISTINCT subject_id, slug FROM afs.effective_agent_routes
@@ -83,7 +86,9 @@ WHERE team_id = $1 AND subject_kind = $2 AND subject_id = ANY($3)`, teamID, kind
 		if m.DefaultRoute != "" {
 			defModel = m.DefaultModelID
 		}
-		m.Env = domain.RouteEnv(m.EffectiveRoutes, m.DefaultRoute, defModel, bedrockOn)
+		if own {
+			m.Env = domain.RouteEnv(m.EffectiveRoutes, m.DefaultRoute, defModel, bedrockOn)
+		}
 	}
 	return nil
 }
