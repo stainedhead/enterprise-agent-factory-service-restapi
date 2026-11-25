@@ -47,6 +47,10 @@ feed and converges the cluster and AWS, then writes status back for clients to r
 
 ![Budget enforcement](docs/images/budget-enforcement.svg)
 
+From 1.2.0, a team on a per-namespace gateway reaches routed providers (Bedrock, OpenAI-compatible endpoints) through the team gateway, which admits, reserves, forwards and settles each call:
+
+![Team model gateway](docs/images/model-gateway.svg)
+
 ## What the reconciler builds for each team
 
 ![Per-tenant isolation](docs/images/tenant-isolation.svg)
