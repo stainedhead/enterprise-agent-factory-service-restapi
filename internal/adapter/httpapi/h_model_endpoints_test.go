@@ -11,7 +11,6 @@ import (
 
 const team1 = "team_01JD2Q3R4S5T6V7W8X9Y0Z0001"
 
-
 func TestParseStatementCSVAndJSON(t *testing.T) {
 	csvBody := "\ufeffteamId,model,amountUsd,tokens\n" + team1 + ",Hermes-4,212.40,48100000\n" + team1 + ",Hermes-3,1.00,\n"
 	r := httptest.NewRequest("POST", "/x?period=2026-11&source=nous_statement", strings.NewReader(csvBody))
