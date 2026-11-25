@@ -123,7 +123,9 @@ type Pool struct {
 	// ModelID is the deprecated alias of Models.DefaultModelID (kept until 2.0.0).
 	ModelID string
 	// Models is the pool's model access (MOD-3).
-	Models         AgentModels
+	Models AgentModels
+	// Mcp is the pool's MCP access (1.3.0); nil until a read fills it.
+	Mcp            *McpAccessState
 	Workers        int
 	Resources      AgentResources
 	ScratchSizeGiB int
@@ -157,6 +159,8 @@ type NewPoolParams struct {
 	Resources      AgentResources
 	ScratchSizeGiB int
 	SharedVolume   string
+	// Mcp is the optional MCP access (1.3.0).
+	Mcp *McpAccessPatch
 }
 
 func validateWorkers(n int) []FieldError {
@@ -251,6 +255,8 @@ type PoolPatch struct {
 	Resources      *AgentResources
 	ScratchSizeGiB *int
 	SharedVolume   *string
+	// Mcp changes the MCP access (1.3.0).
+	Mcp *McpAccessPatch
 }
 
 // Apply returns p with the patch applied and the generation raised. A pool being deleted cannot change.

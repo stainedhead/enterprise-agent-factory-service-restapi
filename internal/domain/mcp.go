@@ -3,6 +3,7 @@ package domain
 import (
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -745,4 +746,62 @@ func McpFederationDir(audience string) string {
 		out = "default"
 	}
 	return out
+}
+
+// McpAccessPatch is the mcp member of a create or update body of an agent or pool; a nil field keeps what is
+// stored (on create, the defaults: access all, mode from mcp.default_agent_mode).
+type McpAccessPatch struct {
+	Access    *string
+	ServerIDs *[]string
+	Mode      *McpAgentMode
+	Blocks    *[]McpAgentBlock
+}
+
+// Merge applies the patch to the stored access. Switching to access all without naming servers drops the stored
+// server ids, so the result validates.
+func (p McpAccessPatch) Merge(cur AgentMcp) AgentMcp {
+	out := AgentMcp{Access: cur.Access, ServerIDs: slices.Clone(cur.ServerIDs), Mode: cur.Mode, Blocks: slices.Clone(cur.Blocks)}
+	if out.Access == "" {
+		out.Access = "all"
+	}
+	if p.Access != nil {
+		out.Access = *p.Access
+		if out.Access == "all" && p.ServerIDs == nil {
+			out.ServerIDs = nil
+		}
+	}
+	if p.ServerIDs != nil {
+		out.ServerIDs = slices.Clone(*p.ServerIDs)
+	}
+	if p.Mode != nil {
+		out.Mode = *p.Mode
+	}
+	if p.Blocks != nil {
+		out.Blocks = slices.Clone(*p.Blocks)
+	}
+	return out
+}
+
+// McpAccessState is the mcp member of an agent or pool read: the stored access, the mode that applies (the
+// stored one or mcp.default_agent_mode), the servers the subject reaches and the AFS_MCP_* names it gets.
+type McpAccessState struct {
+	Access    string
+	ServerIDs []string
+	Mode      McpAgentMode
+	Blocks    []McpAgentBlock
+	Effective []string
+	Env       []string
+}
+
+// Audit is the audit record form of the access.
+func (a AgentMcp) Audit() map[string]any {
+	ids := a.ServerIDs
+	if ids == nil {
+		ids = []string{}
+	}
+	blocks := a.Blocks
+	if blocks == nil {
+		blocks = []McpAgentBlock{}
+	}
+	return map[string]any{"access": a.Access, "serverIds": ids, "mode": string(a.Mode), "blocks": blocks}
 }

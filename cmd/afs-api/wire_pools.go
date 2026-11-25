@@ -15,7 +15,7 @@ import (
 func wirePools(c *components, log *slog.Logger) {
 	deps := acting.Deps{Tx: c.Runner, Audit: c.Audit, Outbox: c.Outbox, Idem: c.Idem, Clock: m1w2Clock{}, IDs: m1w2IDs{crand.Reader}}
 	c.bind(httpapi.BindPools(&httpapi.PoolsAPI{
-		Svc:   &pools.Service{Deps: deps, Repo: postgres.NewPoolRepo(), Entropy: crand.Reader},
+		Svc:   &pools.Service{Deps: deps, Repo: postgres.NewPoolRepo(), Entropy: crand.Reader, Mcp: postgres.NewMcpAccessRepo()},
 		Pages: httpapi.NewPageTokens(c.PageKey, nil),
 	}))
 }

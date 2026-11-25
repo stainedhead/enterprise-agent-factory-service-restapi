@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"encoding/json"
-	"net/http"
 	"time"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
@@ -17,17 +16,34 @@ type mcpRequest struct {
 	Blocks    *[]domain.McpAgentBlock `json:"blocks"`
 }
 
-// refuseMcpUntilBuilt answers 501 not_implemented for a body that sets mcp, until the implementation change of
-// release 1.3.0 binds it (specs/261125-mcp-gateway). An mcp member is refused, never silently ignored.
-func refuseMcpUntilBuilt(w http.ResponseWriter, r *http.Request, m *mcpRequest) bool {
+// patch converts the request to the use case's patch; nil stays nil.
+func (m *mcpRequest) patch() *domain.McpAccessPatch {
 	if m == nil {
-		return false
+		return nil
 	}
-	e := domain.Internal(nil)
-	e.Message = "mcp is not implemented yet"
-	e.Reason = domain.ReasonNotImplemented
-	writeErrorStatus(w, r, e, http.StatusNotImplemented)
-	return true
+	p := &domain.McpAccessPatch{Access: m.Access, ServerIDs: m.ServerIDs, Blocks: m.Blocks}
+	if m.Mode != nil {
+		mode := domain.McpAgentMode(*m.Mode)
+		p.Mode = &mode
+	}
+	return p
+}
+
+// agentMcpBody is Agent.mcp and Pool.mcp (contract AgentMcp).
+type agentMcpBody struct {
+	Access           string                 `json:"access"`
+	ServerIDs        []string               `json:"serverIds"`
+	Mode             string                 `json:"mode"`
+	Blocks           []domain.McpAgentBlock `json:"blocks"`
+	EffectiveServers []string               `json:"effectiveServers"`
+	Env              []string               `json:"env"`
+}
+
+func toAgentMcpBody(m *domain.McpAccessState) *agentMcpBody {
+	if m == nil {
+		return nil
+	}
+	return &agentMcpBody{Access: m.Access, ServerIDs: m.ServerIDs, Mode: string(m.Mode), Blocks: m.Blocks, EffectiveServers: m.Effective, Env: m.Env}
 }
 
 // ---- 1.3.0 MCP bodies (contract §4.14). Field names are the contract's; no credential value is ever a field. ----

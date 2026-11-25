@@ -72,4 +72,3 @@ func TestEndpointBodiesHideEmptyOptionals(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
-

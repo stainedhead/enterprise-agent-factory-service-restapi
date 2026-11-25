@@ -2,6 +2,7 @@ package extsys_test
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"testing"
 	"time"
@@ -372,5 +373,26 @@ func TestRepositoryFailures(t *testing.T) {
 				t.Errorf("%s failing at repository call %d: err %v, audit %d", name, n, err, len(audit.Entries))
 			}
 		}
+	}
+}
+
+// v1.6.0: an mcp-category system whose host an approved MCP server covers cannot be switched on for a team or an
+// agent (409 governed_by_mcp_server); switching it off still works.
+func TestGovernedByMcpServer(t *testing.T) {
+	s, r, _ := rig()
+	ctx := t.Context()
+	r.systems["ext_mcp"] = domain.ExternalSystem{ID: "ext_mcp", Slug: "issues", Name: "Issues", Category: domain.ExtMcp, Enabled: true,
+		GovernedBy: "mcp_1", Version: 1}
+	for name, err := range map[string]error{
+		"team":  func() error { _, err := s.SetTeamState(ctx, admin, team, "ext_mcp", true, nil); return err }(),
+		"agent": func() error { _, err := s.SetAgentState(ctx, admin, team, agent, "ext_mcp", true, nil); return err }(),
+	} {
+		var e *domain.Error
+		if !errors.As(err, &e) || e.Reason != domain.ReasonGovernedByMcpServer || e.Details["mcpServerId"] != "mcp_1" {
+			t.Errorf("%s on = %v", name, err)
+		}
+	}
+	if _, err := s.SetTeamState(ctx, admin, team, "ext_mcp", false, nil); err != nil {
+		t.Errorf("off = %v", err)
 	}
 }

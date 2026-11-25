@@ -112,9 +112,6 @@ func (a *AgentsAPI) create(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
-	if refuseMcpUntilBuilt(w, r, req.Mcp) {
-		return
-	}
 	vol, err := req.Volume.spec()
 	if err != nil {
 		WriteError(w, r, err)
@@ -133,7 +130,7 @@ func (a *AgentsAPI) create(w http.ResponseWriter, r *http.Request) {
 	res, err := a.Svc.Create(r.Context(), c, teamID, domain.NewAgentParams{Name: req.Name, Description: req.Description,
 		Template: req.Template, Image: req.Image, ModelID: req.ModelID, Models: req.Models.input(), Resources: req.Resources,
 		IAMIdentity: domain.IAMIdentity(req.IAMIdentity), Volume: vol, Bindings: bindingsOf(req.SecretBinds),
-		Role: domain.AgentRole(req.Role), Collaboration: req.Collaboration.input()}, idem)
+		Role: domain.AgentRole(req.Role), Collaboration: req.Collaboration.input(), Mcp: req.Mcp.patch()}, idem)
 	if err != nil {
 		WriteError(w, r, err)
 		return
@@ -163,11 +160,8 @@ func (a *AgentsAPI) update(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
-	if refuseMcpUntilBuilt(w, r, req.Mcp) {
-		return
-	}
 	p := domain.AgentPatch{Name: req.Name, Description: req.Description, Template: req.Template, Image: req.Image, ModelID: req.ModelID,
-		Models: req.Models.input(), Resources: req.Resources, Collaboration: req.Collaboration.input()}
+		Models: req.Models.input(), Resources: req.Resources, Collaboration: req.Collaboration.input(), Mcp: req.Mcp.patch()}
 	if req.ModelID != nil {
 		// The deprecated modelId alone changes only the default; with a different models.defaultModelId it
 		// is refused by the domain as conflicting_fields.
