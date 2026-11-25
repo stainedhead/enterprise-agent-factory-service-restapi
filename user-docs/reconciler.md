@@ -13,6 +13,13 @@ For each active team it applies, and keeps correct:
 - an External Secrets `SecretStore` bound to the team's IAM role, and a copy of the gateway CA bundle
 - the team's IAM roles (`afs-<ulid>` under `/afs/<namespace>/`, the Bedrock role trusting only the
   gateway) and one Bedrock application inference profile per enabled model
+- for a team set to `per_namespace` (1.2.0): its own `afs-gateway` (ServiceAccount, Deployment of 2 replicas, Service on
+  8443, PodDisruptionBudget, serving Certificate), ExternalSecrets `afs-gateway-credentials` (one key per route) and
+  `afs-gateway-db`, and the CiliumNetworkPolicy `afs-gateway-policy` that lets only that gateway reach the route hosts;
+  agents' gateway traffic goes to it. Route health is in `resource_status` (kinds `team_route`, `team_gateway`). Back to
+  `shared`, these objects are removed. Needs `AFS_TEAM_GATEWAY_*` (see [configuration](configuration.md)) and, per team,
+  the gateway ServiceAccount's Pod Identity association (Terraform) while Bedrock is used. See
+  [model routes](model-routes.md).
 
 Tags on AWS resources follow the team's effective tag set (system tags, service tags, team tags; at most 40
 keys). Roles, Pod Identity associations, inference profiles, snapshots and NodePools are tagged by their own

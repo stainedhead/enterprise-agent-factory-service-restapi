@@ -196,6 +196,61 @@ COL-34, COL-35: RA-17, RA-19..21, RC-24..27. COL-36: RA-21, EDGE-7. SEC-7: RC-21
 changes (change PRD §6.8): RC-22, RC-23, RC-24. ACC-2 role: RA-18.
 
 
+### 4.3 Requirements owned for the team model gateway (1.2.0)
+
+Added by the change PRD [`model-endpoint-gateway-PRD.md`](https://github.com/stainedhead/enterprise-agent-factory-service/blob/main/model-endpoint-gateway-PRD.md)
+(approved by J, 2026-11-25; Appendix D.3). The requirement ids MEG-GW-1..8, MEG-RC-1..6, MEG-BL-1..3 and MEG-API-1..5 and
+their tests are listed in [`specs/261125-model-endpoint-gateway/spec.md`](../../261125-model-endpoint-gateway/spec.md); the
+contracts are authoritative for names and shapes (gateway contract v1.2.0 §12, API contract v1.5.0 §3 and §4.13, database
+contract v1.5.0 §7.4, migration 000023). The stories below refine the change PRD's US-60..US-80.
+
+**MEG-US-1 · A service route, priced and switched on.** *(MEG-API-1, 2, 4)*
+- Given a service admin, `CreateModelEndpoint` creates a disabled route with its provider taken from the host;
+  `CreateEndpointModelPrice` appends an effective-dated price; enabling a route on a provider that is off is
+  `provider_disabled`. Every mutation writes row, audit and outbox in one transaction; updates need `If-Match`. A team-admin
+  is denied every `/v1/admin/model-endpoints` operation [handler, repository against the schema].
+
+**MEG-US-2 · Credentials are references.** *(MEG-API-3)*
+- `PutModelEndpointCredential` and `RotateModelEndpointCredential` write the value to Secrets Manager at the database's
+  path and return `secretArn`, `status` and `rotatedAt`; no response, log, audit, event or error carries the value
+  [handler with fake Secrets Manager].
+
+**MEG-US-3 · A team on its own gateway.** *(MEG-RC-1, 2, 4)*
+- Given `PutTeamGatewaySettings {deployment: per_namespace}`, the reconciler renders `afs-gateway` (2 replicas,
+  PodDisruptionBudget, Service on 8443), ExternalSecrets for the route credentials and the database URL, a serving
+  certificate, and a CiliumNetworkPolicy whose egress is DNS, the route hosts, Bedrock while it is on, the federation token
+  hosts and the database; agents' gateway egress goes to it. Back to `shared`, the objects are removed [render tests].
+
+**MEG-US-4 · Agents see their routes.** *(MEG-RC-3)*
+- An agent of a per_namespace team with routes gets `AFS_LLM_ROUTES`, `AFS_LLM_<ROUTE>_BASE_URL`, `OPENAI_BASE_URL` on
+  `$(AFS_GATEWAY_URL)`, a route default as `AFS_LLM_DEFAULT_ROUTE`/`MODEL`, and `/etc/afs/llm-routes.json`; an agent on
+  the shared gateway gets none of them and its pod template is unchanged from 1.1.0 [render and source tests].
+
+**MEG-US-5 · Route health.** *(MEG-RC-6)*
+- A route without its credential is `Unavailable` (`credential_missing`) and publishes one `model_endpoint.degraded`; the
+  same health again publishes nothing; the credential arriving makes it `Ready` and publishes one
+  `model_endpoint.recovered` [against the schema].
+
+**MEG-US-6 · Calls through a route are metered and capped.** *(MEG-GW-1..8)*
+- `POST /r/<route>/v1/chat/completions` reserves spend, writes the output cap into the request, injects and strips
+  `include_usage`, settles to the larger of the gateway's and the provider's cost, and records `usage_events` with the
+  route and timing columns; a database loss fails closed [gateway tests with fake upstreams].
+
+**MEG-US-7 · Provider costs are reconciled.** *(MEG-BL-1, 2)*
+- Given recorded OpenAI, OpenRouter, Azure and Google responses, each team's provider cost of a route is compared with the
+  gateway's settled cost and a variance above `billing.variance_alert_pct` publishes `cost.variance_detected`; unnamed
+  cost is reported as unattributed; a Nous or OpenCode route without a statement for the month is not reconciled
+  [adapter with fixtures, against the schema].
+
+**MEG-US-8 · Capacity and prices.** *(MEG-BL-3)*
+- A capacity route's day cost is split across the team's agents and pools by token share and the parts sum to the
+  amount; a listed price that differs from the price in force gives one pending proposal per model, none when equal, and
+  a newer one supersedes it [use case, against the schema].
+
+**MEG-US-9 · Reports by route.** *(MEG-API-5)*
+- Usage and costs group by `route` and filter on a route slug or `bedrock`; `GetInferenceReport` gives per-route calls,
+  errors, tokens, cost and latency percentiles in JSON and CSV [against the schema].
+
 ## 5. User stories and acceptance criteria
 
 Stories refine the product stories (US-n). Each acceptance criterion maps to at least one automated

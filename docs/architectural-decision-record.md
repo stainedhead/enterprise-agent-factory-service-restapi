@@ -274,3 +274,45 @@ Decisions local to this repository. Cross-repo decisions live in the root reposi
   hostname to (team, surface, level) from `orchestration_routes()`; a surface is served only on the hostname of its effective
   level, the other is a `404`. Sign-in uses the apex of the level it was reached on.
 - Consequences: no per-team load balancer and no change to the edge's database role; a wrong-level request reveals nothing.
+
+## ADR-031 Model routes are served only by a gateway in the team's namespace
+
+- Status: Accepted (spec 261125-model-endpoint-gateway)
+- Context: routes reach hosts outside AWS with per-team credentials; the shared gateway's egress and credentials would
+  then span every team.
+- Decision: `teams.gateway_deployment = per_namespace` makes the reconciler run `afs-gateway --team-namespace` in the
+  team's namespace with only that team's route credentials, egress to the route hosts only and the team policy sending
+  agents' gateway traffic to it. Route variables and `llm-routes.json` are delivered only then; a shared-gateway team keeps
+  1.1.0 behaviour and pod-template hash.
+- Consequences: a credential or egress rule is never shared across teams; turning a team on costs two gateway pods in its
+  namespace; Bedrock keeps working on either gateway.
+
+## ADR-032 The gateway router is a Mux of route families
+
+- Status: Accepted (spec 261125-model-endpoint-gateway)
+- Context: 1.2.0 adds OpenAI-compatible route paths and 1.3.0 adds MCP; the Bedrock path carries an escaped model id
+  that `http.ServeMux` would clean or redirect.
+- Decision: `gatewayhttp.Mux` dispatches exact paths and prefixes (longest match) to families that mount themselves
+  (`Family.Mount`); each family keeps its own wire format, errors and metering, and anything unmatched is the contract's 404.
+- Consequences: a release adds a family without editing the others; two families claiming one path panic at wiring.
+
+## ADR-033 Route health lives in resource_status and publishes once per transition
+
+- Status: Accepted (spec 261125-model-endpoint-gateway)
+- Context: the API shows a route's health per team and subscribers need degraded and recovered events.
+- Decision: the team reconciler writes kind `team_route` (`<teamId>/<endpointId>`, condition `RouteHealth`) and
+  `team_gateway` rows, comparing with the stored phase in the same transaction to publish `model_endpoint.degraded` or
+  `.recovered` only on a change.
+- Consequences: no new table; a reconcile loop that finds the same health is silent; returning to shared removes the rows.
+
+## ADR-034 Provider costs are attributed by the provider naming the team
+
+- Status: Accepted (spec 261125-model-endpoint-gateway)
+- Context: provider bills (OpenAI, OpenRouter, Azure, Google) do not know AFS teams; guessing an attribution would make
+  variance alerts wrong.
+- Decision: a figure belongs to a team only when the provider side names it (project or key name containing the team id,
+  `afs-team-id` tag or label, a resource group containing the id); anything else is unattributed and reported per route.
+  Pulls run behind `routebill.Puller` with recorded fixtures; the comparison and its `cost.variance_detected` events are
+  one transaction.
+- Consequences: operators give each team its own project, key, resource group or label (the `per_team` credential mode);
+  shared provider accounts reconcile only in total.
