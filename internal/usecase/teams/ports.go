@@ -40,6 +40,8 @@ type ModelInfo struct {
 	Callable bool
 	// PriceState is none, pending or approved.
 	PriceState string
+	// ProviderOff is true while the Bedrock provider is switched off (providerState off).
+	ProviderOff bool
 	// InferenceProfileState is the team's inference profile state for the model (creating, active or
 	// retiring); empty when there is none.
 	InferenceProfileState string
