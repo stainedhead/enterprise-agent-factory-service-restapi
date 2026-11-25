@@ -50,10 +50,10 @@ func TestWriteAndFill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a := got["agt_1"]; a.Access != "selected" || a.Mode != full || len(a.Env) != 3 || len(a.Blocks) != 1 || a.Effective[0] != srvA {
+	if a := got["agt_1"]; a.Access != "selected" || a.Mode != full || len(a.Env) != 4 || len(a.Blocks) != 1 || a.Effective[0] != srvA {
 		t.Errorf("agt_1 = %+v", a)
 	}
-	if b := got["agt_2"]; b.Access != "all" || b.Mode != domain.McpAgentModeSearch || len(b.Env) != 2 || b.ServerIDs == nil || b.Blocks == nil {
+	if b := got["agt_2"]; b.Access != "all" || b.Mode != domain.McpAgentModeSearch || len(b.Env) != 4 || b.ServerIDs == nil || b.Blocks == nil {
 		t.Errorf("agt_2 = %+v", b)
 	}
 	if m, err := mcpaccess.Fill(ctx, nil, st, team, mcpaccess.KindAgent, nil); err != nil || len(m) != 0 {

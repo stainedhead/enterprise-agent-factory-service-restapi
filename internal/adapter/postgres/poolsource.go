@@ -103,6 +103,9 @@ func (s *PoolSource) loadChildren(ctx context.Context, t *Tx, d *pool.Desired) e
 	if d.ModelID, err = loadRoutes(ctx, t, "pool", d.ID, d.ModelID, &d.Routes); err != nil {
 		return err
 	}
+	if err := loadMcp(ctx, t, "pool", d.ID, &d.Mcp); err != nil {
+		return err
+	}
 	if d.ModelReason, d.PrevModelUnavailable, err = modelState(ctx, t, "pool", d.ID, d.ModelID, d.Routes.Effective(d.Models)); err != nil {
 		return err
 	}

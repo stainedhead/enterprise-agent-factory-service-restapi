@@ -37,6 +37,8 @@ type Store interface {
 type Stored struct {
 	Access    domain.AgentMcp
 	Effective []string
+	// EffectiveSlugs are the slugs of the Effective servers.
+	EffectiveSlugs []string
 }
 
 // Write merges the patch into the stored access (the defaults for a new subject), validates it against the team's
@@ -107,7 +109,7 @@ func Fill(ctx context.Context, tx port.Tx, st Store, teamID, kind string, ids []
 			eff = []string{}
 		}
 		out[id] = &domain.McpAccessState{Access: s.Access.Access, ServerIDs: ids, Mode: mode, Blocks: blocks, Effective: eff,
-			Env: domain.McpEnv(mode)}
+			Env: domain.McpEnv(s.EffectiveSlugs)}
 	}
 	return out, nil
 }

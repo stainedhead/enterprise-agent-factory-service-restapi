@@ -49,7 +49,7 @@ func TestMcpAccessRepo(t *testing.T) {
 	}
 
 	if m := fill(); m == nil || m.Access != "all" || m.Mode != domain.McpAgentModeSearch || len(m.Effective) != 1 || m.Effective[0] != on ||
-		len(m.Env) != 2 {
+		len(m.Env) != 4 {
 		t.Fatalf("default = %+v", m)
 	}
 	sel, full := "selected", domain.McpAgentModeFull
@@ -63,7 +63,7 @@ func TestMcpAccessRepo(t *testing.T) {
 	}
 	m := fill()
 	if m.Access != "selected" || len(m.ServerIDs) != 1 || m.Mode != full || len(m.Blocks) != 1 || m.Blocks[0].Name != "list_*" ||
-		len(m.Effective) != 0 || len(m.Env) != 3 {
+		len(m.Effective) != 0 || len(m.Env) != 0 {
 		t.Errorf("selected = %+v", m)
 	}
 	if n := r.count(`SELECT count(*) FROM afs.mcp_policies WHERE level = 'agent' AND agent_id = $1`, r.agent); n != 1 {

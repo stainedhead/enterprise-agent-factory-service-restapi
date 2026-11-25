@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -49,11 +50,19 @@ func run(ctx context.Context, args []string, env func(string) string, stdout, st
 	maxRequest := fs.Int64("max-request-bytes", 1<<20, "largest request body accepted")
 	passEnv := fs.String("pass-env", "", "comma-separated environment variable names passed to the server")
 	dir := fs.String("dir", "", "working directory of the server")
+	install := fs.String("install", "", "copy this binary into the directory and exit (the init container of a hosted server's pod)")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
 	if *version {
 		_, _ = fmt.Fprintln(stdout, buildinfo.String("afs-mcp-bridge"))
+		return 0
+	}
+	if *install != "" {
+		if err := installSelf(*install); err != nil {
+			_, _ = fmt.Fprintln(stderr, "afs-mcp-bridge:", err)
+			return exitFailed
+		}
 		return 0
 	}
 	command := fs.Args()
@@ -113,4 +122,27 @@ func childEnv(names string, env func(string) string) []string {
 		}
 	}
 	return out
+}
+
+// installSelf copies the running executable to dir/afs-mcp-bridge, executable by all, so the server container
+// of a hosted pod can run the bridge from a shared volume.
+func installSelf(dir string) error {
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	src, err := os.Open(self) //nolint:gosec // the running executable
+	if err != nil {
+		return err
+	}
+	defer func() { _ = src.Close() }()
+	dst, err := os.OpenFile(filepath.Join(dir, "afs-mcp-bridge"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755) //nolint:gosec // an executable
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		_ = dst.Close()
+		return err
+	}
+	return dst.Close()
 }

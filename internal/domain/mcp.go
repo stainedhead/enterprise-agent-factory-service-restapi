@@ -516,12 +516,38 @@ func (a AgentMcp) Validate(teamEnabled []string) error {
 	return nil
 }
 
-// McpEnv returns the AFS_MCP_* variable names an agent gets (PRD §6.1).
-func McpEnv(mode McpAgentMode) []string {
-	if mode == McpAgentModeFull {
-		return []string{"AFS_MCP_URL", "AFS_MCP_CONFIG", "AFS_MCP_SERVERS"}
+// McpServerEnvName is AFS_MCP_<SERVER>_URL of a server: the slug upper-cased with '-' replaced by '_' (gateway
+// contract §13.5).
+func McpServerEnvName(slug string) string {
+	return "AFS_MCP_" + strings.ToUpper(strings.ReplaceAll(slug, "-", "_")) + "_URL"
+}
+
+// McpEnv returns the AFS_MCP_* names an agent or pool gets (gateway contract §13.5): none without an effective
+// server; else AFS_MCP_URL, AFS_MCP_MODE, AFS_MCP_SERVERS and one AFS_MCP_<SERVER>_URL per server, by slug.
+func McpEnv(slugs []string) []string {
+	vars := McpEnvVars("", slugs)
+	out := make([]string, 0, len(vars))
+	for _, v := range vars {
+		out = append(out, v.Name)
 	}
-	return []string{"AFS_MCP_URL", "AFS_MCP_CONFIG"}
+	return out
+}
+
+// McpEnvVars returns the AFS_MCP_* variables with their values; the URLs reference $(AFS_GATEWAY_URL), so they
+// must follow it in the container's environment.
+func McpEnvVars(mode McpAgentMode, slugs []string) []EnvVar {
+	if len(slugs) == 0 {
+		return []EnvVar{}
+	}
+	ss := slices.Clone(slugs)
+	slices.Sort(ss)
+	ss = slices.Compact(ss)
+	out := []EnvVar{{Name: "AFS_MCP_URL", Value: GatewayURLRef + "/mcp"}, {Name: "AFS_MCP_MODE", Value: string(mode)},
+		{Name: "AFS_MCP_SERVERS", Value: strings.Join(ss, ",")}}
+	for _, s := range ss {
+		out = append(out, EnvVar{Name: McpServerEnvName(s), Value: GatewayURLRef + "/mcp/" + s})
+	}
+	return out
 }
 
 // FederatedIdentity is an agent's or pool's projected-token identity (PRD Appendix C).

@@ -817,11 +817,11 @@ func TestEffective(t *testing.T) {
 		{ServerID: "mcp_b", Slug: "b", ServerKind: "team", Mode: "read_only", PrimitiveID: "mpr_3", Kind: "prompt", Name: "z", Allowed: true},
 	}
 	e, err := w.s.GetEffective(ctx, viewer, team, "agent", agentID)
-	if err != nil || len(e.Servers) != 2 || len(e.Servers[0].Primitives) != 2 || e.Servers[1].URL != "/mcp/b" || e.Subject.Mode != domain.McpAgentModeSearch || len(e.Env) != 2 {
+	if err != nil || len(e.Servers) != 2 || len(e.Servers[0].Primitives) != 2 || e.Servers[1].URL != "/mcp/b" || e.Subject.Mode != domain.McpAgentModeSearch || len(e.Env) != 5 {
 		t.Fatalf("effective = %+v %v", e, err)
 	}
 	p, err := w.s.GetEffective(ctx, viewer, team, "pool", poolID)
-	if err != nil || p.Subject.Mode != domain.McpAgentModeFull || len(p.Env) != 3 {
+	if err != nil || p.Subject.Mode != domain.McpAgentModeFull || len(p.Env) != 5 {
 		t.Fatalf("pool = %+v %v", p, err)
 	}
 	if _, err := w.s.GetEffective(ctx, viewer, team, "agent", "agt_none"); domain.KindOf(err) != domain.KindNotFound {

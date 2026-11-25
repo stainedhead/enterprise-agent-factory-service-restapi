@@ -28,14 +28,14 @@ func TestAgentMcp(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := res.Agent
-	if a.Mcp == nil || a.Mcp.Access != "selected" || a.Mcp.Mode != domain.McpAgentModeSearch || len(a.Mcp.Effective) != 1 || len(a.Mcp.Env) != 2 {
+	if a.Mcp == nil || a.Mcp.Access != "selected" || a.Mcp.Mode != domain.McpAgentModeSearch || len(a.Mcp.Effective) != 1 || len(a.Mcp.Env) != 4 {
 		t.Fatalf("created mcp = %+v", a.Mcp)
 	}
 	if after := r.audit.Entries[len(r.audit.Entries)-1].Record.After.(map[string]any); after["mcp"] == nil {
 		t.Error("the audit record has no mcp")
 	}
 	got, err := r.svc.Update(t.Context(), admin, team, a.ID, a.Version, domain.AgentPatch{Mcp: &domain.McpAccessPatch{Mode: &full}})
-	if err != nil || got.Mcp.Mode != full || len(got.Mcp.Env) != 3 || got.Mcp.Access != "selected" {
+	if err != nil || got.Mcp.Mode != full || len(got.Mcp.Env) != 4 || got.Mcp.Access != "selected" {
 		t.Fatalf("update = %+v %v", got.Mcp, err)
 	}
 	ev := r.outbox.Events[len(r.outbox.Events)-1]

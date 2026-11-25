@@ -650,7 +650,8 @@ func (s *Service) GetEffective(ctx context.Context, c acting.Caller, teamID, kin
 		if err != nil {
 			return err
 		}
-		out = Effective{Subject: subj, Servers: []EffectiveServer{}, Env: domain.McpEnv(subj.Mode)}
+		out = Effective{Subject: subj, Servers: []EffectiveServer{}}
+		var slugs []string
 		for _, r := range rows {
 			n := len(out.Servers)
 			if n == 0 || out.Servers[n-1].ServerID != r.ServerID {
@@ -659,7 +660,11 @@ func (s *Service) GetEffective(ctx context.Context, c acting.Caller, teamID, kin
 				n++
 			}
 			out.Servers[n-1].Primitives = append(out.Servers[n-1].Primitives, r)
+			if r.Allowed {
+				slugs = append(slugs, r.Slug)
+			}
 		}
+		out.Env = domain.McpEnv(slugs)
 		return nil
 	})
 	return out, err

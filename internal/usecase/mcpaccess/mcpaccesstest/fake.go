@@ -54,7 +54,7 @@ func (s *Store) Stored(_ context.Context, _ port.Tx, teamID, _ string, ids []str
 		if a.Access == "all" {
 			eff = s.On[teamID]
 		}
-		out[id] = mcpaccess.Stored{Access: a, Effective: eff}
+		out[id] = mcpaccess.Stored{Access: a, Effective: eff, EffectiveSlugs: eff}
 	}
 	return out, nil
 }

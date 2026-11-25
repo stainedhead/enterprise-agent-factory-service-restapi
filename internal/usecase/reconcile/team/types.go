@@ -88,6 +88,12 @@ type TeamGatewaySpec struct {
 	// TLSIssuer is the cert-manager ClusterIssuer of the gateway's serving certificate
 	// (AFS_TEAM_GATEWAY_TLS_ISSUER); it must chain to the CA bundle agents trust. Empty: no Certificate.
 	TLSIssuer string
+	// McpSessionKeys are the reconciler's MCP session keys (AFS_TEAM_GATEWAY_MCP_SESSION_KEYS: one or two base64
+	// 32-byte keys, current first); each team gateway gets keys derived from them (SessionKeys). None: the team
+	// gateways serve no MCP.
+	McpSessionKeys [][]byte
+	// McpBridgeImage is the afs-mcp-bridge image (AFS_MCP_BRIDGE_IMAGE), copied into hosted server pods.
+	McpBridgeImage string
 }
 
 // ApplyResult lists the objects an apply created or changed, by engine.ObjectName.

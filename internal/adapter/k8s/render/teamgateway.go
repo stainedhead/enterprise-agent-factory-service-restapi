@@ -14,6 +14,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/k8s/crd/agentictm"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/team"
 )
 
@@ -24,6 +25,8 @@ const (
 	teamGatewayDB            = team.TeamGatewayName + "-db"
 	teamGatewayTLS           = team.TeamGatewayName + "-tls"
 	teamGatewayPolicy        = team.TeamGatewayName + "-policy"
+	teamGatewayMcp           = team.TeamGatewayName + "-mcp"
+	mcpSealingKeysKey        = "sealing-keys"
 	teamGatewayCredDir       = "/etc/afs/gateway-credentials" //nolint:gosec // a mount path
 	teamGatewayFederationDir = "/var/run/secrets/afs/federation"
 	teamGatewayTLSDir        = "/etc/afs/gateway-tls"
@@ -42,6 +45,7 @@ var TeamGatewayGVKs = []struct {
 	{schema.GroupVersionKind{Group: "external-secrets.io", Version: "v1", Kind: "ExternalSecret"}, teamGatewayCredentials},
 	{schema.GroupVersionKind{Group: "external-secrets.io", Version: "v1", Kind: "ExternalSecret"}, teamGatewayDB},
 	{schema.GroupVersionKind{Group: "cert-manager.io", Version: "v1", Kind: "Certificate"}, teamGatewayTLS},
+	{schema.GroupVersionKind{Version: "v1", Kind: "Secret"}, teamGatewayMcp},
 	{schema.GroupVersionKind{Version: "v1", Kind: "ServiceAccount"}, team.TeamGatewayName},
 }
 
@@ -79,6 +83,12 @@ func TeamGateway(env team.Environment) ([]*unstructured.Unstructured, error) {
 	if spec.DatabaseSecretARN != "" {
 		out = append(out, gatewayExternalSecret(t.Namespace, teamGatewayDB,
 			[]any{map[string]any{"secretKey": "url", "remoteRef": map[string]any{"key": spec.DatabaseSecretARN}}}))
+	}
+	if keys := mcpSessionKeys(env); keys != "" {
+		sec := New("v1", "Secret", t.Namespace, teamGatewayMcp)
+		sec.Object["type"] = "Opaque"
+		sec.Object["stringData"] = map[string]any{mcpSealingKeysKey: keys}
+		out = append(out, sec)
 	}
 	if spec.TLSIssuer != "" {
 		cert := New("cert-manager.io/v1", "Certificate", t.Namespace, teamGatewayTLS)
@@ -119,6 +129,30 @@ func federationAudience(g team.TeamGateway) string {
 	return ""
 }
 
+// mcpSessionKeys is the team's derived MCP session sealing keys while MCP is on and the reconciler has keys.
+func mcpSessionKeys(env team.Environment) string {
+	if !env.Team.Gateway.Mcp.Enabled {
+		return ""
+	}
+	return team.SessionKeys(env.TeamGateway.McpSessionKeys, env.Team.ID)
+}
+
+// mcpFederationVolume projects one service-account token per workload federation audience at
+// <McpGatewayFederationRoot>/<McpFederationDir(audience)>/token (gateway contract §13.6).
+func mcpFederationVolume(g team.TeamGateway) (corev1.Volume, bool) {
+	auds := g.Mcp.Audiences()
+	if len(auds) == 0 {
+		return corev1.Volume{}, false
+	}
+	src := make([]corev1.VolumeProjection, 0, len(auds))
+	for _, a := range auds {
+		src = append(src, corev1.VolumeProjection{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+			Audience: a, ExpirationSeconds: ptr.To(TokenLifetimeSeconds), Path: domain.McpFederationDir(a) + "/token"}})
+	}
+	return corev1.Volume{Name: "mcp-federation", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{
+		DefaultMode: ptr.To[int32](0o444), Sources: src}}}, true
+}
+
 func teamGatewayDeployment(env team.Environment) (*unstructured.Unstructured, error) {
 	t, g, spec := env.Team, env.Team.Gateway, env.TeamGateway
 	envVars := []corev1.EnvVar{
@@ -149,6 +183,14 @@ func teamGatewayDeployment(env team.Environment) (*unstructured.Unstructured, er
 			Sources: []corev1.VolumeProjection{{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
 				Audience: aud, ExpirationSeconds: ptr.To(TokenLifetimeSeconds), Path: "token"}}},
 		}}})
+	}
+	if v, ok := mcpFederationVolume(g); ok {
+		mounts = append(mounts, corev1.VolumeMount{Name: v.Name, MountPath: domain.McpGatewayFederationRoot, ReadOnly: true})
+		volumes = append(volumes, v)
+	}
+	if mcpSessionKeys(env) != "" {
+		envVars = append(envVars, corev1.EnvVar{Name: "AFS_GATEWAY_MCP_SEALING_KEYS", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: teamGatewayMcp}, Key: mcpSealingKeysKey}}})
 	}
 	dep := &appsv1.Deployment{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},

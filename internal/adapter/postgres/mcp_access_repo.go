@@ -73,13 +73,15 @@ func (*McpAccessRepo) Stored(ctx context.Context, tx port.Tx, teamID, kind strin
 	err = collect(ctx, pt, kind, `SELECT x.id, x.mcp_access, coalesce(x.mcp_mode, ''),
   coalesce((SELECT array_agg(l.server_id ORDER BY l.server_id) FROM afs.`+links+` l WHERE l.team_id = x.team_id AND l.`+col+` = x.id), '{}'),
   coalesce((SELECT array_agg(DISTINCT e.server_id ORDER BY e.server_id) FROM afs.effective_agent_mcp e
+             WHERE e.subject_kind = $3 AND e.team_id = x.team_id AND e.subject_id = x.id), '{}'),
+  coalesce((SELECT array_agg(DISTINCT e.slug ORDER BY e.slug) FROM afs.effective_agent_mcp e
              WHERE e.subject_kind = $3 AND e.team_id = x.team_id AND e.subject_id = x.id), '{}')
 FROM afs.`+table+` x WHERE x.team_id = $1 AND x.id = ANY($2) AND x.deleted_at IS NULL`, []any{teamID, ids, kind}, func(rows pgx.Rows) error {
 		var (
 			id, mode string
 			s        mcpaccess.Stored
 		)
-		if err := rows.Scan(&id, &s.Access.Access, &mode, &s.Access.ServerIDs, &s.Effective); err != nil {
+		if err := rows.Scan(&id, &s.Access.Access, &mode, &s.Access.ServerIDs, &s.Effective, &s.EffectiveSlugs); err != nil {
 			return err
 		}
 		s.Access.Mode = domain.McpAgentMode(mode)

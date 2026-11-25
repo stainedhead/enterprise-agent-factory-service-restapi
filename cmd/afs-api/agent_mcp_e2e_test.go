@@ -50,13 +50,13 @@ func TestAgentMcpEndToEnd(t *testing.T) {
 	code, out, hdr := agentCall(t, c.Handler, http.MethodPost, base, adm, body(`{"access":"selected","serverIds":["`+on+`"],
   "blocks":[{"serverId":"`+on+`","name":"delete_*","effect":"block"}]}`))
 	if code != 201 || !strings.Contains(out, `"mcp":{"access":"selected","serverIds":["`+on+`"],"mode":"search"`) ||
-		!strings.Contains(out, `"effectiveServers":[]`) || !strings.Contains(out, `"env":["AFS_MCP_URL","AFS_MCP_CONFIG"]`) {
+		!strings.Contains(out, `"effectiveServers":[]`) || !strings.Contains(out, `"env":[]`) {
 		t.Fatalf("create: %d %s", code, out)
 	}
 	id := out[strings.Index(out, `"id":"`)+6:]
 	id = id[:strings.Index(id, `"`)]
 	code, out, _ = agentCall(t, c.Handler, http.MethodPatch, base+"/"+id, adm, `{"mcp":{"mode":"full"}}`, "If-Match", hdr.Get("ETag"))
-	if code != 200 || !strings.Contains(out, `"mode":"full"`) || !strings.Contains(out, `"AFS_MCP_SERVERS"`) || !strings.Contains(out, "delete_*") {
+	if code != 200 || !strings.Contains(out, `"mode":"full"`) || !strings.Contains(out, "delete_*") {
 		t.Fatalf("update: %d %s", code, out)
 	}
 	var n int

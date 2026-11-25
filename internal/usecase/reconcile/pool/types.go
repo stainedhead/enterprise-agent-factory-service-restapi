@@ -82,6 +82,8 @@ type Desired struct {
 	Models []string
 	// Routes are the pool's effective model routes and route default (v1.2.0).
 	Routes agent.LLMRoutes
+	// Mcp is the pool's effective MCP servers and mode (v1.3.0).
+	Mcp agent.McpAccess
 	// ModelReason and PrevModelUnavailable: see agent.Desired.
 	ModelReason          string
 	PrevModelUnavailable *bool
