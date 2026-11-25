@@ -10,7 +10,7 @@ import (
 // default_route and the selected routes in agent_model_endpoints or pool_model_endpoints, by slug.
 
 // routeCols returns the select columns of the route members of the subject aliased alias, whose
-// selection is in table keyed by col: route_access, default_route ('' for NULL) and the selected slugs.
+// selection is in table keyed by col: route_access, default_route (” for NULL) and the selected slugs.
 func subjectRouteCols(alias, table, col string) string {
 	return alias + `.route_access, coalesce(` + alias + `.default_route, ''),
   coalesce((SELECT array_agg(e.slug ORDER BY e.slug) FROM afs.` + table + ` x JOIN afs.model_endpoints e ON e.id = x.endpoint_id
