@@ -241,8 +241,6 @@ github.com/segmentio/encoding v0.5.4 h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfv
 github.com/segmentio/encoding v0.5.4/go.mod h1:HS1ZKa3kSN32ZHVZ7ZLPLXWvOVIiZtyJnO1gPH1sKt0=
 github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
 github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
-github.com/stainedhead/enterprise-agent-factory-service-db v0.0.0-20261123172306-3514c68a6594 h1:1b8czNwnUJXSA6czu2plGtaaquXPE1HAfbDLN7cMmPc=
-github.com/stainedhead/enterprise-agent-factory-service-db v0.0.0-20261123172306-3514c68a6594/go.mod h1:Zr8s7ESewi0jwI/oKqjd/6eqkBkQggUqDyIZ/Y6pEmc=
 github.com/stainedhead/enterprise-agent-factory-service-db v0.0.0-20261125011205-debc7d9d28fd h1:CyfKGXlhe3eTz4xCLylxu7NG3Q7wTlUC5jHK070dw5c=
 github.com/stainedhead/enterprise-agent-factory-service-db v0.0.0-20261125011205-debc7d9d28fd/go.mod h1:Zr8s7ESewi0jwI/oKqjd/6eqkBkQggUqDyIZ/Y6pEmc=
 github.com/standard-webhooks/standard-webhooks/libraries v0.0.1 h1:uOfcYT+3QungH6tIGSVCR/Y3KJmgJiHcojJbMTPDZAI=

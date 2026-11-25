@@ -12,7 +12,7 @@ import (
 
 // Mount paths the reconciler renders into a team gateway pod (MEG-RC-4).
 const (
-	DefaultCredentialsDir  = "/etc/afs/gateway-credentials"
+	DefaultCredentialsDir  = "/etc/afs/gateway-credentials"          //nolint:gosec // a mount path
 	DefaultFederationToken = "/var/run/secrets/afs/federation/token" //nolint:gosec // a mount path, not a credential
 )
 

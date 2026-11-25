@@ -24,7 +24,7 @@ const (
 	teamGatewayDB            = team.TeamGatewayName + "-db"
 	teamGatewayTLS           = team.TeamGatewayName + "-tls"
 	teamGatewayPolicy        = team.TeamGatewayName + "-policy"
-	teamGatewayCredDir       = "/etc/afs/gateway-credentials"
+	teamGatewayCredDir       = "/etc/afs/gateway-credentials" //nolint:gosec // a mount path
 	teamGatewayFederationDir = "/var/run/secrets/afs/federation"
 	teamGatewayTLSDir        = "/etc/afs/gateway-tls"
 )

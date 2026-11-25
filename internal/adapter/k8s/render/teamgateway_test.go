@@ -16,7 +16,7 @@ func gatewayEnv(g team.TeamGateway) team.Environment {
 	d := desired
 	d.Gateway = g
 	return team.Environment{Team: d, Region: "us-east-1", GatewayNamespace: "afs-system", GatewayName: "afs-gateway", GatewayPort: 8443,
-		TeamGateway: team.TeamGatewaySpec{Image: "registry.example.com/afs-gateway@sha256:" + strings.Repeat("a", 64),
+		TeamGateway: team.TeamGatewaySpec{Image: "registry.example.com/afs-gateway@sha256:" + strings.Repeat("a", 64), //nolint:gosec // fixture ARN
 			DatabaseSecretARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/_service/gateway-db-AbCdEf",
 			DatabaseHost:      "afs.cluster-x.us-east-1.rds.amazonaws.com", TLSIssuer: "afs-internal"}}
 }
@@ -24,7 +24,7 @@ func gatewayEnv(g team.TeamGateway) team.Environment {
 // MEG-RC-1..4: the team gateway's objects, its replicas, its egress and the federation token.
 func TestTeamGatewayRender(t *testing.T) {
 	g := team.TeamGateway{Deployment: team.DeploymentPerNamespace, BedrockOn: true, Endpoints: []team.GatewayEndpoint{
-		{ID: "mep_1", Slug: "openai", Location: "external", BaseURL: "https://api.openai.com/v1", AuthKind: "bearer",
+		{ID: "mep_1", Slug: "openai", Location: "external", BaseURL: "https://api.openai.com/v1", AuthKind: "bearer", //nolint:gosec // fixture ARN
 			CredentialARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/_service/gateway/openai-AbCdEf"},
 		{ID: "mep_2", Slug: "vllm", Location: "in_namespace", BaseURL: "http://vllm:8000/v1", AuthKind: "none"},
 		{ID: "mep_3", Slug: "azure", Location: "external", BaseURL: "https://mx.openai.azure.com/openai/v1", AuthKind: "azure_federated",

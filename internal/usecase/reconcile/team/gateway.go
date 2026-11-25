@@ -27,7 +27,7 @@ const (
 	TeamGatewayPort     = 8443
 	TeamGatewayReplicas = 2
 	// AzureTokenAudience is the audience Entra ID workload identity federation accepts.
-	AzureTokenAudience = "api://AzureADTokenExchange"
+	AzureTokenAudience = "api://AzureADTokenExchange" //nolint:gosec // a token audience, not a credential
 )
 
 // TeamGatewayURL is AFS_GATEWAY_URL of a team on its own gateway.
@@ -192,7 +192,7 @@ func (g TeamGateway) GoogleAudiences() []string {
 const (
 	ReasonRouteReady         = "Ready"
 	ReasonGatewayShared      = "team_gateway_not_deployed"
-	ReasonCredentialMissing  = "credential_missing"
+	ReasonCredentialMissing  = "credential_missing" //nolint:gosec // a reason code
 	ReasonFederationNotReady = "federation_not_ready"
 	ReasonFederationPending  = "federation_pending"
 )

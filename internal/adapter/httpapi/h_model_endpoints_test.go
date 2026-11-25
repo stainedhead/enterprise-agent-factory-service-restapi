@@ -13,7 +13,7 @@ const team1 = "team_01JD2Q3R4S5T6V7W8X9Y0Z0001"
 
 func TestParseStatementCSVAndJSON(t *testing.T) {
 	csvBody := "\ufeffteamId,model,amountUsd,tokens\n" + team1 + ",Hermes-4,212.40,48100000\n" + team1 + ",Hermes-3,1.00,\n"
-	r := httptest.NewRequest("POST", "/x?period=2026-11&source=nous_statement", strings.NewReader(csvBody))
+	r := httptest.NewRequestWithContext(t.Context(), "POST", "/x?period=2026-11&source=nous_statement", strings.NewReader(csvBody))
 	r.Header.Set("Content-Type", "text/csv")
 	st, err := parseStatement(r, []byte(csvBody))
 	if err != nil || len(st.Rows) != 2 || st.Source != me.SourceNousStatement || *st.Rows[0].Tokens != 48100000 || st.Rows[1].Tokens != nil {
@@ -23,7 +23,7 @@ func TestParseStatementCSVAndJSON(t *testing.T) {
 		t.Fatalf("total %s period %s", st.Total(), st.Period)
 	}
 	js := `{"period":"2026-10","source":"opencode_csv","rows":[{"teamId":"` + team1 + `","model":"m","amountUsd":"3"}]}`
-	r = httptest.NewRequest("POST", "/x", strings.NewReader(js))
+	r = httptest.NewRequestWithContext(t.Context(), "POST", "/x", strings.NewReader(js))
 	r.Header.Set("Content-Type", "application/json")
 	if st, err = parseStatement(r, []byte(js)); err != nil || len(st.Rows) != 1 {
 		t.Fatalf("json %+v %v", st, err)
@@ -38,7 +38,7 @@ func TestParseStatementCSVAndJSON(t *testing.T) {
 		"query on json":  {"application/json", "?period=2026-11", `{}`},
 		"unknown field":  {"application/json", "", `{"period":"2026-11","x":1}`},
 	} {
-		r := httptest.NewRequest("POST", "/x"+c.q, strings.NewReader(c.body))
+		r := httptest.NewRequestWithContext(t.Context(), "POST", "/x"+c.q, strings.NewReader(c.body))
 		r.Header.Set("Content-Type", c.ct)
 		if _, err := parseStatement(r, []byte(c.body)); domain.KindOf(err) != domain.KindValidation {
 			t.Errorf("%s: %v", name, err)

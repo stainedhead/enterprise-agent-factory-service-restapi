@@ -25,7 +25,7 @@ const (
 	kindModels     = "endpoint_models"
 	kindPrice      = "endpoint_model_prices"
 	kindProposal   = "endpoint_price_proposals"
-	kindCredential = "endpoint_credentials"
+	kindCredential = "endpoint_credentials" //nolint:gosec // a table name
 	kindFederation = "endpoint_federations"
 	kindStatement  = "provider_statements"
 	kindProvider   = "inference_providers"

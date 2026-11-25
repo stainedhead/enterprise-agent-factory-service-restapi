@@ -77,7 +77,7 @@ func (x *GoogleExchanger) Exchange(ctx context.Context, f Federation) (string, t
 	if sts == "" {
 		sts = "https://sts.googleapis.com/v1/token"
 	}
-	body, _ := json.Marshal(map[string]string{"grantType": "urn:ietf:params:oauth:grant-type:token-exchange", "audience": GoogleAudience(f),
+	body, _ := json.Marshal(map[string]string{"grantType": "urn:ietf:params:oauth:grant-type:token-exchange", "audience": GoogleAudience(f), //nolint:gosec // OAuth grant type URNs; the subject token is a variable
 		"scope": GoogleScope, "requestedTokenType": "urn:ietf:params:oauth:token-type:access_token",
 		"subjectToken": subject, "subjectTokenType": "urn:ietf:params:oauth:token-type:jwt"})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sts, strings.NewReader(string(body)))

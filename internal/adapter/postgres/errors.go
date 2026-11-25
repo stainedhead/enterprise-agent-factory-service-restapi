@@ -139,7 +139,7 @@ var constraintConflicts = map[string]conflictReason{
 }
 
 // constraintRefusals names the 000022 guards that are a 400 ValidationError with a contract reason.
-var constraintRefusals = map[string]string{
+var constraintRefusals = map[string]string{ //nolint:gosec // constraint names and reason codes
 	"agents_role_reserved":             domain.ReasonRoleReserved,
 	"agents_name_reserved":             domain.ReasonNameReserved,
 	"agent_pools_name_reserved":        domain.ReasonNameReserved,
@@ -170,7 +170,7 @@ var constraintRefusals = map[string]string{
 }
 
 // endpointRefusalFields names the request field of each 000023 refusal.
-var endpointRefusalFields = map[string]string{
+var endpointRefusalFields = map[string]string{ //nolint:gosec // constraint names and field names
 	"provider_disabled":                  "enabled",
 	"no_fallback_model":                  "fallbackModel",
 	"endpoint_base_url_placeholder":      "baseUrl",

@@ -69,7 +69,7 @@ func call(c Doer, req *http.Request, bearer string, out any) error {
 	if err != nil {
 		return fmt.Errorf("%w: %s: %s", ErrProvider, req.URL.Host, redactErr(err, bearer))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
 		return fmt.Errorf("%w: %s: read: %s", ErrProvider, req.URL.Host, redactErr(err, bearer))
@@ -78,7 +78,7 @@ func call(c Doer, req *http.Request, bearer string, out any) error {
 		return fmt.Errorf("%w: %s %s: status %d", ErrProvider, req.Method, req.URL.Host+req.URL.Path, resp.StatusCode)
 	}
 	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("%w: %s: decode: %v", ErrProvider, req.URL.Host+req.URL.Path, err)
+		return fmt.Errorf("%w: %s: decode: %w", ErrProvider, req.URL.Host+req.URL.Path, err)
 	}
 	return nil
 }

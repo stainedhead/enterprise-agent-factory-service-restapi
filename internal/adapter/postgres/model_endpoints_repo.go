@@ -524,7 +524,7 @@ func (*ModelEndpointsRepo) CredentialPath(ctx context.Context, tx port.Tx, e mod
 	return path, MapError(err, OpRead, "team")
 }
 
-const credCols = `endpoint_id, scope, coalesce(team_id, ''), secret_arn, status, rotated_at, version`
+const credCols = `endpoint_id, scope, coalesce(team_id, ''), secret_arn, status, rotated_at, version` //nolint:gosec // column names; the table holds ARNs only
 
 func scanCredential(row scanner) (modelendpoints.Credential, error) {
 	var c modelendpoints.Credential

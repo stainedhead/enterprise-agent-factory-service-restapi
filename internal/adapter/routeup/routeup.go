@@ -77,7 +77,7 @@ func (c *Client) Do(ctx context.Context, ep gateway.RouteEndpoint, req *http.Req
 	if err != nil {
 		return nil, err
 	}
-	resp, err := hc.Do(req.WithContext(ctx))
+	resp, err := hc.Do(req.WithContext(ctx)) //nolint:gosec // the upstream is the admitted route's base URL, set by an admin and limited by egress policy
 	if err != nil {
 		var ne net.Error
 		if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ne) && ne.Timeout()) {

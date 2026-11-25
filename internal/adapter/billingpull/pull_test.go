@@ -19,7 +19,7 @@ import (
 const (
 	teamA  = "team_01JD2Q3R4S5T6V7W8X9Y0Z0001"
 	teamB  = "team_01JD2Q3R4S5T6V7W8X9Y0Z0002"
-	secret = "sk-admin-not-a-real-key"
+	secret = "sk-admin-not-a-real-key" //nolint:gosec // fixture, not a key
 )
 
 var day = time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)
@@ -57,7 +57,7 @@ func (r *replay) server() *httptest.Server {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		b, err := os.ReadFile("testdata/" + f)
+		b, err := os.ReadFile("testdata/" + f) //nolint:gosec // fixture names are literals of this file
 		if err != nil {
 			r.t.Fatal(err)
 		}

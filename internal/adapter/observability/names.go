@@ -33,9 +33,9 @@ const (
 	// GenAI semantic-convention metrics of route calls (gateway contract §12.7). Labels never carry an agent
 	// or pool id: gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model, afs_team_id, afs_route,
 	// afs_provider, afs_usage_source (and gen_ai_token_type on token usage).
-	MetricGenAITokenUsage        = "gen_ai_client_token_usage"
+	MetricGenAITokenUsage        = "gen_ai_client_token_usage" //nolint:gosec // a metric name
 	MetricGenAIOperationDuration = "gen_ai_client_operation_duration_seconds"
-	MetricGenAITimeToFirstToken  = "gen_ai_server_time_to_first_token_seconds"
+	MetricGenAITimeToFirstToken  = "gen_ai_server_time_to_first_token_seconds" //nolint:gosec // a metric name
 
 	// Outbox.
 	MetricOutboxPending   = "afs_outbox_pending_events"

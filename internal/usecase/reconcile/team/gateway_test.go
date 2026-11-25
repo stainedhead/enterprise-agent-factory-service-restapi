@@ -13,7 +13,7 @@ import (
 
 func gatewayFixture(deployment string) team.TeamGateway {
 	return team.TeamGateway{Deployment: deployment, BedrockOn: true, Endpoints: []team.GatewayEndpoint{
-		{ID: "mep_1", Slug: "openai", Location: "external", BaseURL: "https://api.openai.com/v1", AuthKind: "bearer", CredentialARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/_service/gateway/openai-AbCdEf"},
+		{ID: "mep_1", Slug: "openai", Location: "external", BaseURL: "https://api.openai.com/v1", AuthKind: "bearer", CredentialARN: "arn:aws:secretsmanager:us-east-1:111122223333:secret:afs/_service/gateway/openai-AbCdEf"}, //nolint:gosec // fixture ARN
 		{ID: "mep_2", Slug: "vllm", Location: "in_namespace", BaseURL: "http://vllm:8000/v1", AuthKind: "none"},
 		{ID: "mep_3", Slug: "azure", Location: "external", BaseURL: "https://mx.openai.azure.com/openai/v1", AuthKind: "azure_federated",
 			Federation: &team.Federation{Kind: "azure", TenantID: "t", ClientID: "c", Status: "pending"}},
