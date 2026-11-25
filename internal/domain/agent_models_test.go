@@ -246,20 +246,128 @@ func TestCapabilityValidation(t *testing.T) {
 	}
 }
 
-// The v1.5.0 route members are refused, never ignored, until route admission ships.
-func TestRouteMembersRefusedUntilImplemented(t *testing.T) {
-	ra := "selected"
-	in := &ModelsInput{Routes: &RoutesInput{Access: &ra}}
-	if !in.Present() {
-		t.Error("routes make the input present")
+func routeSets() ModelSets {
+	s := sets()
+	s.Routes = map[string][]string{"openai": {"gpt-x", "gpt-y"}, "local": {"llama"}}
+	return s
+}
+
+func ptrS(s string) *string { return &s }
+
+// MEG-API-9: route access, routes and a route default on create (v1.5.0 §4.13).
+func TestResolveRoutes(t *testing.T) {
+	sel := "selected"
+	m, err := ResolveNewModels(&ModelsInput{DefaultModelID: ptrS("openai/gpt-x"), Routes: &RoutesInput{Access: &sel, Routes: &[]string{"openai"}}}, "", routeSets())
+	if err != nil || m.DefaultRoute != "openai" || m.DefaultModelID != "gpt-x" || m.DefaultRef() != "openai/gpt-x" || m.RouteAccess != ModelAccessSelected {
+		t.Fatalf("%+v %v", m, err)
 	}
-	if _, err := ResolveNewModels(in, "", sets()); err == nil {
-		t.Error("create with routes must fail")
-	} else if f, r := fieldReason(err); f != "models.routeAccess" || r != ReasonNotImplemented {
-		t.Errorf("create = %s %s", f, r)
+	// defaultRoute with the model name.
+	m, err = ResolveNewModels(&ModelsInput{DefaultModelID: ptrS("llama"), Routes: &RoutesInput{DefaultRoute: ptrS("local")}}, "", routeSets())
+	if err != nil || m.DefaultRoute != "local" || m.RouteAccess != ModelAccessAll || len(m.Routes) != 0 {
+		t.Fatalf("%+v %v", m, err)
 	}
-	cur := AgentModels{Access: ModelAccessAll, DefaultModelID: "a"}
-	if _, err := cur.ApplyModels(in, "", sets()); err == nil {
-		t.Error("update with routes must fail")
+	// Routes alone read as a selection; the setting default is a route model.
+	s := routeSets()
+	s.SettingDefault = "local/llama"
+	m, err = ResolveNewModels(&ModelsInput{Routes: &RoutesInput{Routes: &[]string{"local"}}}, "", s)
+	if err != nil || m.RouteAccess != ModelAccessSelected || m.DefaultRef() != "local/llama" {
+		t.Fatalf("%+v %v", m, err)
+	}
+	// Without routes, a route setting default that is outside the selection falls back to a Bedrock model.
+	m, err = ResolveNewModels(&ModelsInput{Routes: &RoutesInput{Access: &sel, Routes: &[]string{"openai"}}}, "", s)
+	if err != nil || m.DefaultRoute != "" || m.DefaultModelID != "a" {
+		t.Fatalf("fallback %+v %v", m, err)
+	}
+	all := "all"
+	bad := "x"
+	for name, c := range map[string]struct {
+		in            *ModelsInput
+		field, reason string
+	}{
+		"route not in team":    {&ModelsInput{Routes: &RoutesInput{Routes: &[]string{"nope"}}}, "models.routes[0]", ReasonAgentRoutesTeam},
+		"twice":                {&ModelsInput{Routes: &RoutesInput{Routes: &[]string{"local", "local"}}}, "models.routes[1]", "is listed twice"},
+		"routes with all":      {&ModelsInput{Routes: &RoutesInput{Access: &all, Routes: &[]string{"local"}}}, "models.routes", ReasonRoutesNotAllowedForAll},
+		"bad access":           {&ModelsInput{Routes: &RoutesInput{Access: &bad}}, "models.routeAccess", "must be all or selected"},
+		"default not on route": {&ModelsInput{DefaultModelID: ptrS("local/gpt-x")}, "models.defaultModelId", ReasonAgentsDefaultRouteAllowed},
+		"default route not selected": {&ModelsInput{DefaultModelID: ptrS("openai/gpt-x"), Routes: &RoutesInput{Access: &sel, Routes: &[]string{"local"}}},
+			"models.defaultModelId", ReasonAgentsDefaultRouteAllowed},
+		"conflict":            {&ModelsInput{DefaultModelID: ptrS("openai/gpt-x"), Routes: &RoutesInput{DefaultRoute: ptrS("local")}}, "models.defaultRoute", ReasonConflictingFields},
+		"route without model": {&ModelsInput{Routes: &RoutesInput{DefaultRoute: ptrS("local")}}, "models.defaultModelId", "required"},
+	} {
+		_, err := ResolveNewModels(c.in, "", routeSets())
+		if f, r := fieldReason(err); f != c.field || r != c.reason {
+			t.Errorf("%s: %s %s (%v)", name, f, r, err)
+		}
+	}
+	many := make([]string, MaxSelectedRoutes+1)
+	for i := range many {
+		many[i] = "r" + string(rune('a'+i%26)) + string(rune('a'+i/26))
+	}
+	if _, err := ResolveNewModels(&ModelsInput{Routes: &RoutesInput{Routes: &many}}, "", routeSets()); err == nil {
+		t.Error("51 routes accepted")
+	}
+	// Routes unknown (no route set): a route default is refused.
+	if _, err := ResolveNewModels(&ModelsInput{DefaultModelID: ptrS("openai/gpt-x")}, "", sets()); err == nil {
+		t.Error("route default without a route set")
+	}
+}
+
+func TestApplyRoutes(t *testing.T) {
+	cur := AgentModels{Access: ModelAccessAll, ModelIDs: []string{}, DefaultModelID: "a"}
+	sel, all := "selected", "all"
+	next, err := cur.ApplyModels(&ModelsInput{DefaultModelID: ptrS("openai/gpt-y"), Routes: &RoutesInput{Access: &sel, Routes: &[]string{"openai", "local"}}}, "", routeSets())
+	if err != nil || next.DefaultRef() != "openai/gpt-y" || len(next.Routes) != 2 || next.Equal(cur) {
+		t.Fatalf("%+v %v", next, err)
+	}
+	// Back to Bedrock: a Bedrock default clears the route; all clears the routes.
+	back, err := next.ApplyModels(&ModelsInput{DefaultModelID: ptrS("b"), Routes: &RoutesInput{Access: &all, DefaultRouteNull: true}}, "", routeSets())
+	if err != nil || back.DefaultRoute != "" || back.DefaultModelID != "b" || len(back.Routes) != 0 || back.RouteAccess != ModelAccessAll {
+		t.Fatalf("back %+v %v", back, err)
+	}
+	// Clearing defaultRoute needs a new default.
+	if _, err := next.ApplyModels(&ModelsInput{Routes: &RoutesInput{DefaultRouteNull: true}}, "", routeSets()); err == nil {
+		t.Error("cleared route without a default")
+	}
+	// defaultRoute alone moves the default to the same model name on another route.
+	moved, err := next.ApplyModels(&ModelsInput{Routes: &RoutesInput{DefaultRoute: ptrS("openai")}}, "", routeSets())
+	if err != nil || moved.DefaultRoute != "openai" {
+		t.Fatalf("moved %+v %v", moved, err)
+	}
+	// Narrowing the routes so the default's route is gone is refused.
+	if _, err := next.ApplyModels(&ModelsInput{Routes: &RoutesInput{Routes: &[]string{"local"}}}, "", routeSets()); err == nil {
+		t.Error("default route dropped")
+	}
+	// The legacy modelId alias can name a route model.
+	leg, err := cur.ApplyModels(nil, "local/llama", routeSets())
+	if err != nil || leg.DefaultRef() != "local/llama" {
+		t.Fatalf("legacy %+v %v", leg, err)
+	}
+}
+
+func TestRouteModelUnavailable(t *testing.T) {
+	m := AgentModels{DefaultRoute: "openai", DefaultModelID: "gpt-x", EffectiveRoutes: []string{"openai"}}
+	if gone, empty := m.ModelUnavailable(nil); gone || empty {
+		t.Error("route default is available")
+	}
+	m.EffectiveRoutes = nil
+	if gone, empty := m.ModelUnavailable(nil); !gone || !empty {
+		t.Error("route default is gone")
+	}
+}
+
+func TestRouteEnv(t *testing.T) {
+	env := RouteEnv([]string{"openai-prod", "local"}, "openai-prod", "gpt-x", true)
+	want := []EnvVar{{"AFS_LLM_ROUTES", "openai-prod,local"}, {"AFS_LLM_OPENAI_PROD_BASE_URL", "$(AFS_GATEWAY_URL)/r/openai-prod/v1"},
+		{"AFS_LLM_LOCAL_BASE_URL", "$(AFS_GATEWAY_URL)/r/local/v1"}, {"AFS_LLM_BEDROCK_BASE_URL", "$(AFS_GATEWAY_URL)/r/bedrock/v1"},
+		{"AFS_LLM_DEFAULT_ROUTE", "openai-prod"}, {"AFS_LLM_DEFAULT_MODEL", "gpt-x"}, {"OPENAI_BASE_URL", "$(AFS_GATEWAY_URL)/openai/v1"},
+		{"OPENAI_API_KEY", "afs-gateway"}}
+	if !slices.Equal(env, want) {
+		t.Fatalf("%v", env)
+	}
+	if len(RouteEnv(nil, "", "", false)) != 0 {
+		t.Error("no routes, no Bedrock: no variables")
+	}
+	if got := OrderRoutes([]string{"b", "a", "c", "a"}, "c"); !slices.Equal(got, []string{"c", "a", "b"}) {
+		t.Errorf("order %v", got)
 	}
 }

@@ -39,6 +39,17 @@ type Model struct {
 	Origin ModelOrigin
 	// TeamsWithAccess counts the teams that may use the model (the admin list only; -1 when not loaded).
 	TeamsWithAccess int
+	// ProviderOff is true while the Bedrock provider is switched off (v1.5.0 providerState off); the
+	// model is then not callable.
+	ProviderOff bool
+}
+
+// ProviderState is the v1.5.0 providerState of a model: on or off.
+func ProviderState(off bool) string {
+	if off {
+		return "off"
+	}
+	return "on"
 }
 
 // PriceState says whether a model has a price the gateway can charge.

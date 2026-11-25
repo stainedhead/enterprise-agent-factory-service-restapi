@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream"
 
@@ -61,10 +62,14 @@ func (s *Server) stream(ctx context.Context, rw *respWriter, p *parsed, call bed
 	meter.Started()
 
 	var out frameWriter
-	if p.wire == wireAnthropic {
+	switch p.wire {
+	case wireAnthropic:
 		rw.Header().Set("Content-Type", "text/event-stream")
 		out = &sseWriter{rw: rw}
-	} else {
+	case wireChat:
+		rw.Header().Set("Content-Type", "text/event-stream")
+		out = &chatChunkWriter{rw: rw, model: p.modelID, id: "chatcmpl-" + rw.requestID, created: time.Now().Unix(), includeUsage: p.includeUsage}
+	default:
 		rw.Header().Set("Content-Type", "application/vnd.amazon.eventstream")
 		out = &eventWriter{rw: rw, enc: eventstream.NewEncoder()}
 	}
@@ -136,7 +141,7 @@ func (w *eventWriter) fail(err error, requestID string) error {
 // the invocation metrics of message_stop. The base64 decoding only runs for Invoke-style chunks.
 func observe(m *gateway.StreamMeter, wire wireKind, msg eventstream.Message) {
 	switch wire {
-	case wireConverse:
+	case wireConverse, wireChat:
 		if msg.Headers.Get(":event-type").String() != "metadata" {
 			return
 		}

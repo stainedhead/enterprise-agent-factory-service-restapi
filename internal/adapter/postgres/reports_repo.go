@@ -67,9 +67,19 @@ type reportSource struct {
 	dims   map[domain.ReportDim]string
 	tagCol string
 	// filters map a filter to its column ("" when the source has none).
-	team, agent, pool, model, system string
-	measures                         []string
+	team, agent, pool, model, system, route string
+	measures                                []string
 }
+
+// Route expressions (v1.5.0). A per-call row names its endpoint (NULL for Bedrock); a cost_daily row of
+// source route or route_capacity holds <route>/<model> (or the route alone) in model_id.
+const (
+	eventRoute = `CASE WHEN x.endpoint_id IS NULL THEN 'bedrock'
+  ELSE coalesce((SELECT e.slug FROM afs.model_endpoints e WHERE e.id = x.endpoint_id), x.endpoint_id) END`
+	eventModel = `coalesce(x.model_id, (` + eventRoute + `) || '/' || coalesce(x.model_name, ''))`
+	dailyRoute = `CASE WHEN x.source IN ('route', 'route_capacity') THEN split_part(x.model_id, '/', 1)
+  WHEN x.source IN ('gateway', 'cur_bedrock') THEN 'bedrock' ELSE '(none)' END`
+)
 
 const (
 	dayText  = `to_char(%s, 'YYYY-MM-DD')`
@@ -117,8 +127,9 @@ func sourceFor(q domain.ReportQuery) (reportSource, bool) {
 		costs := q.Kind == domain.ReportKindCosts
 		if !daily {
 			s := reportSource{from: `afs.usage_events x`, timeCond: `x.occurred_at >= {from} AND x.occurred_at < {to}`,
-				dims:   withDims(fiveMinuteDims(`x.occurred_at`, `x.team_id`, `x.agent_id`, `x.pool_id`), map[domain.ReportDim]string{domain.DimModel: `x.model_id`}),
-				tagCol: `x.tag_set_id`, team: `x.team_id`, agent: `x.agent_id`, pool: `x.pool_id`, model: `x.model_id`}
+				dims: withDims(fiveMinuteDims(`x.occurred_at`, `x.team_id`, `x.agent_id`, `x.pool_id`),
+					map[domain.ReportDim]string{domain.DimModel: eventModel, domain.DimRoute: eventRoute}),
+				tagCol: `x.tag_set_id`, team: `x.team_id`, agent: `x.agent_id`, pool: `x.pool_id`, model: eventModel, route: eventRoute}
 			if costs {
 				s.measures = []string{fmt.Sprintf(moneySum, `x.cost_usd`), `'0.00'`}
 			} else {
@@ -130,13 +141,15 @@ func sourceFor(q domain.ReportQuery) (reportSource, bool) {
 		s := reportSource{from: `afs.cost_daily x`, timeCond: `x.day >= {fromDay}::date AND x.day <= {toDay}::date`,
 			dims: map[domain.ReportDim]string{
 				domain.DimTeam: `x.team_id`, domain.DimAgent: fmt.Sprintf(`coalesce(x.agent_id, %s)`, none), domain.DimPool: fmt.Sprintf(`coalesce(x.pool_id, %s)`, none),
-				domain.DimModel: fmt.Sprintf(`coalesce(x.model_id, %s)`, none), domain.DimDay: fmt.Sprintf(dayText, `x.day`)},
-			tagCol: `x.tag_set_id`, team: `x.team_id`, agent: `x.agent_id`, pool: `x.pool_id`, model: `x.model_id`}
+				domain.DimModel: fmt.Sprintf(`coalesce(x.model_id, %s)`, none), domain.DimDay: fmt.Sprintf(dayText, `x.day`),
+				domain.DimRoute: dailyRoute},
+			tagCol: `x.tag_set_id`, team: `x.team_id`, agent: `x.agent_id`, pool: `x.pool_id`, model: `x.model_id`, route: dailyRoute}
+		// Metered spend is the gateway's: Bedrock calls (gateway) and route calls (route).
 		if costs {
-			s.measures = []string{`coalesce(sum(x.cost_usd) FILTER (WHERE x.source = 'gateway'), 0)::text`,
-				`coalesce(sum(x.cost_usd) FILTER (WHERE x.source <> 'gateway'), 0)::text`}
+			s.measures = []string{`coalesce(sum(x.cost_usd) FILTER (WHERE x.source IN ('gateway', 'route')), 0)::text`,
+				`coalesce(sum(x.cost_usd) FILTER (WHERE x.source NOT IN ('gateway', 'route')), 0)::text`}
 		} else {
-			s.timeCond += ` AND x.source = 'gateway'`
+			s.timeCond += ` AND x.source IN ('gateway', 'route')`
 			s.measures = []string{bigint(`coalesce(sum(x.calls), 0)`), bigint(`coalesce(sum(x.input_tokens), 0)`),
 				bigint(`coalesce(sum(x.output_tokens), 0)`), fmt.Sprintf(moneySum, `x.cost_usd`)}
 		}
@@ -267,6 +280,9 @@ func reportSQL(q domain.ReportQuery, offset, limit int) (rowsSQL string, rowsArg
 	eq(src.pool, f.PoolID)
 	eq(src.model, f.ModelID)
 	eq(src.system, f.SystemID)
+	if f.Route != "" && src.route != "" {
+		conds = append(conds, `(`+src.route+`) = `+b.arg(f.Route))
+	}
 	if q.Kind == domain.ReportKindCollaboration {
 		for _, g := range q.GroupBy {
 			if g.Dim == domain.DimReason {

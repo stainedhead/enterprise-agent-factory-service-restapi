@@ -22,6 +22,8 @@ Guides:
 | [Costs, reconciliation and prices](billing.md) | Callers and operators: cost reads, billing jobs, price proposals |
 | [Work orders and swarm templates](work-orders.md) | Callers and operators: swarm templates, work orders, security operators, service keys, worker tokens |
 | [Paperclip collaboration: the edge](collaboration-edge.md) | Operators: deploying `afs-edge`, the ALB and WAF, settings, sealing keys, troubleshooting |
+| [Model routes and the team gateway](model-routes.md) | Callers and operators: routes, team gateways, agent variables, health, provider switches (1.2.0) |
+| [Upgrading to 1.2.0](upgrading-to-1.2.0.md) | Operators: migration 000023, new reconciler and billing settings, nothing changes for 1.1.0 agents |
 | [Upgrading to 1.1.0](upgrading-to-1.1.0.md) | Operators: the one-way database upgrade, the backfill, deprecations, new settings |
 | [Export, import and restore](export-import-restore.md) | Operators: bundles, dry-run imports with an account map, restoring a team revision |
 

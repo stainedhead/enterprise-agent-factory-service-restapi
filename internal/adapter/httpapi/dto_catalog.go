@@ -11,7 +11,7 @@ import (
 func toModelBody(m domain.Model) modelBody {
 	return modelBody{ID: m.ID, Provider: m.Provider, DisplayName: m.DisplayName, Enabled: m.Enabled, ContextWindow: m.ContextWindow,
 		MaxOutputTokens: m.MaxOutputTokens, Version: int64(m.Version), UpdatedAt: w2Time(m.UpdatedAt),
-		Callable: m.Callable, PriceState: string(m.PriceState)}
+		Callable: m.Callable, PriceState: string(m.PriceState), ProviderState: domain.ProviderState(m.ProviderOff)}
 }
 
 // toAdminModelBody adds the fields only the admin list shows (serviceEnabled, origin, teamsWithAccess).

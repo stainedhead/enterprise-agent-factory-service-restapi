@@ -23,8 +23,8 @@ func NewAgentRepo() *AgentRepo { return &AgentRepo{} }
 
 var _ agents.Repository = (*AgentRepo)(nil)
 
-const agentSelect = `SELECT a.id, a.team_id, a.name, a.description, a.template, a.image, a.model_id, a.model_access, a.default_model_id,
-  coalesce((SELECT array_agg(x.model_id ORDER BY x.model_id) FROM afs.agent_models x WHERE x.team_id = a.team_id AND x.agent_id = a.id), '{}'), a.resources,
+var agentSelect = `SELECT a.id, a.team_id, a.name, a.description, a.template, a.image, a.model_id, a.model_access, a.default_model_id,
+  coalesce((SELECT array_agg(x.model_id ORDER BY x.model_id) FROM afs.agent_models x WHERE x.team_id = a.team_id AND x.agent_id = a.id), '{}'), ` + subjectRouteCols("a", "agent_model_endpoints", "agent_id") + `, a.resources,
   a.iam_identity, coalesce(ident.external_ref, ''),
   a.storage_size_gib, a.storage_class, a.storage_on_delete, a.snapshot_schedule, a.snapshot_retain_count,
   a.state, a.version, a.generation, a.created_at, a.created_by, a.updated_at,
@@ -52,12 +52,13 @@ func scanAgent(row pgx.Row) (domain.Agent, error) {
 		class, onDelete, scheduled string
 		role                       string
 		access, defModel           string
-		modelIDs                   []string
+		modelIDs, routes           []string
+		rAccess, defRoute          string
 		cConnect                   *bool
 		cPC, cState, cErr          *string
 		cSynced                    *time.Time
 	)
-	err := row.Scan(&a.ID, &a.TeamID, &name, &a.Description, &a.Template, &image, &a.ModelID, &access, &defModel, &modelIDs, &res,
+	err := row.Scan(&a.ID, &a.TeamID, &name, &a.Description, &a.Template, &image, &a.ModelID, &access, &defModel, &modelIDs, &rAccess, &defRoute, &routes, &res,
 		&iam, &a.IAMRoleARN, &sizeGiB, &class, &onDelete, &scheduled, &retain,
 		&state, &ver, &gen, &a.CreatedAt, &a.CreatedBy, &a.UpdatedAt, &phase, &obs, &conds, &lastRec,
 		&role, &cConnect, &cPC, &cState, &cSynced, &cErr)
@@ -78,6 +79,8 @@ func scanAgent(row pgx.Row) (domain.Agent, error) {
 	if modelIDs == nil {
 		a.Models.ModelIDs = []string{}
 	}
+	routeModels(&a.Models, rAccess, defRoute, routes)
+	a.ModelID = a.Models.DefaultRef()
 	if cConnect != nil {
 		c := &domain.AgentCollaboration{Connect: *cConnect, LastSyncedAt: cSynced}
 		if cPC != nil {
@@ -272,15 +275,20 @@ func (*AgentRepo) Insert(ctx context.Context, tx port.Tx, a domain.Agent, templa
 		return err
 	}
 	_, err = pt.Exec(ctx, `INSERT INTO afs.agents (id, team_id, name, description, template, template_id, image, default_model_id, model_access, resources,
-  iam_identity, storage_size_gib, storage_class, storage_on_delete, snapshot_schedule, snapshot_retain_count, state, generation, role)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+  iam_identity, storage_size_gib, storage_class, storage_on_delete, snapshot_schedule, snapshot_retain_count, state, generation, role,
+  route_access, default_route)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
 		a.ID, a.TeamID, string(a.Name), a.Description, a.Template, nullable(templateID), string(a.Image), a.Models.DefaultModelID, string(accessOrAll(a.Models.Access)), res,
 		string(a.IAMIdentity), a.Volume.SizeGiB, a.Volume.StorageClass, a.Volume.OnDelete, a.Volume.SnapshotSchedule,
-		a.Volume.SnapshotRetain, string(a.State), int64(a.Generation), roleOrWorker(a.Role))
+		a.Volume.SnapshotRetain, string(a.State), int64(a.Generation), roleOrWorker(a.Role),
+		string(accessOrAll(a.Models.RouteAccess)), nullRoute(a.Models))
 	if err != nil {
 		return MapError(err, OpWrite, "agent")
 	}
 	if err := replaceModels(ctx, pt, "agent_models", "agent_id", a.TeamID, a.ID, a.Models); err != nil {
+		return err
+	}
+	if err := replaceRoutes(ctx, pt, "agent_model_endpoints", "agent_id", a.TeamID, a.ID, a.Models); err != nil {
 		return err
 	}
 	return replaceBindings(ctx, pt, a)
@@ -299,12 +307,12 @@ func (*AgentRepo) Update(ctx context.Context, tx port.Tx, a domain.Agent, templa
 	}
 	q := `UPDATE afs.agents SET description=$3, default_model_id=$4, model_access=$14, resources=$5, iam_identity=$6,
   storage_size_gib=$7, storage_class=$8, storage_on_delete=$9, snapshot_schedule=$10, snapshot_retain_count=$11,
-  state=$12, generation=$13`
+  state=$12, generation=$13, route_access=$15, default_route=$16`
 	args := []any{a.TeamID, a.ID, a.Description, a.Models.DefaultModelID, res, string(a.IAMIdentity), a.Volume.SizeGiB, a.Volume.StorageClass,
 		a.Volume.OnDelete, a.Volume.SnapshotSchedule, a.Volume.SnapshotRetain, string(a.State), int64(a.Generation)}
-	args = append(args, string(accessOrAll(a.Models.Access)))
+	args = append(args, string(accessOrAll(a.Models.Access)), string(accessOrAll(a.Models.RouteAccess)), nullRoute(a.Models))
 	if templateChanged {
-		q += `, template=$15, template_id=$16, image=$17`
+		q += `, template=$17, template_id=$18, image=$19`
 		args = append(args, a.Template, templateID, string(a.Image))
 	}
 	q += ` WHERE team_id=$1 AND id=$2 AND version=$` + strconv.Itoa(len(args)+1)
@@ -317,6 +325,9 @@ func (*AgentRepo) Update(ctx context.Context, tx port.Tx, a domain.Agent, templa
 		return domain.PreconditionFailed()
 	}
 	if err := replaceModels(ctx, pt, "agent_models", "agent_id", a.TeamID, a.ID, a.Models); err != nil {
+		return err
+	}
+	if err := replaceRoutes(ctx, pt, "agent_model_endpoints", "agent_id", a.TeamID, a.ID, a.Models); err != nil {
 		return err
 	}
 	// Bindings are replaced only when they differ from the stored set.
@@ -505,7 +516,11 @@ WHERE team_id = $1 AND subject_kind = 'agent' AND subject_id = ANY($2) ORDER BY 
 		i := idx[agent]
 		list[i].Models.Effective = append(list[i].Models.Effective, model)
 	}
-	return MapError(rows.Err(), OpRead, "models")
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return MapError(err, OpRead, "models")
+	}
+	return effectiveRoutes(ctx, pt, teamID, "agent", ids, func(id string) *domain.AgentModels { return &list[idx[id]].Models })
 }
 
 // SetCollaboration implements agents.Repository.

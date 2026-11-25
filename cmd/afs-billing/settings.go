@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/aws/athena"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 )
 
 // settings are read from the environment (architecture §7). Everything the Helm chart supplies from
@@ -29,6 +31,30 @@ type settings struct {
 	PriceRegion string
 	// Lookback is how many days ending yesterday a CUR job covers (AFS_BILLING_LOOKBACK_DAYS, default 3).
 	Lookback int
+
+	// AzureScopes maps an Azure route slug to its Cost Management scope (AFS_BILLING_AZURE_SCOPES,
+	// "route=/subscriptions/<id>[/resourceGroups/<name>],..."); GoogleExports a Google route slug to its billing
+	// export table (AFS_BILLING_GOOGLE_EXPORTS, "route=<project>:<dataset>.<table>,..."). A provider with no
+	// entry is not pulled.
+	AzureScopes, GoogleExports map[string]string
+	// PriceListURL is the LiteLLM price list the route-price-sync job reads (AFS_ROUTE_PRICE_LIST_URL).
+	PriceListURL string
+}
+
+// routeMap parses "route=value,route=value".
+func routeMap(name, v string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, part := range strings.Split(v, ",") {
+		if part = strings.TrimSpace(part); part == "" {
+			continue
+		}
+		k, val, ok := strings.Cut(part, "=")
+		if !ok || domain.ValidRouteSlug(k) != nil || val == "" {
+			return nil, fmt.Errorf("%s: %q is not route=value", name, part)
+		}
+		out[k] = val
+	}
+	return out, nil
 }
 
 const defaultLookback = 3
@@ -62,6 +88,14 @@ func settingsFrom(env func(string) string) (settings, error) {
 		}
 		s.Lookback = n
 	}
+	var err error
+	if s.AzureScopes, err = routeMap("AFS_BILLING_AZURE_SCOPES", env("AFS_BILLING_AZURE_SCOPES")); err != nil {
+		return s, err
+	}
+	if s.GoogleExports, err = routeMap("AFS_BILLING_GOOGLE_EXPORTS", env("AFS_BILLING_GOOGLE_EXPORTS")); err != nil {
+		return s, err
+	}
+	s.PriceListURL = env("AFS_ROUTE_PRICE_LIST_URL")
 	if s.DatabaseURL == "" {
 		return s, errors.New("AFS_DATABASE_URL is not set")
 	}

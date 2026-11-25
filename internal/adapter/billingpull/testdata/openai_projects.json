@@ -1,0 +1,5 @@
+{"object":"list","data":[
+ {"id":"proj_a","object":"organization.project","name":"afs team_01JD2Q3R4S5T6V7W8X9Y0Z0001","created_at":1795132800,"archived_at":null,"status":"active"},
+ {"id":"proj_b","object":"organization.project","name":"afs team_01JD2Q3R4S5T6V7W8X9Y0Z0002","created_at":1795132800,"archived_at":null,"status":"active"},
+ {"id":"proj_x","object":"organization.project","name":"Default project","created_at":1795132800,"archived_at":null,"status":"active"}
+],"first_id":"proj_a","last_id":"proj_x","has_more":false}

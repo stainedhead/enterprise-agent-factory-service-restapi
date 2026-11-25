@@ -80,6 +80,8 @@ type Desired struct {
 	ModelID     string
 	// Models are the model ids the pool may call (afs.effective_agent_models), sorted.
 	Models []string
+	// Routes are the pool's effective model routes and route default (v1.2.0).
+	Routes agent.LLMRoutes
 	// ModelReason and PrevModelUnavailable: see agent.Desired.
 	ModelReason          string
 	PrevModelUnavailable *bool

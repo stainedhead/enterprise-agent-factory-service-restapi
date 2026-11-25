@@ -1,0 +1,5 @@
+{"data":[
+ {"name":"afs team_01JD2Q3R4S5T6V7W8X9Y0Z0001","label":"sk-or-v1-abc...123","limit":100,"disabled":false,"usage":52.1,"usage_daily":3.25,"usage_weekly":20.0,"usage_monthly":52.1,"hash":"h1","created_at":"2026-11-01T00:00:00Z","updated_at":null},
+ {"name":"ci","label":"afs team_01JD2Q3R4S5T6V7W8X9Y0Z0002","limit":null,"disabled":false,"usage":1,"usage_daily":1.5,"usage_weekly":1,"usage_monthly":1,"hash":"h2","created_at":"2026-11-01T00:00:00Z","updated_at":null},
+ {"name":"personal","label":"sk-or-v1-def...456","limit":null,"disabled":true,"usage":9,"usage_daily":0.75,"usage_weekly":9,"usage_monthly":9,"hash":"h3","created_at":"2026-11-01T00:00:00Z","updated_at":null}
+]}

@@ -22,6 +22,9 @@ type Deps struct {
 	SettleRecorder SettleRecorder
 	// ModelDenials is optional: told of every call refused by model admission.
 	ModelDenials ModelDenialRecorder
+	// Routes and Upstreams serve model routes; both are set on a team gateway only (gateway contract §12).
+	Routes    RouteStore
+	Upstreams UpstreamAuth
 }
 
 // Config configures the Service.
@@ -41,7 +44,10 @@ type Config struct {
 	SettleQueueSize                                    int
 	SettleRetryWindow, SettleRetryBase, SettleRetryMax time.Duration
 	Now                                                func() time.Time
-	Log                                                *slog.Logger
+	// TeamNamespace is set on a team gateway (--team-namespace): it serves that namespace's pods only, and
+	// only it serves model routes (gateway contract §12.1).
+	TeamNamespace string
+	Log           *slog.Logger
 }
 
 // Service runs one model call from identification to settlement.

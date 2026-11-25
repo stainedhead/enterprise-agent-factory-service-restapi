@@ -2,6 +2,33 @@
 
 All notable changes to this repository. `-db` and `-restapi` share version numbers (lockstep).
 
+## v1.2.0
+
+Team model gateway, model routes and provider switches (spec `specs/261125-model-endpoint-gateway/`, change PRD
+`model-endpoint-gateway-PRD.md`). Adopts `-db` migration 000023 (pinned to the pseudo-version of `-db` commit `debc7d9`
+until `-db` v1.2.0 is tagged; see `user-docs/upgrading-to-1.2.0.md`). Nothing changes for a 1.1.0 agent on the shared gateway.
+
+- API contract v1.5.0 §4.13 (27 operations; 221 with the 1.1.0 set): service model endpoints, their models, prices and
+  price proposals, credentials (`{value}` in, metadata out), federations, provider statements (JSON and CSV), inference
+  providers (`UpdateInferenceProvider`, Bedrock fallback guard), `PutTeamGatewaySettings`, team route selections and
+  team-declared endpoints, `GetInferenceReport` and `GetTeamInferenceReport`. Agent and pool `models` gain `routeAccess`,
+  `routes`, `defaultRoute`, `effectiveRoutes` and `env`; usage and cost reports group and filter by `route`; `ListModels`
+  adds `providerState`. The MCP fields of contract v1.6.0 on `PutTeamGatewaySettings` are decoded and refused until 1.3.0.
+- Gateway: team mode (`--team-namespace`, `AFS_GATEWAY_TEAM_ID`); route admission from `afs.route_admission` (60 s cache,
+  change-feed invalidation); OpenAI pass-through for Chat Completions, Responses, Embeddings and SSE with the output cap
+  written into the request and `include_usage` injected and stripped; provider cost settles to the larger;
+  `/r/bedrock` Chat Completions to Converse (`unsupported_parameter`); upstream auth from mounted files and Azure and
+  Google federation; `GET /v1/models` per route; GenAI telemetry without agent labels. The router is a Mux of route families.
+- Reconciler: the team gateway per namespace (ServiceAccount, Deployment, Service, PodDisruptionBudget,
+  CiliumNetworkPolicy, ExternalSecrets, Certificate) behind `teams.gateway_deployment`; route-host egress from the team
+  gateway only; route variables, `OPENAI_BASE_URL` and `/etc/afs/llm-routes.json` for agents and pools; route defaults
+  checked with `afs.route_admission`; route health (`team_route`, `team_gateway` status) with `model_endpoint.degraded`
+  and `.recovered`. Settings `AFS_TEAM_GATEWAY_*`.
+- Billing: jobs `route-pull` (OpenAI, OpenRouter, Azure Cost Management, Google billing export, recorded fixtures),
+  `route-statements` (Nous, OpenCode), `route-capacity` (cost_daily `route_capacity` by token share) and
+  `route-price-sync` (LiteLLM's list into endpoint price proposals); gateway rollup writes route calls as source `route`.
+- Deploy: four billing CronJobs; the billing role reads `<prefix>/_service/billing/*`.
+
 ## v1.1.0
 
 Team orchestration agent and model access (spec `specs/261123-orchestration-and-model-access/`, change PRD `team-orchestration-agent-PRD.md`). Adopts `-db` migration 000022 (one-way upgrade; see `user-docs/upgrading-to-1.1.0.md`):

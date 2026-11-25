@@ -39,17 +39,23 @@ func CiliumTeamPolicy(env team.Environment) *unstructured.Unstructured {
 					"rules": map[string]any{"dns": []any{map[string]any{"matchPattern": "*"}}},
 				}},
 			},
-			map[string]any{
-				"toEndpoints": []any{map[string]any{"matchLabels": map[string]any{
-					podNamespaceLabel: env.GatewayNamespace, gatewayNameLabel: env.GatewayName,
-				}}},
-				"toPorts": []any{map[string]any{
-					"ports": []any{map[string]any{"port": port(env.GatewayPort), "protocol": "TCP"}},
-				}},
-			},
+			gatewayEgress(env),
 		},
 	}
 	return Managed(u, OwnerOfTeam(env.Team))
+}
+
+// gatewayEgress is the connection to the team's gateway: the shared afs-gateway, or the team's own in its
+// namespace while the team is per_namespace (gateway contract §12.1).
+func gatewayEgress(env team.Environment) map[string]any {
+	ns, name, p := env.GatewayNamespace, env.GatewayName, env.GatewayPort
+	if env.Team.Gateway.PerNamespace() {
+		ns, name, p = env.Team.Namespace, team.TeamGatewayName, team.TeamGatewayPort
+	}
+	return map[string]any{
+		"toEndpoints": []any{map[string]any{"matchLabels": map[string]any{podNamespaceLabel: ns, gatewayNameLabel: name}}},
+		"toPorts":     []any{map[string]any{"ports": []any{map[string]any{"port": port(p), "protocol": "TCP"}}}},
+	}
 }
 
 // OwnerPlatform is the owner of the cluster-wide objects.

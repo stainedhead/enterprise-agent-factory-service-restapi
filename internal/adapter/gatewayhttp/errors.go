@@ -46,6 +46,8 @@ func statusOf(err error) int {
 		return http.StatusTooManyRequests
 	case domain.KindUpstream:
 		return http.StatusBadGateway
+	case domain.KindUpstreamTimeout:
+		return http.StatusGatewayTimeout
 	case domain.KindUnavailable:
 		return http.StatusServiceUnavailable
 	}
@@ -128,7 +130,7 @@ func (rw *respWriter) writeProblem(err error, status int, anthropic bool) {
 		switch {
 		case de.RetryAfterSeconds > 0:
 			rw.Header().Set("Retry-After", strconv.Itoa(de.RetryAfterSeconds))
-		case de.Kind == domain.KindUnavailable || de.Kind == domain.KindUpstream:
+		case de.Kind == domain.KindUnavailable || de.Kind == domain.KindUpstream || de.Kind == domain.KindUpstreamTimeout:
 			rw.Header().Set("Retry-After", "1")
 		}
 	}

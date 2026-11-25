@@ -214,7 +214,7 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in
 		if p.Models, err = domain.ResolveNewModels(in.Models, in.ModelID, sets); err != nil {
 			return err
 		}
-		p.ModelID = p.Models.DefaultModelID
+		p.ModelID = p.Models.DefaultRef()
 		if err := s.checkStage(ctx, tx, teamID, p.StageID); err != nil {
 			return err
 		}
@@ -299,7 +299,7 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, teamID, id string
 			if next.Models, err = cur.Models.ApplyModels(patch.Models, legacy, sets); err != nil {
 				return err
 			}
-			next.ModelID = next.Models.DefaultModelID
+			next.ModelID = next.Models.DefaultRef()
 		}
 		if next.StageID != cur.StageID {
 			if err := s.checkStage(ctx, tx, teamID, next.StageID); err != nil {

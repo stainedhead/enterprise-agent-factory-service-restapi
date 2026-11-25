@@ -236,6 +236,8 @@ type Record struct {
 	Cost       domain.Money
 	LatencyMS  int
 	TagSetID   string
+	// Route is set on a route call: ModelID is then empty (gateway contract §12.6).
+	Route *RouteFields
 }
 
 // UsageSink accepts usage rows. Record never blocks the call: the writer batches (gateway contract §8).

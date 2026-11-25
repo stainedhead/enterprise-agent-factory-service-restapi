@@ -73,6 +73,21 @@ type Target struct {
 	Children bool
 }
 
+// GatewayTables are the model gateway tables (-db 000023) whose rows change a team's route set: a row with a
+// team part concerns that team, a service-level row (a service endpoint, a provider switch) every team.
+var GatewayTables = []string{"model_endpoints", "endpoint_models", "endpoint_model_prices", "endpoint_credentials",
+	"endpoint_federations", "team_model_endpoints", "inference_providers"}
+
+// GatewayRoutes routes the gateway tables (and extra, the subject's own selection table) to every resource of
+// kind in the team named by the change, or to every resource of kind for a service-level change.
+func GatewayRoutes(kind Kind, children bool, extra ...string) []Route {
+	var out []Route
+	for _, t := range append(append([]string{}, GatewayTables...), extra...) {
+		out = append(out, Route{Table: t, Targets: []Target{{Kind: kind, Children: children}}, FanOut: []Kind{kind}})
+	}
+	return out
+}
+
 // Route maps one table to the resources to reconcile when a row of it changes.
 type Route struct {
 	Table   string

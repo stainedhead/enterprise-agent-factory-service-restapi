@@ -1,0 +1,3 @@
+{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/afs/providers/Microsoft.CostManagement/query/q1","name":"q1","type":"Microsoft.CostManagement/query",
+ "properties":{"nextLink":null,"columns":[{"name":"CostUSD","type":"Number"},{"name":"ResourceGroupName","type":"String"},{"name":"TagKey","type":"String"},{"name":"TagValue","type":"String"},{"name":"Currency","type":"String"}],
+ "rows":[[12.5,"rg-shared","afs-team-id","team_01JD2Q3R4S5T6V7W8X9Y0Z0001","USD"],[2.5,"rg-team_01jd2q3r4s5t6v7w8x9y0z0001","","","USD"],[1.25,"rg-other","","","USD"]]}}

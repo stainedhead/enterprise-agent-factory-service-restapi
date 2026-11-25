@@ -19,9 +19,9 @@ and [-website](https://github.com/stainedhead/enterprise-agent-factory-service-w
 console) are clients of this API and consume `api/openapi.yaml`. Requirements: the root repository's
 `enterprise-agent-factory-service-initial-PRD.md`.
 
-Status: feature complete, release 1.1.0 (lockstep with `-db`, migrations 000001-000022): the REST API
-(194 operations, contract v1.4.0), reconciler, gateway, billing job and edge, with the team orchestration
-agent and model access added in 1.1.0.
+Status: feature complete, release 1.2.0 (lockstep with `-db`, migrations 000001-000023): the REST API
+(221 operations, contract v1.5.0, plus the v1.6.0 MCP operations pending for 1.3.0), reconciler, gateway, billing job
+and edge, with the team model gateway, model routes and provider switches added in 1.2.0.
 
 ## Toolchain
 
@@ -53,6 +53,8 @@ internal/usecase/edge/    edge decisions: classes, sessions, scan, caches (>= 90
 internal/adapter/edge*/   edgehttp (proxy, WebSocket), edgedb (afs_edge functions), edgesession (sealer), edgelog
 internal/adapter/k8s/     Kubernetes client for the reconciler
 internal/adapter/aws/     IAM, Pod Identity, Secrets Manager, Bedrock, EventBridge, Athena
+internal/adapter/billingpull/ provider cost pulls (OpenAI, OpenRouter, Azure, Google) and the LiteLLM price list, recorded fixtures
+internal/adapter/routeup/, routeauth/ team gateway upstream clients and Azure/Google federation token exchange
 internal/buildinfo/       version stamped by the Makefile
 deploy/helm/  deploy/terraform/
 docs/  user-docs/  specs/
@@ -161,7 +163,7 @@ for design, requirements, spec or process material, and must not link into `spec
 
 ## Git
 
-**Versioning (lockstep).** `-db` and `-restapi` share version numbers: release `vX.Y.Z` of this repository goes with `vX.Y.Z` of `enterprise-agent-factory-service-db`. The current release is 1.1.0 (`-db` v1.1.0 adds migration 000022). The Makefile `VERSION` default and the Helm chart `version` and `appVersion` carry it; `CHANGELOG.md` records each release.
+**Versioning (lockstep).** `-db` and `-restapi` share version numbers: release `vX.Y.Z` of this repository goes with `vX.Y.Z` of `enterprise-agent-factory-service-db`. The current release is 1.2.0 (`-db` v1.2.0 adds migration 000023). The Makefile `VERSION` default and the Helm chart `version` and `appVersion` carry it; `CHANGELOG.md` records each release.
 
 Clear commit messages that reference the spec directory when there is one. Do not force-push shared
 branches. Do not commit `bin/`, `dist/`, coverage output or Terraform state. Work on a branch and open a

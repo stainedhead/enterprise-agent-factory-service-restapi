@@ -51,7 +51,7 @@ func TestRunUsage(t *testing.T) {
 }
 
 func TestEveryHelmJobOfThisStreamIsRegistered(t *testing.T) {
-	for _, name := range []string{"cur-ingest", "reconcile", "price-sync"} {
+	for _, name := range []string{"cur-ingest", "reconcile", "price-sync", "route-pull", "route-statements", "route-capacity", "route-price-sync"} {
 		if _, ok := jobs[name]; !ok {
 			t.Errorf("job %s is not registered (deploy/helm/afs/values/billing.yaml)", name)
 		}
@@ -223,5 +223,41 @@ func TestLogVarianceIsStructuredAndWarnsOverThreshold(t *testing.T) {
 	}
 	if !strings.Contains(lines[1], `"level":"INFO"`) {
 		t.Errorf("a quiet day must be INFO: %s", lines[1])
+	}
+}
+
+func TestRouteBillingSettings(t *testing.T) {
+	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+	s, err := settingsFrom(env(map[string]string{"AFS_DATABASE_URL": "postgres://u@h/db",
+		"AFS_BILLING_AZURE_SCOPES":   "azure-prod=/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/afs, ",
+		"AFS_BILLING_GOOGLE_EXPORTS": "vertex=afs-billing-prj:billing.export", "AFS_ROUTE_PRICE_LIST_URL": "https://prices.example.com/list.json"}))
+	if err != nil || s.AzureScopes["azure-prod"] == "" || s.GoogleExports["vertex"] != "afs-billing-prj:billing.export" || s.PriceListURL == "" {
+		t.Fatalf("settings = %+v %v", s, err)
+	}
+	for _, bad := range []map[string]string{
+		{"AFS_DATABASE_URL": "x", "AFS_BILLING_AZURE_SCOPES": "no-equals"},
+		{"AFS_DATABASE_URL": "x", "AFS_BILLING_GOOGLE_EXPORTS": "Bad_Slug=p:d.t"},
+	} {
+		if _, err := settingsFrom(env(bad)); err == nil {
+			t.Errorf("%v: want error", bad)
+		}
+	}
+	a := &app{settings: s}
+	if n := len(a.dailyPullers(nil, nil)); n != 3 {
+		t.Errorf("pullers = %d", n)
+	}
+	if n := len((&app{}).dailyPullers(nil, nil)); n != 1 {
+		t.Errorf("pullers without Azure and Google = %d", n)
+	}
+}
+
+func TestStatementMonth(t *testing.T) {
+	now := time.Date(2026, 1, 5, 7, 0, 0, 0, time.UTC)
+	if got := statementMonth(now, jobInput{}); !got.Equal(time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("default = %v", got)
+	}
+	d := time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)
+	if got := statementMonth(now, jobInput{Day: &d}); !got.Equal(d) {
+		t.Errorf("--day = %v", got)
 	}
 }

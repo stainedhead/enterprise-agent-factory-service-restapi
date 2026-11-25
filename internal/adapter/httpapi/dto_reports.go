@@ -128,7 +128,7 @@ func cell(v any) string {
 func rawReportQuery(r *http.Request) domain.RawReportQuery {
 	q := r.URL.Query()
 	raw := domain.RawReportQuery{From: q.Get("from"), To: q.Get("to"), Range: q.Get("range"), GroupBy: q.Get("groupBy"),
-		TeamID: q.Get("teamId"), AgentID: q.Get("agentId"), ModelID: q.Get("modelId"), SystemID: q.Get("systemId"), PoolID: q.Get("poolId")}
+		TeamID: q.Get("teamId"), AgentID: q.Get("agentId"), ModelID: q.Get("modelId"), SystemID: q.Get("systemId"), PoolID: q.Get("poolId"), Route: q.Get("route")}
 	for name, vals := range q {
 		if key, ok := strings.CutPrefix(name, "tag."); ok && len(vals) > 0 {
 			if raw.Tags == nil {
