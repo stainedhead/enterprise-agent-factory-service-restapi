@@ -71,7 +71,9 @@ type fedStore struct {
 	reports []string
 }
 
-func (s *fedStore) Federation(context.Context, string, string) (routeauth.Federation, error) { return s.f, s.err }
+func (s *fedStore) Federation(context.Context, string, string) (routeauth.Federation, error) {
+	return s.f, s.err
+}
 
 func (s *fedStore) ReportFederation(_ context.Context, _, _, status, _ string) error {
 	s.reports = append(s.reports, status)
