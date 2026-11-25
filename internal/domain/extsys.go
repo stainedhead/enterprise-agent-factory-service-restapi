@@ -28,12 +28,15 @@ const (
 	ExtIdentity      ExtCategory = "identity"
 	ExtLLM           ExtCategory = "llm"
 	ExtOther         ExtCategory = "other"
+	// ExtMcp (v1.6.0) is an MCP server reached directly. Once an MCP server of the catalog covers its host,
+	// the system cannot be granted (409 governed_by_mcp_server): agents use the gateway instead.
+	ExtMcp ExtCategory = "mcp"
 )
 
 // Valid reports whether c is a known category.
 func (c ExtCategory) Valid() bool {
 	switch c {
-	case ExtDevTools, ExtCollaboration, ExtEmail, ExtCloud, ExtIdentity, ExtLLM, ExtOther:
+	case ExtDevTools, ExtCollaboration, ExtEmail, ExtCloud, ExtIdentity, ExtLLM, ExtOther, ExtMcp:
 		return true
 	}
 	return false

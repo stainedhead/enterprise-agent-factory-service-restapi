@@ -57,9 +57,9 @@ var OrchestrationSettingSpecs = []SettingSpec{
 	{Key: SettingModelsDefaultModelID, Type: "string", Default: "null", Nullable: true, Pattern: "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$", Allowed: "null, or an enabled model"},
 }
 
-// AllSettingSpecs returns the generated registry followed by the orchestration and model settings.
+// AllSettingSpecs returns the generated registry followed by the orchestration, model and MCP settings.
 func AllSettingSpecs() []SettingSpec {
-	return slices.Concat(SettingSpecs, OrchestrationSettingSpecs)
+	return slices.Concat(SettingSpecs, OrchestrationSettingSpecs, McpSettingSpecs)
 }
 
 // RenamedSettings maps the 1.0.1 setting keys that 1.1.0 renamed to their new keys. PutSetting refuses the old key

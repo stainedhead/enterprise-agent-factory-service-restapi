@@ -267,7 +267,8 @@ func TestEffective(t *testing.T) {
 	if got := authz.ServicePermissions(svcAdmin); len(got) != len(authz.AllPermissions()) {
 		t.Error("service admin service permissions")
 	}
-	want := []authz.Permission{authz.TeamsReadDirectory, authz.WorkOrdersRead, authz.WorkOrdersWrite, authz.SwarmTemplatesRead}
+	want := []authz.Permission{authz.TeamsReadDirectory, authz.WorkOrdersRead, authz.WorkOrdersWrite, authz.SwarmTemplatesRead,
+		authz.McpServersRead, authz.McpServersReview, authz.McpServersSuspend, authz.McpEventsRead}
 	if got := authz.ServicePermissions(secOp); !slices.Equal(got, want) {
 		t.Errorf("security operator column = %v, want %v", got, want)
 	}
@@ -351,6 +352,63 @@ func TestModelEndpointPermissions(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			d := authz.Authorize(c.p, c.perm, c.res)
+			if d.Outcome != c.want {
+				t.Fatalf("outcome = %v, want %v", d.Outcome, c.want)
+			}
+			if c.want == authz.Deny && d.RequiredPermission != c.perm {
+				t.Errorf("required = %s, want %s", d.RequiredPermission, c.perm)
+			}
+		})
+	}
+}
+
+// TestMcpPermissions: contract v1.6.0 §4.14. Service paths serve service admins and security operators; team
+// roles use the team paths (CD-45); team-admins pass the route for team-mcp-servers:approve and the use case
+// decides mcpApprovalPolicy.
+func TestMcpPermissions(t *testing.T) {
+	collab := authz.Principal{ID: "usr_c", Type: authz.PrincipalUser, Bindings: []authz.Binding{{Role: authz.RoleTeamCollaborator, TeamID: teamA}}}
+	ta := team(teamA, authz.TeamFlags{})
+	cases := []struct {
+		name string
+		p    authz.Principal
+		perm authz.Permission
+		res  authz.Resource
+		want authz.Outcome
+	}{
+		{"service admin writes the catalog", svcAdmin, authz.McpServersWrite, service, authz.Allow},
+		{"service admin writes MCP settings", svcAdmin, authz.McpSettingsWrite, service, authz.Allow},
+		{"security operator reads the catalog", secOp, authz.McpServersRead, service, authz.Allow},
+		{"security operator reviews", secOp, authz.McpServersReview, service, authz.Allow},
+		{"security operator suspends", secOp, authz.McpServersSuspend, service, authz.Allow},
+		{"security operator reads the ledger", secOp, authz.McpEventsRead, service, authz.Allow},
+		{"security operator cannot write the catalog", secOp, authz.McpServersWrite, service, authz.Deny},
+		{"security operator cannot write MCP settings", secOp, authz.McpSettingsWrite, service, authz.Deny},
+		{"security operator is denied team MCP routes", secOp, authz.TeamMcpServersRead, ta, authz.Deny},
+		{"team-admin cannot use service MCP paths", admin, authz.McpServersRead, service, authz.Deny},
+		{"team-admin cannot review", admin, authz.McpServersReview, service, authz.Deny},
+		{"viewer cannot read the service ledger", viewer, authz.McpEventsRead, service, authz.Deny},
+		{"team key cannot suspend", teamKey, authz.McpServersSuspend, service, authz.Deny},
+		{"viewer reads the team's servers", viewer, authz.TeamMcpServersRead, ta, authz.Allow},
+		{"collaborator reads the team's servers", collab, authz.TeamMcpServersRead, ta, authz.Allow},
+		{"viewer reads the team ledger", viewer, authz.McpEventsRead, ta, authz.Allow},
+		{"viewer cannot switch servers", viewer, authz.TeamMcpServersWrite, ta, authz.Deny},
+		{"collaborator cannot switch servers", collab, authz.TeamMcpServersWrite, ta, authz.Deny},
+		{"viewer cannot approve", viewer, authz.TeamMcpServersApprove, ta, authz.Deny},
+		{"team-admin switches servers", admin, authz.TeamMcpServersWrite, ta, authz.Allow},
+		{"team-admin passes the approval route", admin, authz.TeamMcpServersApprove, ta, authz.Allow},
+		{"team-admin writes federated identities", admin, authz.AgentFederatedIdentitiesWrite, ta, authz.Allow},
+		{"viewer cannot write federated identities", viewer, authz.AgentFederatedIdentitiesWrite, ta, authz.Deny},
+		{"team-admin of another team is not found", admin, authz.TeamMcpServersWrite, team(teamB, authz.TeamFlags{}), authz.NotFound},
+		{"service admin approves any team's server", svcAdmin, authz.TeamMcpServersApprove, team(teamB, authz.TeamFlags{}), authz.Allow},
+		{"workload cannot read team servers", workload, authz.TeamMcpServersRead, ta, authz.Deny},
+		{"unbound is not found", unbound, authz.TeamMcpServersRead, ta, authz.NotFound},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			d := authz.Check(c.p, authz.Requirement{Permission: c.perm}, c.res)
+			if c.perm == authz.TeamMcpServersApprove {
+				d = authz.Check(c.p, authz.Requirement{Permission: c.perm, Condition: authz.CondMcpApprovalPolicy}, c.res)
+			}
 			if d.Outcome != c.want {
 				t.Fatalf("outcome = %v, want %v", d.Outcome, c.want)
 			}

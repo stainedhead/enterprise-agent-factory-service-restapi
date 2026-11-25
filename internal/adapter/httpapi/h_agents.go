@@ -112,6 +112,9 @@ func (a *AgentsAPI) create(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
+	if refuseMcpUntilBuilt(w, r, req.Mcp) {
+		return
+	}
 	vol, err := req.Volume.spec()
 	if err != nil {
 		WriteError(w, r, err)
@@ -158,6 +161,9 @@ func (a *AgentsAPI) update(w http.ResponseWriter, r *http.Request) {
 	var req updateAgentRequest
 	if err := Decode(r, &req); err != nil {
 		WriteError(w, r, err)
+		return
+	}
+	if refuseMcpUntilBuilt(w, r, req.Mcp) {
 		return
 	}
 	p := domain.AgentPatch{Name: req.Name, Description: req.Description, Template: req.Template, Image: req.Image, ModelID: req.ModelID,

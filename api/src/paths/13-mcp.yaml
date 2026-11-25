@@ -1,0 +1,5278 @@
+# API contract v1.6.0 §4.14: governed MCP servers and federated identities. Generated once from the contract, then hand-maintained.
+/v1/mcp-servers:
+  get:
+    operationId: ListMcpServers
+    summary: List MCP servers
+    tags:
+    - mcp-servers
+    parameters:
+    - name: scope
+      in: query
+      schema:
+        type: string
+        enum:
+        - enterprise
+        - team
+        - all
+    - name: reviewStatus
+      in: query
+      schema:
+        type: string
+        enum:
+        - draft
+        - pending_review
+        - approved
+        - rejected
+        - suspended
+    - name: riskTier
+      in: query
+      schema:
+        type: string
+        enum:
+        - low
+        - elevated
+        - high
+    - name: teamId
+      in: query
+      schema:
+        type: string
+        pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+    - name: location
+      in: query
+      schema:
+        type: string
+        enum:
+        - external
+        - corporate
+        - in_namespace
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServerList'
+            example:
+              items:
+              - id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                teamId: null
+                scope: enterprise
+                slug: github
+                displayName: GitHub
+                owner: Developer platform
+                purpose: Repositories, issues and pull requests
+                docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+                dataClassification: internal
+                transport: streamable_http
+                location: external
+                url: https://api.githubcopilot.com/mcp/
+                hosted: null
+                authKind: oauth_client
+                authHeader: null
+                credentialMode: per_team
+                federation: null
+                protocolVersion: '2026-07-28'
+                reviewStatus: approved
+                published: true
+                riskTier: elevated
+                riskReasons:
+                - external_host
+                - destructive_tools
+                approver: null
+                checks:
+                - name: tls
+                  outcome: pass
+                  detail: null
+                  checkedAt: '2026-11-25T18:00:00Z'
+                - name: description_injection
+                  outcome: pass
+                  detail: null
+                  checkedAt: '2026-11-25T18:00:00Z'
+                driftPolicy: hold
+                defaultForNewTeams: false
+                allowSampling: false
+                trustAnnotations: true
+                limits:
+                  requestBytes: 1048576
+                  responseBytes: 8388608
+                  timeoutSeconds: 60
+                  concurrentPerAgent: 8
+                credentialState: set
+                suspendedReason: null
+                adoption:
+                  teams: 12
+                  agents: 85
+                version: 4
+                createdAt: '2026-11-25T18:00:00Z'
+                createdBy: usr_admin
+                updatedAt: '2026-11-25T18:00:00Z'
+              nextToken: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:read
+    x-afs-scope: service
+    x-afs-cli: mcp-servers list-mcp-servers
+    x-afs-sdk: mcpServers.list()
+    x-afs-screen: '46'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateMcpServer
+    summary: Create MCP server
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateMcpServerRequest'
+          example:
+            slug: github
+            displayName: GitHub
+            owner: Developer platform
+            purpose: Repositories, issues and pull requests
+            dataClassification: internal
+            transport: streamable_http
+            location: external
+            url: https://api.githubcopilot.com/mcp/
+            authKind: oauth_client
+            credentialMode: per_team
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: null
+              scope: enterprise
+              slug: github
+              displayName: GitHub
+              owner: Developer platform
+              purpose: Repositories, issues and pull requests
+              docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+              dataClassification: internal
+              transport: streamable_http
+              location: external
+              url: https://api.githubcopilot.com/mcp/
+              hosted: null
+              authKind: oauth_client
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: draft
+              published: false
+              riskTier: null
+              riskReasons: []
+              approver: null
+              checks: []
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: true
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: missing
+              suspendedReason: null
+              adoption:
+                teams: 0
+                agents: 0
+              version: 1
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:write
+    x-afs-scope: service
+    x-afs-cli: mcp-servers create-mcp-server
+    x-afs-sdk: mcpServers.create()
+    x-afs-screen: '48'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.created
+/v1/mcp-servers/{mcpServerId}:
+  get:
+    operationId: GetMcpServer
+    summary: Get MCP server
+    tags:
+    - mcp-servers
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: null
+              scope: enterprise
+              slug: github
+              displayName: GitHub
+              owner: Developer platform
+              purpose: Repositories, issues and pull requests
+              docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+              dataClassification: internal
+              transport: streamable_http
+              location: external
+              url: https://api.githubcopilot.com/mcp/
+              hosted: null
+              authKind: oauth_client
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: approved
+              published: true
+              riskTier: elevated
+              riskReasons:
+              - external_host
+              - destructive_tools
+              approver: null
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: true
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: set
+              suspendedReason: null
+              adoption:
+                teams: 12
+                agents: 85
+              version: 4
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:read
+    x-afs-scope: service
+    x-afs-cli: mcp-servers describe-mcp-server
+    x-afs-sdk: mcpServers.get()
+    x-afs-screen: '47'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  patch:
+    operationId: UpdateMcpServer
+    summary: Update MCP server
+    tags:
+    - mcp-servers
+    description: Enterprise servers; a change of url, image, location or auth returns an approved server to pending_review
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateMcpServerRequest'
+          example:
+            purpose: Repositories, issues, pull requests and Actions
+            defaultForNewTeams: false
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: null
+              scope: enterprise
+              slug: github
+              displayName: GitHub
+              owner: Developer platform
+              purpose: Repositories, issues, pull requests and Actions
+              docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+              dataClassification: internal
+              transport: streamable_http
+              location: external
+              url: https://api.githubcopilot.com/mcp/
+              hosted: null
+              authKind: oauth_client
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: approved
+              published: true
+              riskTier: elevated
+              riskReasons:
+              - external_host
+              - destructive_tools
+              approver: null
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: true
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: set
+              suspendedReason: null
+              adoption:
+                teams: 12
+                agents: 85
+              version: 5
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:write
+    x-afs-scope: service
+    x-afs-cli: mcp-servers update-mcp-server
+    x-afs-sdk: mcpServers.update()
+    x-afs-screen: '47'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.updated
+    - mcp_server.submitted
+  delete:
+    operationId: DeleteMcpServer
+    summary: Delete MCP server
+    tags:
+    - mcp-servers
+    description: Refused while switched on for any team (409 server_in_use)
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:write
+    x-afs-scope: service
+    x-afs-cli: mcp-servers delete-mcp-server
+    x-afs-sdk: mcpServers.delete()
+    x-afs-screen: '47'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.deleted
+/v1/mcp-servers:import:
+  post:
+    operationId: ImportMcpServerManifest
+    summary: Import MCP server manifest
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ImportMcpServerManifestRequest'
+          example:
+            manifest:
+              name: io.github.github/github-mcp-server
+              version: 1.2.0
+              remotes:
+              - type: streamable-http
+                url: https://api.githubcopilot.com/mcp/
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: null
+              scope: enterprise
+              slug: github
+              displayName: GitHub
+              owner: ''
+              purpose: ''
+              docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+              dataClassification: internal
+              transport: streamable_http
+              location: external
+              url: https://api.githubcopilot.com/mcp/
+              hosted: null
+              authKind: oauth_client
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: draft
+              published: false
+              riskTier: null
+              riskReasons: []
+              approver: null
+              checks: []
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: true
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: missing
+              suspendedReason: null
+              adoption:
+                teams: 0
+                agents: 0
+              version: 1
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:write
+    x-afs-scope: service
+    x-afs-cli: mcp-servers import-mcp-server-manifest
+    x-afs-sdk: mcpServers.importManifest()
+    x-afs-screen: '48'
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.created
+/v1/mcp-servers/{mcpServerId}:publish:
+  post:
+    operationId: PublishMcpServer
+    summary: Publish MCP server
+    tags:
+    - mcp-servers
+    description: Needs approved (409 server_not_approved)
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpReviewNoteRequest'
+          example:
+            note: Open to all teams
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: null
+              scope: enterprise
+              slug: github
+              displayName: GitHub
+              owner: Developer platform
+              purpose: Repositories, issues and pull requests
+              docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+              dataClassification: internal
+              transport: streamable_http
+              location: external
+              url: https://api.githubcopilot.com/mcp/
+              hosted: null
+              authKind: oauth_client
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: approved
+              published: true
+              riskTier: elevated
+              riskReasons:
+              - external_host
+              - destructive_tools
+              approver: null
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: true
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: set
+              suspendedReason: null
+              adoption:
+                teams: 12
+                agents: 85
+              version: 4
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:write
+    x-afs-scope: service
+    x-afs-cli: mcp-servers publish-mcp-server
+    x-afs-sdk: mcpServers.publish()
+    x-afs-screen: '47'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.published
+/v1/mcp-servers/{mcpServerId}:retire:
+  post:
+    operationId: RetireMcpServer
+    summary: Retire MCP server
+    tags:
+    - mcp-servers
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpReviewNoteRequest'
+          example:
+            note: Replaced by github-v2
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: null
+              scope: enterprise
+              slug: github
+              displayName: GitHub
+              owner: Developer platform
+              purpose: Repositories, issues and pull requests
+              docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+              dataClassification: internal
+              transport: streamable_http
+              location: external
+              url: https://api.githubcopilot.com/mcp/
+              hosted: null
+              authKind: oauth_client
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: approved
+              published: false
+              riskTier: elevated
+              riskReasons:
+              - external_host
+              - destructive_tools
+              approver: null
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: true
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: set
+              suspendedReason: null
+              adoption:
+                teams: 12
+                agents: 85
+              version: 4
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:write
+    x-afs-scope: service
+    x-afs-cli: mcp-servers retire-mcp-server
+    x-afs-sdk: .retire()
+    x-afs-screen: '47'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.retired
+/v1/mcp-servers/{mcpServerId}:suspend:
+  post:
+    operationId: SuspendMcpServer
+    summary: Suspend MCP server
+    tags:
+    - mcp-servers
+    description: Any server; the gateway enforces it within 60 s
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpReasonRequest'
+          example:
+            reason: Upstream vendor incident INC-2214
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: null
+              scope: enterprise
+              slug: github
+              displayName: GitHub
+              owner: Developer platform
+              purpose: Repositories, issues and pull requests
+              docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+              dataClassification: internal
+              transport: streamable_http
+              location: external
+              url: https://api.githubcopilot.com/mcp/
+              hosted: null
+              authKind: oauth_client
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: suspended
+              published: true
+              riskTier: elevated
+              riskReasons:
+              - external_host
+              - destructive_tools
+              approver: null
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: true
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: set
+              suspendedReason: Upstream vendor incident INC-2214
+              adoption:
+                teams: 12
+                agents: 85
+              version: 4
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:suspend
+    x-afs-scope: service
+    x-afs-cli: mcp-servers suspend-mcp-server
+    x-afs-sdk: mcpServers.suspend()
+    x-afs-screen: 47, 49
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.suspended
+/v1/mcp-servers/{mcpServerId}:resume:
+  post:
+    operationId: ResumeMcpServer
+    summary: Resume MCP server
+    tags:
+    - mcp-servers
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpReasonRequest'
+          example:
+            reason: Vendor confirmed the fix
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: null
+              scope: enterprise
+              slug: github
+              displayName: GitHub
+              owner: Developer platform
+              purpose: Repositories, issues and pull requests
+              docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+              dataClassification: internal
+              transport: streamable_http
+              location: external
+              url: https://api.githubcopilot.com/mcp/
+              hosted: null
+              authKind: oauth_client
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: approved
+              published: true
+              riskTier: elevated
+              riskReasons:
+              - external_host
+              - destructive_tools
+              approver: null
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: true
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: set
+              suspendedReason: null
+              adoption:
+                teams: 12
+                agents: 85
+              version: 4
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:suspend
+    x-afs-scope: service
+    x-afs-cli: mcp-servers resume-mcp-server
+    x-afs-sdk: .resume()
+    x-afs-screen: 47, 49
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.resumed
+/v1/mcp-servers/{mcpServerId}:refresh:
+  post:
+    operationId: RefreshMcpInventory
+    summary: Refresh MCP inventory
+    tags:
+    - mcp-servers
+    description: The gateway refreshes within 2 minutes; audited, no event (§4.12)
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '202':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: null
+              scope: enterprise
+              slug: github
+              displayName: GitHub
+              owner: Developer platform
+              purpose: Repositories, issues and pull requests
+              docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+              dataClassification: internal
+              transport: streamable_http
+              location: external
+              url: https://api.githubcopilot.com/mcp/
+              hosted: null
+              authKind: oauth_client
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: approved
+              published: true
+              riskTier: elevated
+              riskReasons:
+              - external_host
+              - destructive_tools
+              approver: null
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: true
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: set
+              suspendedReason: null
+              adoption:
+                teams: 12
+                agents: 85
+              version: 4
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:write
+    x-afs-scope: service
+    x-afs-cli: mcp-servers refresh-mcp-inventory
+    x-afs-sdk: mcpServers.refresh()
+    x-afs-screen: '47'
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/mcp-servers/{mcpServerId}/primitives:
+  get:
+    operationId: ListMcpPrimitives
+    summary: List MCP primitives
+    tags:
+    - mcp-servers
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: kind
+      in: query
+      schema:
+        type: string
+        enum:
+        - tool
+        - resource
+        - resource_template
+        - prompt
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum:
+        - approved
+        - pending_review
+        - blocked
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpPrimitiveList'
+            example:
+              items:
+              - id: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                serverId: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                kind: tool
+                name: create_pull_request
+                title: Create a pull request
+                annotations:
+                  destructiveHint: false
+                  readOnlyHint: false
+                digest: sha256:9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a
+                approvedDigest: sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+                status: pending_review
+                change: compatible
+                firstSeen: '2026-11-25T18:00:00Z'
+                lastSeen: '2026-11-25T18:00:00Z'
+                decision:
+                  allowed: false
+                  level: null
+                  reason: primitive_pending_review
+              nextToken: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:read
+    x-afs-scope: service
+    x-afs-cli: mcp-servers list-mcp-primitives
+    x-afs-sdk: mcpServers.primitives()
+    x-afs-screen: '47'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/mcp-servers/{mcpServerId}/primitives/{primitiveId}/change:
+  get:
+    operationId: GetMcpPrimitiveChange
+    summary: Get MCP primitive change
+    tags:
+    - mcp-servers
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: primitiveId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mpr_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpPrimitiveChange'
+            example:
+              primitive:
+                id: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                serverId: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                kind: tool
+                name: create_pull_request
+                title: Create a pull request
+                annotations:
+                  destructiveHint: false
+                  readOnlyHint: false
+                digest: sha256:9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a
+                approvedDigest: sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+                status: pending_review
+                change: compatible
+                firstSeen: '2026-11-25T18:00:00Z'
+                lastSeen: '2026-11-25T18:00:00Z'
+                decision:
+                  allowed: false
+                  level: null
+                  reason: primitive_pending_review
+              approvedDefinition:
+                name: create_pull_request
+                description: Open a pull request
+              pendingDefinition:
+                name: create_pull_request
+                description: Open a pull request; draft by default
+              diff:
+              - field: description
+                before: Open a pull request
+                after: Open a pull request; draft by default
+              checks:
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              crossesRiskLine: false
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:read
+    x-afs-scope: service
+    x-afs-cli: mcp-servers get-mcp-primitive-change
+    x-afs-sdk: mcpServers.primitiveChange()
+    x-afs-screen: '49'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/mcp-servers/{mcpServerId}/primitives/{primitiveId}:approve:
+  post:
+    operationId: ApproveMcpPrimitive
+    summary: Approve MCP primitive
+    tags:
+    - mcp-servers
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: primitiveId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mpr_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpReviewNoteRequest'
+          example:
+            note: Schema change is compatible
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpPrimitive'
+            example:
+              id: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              serverId: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              kind: tool
+              name: create_pull_request
+              title: Create a pull request
+              annotations:
+                destructiveHint: false
+                readOnlyHint: false
+              digest: sha256:9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a
+              approvedDigest: sha256:9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a
+              status: approved
+              change: null
+              firstSeen: '2026-11-25T18:00:00Z'
+              lastSeen: '2026-11-25T18:00:00Z'
+              decision:
+                allowed: true
+                level: null
+                reason: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:review
+    x-afs-scope: service
+    x-afs-cli: mcp-servers approve-mcp-primitive
+    x-afs-sdk: mcpServers.approvePrimitive()
+    x-afs-screen: '49'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.primitive_approved
+/v1/mcp-servers/{mcpServerId}/primitives/{primitiveId}:reject:
+  post:
+    operationId: RejectMcpPrimitive
+    summary: Reject MCP primitive
+    tags:
+    - mcp-servers
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: primitiveId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mpr_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpReviewNoteRequest'
+          example:
+            note: New description asks for credentials
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpPrimitive'
+            example:
+              id: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              serverId: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              kind: tool
+              name: create_pull_request
+              title: Create a pull request
+              annotations:
+                destructiveHint: false
+                readOnlyHint: false
+              digest: sha256:9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a
+              approvedDigest: sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              status: blocked
+              change: compatible
+              firstSeen: '2026-11-25T18:00:00Z'
+              lastSeen: '2026-11-25T18:00:00Z'
+              decision:
+                allowed: false
+                level: service
+                reason: primitive_blocked_service
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:review
+    x-afs-scope: service
+    x-afs-cli: mcp-servers reject-mcp-primitive
+    x-afs-sdk: .rejectPrimitive()
+    x-afs-screen: '49'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.primitive_rejected
+/v1/mcp-servers/{mcpServerId}/policy:
+  put:
+    operationId: PutMcpPolicy
+    summary: Put MCP policy
+    tags:
+    - mcp-servers
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutMcpPolicyRequest'
+          example:
+            rules:
+            - name: delete_*
+              effect: block
+              rateLimitPerMinute: null
+            - class: read_only
+              effect: allow
+              rateLimitPerMinute: 120
+            driftPolicy: hold
+            trustAnnotations: true
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpPolicy'
+            example:
+              serverId: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              level: service
+              teamId: null
+              rules:
+              - name: delete_*
+                effect: block
+                rateLimitPerMinute: null
+              - class: read_only
+                effect: allow
+                rateLimitPerMinute: 120
+              driftPolicy: hold
+              allowSampling: false
+              trustAnnotations: true
+              version: 5
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:write
+    x-afs-scope: service
+    x-afs-cli: mcp-servers put-mcp-policy
+    x-afs-sdk: mcpServers.putPolicy()
+    x-afs-screen: '47'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.policy_changed
+/v1/mcp-servers/{mcpServerId}/credentials/{scope}:
+  put:
+    operationId: PutMcpServerCredential
+    summary: Put MCP server credential
+    tags:
+    - mcp-servers
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: scope
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^(_shared|team_[0-9A-HJKMNP-TV-Z]{26})$
+        example: _shared
+      description: _shared or a team id
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpCredentialRequest'
+          example:
+            clientId: Iv1.0123456789abcdef
+            clientSecret: example-only
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpCredential'
+            example:
+              scope: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              kind: oauth_client
+              state: set
+              subject: null
+              scopes:
+              - repo
+              - read:org
+              expiresAt: null
+              rotatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:write
+    x-afs-scope: service
+    x-afs-cli: mcp-servers put-mcp-server-credential
+    x-afs-sdk: mcpServers.putCredential()
+    x-afs-screen: '47'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.credential_set
+/v1/mcp-servers/{mcpServerId}:approve:
+  post:
+    operationId: ApproveMcpServer
+    summary: Approve MCP server
+    tags:
+    - mcp-servers
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpServerReviewRequest'
+          example:
+            note: Checks pass; destructive tools blocked
+            primitives:
+            - primitiveId: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              decision: block
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: null
+              scope: enterprise
+              slug: github
+              displayName: GitHub
+              owner: Developer platform
+              purpose: Repositories, issues and pull requests
+              docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+              dataClassification: internal
+              transport: streamable_http
+              location: external
+              url: https://api.githubcopilot.com/mcp/
+              hosted: null
+              authKind: oauth_client
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: approved
+              published: false
+              riskTier: elevated
+              riskReasons:
+              - external_host
+              - destructive_tools
+              approver: null
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: true
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: set
+              suspendedReason: null
+              adoption:
+                teams: 12
+                agents: 85
+              version: 4
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:review
+    x-afs-scope: service
+    x-afs-cli: mcp-servers approve-mcp-server
+    x-afs-sdk: mcpServers.approve()
+    x-afs-screen: '49'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.approved
+/v1/mcp-servers/{mcpServerId}:reject:
+  post:
+    operationId: RejectMcpServer
+    summary: Reject MCP server
+    tags:
+    - mcp-servers
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpServerReviewRequest'
+          example:
+            note: Host is on a consumer domain
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: null
+              scope: enterprise
+              slug: github
+              displayName: GitHub
+              owner: Developer platform
+              purpose: Repositories, issues and pull requests
+              docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+              dataClassification: internal
+              transport: streamable_http
+              location: external
+              url: https://api.githubcopilot.com/mcp/
+              hosted: null
+              authKind: oauth_client
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: rejected
+              published: false
+              riskTier: elevated
+              riskReasons:
+              - external_host
+              - destructive_tools
+              approver: null
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: true
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: set
+              suspendedReason: null
+              adoption:
+                teams: 0
+                agents: 0
+              version: 4
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:review
+    x-afs-scope: service
+    x-afs-cli: mcp-servers reject-mcp-server
+    x-afs-sdk: .reject()
+    x-afs-screen: '49'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.rejected
+/v1/mcp-servers/{mcpServerId}:request-changes:
+  post:
+    operationId: RequestMcpServerChanges
+    summary: Request MCP server changes
+    tags:
+    - mcp-servers
+    parameters:
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpServerReviewRequest'
+          example:
+            note: Pin the image by digest
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              teamId: null
+              scope: enterprise
+              slug: github
+              displayName: GitHub
+              owner: Developer platform
+              purpose: Repositories, issues and pull requests
+              docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+              dataClassification: internal
+              transport: streamable_http
+              location: external
+              url: https://api.githubcopilot.com/mcp/
+              hosted: null
+              authKind: oauth_client
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: draft
+              published: false
+              riskTier: elevated
+              riskReasons:
+              - external_host
+              - destructive_tools
+              approver: null
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: true
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: set
+              suspendedReason: null
+              adoption:
+                teams: 0
+                agents: 0
+              version: 4
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:review
+    x-afs-scope: service
+    x-afs-cli: mcp-servers request-mcp-server-changes
+    x-afs-sdk: .requestChanges()
+    x-afs-screen: '49'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.changes_requested
+/v1/mcp-reviews:
+  get:
+    operationId: ListMcpReviews
+    summary: List MCP reviews
+    tags:
+    - mcp-servers
+    parameters:
+    - name: kind
+      in: query
+      schema:
+        type: string
+        enum:
+        - server
+        - primitive
+    - name: riskTier
+      in: query
+      schema:
+        type: string
+        enum:
+        - low
+        - elevated
+        - high
+    - name: teamId
+      in: query
+      schema:
+        type: string
+        pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+    - name: approver
+      in: query
+      schema:
+        type: string
+        enum:
+        - security
+        - team_admin
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpReviewList'
+            example:
+              items:
+              - kind: server
+                serverId: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0002
+                teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                slug: jira-local
+                primitiveId: null
+                name: null
+                riskTier: elevated
+                riskReasons:
+                - external_host
+                approver: security
+                since: '2026-11-25T18:00:00Z'
+              nextToken: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-servers:review
+    x-afs-scope: service
+    x-afs-cli: mcp-servers list-mcp-reviews
+    x-afs-sdk: mcpReviews.list()
+    x-afs-screen: '49'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/mcp-events:
+  get:
+    operationId: ListMcpEvents
+    summary: List MCP events
+    tags:
+    - mcp-servers
+    description: The MCP ledger; never arguments or results
+    parameters:
+    - $ref: '#/components/parameters/From'
+    - $ref: '#/components/parameters/To'
+    - name: teamId
+      in: query
+      schema:
+        type: string
+        pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+    - name: agentId
+      in: query
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+    - name: poolId
+      in: query
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+    - name: serverId
+      in: query
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+    - name: method
+      in: query
+      schema:
+        type: string
+        maxLength: 64
+    - name: name
+      in: query
+      schema:
+        type: string
+        maxLength: 500
+    - name: outcome
+      in: query
+      schema:
+        type: string
+        enum:
+        - ok
+        - tool_error
+        - protocol_error
+        - refused
+        - upstream_unavailable
+        - timeout
+        - cancelled
+    - name: reason
+      in: query
+      schema:
+        type: string
+        maxLength: 64
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpEventList'
+            example:
+              items:
+              - id: 918273
+                at: '2026-11-25T18:00:00Z'
+                requestId: req_7f3a
+                teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                agentId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                poolId: null
+                workerPod: null
+                serverId: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                serverKind: enterprise
+                method: tools/call
+                name: github__create_pull_request
+                primitiveId: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                digest: sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+                outcome: ok
+                reason: null
+                jsonrpcCode: null
+                httpStatus: 200
+                gatewayMs: 4
+                upstreamMs: 812
+                requestBytes: 1432
+                responseBytes: 2210
+                authKind: oauth_client
+                protocolDownstream: '2026-07-28'
+                protocolUpstream: '2026-07-28'
+                argsSha256: null
+                searchResults: null
+                searchHit: null
+                queryText: null
+              nextToken: null
+          text/csv:
+            schema:
+              type: string
+            example: "id,at,teamId,agentId,serverId,method,name,outcome,reason,gatewayMs,upstreamMs\r\n918273,2026-11-25T18:00:00Z,team_01JD2Q3R4S5T6V7W8X9Y0Z0001,agt_01JD2Q3R4S5T6V7W8X9Y0Z0001,mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001,tools/call,github__create_pull_request,ok,,4,812\r\
+              \n"
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-events:read
+    x-afs-scope: service
+    x-afs-cli: audit list-mcp-events
+    x-afs-sdk: mcpEvents.list()
+    x-afs-screen: '55'
+    x-afs-priority: P0
+    x-afs-csv: true
+    x-afs-events: []
+/v1/reports/mcp:
+  get:
+    operationId: GetMcpUsageReport
+    summary: Get MCP usage report
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/From'
+    - $ref: '#/components/parameters/To'
+    - name: groupBy
+      in: query
+      schema:
+        type: string
+        enum:
+        - server
+        - primitive
+        - team
+        - agent
+        - day
+    - name: view
+      in: query
+      schema:
+        type: string
+        enum:
+        - usage
+        - unused
+        - refusals
+        - discovery
+        - adoption
+    - name: window
+      in: query
+      schema:
+        type: integer
+        enum:
+        - 30
+        - 90
+      description: Days, for view unused
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpUsageReport'
+            example:
+              groupBy: server
+              view: usage
+              from: '2026-11-01T00:00:00Z'
+              to: '2026-11-25T00:00:00Z'
+              windowDays: null
+              rows:
+              - key: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                label: github
+                calls: 18233
+                errors: 41
+                refusals: 12
+                p50Ms: 640
+                p95Ms: 2100
+                teams: null
+                agents: null
+                searches: null
+                searchHitRate: null
+                lastUsedAt: '2026-11-25T18:00:00Z'
+          text/csv:
+            schema:
+              type: string
+            example: "key,label,calls,errors,refusals,p50Ms,p95Ms\r\nmcp_01JD2Q3R4S5T6V7W8X9Y0Z0001,github,18233,41,12,640,2100\r\n"
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-events:read
+    x-afs-scope: service
+    x-afs-cli: reports get-mcp-usage-report
+    x-afs-sdk: reports.mcp()
+    x-afs-screen: '55'
+    x-afs-priority: P0
+    x-afs-csv: true
+    x-afs-events: []
+/v1/mcp-settings/query-capture:start:
+  post:
+    operationId: StartMcpQueryCapture
+    summary: Start MCP query capture
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StartMcpQueryCaptureRequest'
+          example:
+            days: 3
+            reason: Tune search ranking for the payments teams
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpQueryCapture'
+            example:
+              id: mqc_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              startedBy: usr_admin
+              startedAt: '2026-11-25T18:00:00Z'
+              until: '2026-11-28T18:00:00Z'
+              reason: Tune search ranking for the payments teams
+              stoppedAt: null
+              stoppedBy: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-settings:write
+    x-afs-scope: service
+    x-afs-cli: mcp-servers start-mcp-query-capture
+    x-afs-sdk: mcpSettings.startQueryCapture()
+    x-afs-screen: '55'
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_query_capture.started
+/v1/mcp-settings/query-capture:stop:
+  post:
+    operationId: StopMcpQueryCapture
+    summary: Stop MCP query capture
+    tags:
+    - mcp-servers
+    description: Emits mcp_query_capture.stopped unless the window had already expired (§4.12)
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpQueryCapture'
+            example:
+              id: mqc_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              startedBy: usr_admin
+              startedAt: '2026-11-25T18:00:00Z'
+              until: '2026-11-28T18:00:00Z'
+              reason: Tune search ranking for the payments teams
+              stoppedAt: '2026-11-26T09:00:00Z'
+              stoppedBy: usr_admin
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-settings:write
+    x-afs-scope: service
+    x-afs-cli: mcp-servers stop-mcp-query-capture
+    x-afs-sdk: .stopQueryCapture()
+    x-afs-screen: '55'
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_query_capture.stopped
+/v1/mcp-settings/query-capture:
+  get:
+    operationId: GetMcpQueryCapture
+    summary: Get MCP query capture
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpQueryCaptureState'
+            example:
+              capture:
+                id: mqc_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                startedBy: usr_admin
+                startedAt: '2026-11-25T18:00:00Z'
+                until: '2026-11-28T18:00:00Z'
+                reason: Tune search ranking for the payments teams
+                stoppedAt: null
+                stoppedBy: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-events:read
+    x-afs-scope: service
+    x-afs-cli: mcp-servers get-mcp-query-capture
+    x-afs-sdk: mcpSettings.getQueryCapture()
+    x-afs-screen: '55'
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/mcp-servers:
+  get:
+    operationId: ListTeamMcpServers
+    summary: List team MCP servers
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: state
+      in: query
+      schema:
+        type: string
+        enum:
+        - 'on'
+        - 'off'
+        - pending
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamMcpServerList'
+            example:
+              items:
+              - server:
+                  id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                  teamId: null
+                  scope: enterprise
+                  slug: github
+                  displayName: GitHub
+                  owner: Developer platform
+                  purpose: Repositories, issues and pull requests
+                  docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+                  dataClassification: internal
+                  transport: streamable_http
+                  location: external
+                  url: https://api.githubcopilot.com/mcp/
+                  hosted: null
+                  authKind: oauth_client
+                  authHeader: null
+                  credentialMode: per_team
+                  federation: null
+                  protocolVersion: '2026-07-28'
+                  reviewStatus: approved
+                  published: true
+                  riskTier: elevated
+                  riskReasons:
+                  - external_host
+                  - destructive_tools
+                  approver: null
+                  checks:
+                  - name: tls
+                    outcome: pass
+                    detail: null
+                    checkedAt: '2026-11-25T18:00:00Z'
+                  - name: description_injection
+                    outcome: pass
+                    detail: null
+                    checkedAt: '2026-11-25T18:00:00Z'
+                  driftPolicy: hold
+                  defaultForNewTeams: false
+                  allowSampling: false
+                  trustAnnotations: true
+                  limits:
+                    requestBytes: 1048576
+                    responseBytes: 8388608
+                    timeoutSeconds: 60
+                    concurrentPerAgent: 8
+                  credentialState: set
+                  suspendedReason: null
+                  adoption:
+                    teams: 12
+                    agents: 85
+                  version: 4
+                  createdAt: '2026-11-25T18:00:00Z'
+                  createdBy: usr_admin
+                  updatedAt: '2026-11-25T18:00:00Z'
+                enabled: true
+                mode: read_only
+                state: 'on'
+                managed: enterprise
+                credential:
+                  scope: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                  kind: oauth_client
+                  state: set
+                  subject: null
+                  scopes:
+                  - repo
+                  - read:org
+                  expiresAt: null
+                  rotatedAt: '2026-11-25T18:00:00Z'
+                federationState: null
+                updatedAt: '2026-11-25T18:00:00Z'
+              nextToken: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:read
+    x-afs-scope: team
+    x-afs-cli: teams list-team-mcp-servers
+    x-afs-sdk: teams.mcpServers.list()
+    x-afs-screen: 50, 54
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  post:
+    operationId: CreateTeamMcpServer
+    summary: Create team MCP server
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateTeamMcpServerRequest'
+          example:
+            slug: jira-local
+            displayName: Jira (team)
+            owner: Payments team
+            purpose: Tickets for the payments backlog
+            dataClassification: confidential
+            transport: hosted
+            location: in_namespace
+            authKind: none
+            hosted:
+              imageDigest: registry.example.com/mcp/jira@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+              envNames:
+              - JIRA_TOKEN
+              instanceMode: per_team
+              egressHosts:
+              - acme.atlassian.net
+    responses:
+      '201':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              scope: team
+              slug: jira-local
+              displayName: Jira (team)
+              owner: Payments team
+              purpose: Tickets for the payments backlog
+              docUrl: null
+              dataClassification: confidential
+              transport: hosted
+              location: in_namespace
+              url: null
+              hosted:
+                imageDigest: registry.example.com/mcp/jira@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                args:
+                - --read-only=false
+                envNames:
+                - JIRA_TOKEN
+                instanceMode: per_team
+                egressHosts:
+                - acme.atlassian.net
+                resources:
+                  cpu: 250m
+                  memory: 256Mi
+                needsAws: false
+              authKind: none
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: draft
+              published: false
+              riskTier: null
+              riskReasons: []
+              approver: null
+              checks: []
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: false
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: not_required
+              suspendedReason: null
+              adoption:
+                teams: 1
+                agents: 0
+              version: 1
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:write
+    x-afs-scope: team
+    x-afs-cli: teams create-team-mcp-server
+    x-afs-sdk: teams.mcpServers.create()
+    x-afs-screen: '53'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.created
+/v1/teams/{teamId}/mcp-servers/{mcpServerId}:
+  get:
+    operationId: GetTeamMcpServer
+    summary: Get team MCP server
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamMcpServer'
+            example:
+              server:
+                id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                teamId: null
+                scope: enterprise
+                slug: github
+                displayName: GitHub
+                owner: Developer platform
+                purpose: Repositories, issues and pull requests
+                docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+                dataClassification: internal
+                transport: streamable_http
+                location: external
+                url: https://api.githubcopilot.com/mcp/
+                hosted: null
+                authKind: oauth_client
+                authHeader: null
+                credentialMode: per_team
+                federation: null
+                protocolVersion: '2026-07-28'
+                reviewStatus: approved
+                published: true
+                riskTier: elevated
+                riskReasons:
+                - external_host
+                - destructive_tools
+                approver: null
+                checks:
+                - name: tls
+                  outcome: pass
+                  detail: null
+                  checkedAt: '2026-11-25T18:00:00Z'
+                - name: description_injection
+                  outcome: pass
+                  detail: null
+                  checkedAt: '2026-11-25T18:00:00Z'
+                driftPolicy: hold
+                defaultForNewTeams: false
+                allowSampling: false
+                trustAnnotations: true
+                limits:
+                  requestBytes: 1048576
+                  responseBytes: 8388608
+                  timeoutSeconds: 60
+                  concurrentPerAgent: 8
+                credentialState: set
+                suspendedReason: null
+                adoption:
+                  teams: 12
+                  agents: 85
+                version: 4
+                createdAt: '2026-11-25T18:00:00Z'
+                createdBy: usr_admin
+                updatedAt: '2026-11-25T18:00:00Z'
+              enabled: true
+              mode: read_only
+              state: 'on'
+              managed: enterprise
+              credential:
+                scope: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                kind: oauth_client
+                state: set
+                subject: null
+                scopes:
+                - repo
+                - read:org
+                expiresAt: null
+                rotatedAt: '2026-11-25T18:00:00Z'
+              federationState: null
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:read
+    x-afs-scope: team
+    x-afs-cli: teams describe-team-mcp-server
+    x-afs-sdk: teams.mcpServers.get()
+    x-afs-screen: 51, 54
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+  put:
+    operationId: PutTeamMcpServer
+    summary: Put team MCP server
+    tags:
+    - mcp-servers
+    description: An enterprise server must be published; 409 team_gateway_required while the team gateway is shared (CD-44)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutTeamMcpServerRequest'
+          example:
+            enabled: true
+            mode: read_only
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamMcpServer'
+            example:
+              server:
+                id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                teamId: null
+                scope: enterprise
+                slug: github
+                displayName: GitHub
+                owner: Developer platform
+                purpose: Repositories, issues and pull requests
+                docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+                dataClassification: internal
+                transport: streamable_http
+                location: external
+                url: https://api.githubcopilot.com/mcp/
+                hosted: null
+                authKind: oauth_client
+                authHeader: null
+                credentialMode: per_team
+                federation: null
+                protocolVersion: '2026-07-28'
+                reviewStatus: approved
+                published: true
+                riskTier: elevated
+                riskReasons:
+                - external_host
+                - destructive_tools
+                approver: null
+                checks:
+                - name: tls
+                  outcome: pass
+                  detail: null
+                  checkedAt: '2026-11-25T18:00:00Z'
+                - name: description_injection
+                  outcome: pass
+                  detail: null
+                  checkedAt: '2026-11-25T18:00:00Z'
+                driftPolicy: hold
+                defaultForNewTeams: false
+                allowSampling: false
+                trustAnnotations: true
+                limits:
+                  requestBytes: 1048576
+                  responseBytes: 8388608
+                  timeoutSeconds: 60
+                  concurrentPerAgent: 8
+                credentialState: set
+                suspendedReason: null
+                adoption:
+                  teams: 12
+                  agents: 85
+                version: 4
+                createdAt: '2026-11-25T18:00:00Z'
+                createdBy: usr_admin
+                updatedAt: '2026-11-25T18:00:00Z'
+              enabled: true
+              mode: read_only
+              state: 'on'
+              managed: enterprise
+              credential:
+                scope: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                kind: oauth_client
+                state: set
+                subject: null
+                scopes:
+                - repo
+                - read:org
+                expiresAt: null
+                rotatedAt: '2026-11-25T18:00:00Z'
+              federationState: null
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:write
+    x-afs-scope: team
+    x-afs-cli: teams put-team-mcp-server
+    x-afs-sdk: teams.mcpServers.put()
+    x-afs-screen: '50'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - team_mcp_server.enabled
+    - team_mcp_server.disabled
+  patch:
+    operationId: UpdateTeamMcpServer
+    summary: Update team MCP server
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateTeamMcpServerRequest'
+          example:
+            purpose: Tickets for the payments and refunds backlogs
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              scope: team
+              slug: jira-local
+              displayName: Jira (team)
+              owner: Payments team
+              purpose: Tickets for the payments and refunds backlogs
+              docUrl: null
+              dataClassification: confidential
+              transport: hosted
+              location: in_namespace
+              url: null
+              hosted:
+                imageDigest: registry.example.com/mcp/jira@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                args:
+                - --read-only=false
+                envNames:
+                - JIRA_TOKEN
+                instanceMode: per_team
+                egressHosts:
+                - acme.atlassian.net
+                resources:
+                  cpu: 250m
+                  memory: 256Mi
+                needsAws: false
+              authKind: none
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: pending_review
+              published: false
+              riskTier: low
+              riskReasons: []
+              approver: team_admin
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: false
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: not_required
+              suspendedReason: null
+              adoption:
+                teams: 1
+                agents: 0
+              version: 3
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:write
+    x-afs-scope: team
+    x-afs-cli: teams update-team-mcp-server
+    x-afs-sdk: teams.mcpServers.update()
+    x-afs-screen: '51'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.updated
+    - mcp_server.submitted
+  delete:
+    operationId: DeleteTeamMcpServer
+    summary: Delete team MCP server
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:write
+    x-afs-scope: team
+    x-afs-cli: teams delete-team-mcp-server
+    x-afs-sdk: .delete()
+    x-afs-screen: '51'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.deleted
+/v1/teams/{teamId}/mcp-servers/{mcpServerId}:submit:
+  post:
+    operationId: SubmitMcpServerForReview
+    summary: Submit MCP server for review
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              scope: team
+              slug: jira-local
+              displayName: Jira (team)
+              owner: Payments team
+              purpose: Tickets for the payments backlog
+              docUrl: null
+              dataClassification: confidential
+              transport: hosted
+              location: in_namespace
+              url: null
+              hosted:
+                imageDigest: registry.example.com/mcp/jira@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                args:
+                - --read-only=false
+                envNames:
+                - JIRA_TOKEN
+                instanceMode: per_team
+                egressHosts:
+                - acme.atlassian.net
+                resources:
+                  cpu: 250m
+                  memory: 256Mi
+                needsAws: false
+              authKind: none
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: pending_review
+              published: false
+              riskTier: low
+              riskReasons: []
+              approver: team_admin
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: false
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: not_required
+              suspendedReason: null
+              adoption:
+                teams: 1
+                agents: 0
+              version: 2
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:write
+    x-afs-scope: team
+    x-afs-cli: teams submit-mcp-server-for-review
+    x-afs-sdk: teams.mcpServers.submit()
+    x-afs-screen: '53'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.submitted
+/v1/teams/{teamId}/mcp-servers/{mcpServerId}:approve:
+  post:
+    operationId: ApproveTeamMcpServer
+    summary: Approve team MCP server
+    tags:
+    - mcp-servers
+    description: 403 approval_not_permitted_by_policy when mcp.team_server_approval sends this tier to security
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpServerReviewRequest'
+          example:
+            note: Low risk, in namespace
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              scope: team
+              slug: jira-local
+              displayName: Jira (team)
+              owner: Payments team
+              purpose: Tickets for the payments backlog
+              docUrl: null
+              dataClassification: confidential
+              transport: hosted
+              location: in_namespace
+              url: null
+              hosted:
+                imageDigest: registry.example.com/mcp/jira@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                args:
+                - --read-only=false
+                envNames:
+                - JIRA_TOKEN
+                instanceMode: per_team
+                egressHosts:
+                - acme.atlassian.net
+                resources:
+                  cpu: 250m
+                  memory: 256Mi
+                needsAws: false
+              authKind: none
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: approved
+              published: false
+              riskTier: low
+              riskReasons: []
+              approver: null
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: false
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: not_required
+              suspendedReason: null
+              adoption:
+                teams: 1
+                agents: 0
+              version: 2
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:approve
+    x-afs-scope: team
+    x-afs-cli: teams approve-team-mcp-server
+    x-afs-sdk: teams.mcpServers.approve()
+    x-afs-screen: '51'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-condition: mcpApprovalPolicy
+    x-afs-events:
+    - mcp_server.approved
+/v1/teams/{teamId}/mcp-servers/{mcpServerId}:reject:
+  post:
+    operationId: RejectTeamMcpServer
+    summary: Reject team MCP server
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpServerReviewRequest'
+          example:
+            note: Use the enterprise Jira server
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              scope: team
+              slug: jira-local
+              displayName: Jira (team)
+              owner: Payments team
+              purpose: Tickets for the payments backlog
+              docUrl: null
+              dataClassification: confidential
+              transport: hosted
+              location: in_namespace
+              url: null
+              hosted:
+                imageDigest: registry.example.com/mcp/jira@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                args:
+                - --read-only=false
+                envNames:
+                - JIRA_TOKEN
+                instanceMode: per_team
+                egressHosts:
+                - acme.atlassian.net
+                resources:
+                  cpu: 250m
+                  memory: 256Mi
+                needsAws: false
+              authKind: none
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: rejected
+              published: false
+              riskTier: low
+              riskReasons: []
+              approver: null
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: false
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: not_required
+              suspendedReason: null
+              adoption:
+                teams: 1
+                agents: 0
+              version: 2
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:approve
+    x-afs-scope: team
+    x-afs-cli: teams reject-team-mcp-server
+    x-afs-sdk: .reject()
+    x-afs-screen: '51'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-condition: mcpApprovalPolicy
+    x-afs-events:
+    - mcp_server.rejected
+/v1/teams/{teamId}/mcp-servers/{mcpServerId}:refresh:
+  post:
+    operationId: RefreshTeamMcpInventory
+    summary: Refresh team MCP inventory
+    tags:
+    - mcp-servers
+    description: Audited, no event (§4.12)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '202':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServer'
+            example:
+              id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              scope: team
+              slug: jira-local
+              displayName: Jira (team)
+              owner: Payments team
+              purpose: Tickets for the payments backlog
+              docUrl: null
+              dataClassification: confidential
+              transport: hosted
+              location: in_namespace
+              url: null
+              hosted:
+                imageDigest: registry.example.com/mcp/jira@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                args:
+                - --read-only=false
+                envNames:
+                - JIRA_TOKEN
+                instanceMode: per_team
+                egressHosts:
+                - acme.atlassian.net
+                resources:
+                  cpu: 250m
+                  memory: 256Mi
+                needsAws: false
+              authKind: none
+              authHeader: null
+              credentialMode: per_team
+              federation: null
+              protocolVersion: '2026-07-28'
+              reviewStatus: pending_review
+              published: false
+              riskTier: low
+              riskReasons: []
+              approver: team_admin
+              checks:
+              - name: tls
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              - name: description_injection
+                outcome: pass
+                detail: null
+                checkedAt: '2026-11-25T18:00:00Z'
+              driftPolicy: hold
+              defaultForNewTeams: false
+              allowSampling: false
+              trustAnnotations: false
+              limits:
+                requestBytes: 1048576
+                responseBytes: 8388608
+                timeoutSeconds: 60
+                concurrentPerAgent: 8
+              credentialState: not_required
+              suspendedReason: null
+              adoption:
+                teams: 1
+                agents: 0
+              version: 2
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:write
+    x-afs-scope: team
+    x-afs-cli: teams refresh-team-mcp-inventory
+    x-afs-sdk: teams.mcpServers.refresh()
+    x-afs-screen: '51'
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/mcp-servers/{mcpServerId}/primitives:
+  get:
+    operationId: ListTeamMcpPrimitives
+    summary: List team MCP primitives
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: kind
+      in: query
+      schema:
+        type: string
+        enum:
+        - tool
+        - resource
+        - resource_template
+        - prompt
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum:
+        - approved
+        - pending_review
+        - blocked
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpPrimitiveList'
+            example:
+              items:
+              - id: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                serverId: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0002
+                kind: tool
+                name: create_pull_request
+                title: Create a pull request
+                annotations:
+                  destructiveHint: false
+                  readOnlyHint: false
+                digest: sha256:9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a
+                approvedDigest: sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+                status: pending_review
+                change: compatible
+                firstSeen: '2026-11-25T18:00:00Z'
+                lastSeen: '2026-11-25T18:00:00Z'
+                decision:
+                  allowed: false
+                  level: null
+                  reason: primitive_pending_review
+              nextToken: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:read
+    x-afs-scope: team
+    x-afs-cli: teams list-team-mcp-primitives
+    x-afs-sdk: teams.mcpServers.primitives()
+    x-afs-screen: '51'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/mcp-servers/{mcpServerId}/primitives/{primitiveId}:approve:
+  post:
+    operationId: ApproveTeamMcpPrimitive
+    summary: Approve team MCP primitive
+    tags:
+    - mcp-servers
+    description: 403 approval_not_permitted_by_policy when the change crosses a risk line
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: primitiveId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mpr_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpReviewNoteRequest'
+          example:
+            note: Reviewed with the owner
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpPrimitive'
+            example:
+              id: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              serverId: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              kind: tool
+              name: create_pull_request
+              title: Create a pull request
+              annotations:
+                destructiveHint: false
+                readOnlyHint: false
+              digest: sha256:9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a
+              approvedDigest: sha256:9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a
+              status: approved
+              change: null
+              firstSeen: '2026-11-25T18:00:00Z'
+              lastSeen: '2026-11-25T18:00:00Z'
+              decision:
+                allowed: true
+                level: null
+                reason: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:approve
+    x-afs-scope: team
+    x-afs-cli: teams approve-team-mcp-primitive
+    x-afs-sdk: teams.mcpServers.approvePrimitive()
+    x-afs-screen: '51'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-condition: mcpApprovalPolicy
+    x-afs-events:
+    - mcp_server.primitive_approved
+/v1/teams/{teamId}/mcp-servers/{mcpServerId}/primitives/{primitiveId}:reject:
+  post:
+    operationId: RejectTeamMcpPrimitive
+    summary: Reject team MCP primitive
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: primitiveId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mpr_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpReviewNoteRequest'
+          example:
+            note: Not needed
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpPrimitive'
+            example:
+              id: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              serverId: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0002
+              kind: tool
+              name: create_pull_request
+              title: Create a pull request
+              annotations:
+                destructiveHint: false
+                readOnlyHint: false
+              digest: sha256:9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a
+              approvedDigest: sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+              status: blocked
+              change: compatible
+              firstSeen: '2026-11-25T18:00:00Z'
+              lastSeen: '2026-11-25T18:00:00Z'
+              decision:
+                allowed: false
+                level: team
+                reason: primitive_blocked_team
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:approve
+    x-afs-scope: team
+    x-afs-cli: teams reject-team-mcp-primitive
+    x-afs-sdk: .rejectPrimitive()
+    x-afs-screen: '51'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-condition: mcpApprovalPolicy
+    x-afs-events:
+    - mcp_server.primitive_rejected
+/v1/teams/{teamId}/mcp-servers/{mcpServerId}/policy:
+  put:
+    operationId: PutTeamMcpPolicy
+    summary: Put team MCP policy
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutTeamMcpPolicyRequest'
+          example:
+            rules:
+            - name: create_pull_request
+              effect: block
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpPolicy'
+            example:
+              serverId: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              level: team
+              teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              rules:
+              - name: create_pull_request
+                effect: block
+                rateLimitPerMinute: null
+              driftPolicy: hold
+              allowSampling: false
+              trustAnnotations: true
+              version: 5
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:write
+    x-afs-scope: team
+    x-afs-cli: teams put-team-mcp-policy
+    x-afs-sdk: teams.mcpServers.putPolicy()
+    x-afs-screen: '51'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.policy_changed
+/v1/teams/{teamId}/mcp-servers/{mcpServerId}/credential:
+  put:
+    operationId: PutTeamMcpServerCredential
+    summary: Put team MCP server credential
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/McpCredentialRequest'
+          example:
+            value: example-only
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpCredential'
+            example:
+              scope: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              kind: static
+              state: set
+              subject: null
+              scopes: []
+              expiresAt: null
+              rotatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:write
+    x-afs-scope: team
+    x-afs-cli: teams put-team-mcp-server-credential
+    x-afs-sdk: teams.mcpServers.putCredential()
+    x-afs-screen: '51'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.credential_set
+/v1/teams/{teamId}/mcp-servers/{mcpServerId}/oauth:start:
+  post:
+    operationId: StartMcpOAuthConnect
+    summary: Start MCP OAuth connect
+    tags:
+    - mcp-servers
+    description: oauth_user only; writes a single-use state (10 minutes); audited, no event (§4.12)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpOAuthStart'
+            example:
+              authorizationUrl: https://github.com/login/oauth/authorize?client_id=Iv1.0123456789abcdef&state=st_1
+              state: st_1
+              expiresAt: '2026-11-25T18:10:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:write
+    x-afs-scope: team
+    x-afs-cli: teams start-mcp-oauth-connect
+    x-afs-sdk: teams.mcpServers.startOAuth()
+    x-afs-screen: '51'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/mcp-oauth/callback:
+  get:
+    operationId: CompleteMcpOAuthConnect
+    summary: Complete MCP OAuth connect
+    tags:
+    - mcp-servers
+    description: 'No bearer token (CD-48): bound to a single-use state (10 minutes) and to iss (RFC 9207); writes the refresh token
+      to Secrets Manager and redirects to the console'
+    security: []
+    parameters:
+    - name: code
+      in: query
+      schema:
+        type: string
+        maxLength: 2048
+        example: abc
+    - name: state
+      in: query
+      schema:
+        type: string
+        maxLength: 512
+        example: st_1
+    - name: iss
+      in: query
+      schema:
+        type: string
+        maxLength: 500
+        example: https://github.com/login/oauth
+      description: RFC 9207 issuer
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '303':
+        description: Redirect to the console's server page, with ?mcpOAuth=connected or ?mcpOAuth=failed&reason=…
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          Location:
+            schema:
+              type: string
+            description: The console URL
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+    x-afs-permission: none
+    x-afs-scope: public
+    x-afs-cli: none
+    x-afs-sdk: none
+    x-afs-screen: '51'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.credential_set
+/v1/teams/{teamId}/mcp-servers/{mcpServerId}/oauth:disconnect:
+  post:
+    operationId: DisconnectMcpOAuth
+    summary: Disconnect MCP OAuth
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpCredential'
+            example:
+              scope: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              kind: oauth_user
+              state: missing
+              subject: null
+              scopes: []
+              expiresAt: null
+              rotatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:write
+    x-afs-scope: team
+    x-afs-cli: teams disconnect-mcp-oauth
+    x-afs-sdk: teams.mcpServers.disconnectOAuth()
+    x-afs-screen: '51'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - mcp_server.credential_removed
+/v1/teams/{teamId}/mcp-servers/{mcpServerId}/federation:test:
+  post:
+    operationId: TestMcpFederation
+    summary: Test MCP federation
+    tags:
+    - mcp-servers
+    description: The gateway tries the exchange and records federationState; audited, no event (§4.12)
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: mcpServerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+        example: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IdempotencyKey'
+    responses:
+      '202':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamMcpServer'
+            example:
+              server:
+                id: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                teamId: null
+                scope: enterprise
+                slug: github
+                displayName: GitHub
+                owner: Developer platform
+                purpose: Repositories, issues and pull requests
+                docUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp
+                dataClassification: internal
+                transport: streamable_http
+                location: external
+                url: https://api.githubcopilot.com/mcp/
+                hosted: null
+                authKind: oauth_client
+                authHeader: null
+                credentialMode: per_team
+                federation: null
+                protocolVersion: '2026-07-28'
+                reviewStatus: approved
+                published: true
+                riskTier: elevated
+                riskReasons:
+                - external_host
+                - destructive_tools
+                approver: null
+                checks:
+                - name: tls
+                  outcome: pass
+                  detail: null
+                  checkedAt: '2026-11-25T18:00:00Z'
+                - name: description_injection
+                  outcome: pass
+                  detail: null
+                  checkedAt: '2026-11-25T18:00:00Z'
+                driftPolicy: hold
+                defaultForNewTeams: false
+                allowSampling: false
+                trustAnnotations: true
+                limits:
+                  requestBytes: 1048576
+                  responseBytes: 8388608
+                  timeoutSeconds: 60
+                  concurrentPerAgent: 8
+                credentialState: set
+                suspendedReason: null
+                adoption:
+                  teams: 12
+                  agents: 85
+                version: 4
+                createdAt: '2026-11-25T18:00:00Z'
+                createdBy: usr_admin
+                updatedAt: '2026-11-25T18:00:00Z'
+              enabled: true
+              mode: read_only
+              state: 'on'
+              managed: enterprise
+              credential:
+                scope: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                kind: oauth_client
+                state: set
+                subject: null
+                scopes:
+                - repo
+                - read:org
+                expiresAt: null
+                rotatedAt: '2026-11-25T18:00:00Z'
+              federationState: unknown
+              updatedAt: '2026-11-25T18:00:00Z'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:write
+    x-afs-scope: team
+    x-afs-cli: teams test-mcp-federation
+    x-afs-sdk: teams.mcpServers.testFederation()
+    x-afs-screen: '51'
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/agents/{agentId}/mcp:
+  get:
+    operationId: GetEffectiveAgentMcp
+    summary: Get effective agent MCP
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EffectiveMcp'
+            example:
+              subjectKind: agent
+              subjectId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              access: all
+              mode: search
+              servers:
+              - serverId: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                slug: github
+                scope: enterprise
+                mode: read_only
+                url: /mcp/github
+                primitives:
+                - name: search_issues
+                  kind: tool
+                  allowed: true
+                  level: null
+                  reason: null
+                  rateLimitPerMinute: null
+                - name: create_pull_request
+                  kind: tool
+                  allowed: false
+                  level: team
+                  reason: primitive_blocked_team
+                  rateLimitPerMinute: null
+              env:
+              - AFS_MCP_URL
+              - AFS_MCP_CONFIG
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:read
+    x-afs-scope: team
+    x-afs-cli: agents get-effective-agent-mcp
+    x-afs-sdk: agents.mcp()
+    x-afs-screen: '52'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/pools/{poolId}/mcp:
+  get:
+    operationId: GetEffectivePoolMcp
+    summary: Get effective pool MCP
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EffectiveMcp'
+            example:
+              subjectKind: pool
+              subjectId: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+              access: all
+              mode: search
+              servers:
+              - serverId: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                slug: github
+                scope: enterprise
+                mode: read_only
+                url: /mcp/github
+                primitives:
+                - name: search_issues
+                  kind: tool
+                  allowed: true
+                  level: null
+                  reason: null
+                  rateLimitPerMinute: null
+                - name: create_pull_request
+                  kind: tool
+                  allowed: false
+                  level: team
+                  reason: primitive_blocked_team
+                  rateLimitPerMinute: null
+              env:
+              - AFS_MCP_URL
+              - AFS_MCP_CONFIG
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: team-mcp-servers:read
+    x-afs-scope: team
+    x-afs-cli: pools get-effective-pool-mcp
+    x-afs-sdk: pools.mcp()
+    x-afs-screen: '52'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/mcp-events:
+  get:
+    operationId: ListTeamMcpEvents
+    summary: List team MCP events
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/From'
+    - $ref: '#/components/parameters/To'
+    - name: agentId
+      in: query
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+    - name: poolId
+      in: query
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+    - name: serverId
+      in: query
+      schema:
+        type: string
+        pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+    - name: method
+      in: query
+      schema:
+        type: string
+        maxLength: 64
+    - name: name
+      in: query
+      schema:
+        type: string
+        maxLength: 500
+    - name: outcome
+      in: query
+      schema:
+        type: string
+        enum:
+        - ok
+        - tool_error
+        - protocol_error
+        - refused
+        - upstream_unavailable
+        - timeout
+        - cancelled
+    - name: reason
+      in: query
+      schema:
+        type: string
+        maxLength: 64
+    - $ref: '#/components/parameters/MaxResults'
+    - $ref: '#/components/parameters/NextToken'
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          X-Afs-Next-Token:
+            $ref: '#/components/headers/XAfsNextToken'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpEventList'
+            example:
+              items:
+              - id: 918273
+                at: '2026-11-25T18:00:00Z'
+                requestId: req_7f3a
+                teamId: team_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                agentId: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                poolId: null
+                workerPod: null
+                serverId: mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                serverKind: enterprise
+                method: tools/call
+                name: github__create_pull_request
+                primitiveId: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                digest: sha256:4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f
+                outcome: ok
+                reason: null
+                jsonrpcCode: null
+                httpStatus: 200
+                gatewayMs: 4
+                upstreamMs: 812
+                requestBytes: 1432
+                responseBytes: 2210
+                authKind: oauth_client
+                protocolDownstream: '2026-07-28'
+                protocolUpstream: '2026-07-28'
+                argsSha256: null
+                searchResults: null
+                searchHit: null
+                queryText: null
+              nextToken: null
+          text/csv:
+            schema:
+              type: string
+            example: "id,at,teamId,agentId,serverId,method,name,outcome,reason,gatewayMs,upstreamMs\r\n918273,2026-11-25T18:00:00Z,team_01JD2Q3R4S5T6V7W8X9Y0Z0001,agt_01JD2Q3R4S5T6V7W8X9Y0Z0001,mcp_01JD2Q3R4S5T6V7W8X9Y0Z0001,tools/call,github__create_pull_request,ok,,4,812\r\
+              \n"
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-events:read
+    x-afs-scope: team
+    x-afs-cli: audit list-team-mcp-events
+    x-afs-sdk: teams.mcpEvents.list()
+    x-afs-screen: '54'
+    x-afs-priority: P0
+    x-afs-csv: true
+    x-afs-events: []
+/v1/teams/{teamId}/reports/mcp:
+  get:
+    operationId: GetTeamMcpUsageReport
+    summary: Get team MCP usage report
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - $ref: '#/components/parameters/From'
+    - $ref: '#/components/parameters/To'
+    - name: groupBy
+      in: query
+      schema:
+        type: string
+        enum:
+        - server
+        - primitive
+        - agent
+        - day
+    - name: view
+      in: query
+      schema:
+        type: string
+        enum:
+        - usage
+        - unused
+        - refusals
+        - discovery
+    - name: window
+      in: query
+      schema:
+        type: integer
+        enum:
+        - 30
+        - 90
+      description: Days, for view unused
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpUsageReport'
+            example:
+              groupBy: primitive
+              view: usage
+              from: '2026-11-01T00:00:00Z'
+              to: '2026-11-25T00:00:00Z'
+              windowDays: null
+              rows:
+              - key: mpr_01JD2Q3R4S5T6V7W8X9Y0Z0001
+                label: github__create_pull_request
+                calls: 18233
+                errors: 41
+                refusals: 12
+                p50Ms: 640
+                p95Ms: 2100
+                teams: null
+                agents: null
+                searches: null
+                searchHitRate: null
+                lastUsedAt: '2026-11-25T18:00:00Z'
+          text/csv:
+            schema:
+              type: string
+            example: "key,label,calls,errors,refusals,p50Ms,p95Ms\r\nmpr_01JD2Q3R4S5T6V7W8X9Y0Z0001,github__create_pull_request,18233,41,12,640,2100\r\
+              \n"
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: mcp-events:read
+    x-afs-scope: team
+    x-afs-cli: reports get-team-mcp-usage-report
+    x-afs-sdk: teams.reports.mcp()
+    x-afs-screen: '54'
+    x-afs-priority: P0
+    x-afs-csv: true
+    x-afs-events: []
+/v1/teams/{teamId}/agents/{agentId}/federated-identities:
+  get:
+    operationId: ListAgentFederatedIdentities
+    summary: List agent federated identities
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FederatedIdentityList'
+            example:
+              items:
+              - name: azure-prod
+                audience: api://AzureADTokenExchange
+                expirationSeconds: 3600
+                filePath: /var/run/secrets/afs/federation/azure-prod/token
+                envVar: AFS_FEDERATED_TOKEN_FILE_AZURE_PROD
+                issuer: https://oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE
+                subject: system:serviceaccount:afs-t-payments:agt-reviewer
+                version: 1
+                createdAt: '2026-11-25T18:00:00Z'
+                createdBy: usr_admin
+              nextToken: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agents:read
+    x-afs-scope: team
+    x-afs-cli: agents list-agent-federated-identities
+    x-afs-sdk: agents.federatedIdentities.list()
+    x-afs-screen: '52'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/agents/{agentId}/federated-identities/{name}:
+  put:
+    operationId: PutAgentFederatedIdentity
+    summary: Put agent federated identity
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: name
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[a-z][a-z0-9-]{0,30}$
+        example: azure-prod
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutFederatedIdentityRequest'
+          example:
+            audience: api://AzureADTokenExchange
+            expirationSeconds: 3600
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FederatedIdentity'
+            example:
+              name: azure-prod
+              audience: api://AzureADTokenExchange
+              expirationSeconds: 3600
+              filePath: /var/run/secrets/afs/federation/azure-prod/token
+              envVar: AFS_FEDERATED_TOKEN_FILE_AZURE_PROD
+              issuer: https://oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE
+              subject: system:serviceaccount:afs-t-payments:agt-reviewer
+              version: 1
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agent-federated-identities:write
+    x-afs-scope: team
+    x-afs-cli: agents put-agent-federated-identity
+    x-afs-sdk: agents.federatedIdentities.put()
+    x-afs-screen: '52'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - agent.federated_identity_changed
+  delete:
+    operationId: DeleteAgentFederatedIdentity
+    summary: Delete agent federated identity
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^agt_[0-9A-HJKMNP-TV-Z]{26}$
+        example: agt_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: name
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[a-z][a-z0-9-]{0,30}$
+        example: azure-prod
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agent-federated-identities:write
+    x-afs-scope: team
+    x-afs-cli: agents delete-agent-federated-identity
+    x-afs-sdk: .delete()
+    x-afs-screen: '52'
+    x-afs-priority: P0
+    x-afs-csv: false
+    x-afs-events:
+    - agent.federated_identity_changed
+/v1/teams/{teamId}/pools/{poolId}/federated-identities:
+  get:
+    operationId: ListPoolFederatedIdentities
+    summary: List pool federated identities
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - $ref: '#/components/parameters/XRequestId'
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FederatedIdentityList'
+            example:
+              items:
+              - name: azure-prod
+                audience: api://AzureADTokenExchange
+                expirationSeconds: 3600
+                filePath: /var/run/secrets/afs/federation/azure-prod/token
+                envVar: AFS_FEDERATED_TOKEN_FILE_AZURE_PROD
+                issuer: https://oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE
+                subject: system:serviceaccount:afs-t-payments:pool-triage
+                version: 1
+                createdAt: '2026-11-25T18:00:00Z'
+                createdBy: usr_admin
+              nextToken: null
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: pools:read
+    x-afs-scope: team
+    x-afs-cli: pools list-pool-federated-identities
+    x-afs-sdk: pools.federatedIdentities.list()
+    x-afs-screen: '52'
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events: []
+/v1/teams/{teamId}/pools/{poolId}/federated-identities/{name}:
+  put:
+    operationId: PutPoolFederatedIdentity
+    summary: Put pool federated identity
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: name
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[a-z][a-z0-9-]{0,30}$
+        example: azure-prod
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatchPut'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PutFederatedIdentityRequest'
+          example:
+            audience: api://AzureADTokenExchange
+    responses:
+      '200':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+          ETag:
+            $ref: '#/components/headers/ETag'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FederatedIdentity'
+            example:
+              name: azure-prod
+              audience: api://AzureADTokenExchange
+              expirationSeconds: 3600
+              filePath: /var/run/secrets/afs/federation/azure-prod/token
+              envVar: AFS_FEDERATED_TOKEN_FILE_AZURE_PROD
+              issuer: https://oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE
+              subject: system:serviceaccount:afs-t-payments:pool-triage
+              version: 1
+              createdAt: '2026-11-25T18:00:00Z'
+              createdBy: usr_admin
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agent-federated-identities:write
+    x-afs-scope: team
+    x-afs-cli: pools put-pool-federated-identity
+    x-afs-sdk: pools.federatedIdentities.put()
+    x-afs-screen: '52'
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - agent.federated_identity_changed
+  delete:
+    operationId: DeletePoolFederatedIdentity
+    summary: Delete pool federated identity
+    tags:
+    - mcp-servers
+    parameters:
+    - $ref: '#/components/parameters/TeamId'
+    - name: poolId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^pool_[0-9A-HJKMNP-TV-Z]{26}$
+        example: pool_01JD2Q3R4S5T6V7W8X9Y0Z0001
+    - name: name
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[a-z][a-z0-9-]{0,30}$
+        example: azure-prod
+    - $ref: '#/components/parameters/XRequestId'
+    - $ref: '#/components/parameters/IfMatch'
+    responses:
+      '204':
+        description: Success
+        headers:
+          X-Request-Id:
+            $ref: '#/components/headers/XRequestId'
+          X-Afs-Contract-Version:
+            $ref: '#/components/headers/XAfsContractVersion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthenticated'
+      '403':
+        $ref: '#/components/responses/AccessDenied'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '409':
+        $ref: '#/components/responses/Conflict'
+      '412':
+        $ref: '#/components/responses/PreconditionFailed'
+      '428':
+        $ref: '#/components/responses/PreconditionRequired'
+      '429':
+        $ref: '#/components/responses/Throttled'
+      '500':
+        $ref: '#/components/responses/InternalError'
+      '503':
+        $ref: '#/components/responses/Unavailable'
+    x-afs-permission: agent-federated-identities:write
+    x-afs-scope: team
+    x-afs-cli: pools delete-pool-federated-identity
+    x-afs-sdk: .delete()
+    x-afs-screen: '52'
+    x-afs-priority: P1
+    x-afs-csv: false
+    x-afs-events:
+    - agent.federated_identity_changed

@@ -51,6 +51,10 @@ const (
 	CondAssignedOrOwnRepos Condition = "assignedOrOwnRepos"
 	// CondAssignedTeam: the work order is assigned to the caller's team.
 	CondAssignedTeam Condition = "assignedTeam"
+	// CondMcpApprovalPolicy grants team-mcp-servers:approve to team-admins as mcp.team_server_approval and
+	// the server's risk tier allow (contract v1.6.0, CD-45). The route lets a team-admin through; the use
+	// case decides and refuses with approval_not_permitted_by_policy.
+	CondMcpApprovalPolicy Condition = "mcpApprovalPolicy"
 )
 
 // Scope says how a route is scoped.
@@ -351,7 +355,7 @@ func teamConditionHolds(cond Condition, res Resource) bool {
 		return res.Flags.MayManageAwsAccounts
 	case CondViewerKubectl:
 		return res.Flags.ViewerKubectl
-	case CondAssignedOrOwnRepos, CondAssignedTeam:
+	case CondAssignedOrOwnRepos, CondAssignedTeam, CondMcpApprovalPolicy:
 		// On a team route the team is the caller's own; the use case filters to the work orders
 		// that are assigned to it or touch its repositories.
 		return true

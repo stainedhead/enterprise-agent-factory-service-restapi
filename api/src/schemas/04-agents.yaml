@@ -136,6 +136,8 @@ Agent:
       readOnly: true
     models:
       $ref: '#/components/schemas/AgentModels'
+    mcp:
+      $ref: '#/components/schemas/AgentMcp'
     runtime:
       type: string
       enum:
@@ -198,6 +200,8 @@ CreateAgentRequest:
         $ref: '#/components/schemas/SecretBinding'
     models:
       $ref: '#/components/schemas/AgentModelsInput'
+    mcp:
+      $ref: '#/components/schemas/AgentMcpInput'
 UpdateAgentRequest:
   type: object
   properties:
@@ -238,6 +242,8 @@ UpdateAgentRequest:
         $ref: '#/components/schemas/SecretBinding'
     models:
       $ref: '#/components/schemas/AgentModelsInput'
+    mcp:
+      $ref: '#/components/schemas/AgentMcpInput'
     name:
       $ref: '#/components/schemas/Name'
       description: Refused on the orchestration agent (orchestration_field_fixed)

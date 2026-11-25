@@ -228,6 +228,7 @@ type createAgentRequest struct {
 	SecretBinds   []bindingRequest      `json:"secretBindings"`
 	Role          string                `json:"role"`
 	Collaboration *collaborationRequest `json:"collaboration"`
+	Mcp           *mcpRequest           `json:"mcp"`
 }
 
 type updateAgentRequest struct {
@@ -243,6 +244,7 @@ type updateAgentRequest struct {
 	SecretBinds   *[]bindingRequest      `json:"secretBindings"`
 	Role          *string                `json:"role"`
 	Collaboration *collaborationRequest  `json:"collaboration"`
+	Mcp           *mcpRequest            `json:"mcp"`
 }
 
 type snapshotBody struct {
