@@ -316,3 +316,35 @@ Decisions local to this repository. Cross-repo decisions live in the root reposi
   one transaction.
 - Consequences: operators give each team its own project, key, resource group or label (the `per_team` credential mode);
   shared provider accounts reconcile only in total.
+
+## ADR-035 MCP is served only by the team gateway, with sealed stateless sessions
+
+- Status: Accepted (spec 261125-mcp-gateway)
+- Context: MCP servers need credentials agents must not hold, per-call admission against a governed catalog, and a
+  ledger; Streamable HTTP sessions would otherwise pin an agent to one gateway replica.
+- Decision: `/mcp` and `/mcp/<server>` exist only on per-namespace team gateways. Session ids and list cursors are
+  sealed (AES-GCM) with per-team keys the reconciler derives from master keys (`HMAC-SHA256(master,
+  "afs-mcp-session/" + teamId)`), so any replica serves any session and no session state is stored. Refusals answer
+  `-32602 Unknown …` and keep the reason in the ledger only.
+- Consequences: shared-gateway teams cannot use MCP; rate and concurrency limits are per replica (up to twice the
+  setting with two replicas) until a shared limiter exists; `GET /mcp` answers 405, so list-changed notifications reach
+  agents on their next list call.
+
+## ADR-036 Hosted MCP servers run behind afs-mcp-bridge in the team namespace
+
+- Status: Accepted (spec 261125-mcp-gateway)
+- Context: many MCP servers ship as stdio programs; agents must not run them with credentials in their own pods.
+- Decision: the reconciler renders a Deployment and Service `afs-mcp-<slug>` per hosted server. An init container copies
+  `afs-mcp-bridge` into a shared volume and the server container runs it, which speaks Streamable HTTP on 8080 and drives
+  the program over stdio. A CiliumNetworkPolicy admits only the team gateway and allows egress only to DNS and the
+  server's declared hosts. Credentials arrive through an ExternalSecret as environment variables passed by name.
+- Consequences: no image needs changing to be hosted; `per_agent` instance mode is served by one per-team instance for
+  now; the Pod Identity association for servers that need AWS and image signature admission wait for an AWS environment.
+
+## ADR-037 Service connections assume their group role
+
+- Status: Accepted (spec 261125-mcp-gateway)
+- Context: the schema's `SECURITY DEFINER` functions and triggers check `current_user` against the service roles; a
+  LOGIN user that is only a member of `afs_gateway` (the RDS norm) failed those checks.
+- Decision: `postgres.Config.Role` sets the `role` startup parameter, so every connection runs as its service role.
+- Consequences: the login user must be a member of the role; `-db` documents the assumption.

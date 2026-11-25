@@ -2,6 +2,30 @@
 
 All notable changes to this repository. `-db` and `-restapi` share version numbers (lockstep).
 
+## v1.3.0
+
+Governed MCP servers (spec `specs/261125-mcp-gateway/`, change PRD `mcp-gateway-PRD.md`). Adopts `-db` migrations
+000024 to 000026 (pinned to the pseudo-version of `-db` commit `4d8a72d` until `-db` v1.3.0 is tagged; see
+`user-docs/upgrading-to-1.3.0.md`). Nothing changes for an agent until a server is approved and switched on.
+
+- API contract v1.6.0 (55 operations; 276 in all): the MCP catalog (enterprise and team servers, review with three
+  approval levels, primitives, drift holds, checks), team switches and policy, credentials (`{value}` in, metadata out),
+  OAuth connect (`StartMcpOAuthConnect`, `CompleteMcpOAuthConnect`: RFC 9728 and 8414 discovery, PKCE, RFC 9207 issuer
+  check, RFC 8707 resource), federated identities, query captures, usage reports. Agent and pool bodies gain `mcp`;
+  team gateway settings gain `mayAddMcpServers` and `mcpPlacement`; external systems gain `governedBy`
+  (`409 governed_by_mcp_server`).
+- Gateway: `/mcp` (aggregated) and `/mcp/<server>` on team gateways, Streamable HTTP with sealed sessions and cursors
+  (`AFS_GATEWAY_MCP_SEALING_KEYS`), full and search modes, admission from `afs.mcp_admission`, policy with block-wins,
+  rate, size and concurrency limits, upstream auth per kind, inventory refresh with drift holds, a batched ledger.
+- `afs-mcp-bridge`: runs a stdio MCP server behind Streamable HTTP for hosted servers.
+- Reconciler: `AFS_MCP_*` and `/etc/afs/mcp.json` for agents and pools; the team gateway's MCP egress, credentials
+  (`mcp.<slug>`), federation tokens and session keys (`AFS_TEAM_GATEWAY_MCP_SESSION_KEYS`); hosted servers
+  (Deployment, Service, ExternalSecret, CiliumNetworkPolicy, `AFS_MCP_BRIDGE_IMAGE`); conditions `McpServerReady`,
+  `McpAuthExpired`, `McpDriftPending`.
+- Every service connection assumes its group role (`role` startup parameter), so LOGIN users that are members of a
+  service role pass the schema's `current_user` guards.
+- Deploy: Helm `mcpSessionKeys` (reconciler) and `mcpOAuth` (API).
+
 ## v1.2.0
 
 Team model gateway, model routes and provider switches (spec `specs/261125-model-endpoint-gateway/`, change PRD

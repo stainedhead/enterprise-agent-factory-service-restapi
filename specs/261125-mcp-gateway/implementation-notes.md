@@ -26,3 +26,17 @@
   incompatible and always held. A compatible change is auto-approved only under `auto_approve_compatible`, only for an
   approved primitive, only when it crosses no risk line, and only when the whole listing passes the definition checks.
 - A truncated listing (more than 2,000 primitives) never marks anything removed.
+
+## Reconciler and agent access (T7d, T9)
+
+- `AFS_MCP_URL` and the other variables appear only when the agent has at least one effective server, so a 1.2.0 pod
+  template is unchanged. The variables name the servers, so a team-level change that alters an agent's effective set
+  rolls that agent's pod (the config hash includes the MCP delivery). Recorded as a known cost.
+- `per_agent` instance mode is accepted and stored but served by one instance per team for now.
+- The team gateway's egress covers server hosts and federation token endpoints. An OAuth authorization server on a host
+  other than the MCP server's is not yet added to egress; refresh to such a server fails until it is.
+- Hosted servers that need AWS get their own ServiceAccount; the Pod Identity association is not created (needs AWS).
+- Image signature verification by admission policy and the Appendix D notifications are not built.
+- Every service connection now sets the `role` startup parameter (`postgres.Config.Role`); found when the gateway's
+  LOGIN user, a member of `afs_gateway`, failed `current_user` guards in `-db` functions (ADR-037).
+- An earlier commit message named the spec `specs/251125-mcp-gateway`; the directory is `specs/261125-mcp-gateway`.

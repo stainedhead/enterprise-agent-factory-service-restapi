@@ -19,9 +19,9 @@ and [-website](https://github.com/stainedhead/enterprise-agent-factory-service-w
 console) are clients of this API and consume `api/openapi.yaml`. Requirements: the root repository's
 `enterprise-agent-factory-service-initial-PRD.md`.
 
-Status: feature complete, release 1.2.0 (lockstep with `-db`, migrations 000001-000023): the REST API
-(221 operations, contract v1.5.0, plus the v1.6.0 MCP operations pending for 1.3.0), reconciler, gateway, billing job
-and edge, with the team model gateway, model routes and provider switches added in 1.2.0.
+Status: feature complete, release 1.3.0 (lockstep with `-db`, migrations 000001-000026): the REST API
+(276 operations, contract v1.6.0), reconciler, gateway, billing job and edge, with the team model gateway (1.2.0)
+and governed MCP servers on the team gateway, `afs-mcp-bridge` for hosted servers (1.3.0).
 
 ## Toolchain
 
@@ -43,6 +43,7 @@ cmd/afs-api/              REST API server
 cmd/afs-reconciler/       desired-state reconciler (leader-elected)
 cmd/afs-gateway/          Bedrock metering gateway
 cmd/afs-billing/          CUR reconciliation job
+cmd/afs-mcp-bridge/       stdio MCP server behind Streamable HTTP, for hosted servers
 cmd/afs-edge/             collaboration edge: the only public component (sign-in, RBAC, scan, forward)
 internal/domain/          entities and invariants; imports nothing outside the standard library
 internal/usecase/         use cases and ports (interfaces); imports domain and authz only
@@ -163,7 +164,7 @@ for design, requirements, spec or process material, and must not link into `spec
 
 ## Git
 
-**Versioning (lockstep).** `-db` and `-restapi` share version numbers: release `vX.Y.Z` of this repository goes with `vX.Y.Z` of `enterprise-agent-factory-service-db`. The current release is 1.2.0 (`-db` v1.2.0 adds migration 000023). The Makefile `VERSION` default and the Helm chart `version` and `appVersion` carry it; `CHANGELOG.md` records each release.
+**Versioning (lockstep).** `-db` and `-restapi` share version numbers: release `vX.Y.Z` of this repository goes with `vX.Y.Z` of `enterprise-agent-factory-service-db`. The current release is 1.3.0 (`-db` v1.3.0 adds migrations 000024 to 000026). The Makefile `VERSION` default and the Helm chart `version` and `appVersion` carry it; `CHANGELOG.md` records each release.
 
 Clear commit messages that reference the spec directory when there is one. Do not force-push shared
 branches. Do not commit `bin/`, `dist/`, coverage output or Terraform state. Work on a branch and open a

@@ -31,3 +31,10 @@ viewerKubectl:
   roles: {}               # rendered as AFS_VIEWER_KUBECTL_ROLES, e.g. {default: arn:aws:iam::111122223333:role/afs-viewers}
 # Storage class of the shared EFS volume of a pool (AFS_EFS_STORAGE_CLASS, RC-11).
 efsStorageClass: efs-sc
+# MCP servers (1.3.0). AFS_MCP_BRIDGE_IMAGE (the afs-mcp-bridge image, pinned by digest) goes in env when any team
+# hosts a server. AFS_TEAM_GATEWAY_MCP_SESSION_KEYS comes from a Secret: one or two comma-separated base64 32-byte
+# master keys (new first while rotating); each team gateway gets HMAC-SHA256(master, "afs-mcp-session/" + team id).
+# Unset: team gateways do not serve /mcp.
+mcpSessionKeys:
+  secretName: ""
+  secretKey: keys

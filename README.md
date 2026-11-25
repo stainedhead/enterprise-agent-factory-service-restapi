@@ -71,6 +71,15 @@ A team set to `per_namespace` gets its own `afs-gateway` in its namespace. Its a
 and may reach the route hosts. Every provider is a service-admin switch. `afs-billing` reconciles each route against the
 provider's own figures. See [model routes](user-docs/model-routes.md).
 
+## Governed MCP servers (1.3.0)
+
+Agents reach MCP servers only through their team gateway at `$(AFS_GATEWAY_URL)/mcp`. The gateway admits each call
+against the approved catalog and the service, team and agent policy, holds every credential (static, OAuth, workload
+federation, SigV4), and records a ledger row. Hosted servers run in the team namespace behind `afs-mcp-bridge`. See
+[governed MCP servers](user-docs/mcp-servers.md).
+
+![Governed MCP servers](docs/images/mcp-gateway.svg)
+
 ## Build and test
 
 Requires Go 1.27 (pinned in `go.mod`; older Go fetches it) and `make`.
@@ -90,14 +99,12 @@ the build-tagged suites on a cluster. Deployment assets are in [deploy/terraform
 
 ## Status
 
-Release 1.2.0 (lockstep with `-db`): all 221 operations of API contract v1.5.0 are implemented behind the permission
-matrix (the v1.6.0 MCP operations merged for 1.3.0 answer `501 not_implemented` until then), with the reconciler,
-gateway, billing jobs and edge. 1.2.0 adds model routes to OpenAI-compatible endpoints through a team gateway in the
-team's namespace, provider switches (Bedrock included) and route billing; see
-[model routes](user-docs/model-routes.md) and [upgrading to 1.2.0](user-docs/upgrading-to-1.2.0.md). Checks that need a
-real cloud (EKS, live Azure and Google federation, provider billing APIs) are recorded as deferred in
-`specs/261125-model-endpoint-gateway/implementation-notes.md`. `-db` is pinned to a pseudo-version of the commit that
-carries migration 000023 until `-db` v1.2.0 is tagged.
+Release 1.3.0 (lockstep with `-db`): all 276 operations of API contract v1.6.0 are implemented behind the permission
+matrix, with the reconciler, gateway, billing jobs and edge. 1.3.0 adds governed MCP servers (see
+[upgrading to 1.3.0](user-docs/upgrading-to-1.3.0.md)); 1.2.0 added model routes through a team gateway
+([model routes](user-docs/model-routes.md)). Checks that need a real cloud (EKS, live federation, provider billing
+APIs, hosted servers on a cluster) are recorded as deferred in each spec's `implementation-notes.md`. `-db` is pinned
+to a pseudo-version of the commit that carries migration 000026 until `-db` v1.3.0 is tagged.
 
 ## Contributing
 
