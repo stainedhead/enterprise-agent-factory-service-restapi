@@ -46,11 +46,15 @@ func TestAuthorizationMatrix(t *testing.T) {
 	matrix.Run(t, w, c.Handler)
 }
 
-// pendingV150 is httpapi.PendingModelEndpointOps: the v1.5.0 §4.13 operations whose handlers land in the
-// implementation change of release 1.2.0 (specs/261125-model-endpoint-gateway). The list may only shrink.
+// pendingV150 is httpapi.PendingModelEndpointOps and httpapi.PendingMcpOps: the v1.5.0 §4.13 and v1.6.0 §4.14
+// operations whose handlers land in the implementation changes of releases 1.2.0 and 1.3.0
+// (specs/261125-model-endpoint-gateway, specs/261125-mcp-gateway). The lists may only shrink.
 var pendingV150 = func() map[string]bool {
 	m := map[string]bool{}
 	for _, op := range httpapi.PendingModelEndpointOps {
+		m[op] = true
+	}
+	for _, op := range httpapi.PendingMcpOps {
 		m[op] = true
 	}
 	return m

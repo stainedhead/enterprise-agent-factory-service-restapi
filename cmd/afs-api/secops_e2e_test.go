@@ -114,7 +114,8 @@ func TestServiceAPIKeyEndToEnd(t *testing.T) {
 		t.Fatalf("GetMe: %d %s", r.code, r.body)
 	}
 	if !me.SecurityOperator || me.ServiceAdmin || me.Principal.Type != "api_key" || len(me.Teams) != 0 ||
-		!slices.Equal(me.ServicePermissions, []string{"teams:read-directory", "work-orders:read", "work-orders:write", "swarm-templates:read"}) {
+		!slices.Equal(me.ServicePermissions, []string{"teams:read-directory", "work-orders:read", "work-orders:write", "swarm-templates:read",
+			"mcp-servers:read", "mcp-servers:review", "mcp-servers:suspend", "mcp-events:read"}) {
 		t.Fatalf("GetMe for a service key: %+v", me)
 	}
 	// The directory is paginated and the database may hold many teams (CI shares one), so follow nextToken.
@@ -223,6 +224,11 @@ var secopsOps = map[string]bool{
 	"ListWorkOrders": true, "CreateWorkOrder": true, "GetWorkOrder": true, "UpdateWorkOrder": true, "CancelWorkOrder": true,
 	"ListWorkOrderRepos": true, "UpdateWorkOrderRepo": true,
 	"ListSwarmTemplates": true, "GetSwarmTemplate": true, "ListTeamDirectory": true, "GetMe": true,
+	// v1.6.0 §4.14: the security operator column of the MCP service paths (CD-45).
+	"ListMcpServers": true, "GetMcpServer": true, "SuspendMcpServer": true, "ResumeMcpServer": true, "ListMcpPrimitives": true,
+	"GetMcpPrimitiveChange": true, "ApproveMcpPrimitive": true, "RejectMcpPrimitive": true, "ApproveMcpServer": true,
+	"RejectMcpServer": true, "RequestMcpServerChanges": true, "ListMcpReviews": true, "ListMcpEvents": true,
+	"GetMcpUsageReport": true, "GetMcpQueryCapture": true,
 }
 
 // RA-US-1.4, RA-US-15.5, RA-US-3a.2 (part): a security operator and a service key get 403 on every
