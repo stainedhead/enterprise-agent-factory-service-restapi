@@ -778,7 +778,8 @@ func (*ModelEndpointsRepo) TeamGateway(ctx context.Context, tx port.Tx, teamID s
 	if err != nil {
 		return modelendpoints.TeamGateway{}, err
 	}
-	q := `SELECT t.id, t.namespace, t.state, t.gateway_deployment, t.may_add_model_endpoints, t.version, coalesce(rs.phase, '')
+	q := `SELECT t.id, t.namespace, t.state, t.gateway_deployment, t.may_add_model_endpoints, t.version, coalesce(rs.phase, ''),
+  t.may_add_mcp_servers, coalesce(t.mcp_placement, ''), coalesce(t.mcp_placement, afs.mcp_setting('gateway.mcp.placement_default') #>> '{}', 'combined')
 FROM afs.teams t LEFT JOIN afs.resource_status rs ON rs.resource_kind = '` + StatusKindTeamGateway + `' AND rs.resource_id = t.id
 WHERE t.id = $1 AND t.state <> 'deleted'`
 	if forUpdate {
@@ -787,20 +788,24 @@ WHERE t.id = $1 AND t.state <> 'deleted'`
 	var g modelendpoints.TeamGateway
 	var dep string
 	var v int64
-	err = t.QueryRow(ctx, q, teamID).Scan(&g.TeamID, &g.Namespace, &g.State, &dep, &g.MayAdd, &v, &g.GatewayPhase)
+	err = t.QueryRow(ctx, q, teamID).Scan(&g.TeamID, &g.Namespace, &g.State, &dep, &g.MayAdd, &v, &g.GatewayPhase,
+		&g.MayAddMcp, &g.McpPlacementStored, &g.McpPlacement)
 	g.Deployment, g.Version = domain.GatewayDeployment(dep), domain.Version(v)
 	return g, MapError(err, OpRead, "team")
 }
 
 // PutTeamGateway implements modelendpoints.Repository. Changing may_add_model_endpoints needs a service
 // admin (the team guardrail guard answers 42501 otherwise).
-func (*ModelEndpointsRepo) PutTeamGateway(ctx context.Context, tx port.Tx, teamID string, d domain.GatewayDeployment, mayAdd bool, expect domain.Version) error {
+func (*ModelEndpointsRepo) PutTeamGateway(ctx context.Context, tx port.Tx, teamID string, d domain.GatewayDeployment, mayAdd, mayAddMcp bool, placement string, expect domain.Version) error {
 	t, err := Unwrap(tx)
 	if err != nil {
 		return err
 	}
-	tag, err := t.Exec(ctx, `UPDATE afs.teams SET gateway_deployment = $2, may_add_model_endpoints = $3
-WHERE id = $1 AND version = $4 AND (gateway_deployment, may_add_model_endpoints) IS DISTINCT FROM ($2, $3)`, teamID, string(d), mayAdd, int64(expect))
+	tag, err := t.Exec(ctx, `UPDATE afs.teams SET gateway_deployment = $2, may_add_model_endpoints = $3, may_add_mcp_servers = $5,
+  mcp_placement = nullif($6, '')
+WHERE id = $1 AND version = $4
+  AND (gateway_deployment, may_add_model_endpoints, may_add_mcp_servers, mcp_placement) IS DISTINCT FROM ($2, $3, $5, nullif($6, ''))`,
+		teamID, string(d), mayAdd, int64(expect), mayAddMcp, placement)
 	if err != nil {
 		return MapError(err, OpWrite, "team")
 	}

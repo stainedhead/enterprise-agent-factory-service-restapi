@@ -73,22 +73,3 @@ func TestEndpointBodiesHideEmptyOptionals(t *testing.T) {
 	}
 }
 
-// The v1.6.0 MCP fields are decoded (the strict decoder would refuse them) and refused unless they ask for the
-// only state 1.2.0 has.
-func TestGatewayMcpFields(t *testing.T) {
-	f, tr, sep, bad := false, true, "separate", "nope"
-	if err := gatewayMcpFields(nil, nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := gatewayMcpFields(&f, nil); err != nil {
-		t.Fatal(err)
-	}
-	for name, c := range map[string]struct {
-		may *bool
-		pl  *string
-	}{"may add": {&tr, nil}, "placement": {nil, &sep}, "bad placement": {nil, &bad}} {
-		if err := gatewayMcpFields(c.may, c.pl); domain.KindOf(err) != domain.KindValidation {
-			t.Errorf("%s: %v", name, err)
-		}
-	}
-}

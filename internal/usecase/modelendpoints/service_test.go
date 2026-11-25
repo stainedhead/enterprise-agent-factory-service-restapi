@@ -690,6 +690,12 @@ func TestTeamGatewaySettings(t *testing.T) {
 	kind(t, second(r.svc.PutTeamGateway(ctx, admin(), teamA, me.TeamGatewayPatch{}, &stale)), domain.KindPreconditionFailed, "")
 	bad := domain.GatewayDeployment("cluster")
 	kind(t, second(r.svc.PutTeamGateway(ctx, admin(), teamA, me.TeamGatewayPatch{Deployment: &bad}, nil)), domain.KindValidation, "")
+	// v1.6.0: the MCP settings are stored, a placement outside combined and separate is refused.
+	sep, odd := "separate", "elsewhere"
+	if g, err = r.svc.PutTeamGateway(ctx, admin(), teamA, me.TeamGatewayPatch{MayAddMcp: &may, McpPlacement: &sep}, nil); err != nil || !g.MayAddMcp || g.McpPlacement != "separate" {
+		t.Fatalf("mcp settings %+v %v", g, err)
+	}
+	kind(t, second(r.svc.PutTeamGateway(ctx, admin(), teamA, me.TeamGatewayPatch{McpPlacement: &odd}, nil)), domain.KindValidation, "")
 	shared := domain.GatewayShared
 	if g, err = r.svc.PutTeamGateway(ctx, admin(), teamB, me.TeamGatewayPatch{Deployment: &shared}, nil); err != nil || g.GatewayState != me.GatewayStateShared || g.GatewayURL != "https://afs-gateway.afs-system.svc:8443" {
 		t.Fatalf("shared %+v %v", g, err)

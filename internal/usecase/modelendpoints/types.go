@@ -272,16 +272,22 @@ type Impact struct {
 
 // TeamGateway is a team's gateway settings.
 type TeamGateway struct {
-	TeamID        string
-	Namespace     string
-	State         string // the team's lifecycle state
-	Deployment    domain.GatewayDeployment
-	MayAdd        bool
-	Version       domain.Version
-	GatewayPhase  string // resource_status phase of the team gateway, "" before the first render
-	GatewayURL    string
-	GatewayState  string
-	SharedGateway string
+	TeamID     string
+	Namespace  string
+	State      string // the team's lifecycle state
+	Deployment domain.GatewayDeployment
+	MayAdd     bool
+	// MayAddMcp and McpPlacement are the v1.6.0 MCP settings (API contract §4.14); McpPlacement reads the
+	// service default (gateway.mcp.placement_default) when the team has none.
+	MayAddMcp    bool
+	McpPlacement string
+	// McpPlacementStored is the team's own placement, "" when it follows the service default.
+	McpPlacementStored string
+	Version            domain.Version
+	GatewayPhase       string // resource_status phase of the team gateway, "" before the first render
+	GatewayURL         string
+	GatewayState       string
+	SharedGateway      string
 }
 
 // TeamEndpoint is an endpoint as one team sees it (ListTeamModelEndpoints).
@@ -372,7 +378,7 @@ type Repository interface {
 	// TeamGateway returns the team's gateway settings; NotFound when the caller cannot see the team.
 	TeamGateway(ctx context.Context, tx port.Tx, teamID string, forUpdate bool) (TeamGateway, error)
 	// PutTeamGateway stores the settings; PreconditionFailed when the team's version is not expect.
-	PutTeamGateway(ctx context.Context, tx port.Tx, teamID string, d domain.GatewayDeployment, mayAdd bool, expect domain.Version) error
+	PutTeamGateway(ctx context.Context, tx port.Tx, teamID string, d domain.GatewayDeployment, mayAdd, mayAddMcp bool, placement string, expect domain.Version) error
 
 	// ListTeamEndpoints returns the team's endpoints (selected, own and available) with id above after.
 	ListTeamEndpoints(ctx context.Context, tx port.Tx, teamID, relation, after string, limit int) ([]TeamEndpoint, error)

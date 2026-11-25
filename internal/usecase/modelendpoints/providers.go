@@ -163,6 +163,10 @@ func (s *Service) applyFallback(ctx context.Context, tx port.Tx, fallback string
 type TeamGatewayPatch struct {
 	Deployment *domain.GatewayDeployment
 	MayAdd     *bool
+	// MayAddMcp and McpPlacement (combined or separate) are the v1.6.0 MCP settings; changing them needs a
+	// service admin (the database refuses a team-admin with 42501).
+	MayAddMcp    *bool
+	McpPlacement *string
 }
 
 // PutTeamGateway implements PutTeamGatewaySettings (teams:set-guardrails). If-Match, when sent, is the
@@ -173,6 +177,9 @@ func (s *Service) PutTeamGateway(ctx context.Context, c acting.Caller, teamID st
 	}
 	if p.Deployment != nil && *p.Deployment != domain.GatewayShared && *p.Deployment != domain.GatewayPerNamespace {
 		return TeamGateway{}, refused("deployment", "must be shared or per_namespace", "")
+	}
+	if p.McpPlacement != nil && *p.McpPlacement != "combined" && *p.McpPlacement != "separate" {
+		return TeamGateway{}, refused("mcpPlacement", "must be combined or separate", "")
 	}
 	var out TeamGateway
 	err := s.Tx.InTx(ctx, c.Session(), func(ctx context.Context, tx port.Tx) error {
@@ -192,19 +199,26 @@ func (s *Service) PutTeamGateway(ctx context.Context, c acting.Caller, teamID st
 		if p.MayAdd != nil {
 			may = *p.MayAdd
 		}
-		if err := s.Repo.PutTeamGateway(ctx, tx, teamID, d, may, cur.Version); err != nil {
+		mayMcp, placement := cur.MayAddMcp, cur.McpPlacementStored
+		if p.MayAddMcp != nil {
+			mayMcp = *p.MayAddMcp
+		}
+		if p.McpPlacement != nil {
+			placement = *p.McpPlacement
+		}
+		if err := s.Repo.PutTeamGateway(ctx, tx, teamID, d, may, mayMcp, placement, cur.Version); err != nil {
 			return err
 		}
 		if out, err = s.Repo.TeamGateway(ctx, tx, teamID, false); err != nil {
 			return err
 		}
-		before := map[string]any{"gatewayDeployment": cur.Deployment, "mayAddModelEndpoints": cur.MayAdd}
-		after := map[string]any{"gatewayDeployment": out.Deployment, "mayAddModelEndpoints": out.MayAdd}
+		before := map[string]any{"gatewayDeployment": cur.Deployment, "mayAddModelEndpoints": cur.MayAdd, "mayAddMcpServers": cur.MayAddMcp, "mcpPlacement": cur.McpPlacement}
+		after := map[string]any{"gatewayDeployment": out.Deployment, "mayAddModelEndpoints": out.MayAdd, "mayAddMcpServers": out.MayAddMcp, "mcpPlacement": out.McpPlacement}
 		if err := s.Audit.Write(ctx, tx, c.Record("PutTeamGatewaySettings", kindTeam, teamID, teamID, before, after)); err != nil {
 			return err
 		}
 		if err := s.Emit(ctx, tx, c, domain.EventTeamUpdated, teamID, kindTeam, teamID, map[string]any{"teamId": teamID,
-			"changed": []string{"gatewayDeployment", "mayAddModelEndpoints"}}); err != nil {
+			"changed": []string{"gatewayDeployment", "mayAddModelEndpoints", "mayAddMcpServers", "mcpPlacement"}}); err != nil {
 			return err
 		}
 		out = s.gatewayView(out)

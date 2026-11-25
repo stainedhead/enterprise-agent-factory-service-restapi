@@ -438,7 +438,7 @@ func (r *Repo) TeamGateway(_ context.Context, _ port.Tx, teamID string, _ bool) 
 }
 
 // PutTeamGateway implements modelendpoints.Repository.
-func (r *Repo) PutTeamGateway(_ context.Context, _ port.Tx, teamID string, d domain.GatewayDeployment, may bool, expect domain.Version) error {
+func (r *Repo) PutTeamGateway(_ context.Context, _ port.Tx, teamID string, d domain.GatewayDeployment, may, mayMcp bool, placement string, expect domain.Version) error {
 	if err := r.err("PutTeamGateway"); err != nil {
 		return err
 	}
@@ -447,6 +447,10 @@ func (r *Repo) PutTeamGateway(_ context.Context, _ port.Tx, teamID string, d dom
 		return domain.PreconditionFailed()
 	}
 	t.Deployment, t.MayAdd, t.Version = d, may, t.Version+1
+	t.MayAddMcp, t.McpPlacementStored, t.McpPlacement = mayMcp, placement, placement
+	if placement == "" {
+		t.McpPlacement = "combined"
+	}
 	r.Teams[teamID] = t
 	return nil
 }
