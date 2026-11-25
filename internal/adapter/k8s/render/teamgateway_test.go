@@ -103,7 +103,7 @@ func TestTeamGatewayRender(t *testing.T) {
 	if strings.Contains(string(b), "FEDERATION") || len(objs) != 6 {
 		t.Errorf("plain gateway: %d objects, %s", len(objs), b)
 	}
-	if len(render.TeamGatewayGVKs) != 8 {
+	if len(render.TeamGatewayGVKs) != 9 {
 		t.Errorf("removal list = %d", len(render.TeamGatewayGVKs))
 	}
 }

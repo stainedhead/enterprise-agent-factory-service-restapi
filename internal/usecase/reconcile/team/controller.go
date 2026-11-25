@@ -167,6 +167,11 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 		if err := c.cfg.Routes.ReportRoutes(ctx, t.ID, k8sErr == nil && t.Gateway.PerNamespace(), t.Gateway.RouteHealth()); err != nil {
 			errs = append(errs, err)
 		}
+		if m, ok := c.cfg.Routes.(McpReporter); ok {
+			if err := m.ReportMcp(ctx, t.ID, t.Gateway.McpConditions()); err != nil {
+				errs = append(errs, err)
+			}
+		}
 	}
 
 	out := engine.Outcome{Generation: t.Generation, Conditions: conds, Changed: changed, Requeue: requeue}

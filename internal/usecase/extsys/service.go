@@ -128,6 +128,11 @@ func (s *Service) SetTeamState(ctx context.Context, c acting.Caller, teamID, sys
 				return err
 			}
 		}
+		if enabled {
+			if err := cur.GovernedConflict(); err != nil {
+				return err
+			}
+		}
 		if enabled && cur.DisabledAt == domain.ExtSystemDisabledAtService {
 			return domain.Conflict("disabled_above", "the system is switched off at the service level; a team cannot switch it on",
 				map[string]any{"disabledAt": string(cur.DisabledAt)})
@@ -323,6 +328,11 @@ func (s *Service) SetAgentState(ctx context.Context, c acting.Caller, teamID, ag
 		}
 		if expect != nil {
 			if err := domain.CheckVersion(cur.Version, *expect); err != nil {
+				return err
+			}
+		}
+		if enabled {
+			if err := cur.GovernedConflict(); err != nil {
 				return err
 			}
 		}

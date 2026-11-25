@@ -45,6 +45,16 @@ spec:
             {{- end }}
             - name: AFS_LEADER_LEASE_NAMESPACE
               value: {{ default .Release.Namespace $c.leaderLease.namespace | quote }}
+            {{- with $c.mcpSessionKeys }}
+            {{- if .secretName }}
+            # The master keys the team gateways' MCP session sealing keys derive from (1.3.0); never a value.
+            - name: AFS_TEAM_GATEWAY_MCP_SESSION_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ default "keys" .secretKey }}
+            {{- end }}
+            {{- end }}
           {{- include "afs.probes" $ | nindent 10 }}
           resources:
             {{- toYaml $c.resources | nindent 12 }}

@@ -22,6 +22,8 @@ type Client struct {
 	MaxResponse int64
 	// Header, when set, adds headers (for example upstream credentials) to every request.
 	Header func(http.Header)
+	// Sign, when set, signs each request with its body (AWS SigV4), after Header.
+	Sign func(req *http.Request, body []byte) error
 }
 
 // ErrResponseTooLarge is returned when a response passes MaxResponse.
@@ -37,7 +39,7 @@ func (e *HTTPError) Error() string { return fmt.Sprintf("mcpwire: upstream HTTP 
 
 // Call sends m and returns the response with m's id. Messages other than that response that arrive on
 // an event stream (notifications, server requests) are passed to onOther, which may be nil. A
-// notification gets (nil, nil) once the endpoint accepts it with 202.
+// notification, or a response to a server request, gets (nil, nil) once the endpoint accepts it with 202.
 func (c *Client) Call(ctx context.Context, m *Message, sessionID string, onOther func(*Message)) (*Message, error) {
 	body, err := json.Marshal(m)
 	if err != nil {
@@ -64,6 +66,11 @@ func (c *Client) Call(ctx context.Context, m *Message, sessionID string, onOther
 	if c.Header != nil {
 		c.Header(req.Header)
 	}
+	if c.Sign != nil {
+		if err := c.Sign(req, body); err != nil {
+			return nil, err
+		}
+	}
 	hc := c.HTTP
 	if hc == nil {
 		hc = http.DefaultClient
@@ -78,7 +85,7 @@ func (c *Client) Call(ctx context.Context, m *Message, sessionID string, onOther
 		limit = 8 << 20
 	}
 	r := &capped{r: resp.Body, n: limit}
-	if resp.StatusCode == http.StatusAccepted && m.IsNotification() {
+	if resp.StatusCode == http.StatusAccepted && (m.IsNotification() || m.IsResponse()) {
 		return nil, nil
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {

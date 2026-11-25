@@ -180,9 +180,6 @@ func (a *PoolsAPI) create(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
-	if refuseMcpUntilBuilt(w, r, req.Mcp) {
-		return
-	}
 	if req.Workers == nil {
 		WriteError(w, r, bad("workers", "is required"))
 		return
@@ -199,7 +196,7 @@ func (a *PoolsAPI) create(w http.ResponseWriter, r *http.Request) {
 	}
 	in := domain.NewPoolParams{Name: req.Name, Description: req.Description, Template: req.Template, Image: req.Image,
 		Persona: req.Persona, ModelID: req.ModelID, Models: req.Models.input(), Workers: *req.Workers, Resources: req.Resources,
-		ScratchSizeGiB: req.ScratchSizeGiB, SharedVolume: req.SharedVolume}
+		ScratchSizeGiB: req.ScratchSizeGiB, SharedVolume: req.SharedVolume, Mcp: req.Mcp.patch()}
 	if req.StageID != nil {
 		in.StageID = *req.StageID
 	}
@@ -231,9 +228,6 @@ func (a *PoolsAPI) update(w http.ResponseWriter, r *http.Request) {
 	var req updatePoolRequest
 	if err := Decode(r, &req); err != nil {
 		WriteError(w, r, err)
-		return
-	}
-	if refuseMcpUntilBuilt(w, r, req.Mcp) {
 		return
 	}
 	if req.ModelID != nil {

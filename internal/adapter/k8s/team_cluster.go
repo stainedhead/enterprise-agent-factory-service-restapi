@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -72,6 +73,11 @@ func (c *TeamCluster) ApplyTeam(ctx context.Context, env team.Environment) (team
 		}
 		objs = append(objs, gw...)
 	}
+	hosted, err := render.McpHosted(env)
+	if err != nil && firstErr == nil {
+		firstErr = err
+	}
+	objs = append(objs, hosted...)
 	for _, o := range objs {
 		r, err := c.client.Apply(ctx, o)
 		if r.Modified() {
@@ -86,7 +92,34 @@ func (c *TeamCluster) ApplyTeam(ctx context.Context, env team.Environment) (team
 			firstErr = err
 		}
 	}
+	if err := c.removeMcpHosted(ctx, env.Team.Namespace, render.McpHostedSlugs(env)); err != nil && firstErr == nil {
+		firstErr = err
+	}
 	return res, firstErr
+}
+
+// removeMcpHosted deletes the objects of hosted MCP servers the reconciler made whose server is no longer
+// rendered (switched off, rejected, removed, or the team is back on the shared gateway).
+func (c *TeamCluster) removeMcpHosted(ctx context.Context, ns string, keep []string) error {
+	for _, gvk := range render.McpHostedGVKs {
+		live, err := c.client.List(ctx, gvk, ns, render.LabelMcpServer)
+		if err != nil {
+			if meta.IsNoMatchError(err) {
+				continue
+			}
+			return fmt.Errorf("hosted MCP %s: %w", gvk.Kind, err)
+		}
+		for i := range live {
+			o := &live[i]
+			if !render.IsManaged(o) || slices.Contains(keep, o.GetLabels()[render.LabelMcpServer]) {
+				continue
+			}
+			if err := c.client.Delete(ctx, gvk, ns, o.GetName()); err != nil {
+				return fmt.Errorf("hosted MCP %s %s: %w", gvk.Kind, o.GetName(), err)
+			}
+		}
+	}
+	return nil
 }
 
 // removeTeamGateway deletes the objects of a team gateway the reconciler made, when the team is back on the

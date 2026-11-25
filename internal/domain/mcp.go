@@ -3,6 +3,8 @@ package domain
 import (
 	"net/url"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain/mcp"
@@ -514,12 +516,38 @@ func (a AgentMcp) Validate(teamEnabled []string) error {
 	return nil
 }
 
-// McpEnv returns the AFS_MCP_* variable names an agent gets (PRD §6.1).
-func McpEnv(mode McpAgentMode) []string {
-	if mode == McpAgentModeFull {
-		return []string{"AFS_MCP_URL", "AFS_MCP_CONFIG", "AFS_MCP_SERVERS"}
+// McpServerEnvName is AFS_MCP_<SERVER>_URL of a server: the slug upper-cased with '-' replaced by '_' (gateway
+// contract §13.5).
+func McpServerEnvName(slug string) string {
+	return "AFS_MCP_" + strings.ToUpper(strings.ReplaceAll(slug, "-", "_")) + "_URL"
+}
+
+// McpEnv returns the AFS_MCP_* names an agent or pool gets (gateway contract §13.5): none without an effective
+// server; else AFS_MCP_URL, AFS_MCP_MODE, AFS_MCP_SERVERS and one AFS_MCP_<SERVER>_URL per server, by slug.
+func McpEnv(slugs []string) []string {
+	vars := McpEnvVars("", slugs)
+	out := make([]string, 0, len(vars))
+	for _, v := range vars {
+		out = append(out, v.Name)
 	}
-	return []string{"AFS_MCP_URL", "AFS_MCP_CONFIG"}
+	return out
+}
+
+// McpEnvVars returns the AFS_MCP_* variables with their values; the URLs reference $(AFS_GATEWAY_URL), so they
+// must follow it in the container's environment.
+func McpEnvVars(mode McpAgentMode, slugs []string) []EnvVar {
+	if len(slugs) == 0 {
+		return []EnvVar{}
+	}
+	ss := slices.Clone(slugs)
+	slices.Sort(ss)
+	ss = slices.Compact(ss)
+	out := []EnvVar{{Name: "AFS_MCP_URL", Value: GatewayURLRef + "/mcp"}, {Name: "AFS_MCP_MODE", Value: string(mode)},
+		{Name: "AFS_MCP_SERVERS", Value: strings.Join(ss, ",")}}
+	for _, s := range ss {
+		out = append(out, EnvVar{Name: McpServerEnvName(s), Value: GatewayURLRef + "/mcp/" + s})
+	}
+	return out
 }
 
 // FederatedIdentity is an agent's or pool's projected-token identity (PRD Appendix C).
@@ -699,3 +727,107 @@ func McpCaptureEvent(started bool) EventType {
 
 // FederatedIdentityEvent is emitted by the put and delete of an agent or pool federated identity.
 const FederatedIdentityEvent = EventAgentFederatedIdentityChanged
+
+// McpHostedPort is the port the afs-mcp-bridge of a hosted server listens on.
+const McpHostedPort = 8080
+
+// McpHostedName is the Deployment and Service name of a hosted server in its team namespace.
+func McpHostedName(slug string) string { return "afs-mcp-" + slug }
+
+// McpHostedURL is where the team gateway reaches a hosted server: its Service in the team namespace, plain HTTP
+// inside the namespace, with only the gateway allowed in by network policy (PRD §10.2, AC-11.2).
+func McpHostedURL(namespace, slug string) string {
+	return "http://" + McpHostedName(slug) + "." + namespace + ".svc:" + strconv.Itoa(McpHostedPort) + "/mcp"
+}
+
+// McpCredentialKey is the key of a server's credential in the team gateway's credentials Secret, which the
+// reconciler mounts as one file per key. Route slugs never contain a dot, so the keys cannot collide.
+func McpCredentialKey(slug string) string { return "mcp." + slug }
+
+// McpGatewayFederationRoot is where the team gateway's projected tokens for workload federation are mounted.
+const McpGatewayFederationRoot = "/var/run/secrets/afs/gateway/federation"
+
+// McpFederationDir is the directory name of an audience's projected token: the audience lower-cased with every
+// character outside [a-z0-9] replaced by '-', runs folded, at most 63 characters, so api://x and https://x/y map
+// to stable DNS-label names.
+func McpFederationDir(audience string) string {
+	var b strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(audience) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+			dash = false
+			continue
+		}
+		if !dash && b.Len() > 0 {
+			b.WriteByte('-')
+			dash = true
+		}
+	}
+	out := strings.TrimRight(b.String(), "-")
+	if len(out) > 63 {
+		out = strings.TrimRight(out[:63], "-")
+	}
+	if out == "" {
+		out = "default"
+	}
+	return out
+}
+
+// McpAccessPatch is the mcp member of a create or update body of an agent or pool; a nil field keeps what is
+// stored (on create, the defaults: access all, mode from mcp.default_agent_mode).
+type McpAccessPatch struct {
+	Access    *string
+	ServerIDs *[]string
+	Mode      *McpAgentMode
+	Blocks    *[]McpAgentBlock
+}
+
+// Merge applies the patch to the stored access. Switching to access all without naming servers drops the stored
+// server ids, so the result validates.
+func (p McpAccessPatch) Merge(cur AgentMcp) AgentMcp {
+	out := AgentMcp{Access: cur.Access, ServerIDs: slices.Clone(cur.ServerIDs), Mode: cur.Mode, Blocks: slices.Clone(cur.Blocks)}
+	if out.Access == "" {
+		out.Access = "all"
+	}
+	if p.Access != nil {
+		out.Access = *p.Access
+		if out.Access == "all" && p.ServerIDs == nil {
+			out.ServerIDs = nil
+		}
+	}
+	if p.ServerIDs != nil {
+		out.ServerIDs = slices.Clone(*p.ServerIDs)
+	}
+	if p.Mode != nil {
+		out.Mode = *p.Mode
+	}
+	if p.Blocks != nil {
+		out.Blocks = slices.Clone(*p.Blocks)
+	}
+	return out
+}
+
+// McpAccessState is the mcp member of an agent or pool read: the stored access, the mode that applies (the
+// stored one or mcp.default_agent_mode), the servers the subject reaches and the AFS_MCP_* names it gets.
+type McpAccessState struct {
+	Access    string
+	ServerIDs []string
+	Mode      McpAgentMode
+	Blocks    []McpAgentBlock
+	Effective []string
+	Env       []string
+}
+
+// Audit is the audit record form of the access.
+func (a AgentMcp) Audit() map[string]any {
+	ids := a.ServerIDs
+	if ids == nil {
+		ids = []string{}
+	}
+	blocks := a.Blocks
+	if blocks == nil {
+		blocks = []McpAgentBlock{}
+	}
+	return map[string]any{"access": a.Access, "serverIds": ids, "mode": string(a.Mode), "blocks": blocks}
+}

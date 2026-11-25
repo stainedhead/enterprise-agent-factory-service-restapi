@@ -29,6 +29,9 @@ func PodTemplateHash(d Desired, inboxURL string, handoffURLs map[string]string) 
 	if l := agent.RoutesHash(d.Team, d.Routes); l != "" {
 		w("%s", l)
 	}
+	if l := agent.McpHash(d.Team, d.Mcp); l != "" {
+		w("%s", l)
+	}
 	w("inbox=%s", inboxURL)
 	names := make([]string, 0, len(handoffURLs))
 	for n := range handoffURLs {

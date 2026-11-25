@@ -14,6 +14,7 @@ import (
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/mcpaccess"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 )
 
@@ -114,6 +115,52 @@ type Service struct {
 	Rand io.Reader
 	// OnOrphan is called when a compensating delete failed (afs_api_orphan_secrets_total). Optional.
 	OnOrphan func()
+	// Mcp stores the agents' MCP access (1.3.0). Nil leaves reads without mcp and refuses a body that sets it.
+	Mcp mcpaccess.Store
+}
+
+// fill completes reads: the effective models and, when the MCP store is wired, the mcp member.
+func (s *Service) fill(ctx context.Context, tx port.Tx, teamID string, list []domain.Agent) error {
+	if err := s.Repo.EffectiveModels(ctx, tx, teamID, list); err != nil {
+		return err
+	}
+	if s.Mcp == nil || len(list) == 0 {
+		for i := range list {
+			list[i].Mcp = nil
+		}
+		return nil
+	}
+	ids := make([]string, len(list))
+	for i := range list {
+		ids[i] = list[i].ID
+	}
+	m, err := mcpaccess.Fill(ctx, tx, s.Mcp, teamID, mcpaccess.KindAgent, ids)
+	if err != nil {
+		return err
+	}
+	for i := range list {
+		list[i].Mcp = m[list[i].ID]
+	}
+	return nil
+}
+
+// writeMcp stores the mcp member of a create or update and adds it to the audit records.
+func (s *Service) writeMcp(ctx context.Context, tx port.Tx, teamID, id string, p *domain.McpAccessPatch, before, after map[string]any) error {
+	if p == nil {
+		return nil
+	}
+	if s.Mcp == nil {
+		return mcpaccess.ErrNoStore
+	}
+	b, a, err := mcpaccess.Write(ctx, tx, s.Mcp, s.IDs, teamID, mcpaccess.KindAgent, id, *p)
+	if err != nil {
+		return err
+	}
+	if before != nil {
+		before["mcp"] = b
+	}
+	after["mcp"] = a
+	return nil
 }
 
 // Result is an agent with the replayed response of an idempotent call.
@@ -165,7 +212,7 @@ func (s *Service) List(ctx context.Context, c acting.Caller, teamID string, role
 		if rows, err = s.Repo.List(ctx, tx, teamID, role.Normalize(), p.Cursor, p.Limit+1); err != nil {
 			return err
 		}
-		return s.Repo.EffectiveModels(ctx, tx, teamID, rows)
+		return s.fill(ctx, tx, teamID, rows)
 	})
 	if err != nil {
 		return nil, "", err
@@ -186,7 +233,7 @@ func (s *Service) Get(ctx context.Context, c acting.Caller, teamID, id string) (
 			return err
 		}
 		one := []domain.Agent{a}
-		if err = s.Repo.EffectiveModels(ctx, tx, teamID, one); err != nil {
+		if err = s.fill(ctx, tx, teamID, one); err != nil {
 			return err
 		}
 		a = one[0]
@@ -241,7 +288,11 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in
 		if err := s.connectNew(ctx, tx, teamID, a.ID, in.Collaboration); err != nil {
 			return err
 		}
-		if err := s.Audit.Write(ctx, tx, c.Record("CreateAgent", kindAgent, a.ID, teamID, nil, auditOf(a))); err != nil {
+		after := auditOf(a)
+		if err := s.writeMcp(ctx, tx, teamID, a.ID, in.Mcp, nil, after); err != nil {
+			return err
+		}
+		if err := s.Audit.Write(ctx, tx, c.Record("CreateAgent", kindAgent, a.ID, teamID, nil, after)); err != nil {
 			return err
 		}
 		if err := s.emit(ctx, tx, c, domain.EventAgentCreated, a, map[string]any{"name": string(a.Name), "template": a.Template}); err != nil {
@@ -251,7 +302,7 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in
 			return err
 		}
 		one := []domain.Agent{res.Agent}
-		if err = s.Repo.EffectiveModels(ctx, tx, teamID, one); err != nil {
+		if err = s.fill(ctx, tx, teamID, one); err != nil {
 			return err
 		}
 		res.Agent = one[0]
@@ -401,6 +452,7 @@ func changedFields(p domain.AgentPatch) []string {
 	add(p.Volume != nil, "volume")
 	add(p.Bindings != nil, "secretBindings")
 	add(p.Collaboration != nil, "collaboration")
+	add(p.Mcp != nil, "mcp")
 	return f
 }
 
@@ -468,7 +520,11 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, teamID, id string
 				return err
 			}
 		}
-		if err := s.Audit.Write(ctx, tx, c.Record("UpdateAgent", kindAgent, id, teamID, auditOf(cur), auditOf(next))); err != nil {
+		before, after := auditOf(cur), auditOf(next)
+		if err := s.writeMcp(ctx, tx, teamID, id, p.Mcp, before, after); err != nil {
+			return err
+		}
+		if err := s.Audit.Write(ctx, tx, c.Record("UpdateAgent", kindAgent, id, teamID, before, after)); err != nil {
 			return err
 		}
 		if err := s.emit(ctx, tx, c, domain.EventAgentUpdated, next, map[string]any{"fields": changedFields(p)}); err != nil {
@@ -478,7 +534,7 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, teamID, id string
 			return err
 		}
 		one := []domain.Agent{out}
-		if err = s.Repo.EffectiveModels(ctx, tx, teamID, one); err != nil {
+		if err = s.fill(ctx, tx, teamID, one); err != nil {
 			return err
 		}
 		out = one[0]

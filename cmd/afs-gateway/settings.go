@@ -39,6 +39,9 @@ type settings struct {
 	// FederationToken is the projected ServiceAccount token exchanged for Azure and Google tokens
 	// (AFS_GATEWAY_FEDERATION_TOKEN).
 	FederationToken string
+	// McpSealingKeys seal MCP session ids and list cursors on a team gateway (AFS_GATEWAY_MCP_SEALING_KEYS, gateway
+	// contract §13.2); without one the gateway serves no MCP.
+	McpSealingKeys [][]byte
 }
 
 func settingsFrom(env func(string) string) (settings, error) {
@@ -55,6 +58,11 @@ func settingsFrom(env func(string) string) (settings, error) {
 	if s.FederationToken == "" {
 		s.FederationToken = DefaultFederationToken
 	}
+	keys, err := sealingKeys(env("AFS_GATEWAY_MCP_SEALING_KEYS"))
+	if err != nil {
+		return s, err
+	}
+	s.McpSealingKeys = keys
 	if s.Addr == "" {
 		s.Addr = ":8443"
 	}

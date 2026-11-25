@@ -280,7 +280,7 @@ func TestAgentMcp(t *testing.T) {
 			t.Errorf("%s = %q, want %q", c.name, got, c.want)
 		}
 	}
-	if len(McpEnv(McpAgentModeFull)) != 3 || len(McpEnv(McpAgentModeSearch)) != 2 {
+	if e := McpEnv([]string{"git-hub", "jira"}); len(e) != 5 || e[3] != "AFS_MCP_GIT_HUB_URL" || len(McpEnv(nil)) != 0 {
 		t.Error("McpEnv")
 	}
 }

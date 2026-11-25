@@ -190,3 +190,38 @@ func TestSubjectFromIDToken(t *testing.T) {
 		}
 	}
 }
+
+func TestGatewayGrants(t *testing.T) {
+	a := newAuthServer(t)
+	c := &mcpoauth.Client{HTTP: a.srv.Client()}
+	ep := a.base() + "/as/token"
+	tok, err := c.Refresh(t.Context(), ep, "https://afs.example/c.json", "rt-1", "https://res.example/mcp")
+	if err != nil || tok.Value != "at" || tok.Refresh != "rt-9" || tok.Expires.IsZero() {
+		t.Fatalf("refresh = %+v %v", tok, err)
+	}
+	if a.gotForm["grant_type"] != "refresh_token" || a.gotForm["refresh_token"] != "rt-1" || a.gotForm["resource"] != "https://res.example/mcp" {
+		t.Errorf("refresh form = %v", a.gotForm)
+	}
+	if _, err := c.ClientCredentials(t.Context(), ep, "cid", "csec", "https://res.example/mcp"); err != nil || a.gotForm["grant_type"] != "client_credentials" {
+		t.Errorf("client credentials = %v %v", err, a.gotForm)
+	}
+	if _, err := c.TokenExchange(t.Context(), ep, "jwt", "aud", "https://res.example/mcp"); err != nil ||
+		a.gotForm["grant_type"] != "urn:ietf:params:oauth:grant-type:token-exchange" || a.gotForm["subject_token"] != "jwt" || a.gotForm["audience"] != "aud" {
+		t.Errorf("token exchange = %v %v", err, a.gotForm)
+	}
+	a.tokenStatus = http.StatusBadRequest
+	if _, err := c.Refresh(t.Context(), ep, "c", "rt", ""); !errors.Is(err, mcpoauth.ErrInvalidGrant) || strings.Contains(err.Error(), "secret-ish") {
+		t.Errorf("invalid grant = %v", err)
+	}
+	a.tokenStatus = http.StatusInternalServerError
+	if _, err := c.Refresh(t.Context(), ep, "c", "rt", ""); err == nil || errors.Is(err, mcpoauth.ErrInvalidGrant) {
+		t.Errorf("500 = %v", err)
+	}
+	a.tokenStatus, a.wrongCT = http.StatusOK, `{"token_type":"Bearer"}`
+	if _, err := c.ClientCredentials(t.Context(), ep, "c", "s", ""); err == nil {
+		t.Error("a response without an access token")
+	}
+	if _, err := c.TokenExchange(t.Context(), "http://x/token", "j", "", ""); err == nil {
+		t.Error("an http token endpoint")
+	}
+}

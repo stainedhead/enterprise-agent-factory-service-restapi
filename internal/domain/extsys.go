@@ -57,9 +57,21 @@ type ExternalSystem struct {
 	Endpoints   []string
 	Enabled     bool
 	Builtin     bool
-	Version     Version
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// GovernedBy (v1.6.0, category mcp only) is the approved MCP server whose host covers one of the endpoints;
+	// such a system cannot be switched on (409 governed_by_mcp_server).
+	GovernedBy string
+	Version    Version
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+// GovernedConflict is the 409 for switching on a system an MCP server governs; nil when none does.
+func (s ExternalSystem) GovernedConflict() error {
+	if s.GovernedBy == "" {
+		return nil
+	}
+	return Conflict(ReasonGovernedByMcpServer, "an MCP server of the catalog covers this system's host; switch that server on instead",
+		map[string]any{"mcpServerId": s.GovernedBy})
 }
 
 // TeamDeclared reports whether a team declared the system.

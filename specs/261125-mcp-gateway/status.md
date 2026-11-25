@@ -7,8 +7,8 @@
 | 2 Research and data modeling | Complete (database contract §7.5) |
 | 3 Architecture and planning | Complete (plan.md, architecture.md) |
 | 4 Task breakdown | Complete (tasks.md) |
-| 5 Implementation | In progress: T1 to T6, T7a to T7c, T8a, T8c, T10 done; T7d, T8b, T9, T11 open |
-| 6 Completion | Not started |
+| 5 Implementation | Complete: T1 to T11 done in `-restapi` (CLI and console follow in their repos) |
+| 6 Completion | In progress: release 1.3.0 PR; archive after the CLI and console land |
 
 ## Deferred (no AWS environment yet, J 2026-11-25)
 

@@ -115,6 +115,9 @@ WHERE team_id = $1 AND agent_id = $2 AND connect AND link_state <> 'disabled'`, 
 	if d.ModelID, err = loadRoutes(ctx, t, "agent", d.ID, d.ModelID, &d.Routes); err != nil {
 		return err
 	}
+	if err := loadMcp(ctx, t, "agent", d.ID, &d.Mcp); err != nil {
+		return err
+	}
 	if d.ModelReason, d.PrevModelUnavailable, err = modelState(ctx, t, "agent", d.ID, d.ModelID, d.Routes.Effective(d.Models)); err != nil {
 		return err
 	}

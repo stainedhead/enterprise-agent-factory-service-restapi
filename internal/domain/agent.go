@@ -184,7 +184,9 @@ type Agent struct {
 	// ModelID is the deprecated alias of Models.DefaultModelID (kept until 2.0.0).
 	ModelID string
 	// Models is the agent's model access (MOD-3).
-	Models      AgentModels
+	Models AgentModels
+	// Mcp is the agent's MCP access (1.3.0); nil until a read fills it.
+	Mcp         *McpAccessState
 	Resources   AgentResources
 	IAMIdentity IAMIdentity
 	IAMRoleARN  string
@@ -236,6 +238,8 @@ type NewAgentParams struct {
 	Role AgentRole
 	// Collaboration is the worker's optional connection request.
 	Collaboration *CollaborationInput
+	// Mcp is the optional MCP access (1.3.0).
+	Mcp *McpAccessPatch
 }
 
 // NewAgent validates p and returns the agent in state enabled, generation 1.
@@ -307,6 +311,8 @@ type AgentPatch struct {
 	Role *AgentRole
 	// Collaboration is a worker's connection change.
 	Collaboration *CollaborationInput
+	// Mcp changes the MCP access (1.3.0).
+	Mcp *McpAccessPatch
 }
 
 // Apply returns a with the patch applied and the generation raised; the volume may grow but not

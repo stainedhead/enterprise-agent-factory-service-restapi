@@ -151,6 +151,8 @@ type Desired struct {
 	PrevModelUnavailable *bool
 	// Routes are the agent's effective model routes and route default (v1.2.0).
 	Routes LLMRoutes
+	// Mcp is the agent's effective MCP servers and mode (v1.3.0).
+	Mcp McpAccess
 	// State is enabled, paused, deleting or deleted.
 	State      string
 	Generation int64

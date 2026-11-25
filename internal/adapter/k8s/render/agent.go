@@ -85,6 +85,7 @@ func PodTemplate(env agent.Environment) corev1.PodTemplateSpec {
 		corev1.EnvVar{Name: "AWS_DEFAULT_REGION", Value: env.Region},
 	)
 	envVars, awsItems, mounts = routeDelivery(d.Team, d.Routes, envVars, awsItems, mounts)
+	envVars, awsItems, mounts = mcpDelivery(d.Team, d.Mcp, envVars, awsItems, mounts)
 	var extra map[string]string
 	switch {
 	case d.Collab != nil:

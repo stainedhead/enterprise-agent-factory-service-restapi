@@ -78,6 +78,8 @@ type TeamGateway struct {
 	Endpoints  []GatewayEndpoint
 	// BedrockOn is the Bedrock provider switch: off, the team gateway has no Bedrock egress.
 	BedrockOn bool
+	// Mcp is the team's MCP servers (v1.3.0).
+	Mcp McpGateway
 }
 
 // PerNamespace reports whether the team runs its own gateway.
@@ -140,6 +142,9 @@ func (g TeamGateway) Egress(region string) []EgressRule {
 	if g.BedrockOn && region != "" {
 		add(EgressRule{Host: "bedrock-runtime." + region + ".amazonaws.com", Port: 443})
 	}
+	for _, r := range g.Mcp.mcpEgress() {
+		add(r)
+	}
 	out := make([]EgressRule, 0, len(seen))
 	for r := range seen {
 		out = append(out, r)
@@ -159,7 +164,8 @@ type Credential struct {
 	Key, SecretARN string
 }
 
-// Credentials lists the route credentials the team gateway receives, by slug. Only references are listed.
+// Credentials lists the route credentials the team gateway receives, by slug, and the MCP server credentials as
+// mcp.<slug>. Only references are listed.
 func (g TeamGateway) Credentials() []Credential {
 	var out []Credential
 	for _, e := range g.Endpoints {
@@ -167,6 +173,7 @@ func (g TeamGateway) Credentials() []Credential {
 			out = append(out, Credential{Key: e.Slug, SecretARN: e.CredentialARN})
 		}
 	}
+	out = append(out, g.Mcp.mcpCredentials()...)
 	slices.SortFunc(out, func(a, b Credential) int { return strings.Compare(a.Key, b.Key) })
 	return out
 }

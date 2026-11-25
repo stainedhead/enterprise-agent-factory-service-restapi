@@ -23,6 +23,8 @@ Guides:
 | [Work orders and swarm templates](work-orders.md) | Callers and operators: swarm templates, work orders, security operators, service keys, worker tokens |
 | [Paperclip collaboration: the edge](collaboration-edge.md) | Operators: deploying `afs-edge`, the ALB and WAF, settings, sealing keys, troubleshooting |
 | [Model routes and the team gateway](model-routes.md) | Callers and operators: routes, team gateways, agent variables, health, provider switches (1.2.0) |
+| [Governed MCP servers](mcp-servers.md) | Callers and operators: the catalog, review and approval, team switches, agent access, hosted servers, the `/mcp` endpoints (1.3.0) |
+| [Upgrading to 1.3.0](upgrading-to-1.3.0.md) | Operators: migrations 000024–000026, new reconciler, gateway and API settings, nothing changes until a server is approved and switched on |
 | [Upgrading to 1.2.0](upgrading-to-1.2.0.md) | Operators: migration 000023, new reconciler and billing settings, nothing changes for 1.1.0 agents |
 | [Upgrading to 1.1.0](upgrading-to-1.1.0.md) | Operators: the one-way database upgrade, the backfill, deprecations, new settings |
 | [Export, import and restore](export-import-restore.md) | Operators: bundles, dry-run imports with an account map, restoring a team revision |

@@ -319,6 +319,8 @@ type teamGatewayBody struct {
 	TeamID               string  `json:"teamId"`
 	Deployment           string  `json:"deployment"`
 	MayAddModelEndpoints bool    `json:"mayAddModelEndpoints"`
+	MayAddMcpServers     bool    `json:"mayAddMcpServers"`
+	McpPlacement         string  `json:"mcpPlacement"`
 	GatewayState         string  `json:"gatewayState"`
 	GatewayURL           *string `json:"gatewayUrl"`
 	Version              int64   `json:"version"`
@@ -326,6 +328,7 @@ type teamGatewayBody struct {
 
 func toTeamGatewayBody(g me.TeamGateway) teamGatewayBody {
 	return teamGatewayBody{TeamID: g.TeamID, Deployment: string(g.Deployment), MayAddModelEndpoints: g.MayAdd, GatewayState: g.GatewayState,
+		MayAddMcpServers: g.MayAddMcp, McpPlacement: g.McpPlacement,
 		GatewayURL: nullStr(g.GatewayURL), Version: int64(g.Version)}
 }
 

@@ -32,7 +32,7 @@ func newBillingRig(t *testing.T) *billingRig { return newBillingRigAs(t, "afs_bi
 func newBillingRigAs(t *testing.T, role string) *billingRig {
 	t.Helper()
 	db := pgtest.Get(t)
-	pool, err := postgres.OpenPool(t.Context(), postgres.Config{URL: db.URLs[role], Service: "afs-billing", SystemActor: true, MaxConns: 4})
+	pool, err := postgres.OpenPool(t.Context(), postgres.Config{URL: db.URLs[role], Service: "afs-billing", SystemActor: true, MaxConns: 4, Role: role})
 	if err != nil {
 		t.Fatal(err)
 	}

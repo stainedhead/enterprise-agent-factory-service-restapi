@@ -395,6 +395,11 @@ func (s *Service) SetSystemState(ctx context.Context, c acting.Caller, teamID, p
 				return err
 			}
 		}
+		if enabled {
+			if err := cur.GovernedConflict(); err != nil {
+				return err
+			}
+		}
 		if enabled && !cur.TeamOn() {
 			return domain.Conflict("disabled_above", "the system is switched off at the "+string(cur.DisabledAt)+" level; a pool cannot switch it on",
 				map[string]any{"disabledAt": string(cur.DisabledAt)})

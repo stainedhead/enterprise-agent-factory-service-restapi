@@ -27,6 +27,9 @@ func PodTemplateHash(d Desired) string {
 	if l := RoutesHash(d.Team, d.Routes); l != "" {
 		w("%s", l)
 	}
+	if l := McpHash(d.Team, d.Mcp); l != "" {
+		w("%s", l)
+	}
 	if d.Collab != nil {
 		w("collab tool=%s mode=%s host=%s prefix=%s", d.Collab.Tool, d.Collab.Mode, d.Collab.Host, d.Collab.SecretsPrefix)
 	}

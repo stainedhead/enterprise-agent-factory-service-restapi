@@ -31,6 +31,7 @@ type agentBody struct {
 	Status        domain.Status           `json:"status"`
 	Role          string                  `json:"role"`
 	Collaboration *agentCollaborationBody `json:"collaboration,omitempty"`
+	Mcp           *agentMcpBody           `json:"mcp,omitempty"`
 }
 
 // agentModelsBody is Agent.models and Pool.models (API contract §4.4 Models).
@@ -154,7 +155,7 @@ func toAgentBody(a domain.Agent) agentBody {
 		IAMIdentity: string(a.IAMIdentity), IAMRoleArn: a.IAMRoleARN, Paused: a.Paused(),
 		Volume: agentVolumeBody{SizeGiB: a.Volume.SizeGiB, StorageClass: a.Volume.StorageClass, OnDelete: a.Volume.OnDelete,
 			SnapshotSchedule: a.Volume.SnapshotSchedule, SnapshotRetain: a.Volume.SnapshotRetain},
-		Bindings: make([]secretBindingBody, 0, len(a.Bindings)), Status: a.Status}
+		Bindings: make([]secretBindingBody, 0, len(a.Bindings)), Status: a.Status, Mcp: toAgentMcpBody(a.Mcp)}
 	for _, x := range a.Bindings {
 		b.Bindings = append(b.Bindings, secretBindingBody{SecretID: x.SecretID, Delivery: x.Delivery, Target: x.Target})
 	}

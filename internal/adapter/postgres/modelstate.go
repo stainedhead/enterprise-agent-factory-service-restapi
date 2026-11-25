@@ -104,3 +104,27 @@ func loadRoutes(ctx context.Context, t *Tx, kind, id, model string, routes *agen
 	routes.DefaultModel = model
 	return routes.DefaultRoute + "/" + model, nil
 }
+
+// loadMcp fills the subject's effective MCP servers and mode (gateway contract §13.5): the servers of
+// afs.effective_agent_mcp, which runs with the reconciler's rights, and the subject's mode or the service default.
+// Nothing while mcp.enabled is off.
+func loadMcp(ctx context.Context, t *Tx, kind, id string, m *agent.McpAccess) error {
+	table := "agents"
+	if kind == "pool" {
+		table = "agent_pools"
+	}
+	var on bool
+	err := t.QueryRow(ctx, `SELECT coalesce((afs.mcp_setting('mcp.enabled'))::boolean, false),
+  coalesce((SELECT x.mcp_mode FROM afs.`+table+` x WHERE x.id = $1), afs.mcp_setting('mcp.default_agent_mode') #>> '{}', 'search')`, id).
+		Scan(&on, &m.Mode)
+	if err != nil || !on {
+		return MapError(err, OpRead, "MCP access")
+	}
+	return collect(ctx, t, "MCP access", `SELECT DISTINCT e.slug, e.server_kind, e.mode = 'read_only' FROM afs.effective_agent_mcp e
+ WHERE e.subject_kind = $1 AND e.subject_id = $2 ORDER BY 1`, []any{kind, id}, func(rows pgx.Rows) error {
+		var s agent.McpServerRef
+		err := rows.Scan(&s.Slug, &s.Kind, &s.ReadOnly)
+		m.Servers = append(m.Servers, s)
+		return err
+	})
+}

@@ -20,8 +20,11 @@ const (
 	ModelsPath = "/etc/afs/models.json"
 	modelsKey  = "models.json"
 	// RoutesPath is /etc/afs/llm-routes.json (gateway contract §12.4), present on team gateways only.
-	RoutesPath   = "/etc/afs/llm-routes.json"
-	routesKey    = "llm-routes.json"
+	RoutesPath = "/etc/afs/llm-routes.json"
+	routesKey  = "llm-routes.json"
+	// McpPath is /etc/afs/mcp.json (gateway contract §13.5), present when the subject reaches an MCP server.
+	McpPath      = "/etc/afs/mcp.json"
+	mcpKey       = "mcp.json"
 	awsConfigKey = "config"
 	tagsKey      = "tags.json"
 )
@@ -98,6 +101,26 @@ func routeDelivery(t agent.Team, r agent.LLMRoutes, envVars []corev1.EnvVar, ite
 		append(mounts, corev1.VolumeMount{Name: volumeAWS, MountPath: RoutesPath, SubPath: routesKey, ReadOnly: true})
 }
 
+// addMcp puts mcp.json in a ConfigMap's data while the subject reaches an MCP server on its team gateway.
+func addMcp(data map[string]any, t agent.Team, m agent.McpAccess) {
+	if agent.McpDelivered(t, m) {
+		data[mcpKey] = agent.McpJSON(agent.Gateway{}.For(t).URL(), m)
+	}
+}
+
+// mcpDelivery appends the AFS_MCP_* variables after the gateway variables and mounts /etc/afs/mcp.json.
+func mcpDelivery(t agent.Team, m agent.McpAccess, envVars []corev1.EnvVar, items []corev1.KeyToPath, mounts []corev1.VolumeMount) (
+	[]corev1.EnvVar, []corev1.KeyToPath, []corev1.VolumeMount) {
+	if !agent.McpDelivered(t, m) {
+		return envVars, items, mounts
+	}
+	for _, e := range agent.McpEnv(t, m) {
+		envVars = append(envVars, corev1.EnvVar{Name: e.Name, Value: e.Value})
+	}
+	return envVars, append(items, corev1.KeyToPath{Key: mcpKey, Path: mcpKey}),
+		append(mounts, corev1.VolumeMount{Name: volumeAWS, MountPath: McpPath, SubPath: mcpKey, ReadOnly: true})
+}
+
 // ModelsEnv is AFS_MODELS: the ids, sorted, comma separated.
 func ModelsEnv(ids []string) string {
 	ms := append([]string{}, ids...)
@@ -111,6 +134,7 @@ func AgentAWSConfigMap(d agent.Desired) *unstructured.Unstructured {
 	u := New("v1", "ConfigMap", d.Team.Namespace, agent.AWSConfigMapName(d.Name))
 	data := map[string]any{tagsKey: TagsJSON(d), modelsKey: ModelsJSON(d.ModelID, d.Models)}
 	addRoutes(data, d.Team, d.Routes)
+	addMcp(data, d.Team, d.Mcp)
 	if cfg := AWSConfig(d); cfg != "" {
 		data[awsConfigKey] = cfg
 	}

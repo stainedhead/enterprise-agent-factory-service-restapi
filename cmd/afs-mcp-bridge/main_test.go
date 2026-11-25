@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -62,5 +64,20 @@ func TestChildEnv(t *testing.T) {
 	got := childEnv(" TOKEN, ,MISSING", func(k string) string { return env[k] })
 	if want := []string{"PATH=/bin", "HOME=/h", "TOKEN=x"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v", got)
+	}
+}
+
+func TestInstall(t *testing.T) {
+	dir := t.TempDir()
+	var out, errb strings.Builder
+	if code := run(t.Context(), []string{"--install", dir}, func(string) string { return "" }, &out, &errb, nil); code != 0 {
+		t.Fatalf("install = %d %s", code, errb.String())
+	}
+	st, err := os.Stat(filepath.Join(dir, "afs-mcp-bridge"))
+	if err != nil || st.Mode().Perm()&0o111 == 0 || st.Size() == 0 {
+		t.Errorf("installed = %v %v", st, err)
+	}
+	if code := run(t.Context(), []string{"--install", filepath.Join(dir, "missing", "x")}, func(string) string { return "" }, &out, &errb, nil); code != exitFailed {
+		t.Errorf("missing dir = %d", code)
 	}
 }

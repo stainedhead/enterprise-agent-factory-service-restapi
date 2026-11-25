@@ -34,6 +34,10 @@ func TestSettingsFrom(t *testing.T) {
 		"bad poll":       {func(m map[string]string) { m["AFS_POLL_INTERVAL"] = "soon" }, "AFS_POLL_INTERVAL"},
 		"neg":            {func(m map[string]string) { m["AFS_RESYNC_INTERVAL"] = "-1s" }, "AFS_RESYNC_INTERVAL"},
 		"bad gw db port": {func(m map[string]string) { m["AFS_TEAM_GATEWAY_DB_PORT"] = "x" }, "AFS_TEAM_GATEWAY_DB_PORT"},
+		"short mcp key":  {func(m map[string]string) { m["AFS_TEAM_GATEWAY_MCP_SESSION_KEYS"] = "c2hvcnQ=" }, "AFS_TEAM_GATEWAY_MCP_SESSION_KEYS"},
+		"three mcp keys": {func(m map[string]string) {
+			m["AFS_TEAM_GATEWAY_MCP_SESSION_KEYS"] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+		}, "at most two"},
 	}
 	for name, tc := range cases {
 		m := map[string]string{}
@@ -53,11 +57,13 @@ func TestSettingsFrom(t *testing.T) {
 		t.Errorf("IAM auth: %+v %v", s, err)
 	}
 	tg := map[string]string{"AFS_TEAM_GATEWAY_IMAGE": "registry.example.com/afs-gateway:1.2.0", "AFS_TEAM_GATEWAY_DB_PORT": "5433",
-		"AFS_TEAM_GATEWAY_DB_HOST": "db.example.com", "AFS_TEAM_GATEWAY_TLS_ISSUER": "afs-internal"}
+		"AFS_TEAM_GATEWAY_DB_HOST": "db.example.com", "AFS_TEAM_GATEWAY_TLS_ISSUER": "afs-internal",
+		"AFS_TEAM_GATEWAY_MCP_SESSION_KEYS": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "AFS_MCP_BRIDGE_IMAGE": "registry.example.com/afs-mcp-bridge:1.3.0"}
 	for k, v := range base {
 		tg[k] = v
 	}
-	if s, err := settingsFrom(envOf(tg), host()); err != nil || s.TeamGateway.DatabasePort != 5433 || s.TeamGateway.Image == "" || s.TeamGateway.TLSIssuer != "afs-internal" {
+	if s, err := settingsFrom(envOf(tg), host()); err != nil || s.TeamGateway.DatabasePort != 5433 || s.TeamGateway.Image == "" || s.TeamGateway.TLSIssuer != "afs-internal" ||
+		len(s.TeamGateway.McpSessionKeys) != 2 || s.TeamGateway.McpBridgeImage == "" {
 		t.Errorf("team gateway: %+v %v", s.TeamGateway, err)
 	}
 	if _, err := settingsFrom(envOf(base), func() (string, error) { return "", errors.New("no") }); err == nil {

@@ -56,6 +56,7 @@ type poolBody struct {
 	SharedVolume   string                `json:"sharedVolume"`
 	State          string                `json:"state"`
 	Handoffs       []string              `json:"handoffs"`
+	Mcp            *agentMcpBody         `json:"mcp,omitempty"`
 }
 
 func toPoolBody(p domain.Pool) poolBody {
@@ -63,7 +64,7 @@ func toPoolBody(p domain.Pool) poolBody {
 		UpdatedAt: w2Time(p.UpdatedAt), Generation: int64(p.Generation), Status: p.Status, Name: string(p.Name),
 		Description: p.Description, Template: p.Template, Image: string(p.Image), Persona: p.Persona, ModelID: p.Models.DefaultRef(), Models: toAgentModelsBody(p.Models),
 		Workers: p.Workers, Resources: p.Resources, ScratchSizeGiB: p.ScratchSizeGiB, SharedVolume: p.SharedVolume,
-		State: string(p.State), Handoffs: append([]string{}, p.Handoffs...)}
+		State: string(p.State), Handoffs: append([]string{}, p.Handoffs...), Mcp: toAgentMcpBody(p.Mcp)}
 	if p.StageID != "" {
 		s := p.StageID
 		b.StageID = &s
@@ -107,7 +108,8 @@ type updatePoolRequest struct {
 
 func (u updatePoolRequest) patch() domain.PoolPatch {
 	p := domain.PoolPatch{Description: u.Description, Template: u.Template, Image: u.Image, Persona: u.Persona,
-		ModelID: u.ModelID, Models: u.Models.input(), Workers: u.Workers, Resources: u.Resources, ScratchSizeGiB: u.ScratchSizeGiB, SharedVolume: u.SharedVolume}
+		ModelID: u.ModelID, Models: u.Models.input(), Workers: u.Workers, Resources: u.Resources, ScratchSizeGiB: u.ScratchSizeGiB, SharedVolume: u.SharedVolume,
+		Mcp: u.Mcp.patch()}
 	if u.StageID.Set {
 		p.StageID.Set = true
 		if !u.StageID.Null {

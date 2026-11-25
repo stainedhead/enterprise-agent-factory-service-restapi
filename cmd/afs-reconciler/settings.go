@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strconv"
@@ -33,7 +34,8 @@ type settings struct {
 	EdgeNamespace          string   // AFS_EDGE_NAMESPACE, default afs-system: where afs-edge runs (collaboration ingress)
 	EdgeName               string   // AFS_EDGE_NAME, default afs-edge
 	// TeamGateway configures per-namespace gateways (gateway contract §12.1): AFS_TEAM_GATEWAY_IMAGE,
-	// AFS_TEAM_GATEWAY_DB_SECRET_ARN, AFS_TEAM_GATEWAY_DB_HOST, AFS_TEAM_GATEWAY_DB_PORT, AFS_TEAM_GATEWAY_TLS_ISSUER.
+	// AFS_TEAM_GATEWAY_DB_SECRET_ARN, AFS_TEAM_GATEWAY_DB_HOST, AFS_TEAM_GATEWAY_DB_PORT, AFS_TEAM_GATEWAY_TLS_ISSUER,
+	// and for MCP (1.3.0) AFS_TEAM_GATEWAY_MCP_SESSION_KEYS and AFS_MCP_BRIDGE_IMAGE.
 	TeamGateway    team.TeamGatewaySpec
 	PollInterval   time.Duration
 	ResyncInterval time.Duration
@@ -48,7 +50,19 @@ func settingsFrom(env func(string) string, hostname func() (string, error)) (set
 		GatewayNamespace: env("AFS_GATEWAY_NAMESPACE"), GatewayName: env("AFS_GATEWAY_NAME"), GatewayCAConfigMap: env("AFS_GATEWAY_CA_CONFIGMAP"),
 		EdgeNamespace: env("AFS_EDGE_NAMESPACE"), EdgeName: env("AFS_EDGE_NAME"),
 		TeamGateway: team.TeamGatewaySpec{Image: env("AFS_TEAM_GATEWAY_IMAGE"), DatabaseSecretARN: env("AFS_TEAM_GATEWAY_DB_SECRET_ARN"),
-			DatabaseHost: env("AFS_TEAM_GATEWAY_DB_HOST"), TLSIssuer: env("AFS_TEAM_GATEWAY_TLS_ISSUER")},
+			DatabaseHost: env("AFS_TEAM_GATEWAY_DB_HOST"), TLSIssuer: env("AFS_TEAM_GATEWAY_TLS_ISSUER"), McpBridgeImage: env("AFS_MCP_BRIDGE_IMAGE")},
+	}
+	if v := env("AFS_TEAM_GATEWAY_MCP_SESSION_KEYS"); v != "" {
+		for _, p := range strings.Split(v, ",") {
+			k, err := base64.StdEncoding.DecodeString(strings.TrimSpace(p))
+			if err != nil || len(k) != 32 {
+				return s, errors.New("AFS_TEAM_GATEWAY_MCP_SESSION_KEYS: each key must be 32 bytes, base64")
+			}
+			s.TeamGateway.McpSessionKeys = append(s.TeamGateway.McpSessionKeys, k)
+		}
+		if len(s.TeamGateway.McpSessionKeys) > 2 {
+			return s, errors.New("AFS_TEAM_GATEWAY_MCP_SESSION_KEYS: at most two keys")
+		}
 	}
 	if v := env("AFS_TEAM_GATEWAY_DB_PORT"); v != "" {
 		p, err := strconv.Atoi(v)

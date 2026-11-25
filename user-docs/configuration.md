@@ -77,6 +77,8 @@ Needs `AFS_AWS_REGION` (or `AWS_REGION`) when `AFS_DB_IAM_AUTH` is `true`.
 | `AFS_TEAM_GATEWAY_IMAGE` | for per_namespace teams | Image of the team gateway (`afs-gateway`, pinned by digest). |
 | `AFS_TEAM_GATEWAY_DB_SECRET_ARN`, `AFS_TEAM_GATEWAY_DB_HOST`, `AFS_TEAM_GATEWAY_DB_PORT` | for per_namespace teams | Secret holding the team gateway's database URL (synced into the namespace by an ExternalSecret), the database host for its egress rule, and its port (default 5432). |
 | `AFS_TEAM_GATEWAY_TLS_ISSUER` | for per_namespace teams | cert-manager issuer of the team gateway's serving certificate. |
+| `AFS_TEAM_GATEWAY_MCP_SESSION_KEYS` | none | MCP (1.3.0): one or two comma-separated base64 32-byte master keys, new first while rotating. Each team gateway gets `HMAC-SHA256(master, "afs-mcp-session/" + teamId)` in its `afs-gateway-mcp` Secret. Unset: team gateways serve no `/mcp`. Comes from a Kubernetes Secret (Helm `mcpSessionKeys`), never a value. |
+| `AFS_MCP_BRIDGE_IMAGE` | when a team hosts a server | Image of `afs-mcp-bridge` (pinned by digest), copied into each hosted server's pod by an init container. |
 | `AFS_KUBECONFIG`, `POD_NAME` | no | Out-of-cluster development; leader election identity (default hostname). |
 
 More detail on each is in [Running afs-reconciler](reconciler.md).
@@ -95,6 +97,7 @@ More detail on each is in [Running afs-reconciler](reconciler.md).
 | `AFS_GATEWAY_TEAM_NAMESPACE` (`--team-namespace`), `AFS_GATEWAY_TEAM_ID` | none | Team gateway mode (1.2.0): serve this namespace only, with model routes. Both or neither; the reconciler sets them. |
 | `AFS_GATEWAY_CREDENTIALS_DIR` | `/etc/afs/gateway-credentials` | Team gateway: one file per route slug holding the route credential, reread on change. |
 | `AFS_GATEWAY_FEDERATION_TOKEN` | none | Team gateway: the projected ServiceAccount token file used for Azure and Google federation. |
+| `AFS_GATEWAY_MCP_SEALING_KEYS` | none | Team gateway (1.3.0): comma-separated base64 32-byte keys that seal MCP session ids and list cursors; the reconciler sets it from the team's `afs-gateway-mcp` Secret. Unset: no `/mcp`. MCP server credentials are files `mcp.<slug>` in `AFS_GATEWAY_CREDENTIALS_DIR`; federation tokens are under `/var/run/secrets/afs/gateway/federation/<audience>/token`. |
 
 ## afs-billing
 

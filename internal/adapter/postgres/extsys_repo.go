@@ -22,14 +22,15 @@ var _ extsys.Repository = (*ExtSystemRepo)(nil)
 
 // extSystemCols are the columns of every external system read, with the table alias s.
 const extSystemCols = `s.id, coalesce(s.team_id, ''), s.slug, s.name, s.category, s.description, coalesce(s.documentation_url, ''),
-  s.owner, s.purpose, s.endpoints, s.enabled, s.builtin, s.version, s.created_at, s.updated_at`
+  s.owner, s.purpose, s.endpoints, s.enabled, s.builtin, s.version, s.created_at, s.updated_at,
+  CASE WHEN s.category = 'mcp' THEN coalesce((SELECT g FROM unnest(s.endpoints) e, afs.mcp_governed_host(e) g WHERE g IS NOT NULL LIMIT 1), '') ELSE '' END`
 
 func scanExtSystemInto(row pgx.Row, extra ...any) (domain.ExternalSystem, error) {
 	var x domain.ExternalSystem
 	var cat string
 	var v int64
 	dst := append([]any{&x.ID, &x.TeamID, &x.Slug, &x.Name, &cat, &x.Description, &x.DocsURL, &x.Owner, &x.Purpose, &x.Endpoints,
-		&x.Enabled, &x.Builtin, &v, &x.CreatedAt, &x.UpdatedAt}, extra...)
+		&x.Enabled, &x.Builtin, &v, &x.CreatedAt, &x.UpdatedAt, &x.GovernedBy}, extra...)
 	err := row.Scan(dst...)
 	x.Category, x.Version = domain.ExtCategory(cat), domain.Version(v)
 	return x, err

@@ -82,6 +82,7 @@ func PoolAWSConfigMap(d pool.Desired) *unstructured.Unstructured {
 	u := New("v1", "ConfigMap", d.Team.Namespace, pool.AWSConfigMapName(d.Name))
 	data := map[string]any{tagsKey: PoolTagsJSON(d), modelsKey: ModelsJSON(d.ModelID, d.Models)}
 	addRoutes(data, d.Team, d.Routes)
+	addMcp(data, d.Team, d.Mcp)
 	if cfg := PoolAWSConfig(d); cfg != "" {
 		data[awsConfigKey] = cfg
 	}
@@ -211,6 +212,7 @@ func PoolPodTemplate(env pool.Environment) corev1.PodTemplateSpec {
 		corev1.EnvVar{Name: "AWS_DEFAULT_REGION", Value: env.Region},
 	)
 	envVars, awsItems, mounts = routeDelivery(d.Team, d.Routes, envVars, awsItems, mounts)
+	envVars, awsItems, mounts = mcpDelivery(d.Team, d.Mcp, envVars, awsItems, mounts)
 	if env.InboxURL != "" {
 		envVars = append(envVars, corev1.EnvVar{Name: pool.InboxEnvName, Value: env.InboxURL})
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/acting"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/mcpaccess"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/port"
 )
 
@@ -17,6 +18,52 @@ type Service struct {
 	Repo Repository
 	// Entropy feeds the external ids of role links.
 	Entropy io.Reader
+	// Mcp stores the pools' MCP access (1.3.0). Nil leaves reads without mcp and refuses a body that sets it.
+	Mcp mcpaccess.Store
+}
+
+// fill completes reads: the effective models and, when the MCP store is wired, the mcp member.
+func (s *Service) fill(ctx context.Context, tx port.Tx, teamID string, list []domain.Pool) error {
+	if err := s.Repo.EffectiveModels(ctx, tx, teamID, list); err != nil {
+		return err
+	}
+	if s.Mcp == nil || len(list) == 0 {
+		for i := range list {
+			list[i].Mcp = nil
+		}
+		return nil
+	}
+	ids := make([]string, len(list))
+	for i := range list {
+		ids[i] = list[i].ID
+	}
+	m, err := mcpaccess.Fill(ctx, tx, s.Mcp, teamID, mcpaccess.KindPool, ids)
+	if err != nil {
+		return err
+	}
+	for i := range list {
+		list[i].Mcp = m[list[i].ID]
+	}
+	return nil
+}
+
+// writeMcp stores the mcp member of a create or update and adds it to the audit records.
+func (s *Service) writeMcp(ctx context.Context, tx port.Tx, teamID, id string, p *domain.McpAccessPatch, before, after map[string]any) error {
+	if p == nil {
+		return nil
+	}
+	if s.Mcp == nil {
+		return mcpaccess.ErrNoStore
+	}
+	b, a, err := mcpaccess.Write(ctx, tx, s.Mcp, s.IDs, teamID, mcpaccess.KindPool, id, *p)
+	if err != nil {
+		return err
+	}
+	if before != nil {
+		before["mcp"] = b
+	}
+	after["mcp"] = a
+	return nil
 }
 
 // Result is a pool with the replayed response of an idempotent call.
@@ -80,7 +127,7 @@ func (s *Service) get(ctx context.Context, tx port.Tx, teamID, id string, forUpd
 	if err := s.withHandoffs(ctx, tx, list); err != nil {
 		return domain.Pool{}, err
 	}
-	if err := s.Repo.EffectiveModels(ctx, tx, teamID, list); err != nil {
+	if err := s.fill(ctx, tx, teamID, list); err != nil {
 		return domain.Pool{}, err
 	}
 	return list[0].WithDeletingStatus(), nil
@@ -98,7 +145,7 @@ func (s *Service) List(ctx context.Context, c acting.Caller, teamID string, p ac
 		if err := s.withHandoffs(ctx, tx, rows); err != nil {
 			return err
 		}
-		return s.Repo.EffectiveModels(ctx, tx, teamID, rows)
+		return s.fill(ctx, tx, teamID, rows)
 	})
 	if err != nil {
 		return nil, "", err
@@ -225,7 +272,11 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in
 		if err := s.Repo.Insert(ctx, tx, p, tplID); err != nil {
 			return err
 		}
-		if err := s.Audit.Write(ctx, tx, c.Record("CreatePool", kindPool, p.ID, teamID, nil, auditOf(p))); err != nil {
+		after := auditOf(p)
+		if err := s.writeMcp(ctx, tx, teamID, p.ID, in.Mcp, nil, after); err != nil {
+			return err
+		}
+		if err := s.Audit.Write(ctx, tx, c.Record("CreatePool", kindPool, p.ID, teamID, nil, after)); err != nil {
 			return err
 		}
 		if err := s.emit(ctx, tx, c, domain.EventPoolCreated, p, map[string]any{"name": string(p.Name), "template": p.Template, "workers": p.Workers}); err != nil {
@@ -257,6 +308,7 @@ func changedFields(p domain.PoolPatch) []string {
 	add(p.Resources != nil, "resources")
 	add(p.ScratchSizeGiB != nil, "scratchSizeGiB")
 	add(p.SharedVolume != nil, "sharedVolume")
+	add(p.Mcp != nil, "mcp")
 	return f
 }
 
@@ -309,7 +361,11 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, teamID, id string
 		if err := s.Repo.Update(ctx, tx, next, tplID, tplChanged, expect); err != nil {
 			return err
 		}
-		if err := s.Audit.Write(ctx, tx, c.Record("UpdatePool", kindPool, id, teamID, auditOf(cur), auditOf(next))); err != nil {
+		before, after := auditOf(cur), auditOf(next)
+		if err := s.writeMcp(ctx, tx, teamID, id, patch.Mcp, before, after); err != nil {
+			return err
+		}
+		if err := s.Audit.Write(ctx, tx, c.Record("UpdatePool", kindPool, id, teamID, before, after)); err != nil {
 			return err
 		}
 		if err := s.emit(ctx, tx, c, domain.EventPoolUpdated, next, map[string]any{"fields": changedFields(patch)}); err != nil {

@@ -95,6 +95,7 @@ type extSystemBase struct {
 	Purpose     string   `json:"purpose,omitempty"`
 	Scope       string   `json:"scope"`
 	Unmetered   bool     `json:"unmetered"`
+	GovernedBy  *string  `json:"governedBy,omitempty"`
 	Version     int64    `json:"version"`
 	CreatedAt   string   `json:"createdAt"`
 	UpdatedAt   string   `json:"updatedAt"`
@@ -107,7 +108,7 @@ func toExtSystemBase(s domain.ExternalSystem, enabled bool) extSystemBase {
 	}
 	return extSystemBase{ID: s.ID, Slug: s.Slug, Name: s.Name, Category: string(s.Category), Description: s.Description, DocsURL: s.DocsURL,
 		Endpoints: s.Endpoints, Enabled: enabled, Builtin: s.Builtin, Owner: s.Owner, Purpose: s.Purpose, Scope: scope, Unmetered: s.Unmetered(),
-		Version: int64(s.Version), CreatedAt: w2Time(s.CreatedAt), UpdatedAt: w2Time(s.UpdatedAt)}
+		GovernedBy: optStr(s.GovernedBy), Version: int64(s.Version), CreatedAt: w2Time(s.CreatedAt), UpdatedAt: w2Time(s.UpdatedAt)}
 }
 
 // catalogSystemBody is a service-level catalog entry as service admins see it: enabled is the
