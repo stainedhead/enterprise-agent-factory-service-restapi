@@ -38,7 +38,7 @@ token) and `aws_sigv4`.
 ```
 
 `access: all` (the default) means every server the team has on. `mode` is `full` (every allowed tool is listed) or
-`search` (two meta-tools, search and call, for large catalogs); unset takes `mcp.default_agent_mode`. Policy narrows from
+`search` (three meta-tools, `afs_search`, `afs_describe` and `afs_call`, for large catalogs); unset takes `mcp.default_agent_mode`. Policy narrows from
 service to team to agent and a block at any level wins. The read shows `effective` (server ids) and `env`.
 
 ## What the agent gets
