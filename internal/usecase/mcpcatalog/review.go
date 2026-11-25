@@ -573,6 +573,21 @@ func secretOf(kind domain.McpAuthKind, in CredentialInput) (domain.SecretValue, 
 // stores the ARN with state set. A secret created here is deleted again when the transaction fails.
 func (s *Service) putCredential(ctx context.Context, c acting.Caller, action, serverID, scope string, in CredentialInput,
 	expect *domain.Version, check func(srv domain.McpServerRecord) (teamID string, err error)) (CredentialView, error) {
+	return s.writeCredential(ctx, c, action, serverID, scope, expect, func(srv domain.McpServerRecord) (domain.SecretValue, error) {
+		return secretOf(srv.AuthKind, in)
+	}, nil, check)
+}
+
+// storeCredential writes a value the use case built (the OAuth callback's refresh token) with a hook on the record.
+func (s *Service) storeCredential(ctx context.Context, c acting.Caller, action, serverID, scope string, val domain.SecretValue,
+	hook func(*domain.McpCredentialRecord), check func(srv domain.McpServerRecord) (teamID string, err error)) (CredentialView, error) {
+	return s.writeCredential(ctx, c, action, serverID, scope, nil, func(domain.McpServerRecord) (domain.SecretValue, error) { return val, nil },
+		hook, check)
+}
+
+func (s *Service) writeCredential(ctx context.Context, c acting.Caller, action, serverID, scope string, expect *domain.Version,
+	value func(srv domain.McpServerRecord) (domain.SecretValue, error), hook func(*domain.McpCredentialRecord),
+	check func(srv domain.McpServerRecord) (teamID string, err error)) (CredentialView, error) {
 	var out CredentialView
 	var created string
 	err := s.write(ctx, c, func(ctx context.Context, tx port.Tx) error {
@@ -584,7 +599,7 @@ func (s *Service) putCredential(ctx context.Context, c acting.Caller, action, se
 		if err != nil {
 			return err
 		}
-		val, err := secretOf(srv.AuthKind, in)
+		val, err := value(srv)
 		if err != nil {
 			return err
 		}
@@ -625,6 +640,9 @@ func (s *Service) putCredential(ctx context.Context, c acting.Caller, action, se
 				return err
 			}
 			rec.SecretARN = arn
+		}
+		if hook != nil {
+			hook(&rec)
 		}
 		if err := s.Repo.UpsertCredential(ctx, tx, rec); err != nil {
 			return err

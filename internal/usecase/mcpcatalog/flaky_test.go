@@ -306,3 +306,17 @@ func (fl *flaky) DeleteFederated(ctx context.Context, tx port.Tx, kind, teamID, 
 	}
 	return fl.repo.DeleteFederated(ctx, tx, kind, teamID, subjectID, name, expect)
 }
+
+func (fl *flaky) InsertOAuthState(ctx context.Context, tx port.Tx, hash []byte, teamID, serverID string, expiresAt time.Time) error {
+	if err := fl.tick(); err != nil {
+		return err
+	}
+	return fl.repo.InsertOAuthState(ctx, tx, hash, teamID, serverID, expiresAt)
+}
+
+func (fl *flaky) ClaimOAuthState(ctx context.Context, tx port.Tx, hash []byte) (*mcpcatalog.OAuthState, error) {
+	if err := fl.tick(); err != nil {
+		return nil, err
+	}
+	return fl.repo.ClaimOAuthState(ctx, tx, hash)
+}

@@ -50,6 +50,16 @@ spec:
             - name: AFS_CLUSTER_OIDC_ISSUER
               value: {{ . | quote }}
             {{- end }}
+            {{- with $c.mcpOAuth }}
+            {{- if .clientId }}
+            - name: AFS_MCP_OAUTH_CLIENT_ID
+              value: {{ .clientId | quote }}
+            - name: AFS_MCP_OAUTH_REDIRECT_URI
+              value: {{ .redirectUri | quote }}
+            - name: AFS_CONSOLE_URL
+              value: {{ .consoleUrl | quote }}
+            {{- end }}
+            {{- end }}
             - name: AFS_API_REPLICAS
               value: {{ default $c.replicas $c.rateLimitReplicas | quote }}
             # Both keys must be identical on every replica, so they come from one Secret, never a value.

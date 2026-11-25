@@ -57,6 +57,7 @@ var contractOutboxExempt = map[string]string{
 	"PutAgentConfigValue":              "config",
 	"RefreshMcpInventory":              "mcp",
 	"RefreshTeamMcpInventory":          "mcp",
+	"StartMcpOAuthConnect":             "mcp",
 	"TestMcpFederation":                "mcp",
 	"PutAgentTemplate":                 "catalog",
 	"PutBudget":                        "settings",

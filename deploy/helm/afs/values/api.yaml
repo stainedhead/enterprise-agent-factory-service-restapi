@@ -50,3 +50,10 @@ orchestrationBackfill:
   enabled: true
   backoffLimit: 3
   activeDeadlineSeconds: 3600
+# MCP OAuth connect (oauth_user servers): the https URL of this environment's OAuth Client ID Metadata Document, the
+# public URL of GET /v1/mcp-oauth/callback and the console's base URL. All three or none (AFS_MCP_OAUTH_CLIENT_ID,
+# AFS_MCP_OAUTH_REDIRECT_URI, AFS_CONSOLE_URL); empty: StartMcpOAuthConnect answers 409 oauth_not_configured.
+mcpOAuth:
+  clientId: ""
+  redirectUri: ""
+  consoleUrl: ""

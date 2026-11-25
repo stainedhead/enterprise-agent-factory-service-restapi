@@ -7,23 +7,12 @@ import (
 	"testing"
 )
 
-func TestPendingMcpOpsAreSection414(t *testing.T) {
-	sec := map[string]bool{}
-	for _, rt := range Routes {
-		sec[rt.OperationID] = true
+func TestPendingMcpOpsAreEmpty(t *testing.T) {
+	if len(PendingMcpOps) != 0 {
+		t.Errorf("pending = %v", PendingMcpOps)
 	}
-	if len(PendingMcpOps) != 2 {
-		t.Errorf("pending = %d", len(PendingMcpOps))
-	}
-	for _, op := range PendingMcpOps {
-		if !sec[op] {
-			t.Errorf("%s is not a contract operation", op)
-		}
-	}
-	h, _ := newServer(t, BindMcpPending())
-	rec := do(t, h, http.MethodGet, "/v1/mcp-oauth/callback", "svc", "")
-	if rec.Code != http.StatusNotImplemented || !strings.Contains(rec.Body.String(), "not_implemented") {
-		t.Errorf("pending answer = %d %s", rec.Code, rec.Body.String())
+	if err := BindMcpPending()(&Registry{}); err != nil {
+		t.Errorf("binding no operation: %v", err)
 	}
 }
 

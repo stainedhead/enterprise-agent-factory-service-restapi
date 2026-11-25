@@ -2,7 +2,11 @@ package matrix
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres/pgtest"
@@ -12,8 +16,66 @@ import (
 
 const (
 	mcpRequestNoEvent = "§4.12: a refresh or federation test only sets a request timestamp the gateway acts on"
+	mcpStateNoEvent   = "§4.12: starting an OAuth connect writes a single-use state only"
 	mcpDigest         = "sha256:" + "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e"
 )
+
+// OAuthAS is a fake MCP server and OAuth authorization server on one TLS host (httptest's certificate, which
+// World.OIDCClient trusts): Protected Resource Metadata for /mcp, Authorization Server Metadata for /as, and a token
+// endpoint that answers a refresh token for any code. Tests read the last token request from Form.
+type OAuthAS struct {
+	Server *httptest.Server
+	mu     sync.Mutex
+	form   map[string]string
+}
+
+var (
+	oauthASOnce sync.Once
+	oauthAS     *OAuthAS
+)
+
+// FakeOAuthAS returns the process's fake authorization server, started on first use.
+func FakeOAuthAS() *OAuthAS {
+	oauthASOnce.Do(func() {
+		a := &OAuthAS{}
+		a.Server = httptest.NewTLSServer(http.HandlerFunc(a.serve))
+		oauthAS = a
+	})
+	return oauthAS
+}
+
+// Issuer is the fake's issuer.
+func (a *OAuthAS) Issuer() string { return a.Server.URL + "/as" }
+
+// Form is the last token request.
+func (a *OAuthAS) Form() map[string]string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.form
+}
+
+func (a *OAuthAS) serve(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	switch r.URL.Path {
+	case "/.well-known/oauth-protected-resource/mcp":
+		_ = json.NewEncoder(w).Encode(map[string]any{"resource": a.Server.URL + "/mcp", "authorization_servers": []string{a.Issuer()}})
+	case "/.well-known/oauth-authorization-server/as":
+		_ = json.NewEncoder(w).Encode(map[string]any{"issuer": a.Issuer(), "authorization_endpoint": a.Issuer() + "/authorize",
+			"token_endpoint": a.Issuer() + "/token", "code_challenge_methods_supported": []string{"S256"}})
+	case "/as/token":
+		_ = r.ParseForm()
+		f := map[string]string{}
+		for k := range r.PostForm {
+			f[k] = r.PostForm.Get(k)
+		}
+		a.mu.Lock()
+		a.form = f
+		a.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "at", "refresh_token": "rt-matrix", "scope": "read"})
+	default:
+		http.NotFound(w, r)
+	}
+}
 
 // mcpServerSeed describes a server row a case needs.
 type mcpServerSeed struct {
@@ -21,6 +83,7 @@ type mcpServerSeed struct {
 	status    string // review_status
 	published bool
 	auth      string // auth_kind, default static
+	url       string // default https://mx.corp.example/mcp
 }
 
 // mcpTeamReady lets team A add servers and switch enterprise ones on (a per-namespace gateway), for the subtest.
@@ -48,10 +111,13 @@ func (w *World) seedMcpServer(t *testing.T, s mcpServerSeed) map[string]string {
 	if s.auth == "" {
 		s.auth = "static"
 	}
+	if s.url == "" {
+		s.url = "https://mx.corp.example/mcp"
+	}
 	w.exec(t, `INSERT INTO afs.mcp_servers (id, team_id, slug, display_name, owner, purpose, data_classification, transport, location, url, auth_kind,
   review_status, published, risk_tier)
-VALUES ($1, $2, $3, 'Matrix', 'Platform', 'Matrix checks', 'internal', 'streamable_http', 'corporate', 'https://mx.corp.example/mcp', $4, $5, $6, 'low')`,
-		id, team, slug, s.auth, s.status, s.published)
+VALUES ($1, $2, $3, 'Matrix', 'Platform', 'Matrix checks', 'internal', 'streamable_http', 'corporate', $7, $4, $5, $6, 'low')`,
+		id, team, slug, s.auth, s.status, s.published, s.url)
 	t.Cleanup(func() {
 		ctx := context.WithoutCancel(t.Context())
 		_, _ = w.Admin.Exec(ctx, `DELETE FROM afs.mcp_servers WHERE id = $1`, id)
@@ -221,6 +287,12 @@ VALUES ($1, $2, $3, $3, 'oauth_user', 'arn:aws:secretsmanager:us-east-1:00000000
 				pgtest.NewID("mcr"), p["mcpServerId"], w.TeamA.ID, p["slug"])
 			return p
 		}})
+	Register(Case{Op: "StartMcpOAuthConnect", Path: "/v1/teams/{teamId}/mcp-servers/{mcpServerId}/oauth:start", NoOutbox: mcpStateNoEvent,
+		Prepare: func(t *testing.T, w *World) map[string]string {
+			w.mcpTeamReady(t)
+			return w.seedMcpServer(t, mcpServerSeed{team: true, status: "approved", auth: "oauth_user", url: FakeOAuthAS().Server.URL + "/mcp"})
+		}})
+	Exempt("CompleteMcpOAuthConnect", "public redirect (303) bound to a state from StartMcpOAuthConnect; cmd/afs-api TestMcpOAuthConnectEndToEnd")
 	Register(Case{Op: "TestMcpFederation", Path: "/v1/teams/{teamId}/mcp-servers/{mcpServerId}/federation:test", NoOutbox: mcpRequestNoEvent,
 		Prepare: func(t *testing.T, w *World) map[string]string {
 			w.mcpTeamReady(t)

@@ -14,7 +14,7 @@ import (
 
 // McpAPI serves the governed MCP server operations of API contract v1.6.0 §4.14 (release 1.3.0): the enterprise
 // catalog and its review, team servers and switches, policy, credentials (write-only), the call ledger and usage
-// reports, query capture and federated identities. The OAuth connect flow stays pending (PendingMcpOps).
+// reports, query capture, federated identities and the OAuth connect flow (h_mcp_oauth.go).
 type McpAPI struct {
 	Mcp   *mcpcatalog.Service
 	Pages PageTokens
@@ -42,7 +42,7 @@ func (a *McpAPI) Register(g *Registry) error {
 		"RefreshTeamMcpInventory": a.refreshTeam, "ListTeamMcpPrimitives": a.listTeamPrimitives,
 		"ApproveTeamMcpPrimitive": a.teamDecidePrimitive(true), "RejectTeamMcpPrimitive": a.teamDecidePrimitive(false),
 		"PutTeamMcpPolicy": a.putTeamPolicy, "PutTeamMcpServerCredential": a.putTeamCredential,
-		"DisconnectMcpOAuth": a.disconnectOAuth, "TestMcpFederation": a.testFederation,
+		"StartMcpOAuthConnect": a.startOAuth, "CompleteMcpOAuthConnect": a.completeOAuth, "DisconnectMcpOAuth": a.disconnectOAuth, "TestMcpFederation": a.testFederation,
 		"GetEffectiveAgentMcp": a.effective("agent", "agentId"), "GetEffectivePoolMcp": a.effective("pool", "poolId"),
 		"ListTeamMcpEvents": a.listTeamEvents, "GetTeamMcpUsageReport": a.teamUsage,
 		"ListAgentFederatedIdentities": a.listFederated("agent", "agentId"), "PutAgentFederatedIdentity": a.putFederated("agent", "agentId"),

@@ -129,6 +129,10 @@ type Repository interface {
 	GetCredential(ctx context.Context, tx port.Tx, serverID, scope string) (*domain.McpCredentialRecord, error)
 	CredentialPath(ctx context.Context, tx port.Tx, teamID, slug string) (string, error)
 	UpsertCredential(ctx context.Context, tx port.Tx, c domain.McpCredentialRecord) error
+	// InsertOAuthState stores a connect state's hash for the team and server.
+	InsertOAuthState(ctx context.Context, tx port.Tx, hash []byte, teamID, serverID string, expiresAt time.Time) error
+	// ClaimOAuthState marks a live state used and returns it, or nil when it is unknown, used or expired.
+	ClaimOAuthState(ctx context.Context, tx port.Tx, hash []byte) (*OAuthState, error)
 	DeleteCredential(ctx context.Context, tx port.Tx, serverID, scope string) error
 
 	RequestFederationTest(ctx context.Context, tx port.Tx, serverID, teamID string) error
@@ -174,6 +178,10 @@ type Service struct {
 	Secrets SecretWriter
 	// ClusterIssuer is the cluster's OIDC issuer, shown on federated identities for the target's trust setup.
 	ClusterIssuer string
+	// OAuthHTTP discovers authorization servers and redeems codes for the OAuth connect flow (oauth.go).
+	OAuthHTTP OAuthClient
+	// OAuth configures the OAuth connect flow.
+	OAuth OAuthSettings
 }
 
 // checkService re-applies a service-path permission.

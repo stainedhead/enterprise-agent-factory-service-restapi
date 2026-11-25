@@ -28,6 +28,7 @@ type repo struct {
 	events      []domain.McpEventRecord
 	usage       []domain.McpUsageRow
 	captures    []domain.McpQueryCapture
+	oauth       map[string]oauthRow
 	federated   map[string]domain.FederatedIdentityRecord
 	adoption    mcpcatalog.Adoption
 	lastFilter  domain.McpEventFilter
@@ -47,7 +48,7 @@ func newRepo() *repo {
 		refreshed: map[string]bool{}, subjects: map[string]domain.McpSubject{
 			"agent/" + agentID: {Kind: "agent", TeamID: team, ID: agentID, Access: "all"},
 			"pool/" + poolID:   {Kind: "pool", TeamID: team, ID: poolID, Access: "selected", Mode: domain.McpAgentModeFull},
-		}, federated: map[string]domain.FederatedIdentityRecord{},
+		}, federated: map[string]domain.FederatedIdentityRecord{}, oauth: map[string]oauthRow{},
 	}
 }
 
@@ -449,4 +450,26 @@ func (s *secrets) ForceDelete(_ context.Context, arn string) error {
 func (s *secrets) ScheduleDeletion(_ context.Context, arn string, _ int) error {
 	s.scheduled = append(s.scheduled, arn)
 	return nil
+}
+
+// oauthRow is a stored connect state; the fake records every state as started by usr_a (teamAdmin).
+type oauthRow struct {
+	st      mcpcatalog.OAuthState
+	expires time.Time
+	used    bool
+}
+
+func (r *repo) InsertOAuthState(_ context.Context, _ port.Tx, hash []byte, teamID, serverID string, expiresAt time.Time) error {
+	r.oauth[string(hash)] = oauthRow{st: mcpcatalog.OAuthState{TeamID: teamID, ServerID: serverID, CreatedBy: "usr_a"}, expires: expiresAt}
+	return nil
+}
+
+func (r *repo) ClaimOAuthState(_ context.Context, _ port.Tx, hash []byte) (*mcpcatalog.OAuthState, error) {
+	row, ok := r.oauth[string(hash)]
+	if !ok || row.used || !row.expires.After(now) {
+		return nil, nil
+	}
+	row.used = true
+	r.oauth[string(hash)] = row
+	return &row.st, nil
 }

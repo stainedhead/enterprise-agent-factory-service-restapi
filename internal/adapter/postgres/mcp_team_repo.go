@@ -633,3 +633,32 @@ func (*McpRepo) DeleteFederated(ctx context.Context, tx port.Tx, kind, teamID, s
 	}
 	return nil
 }
+
+// InsertOAuthState implements mcpcatalog.Repository: only the state's hash is stored, and no verifier (000026).
+func (*McpRepo) InsertOAuthState(ctx context.Context, tx port.Tx, hash []byte, teamID, serverID string, expiresAt time.Time) error {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return err
+	}
+	_, err = pt.Exec(ctx, `INSERT INTO afs.mcp_oauth_states (state_hash, team_id, server_id, expires_at) VALUES ($1, $2, $3, $4)`,
+		hash, teamID, serverID, expiresAt)
+	return MapError(err, OpWrite, "MCP OAuth state")
+}
+
+// ClaimOAuthState implements mcpcatalog.Repository through afs.claim_mcp_oauth_state (single use, SECURITY DEFINER).
+func (*McpRepo) ClaimOAuthState(ctx context.Context, tx port.Tx, hash []byte) (*mcpcatalog.OAuthState, error) {
+	pt, err := Unwrap(tx)
+	if err != nil {
+		return nil, err
+	}
+	var st mcpcatalog.OAuthState
+	err = pt.QueryRow(ctx, `SELECT team_id, server_id, created_by FROM afs.claim_mcp_oauth_state($1)`, hash).
+		Scan(&st.TeamID, &st.ServerID, &st.CreatedBy)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, MapError(err, OpWrite, "MCP OAuth state")
+	}
+	return &st, nil
+}

@@ -109,6 +109,9 @@ type settings struct {
 	// ClusterOIDCIssuer is the EKS cluster's service account issuer URL (AFS_CLUSTER_OIDC_ISSUER):
 	// workload tokens (RA-2b) are validated against its keys. Empty: workload tokens are refused.
 	ClusterOIDCIssuer string
+	// McpOAuth configures the MCP OAuth connect flow (AFS_MCP_OAUTH_CLIENT_ID, AFS_MCP_OAUTH_REDIRECT_URI,
+	// AFS_CONSOLE_URL; mcpOAuthSettings). Unset: StartMcpOAuthConnect answers 409 oauth_not_configured.
+	McpOAuth mcpOAuthConfig
 }
 
 func settingsFrom(env func(string) string) (settings, error) {
@@ -197,6 +200,9 @@ func settingsFrom(env func(string) string) (settings, error) {
 		return s, err
 	}
 	if err := workloadSettings(env, &s); err != nil {
+		return s, err
+	}
+	if err := mcpOAuthSettings(env, &s); err != nil {
 		return s, err
 	}
 	return s, nil
