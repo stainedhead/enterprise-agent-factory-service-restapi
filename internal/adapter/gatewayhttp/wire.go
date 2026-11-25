@@ -18,6 +18,8 @@ const (
 	wireConverse wireKind = iota
 	wireInvoke
 	wireAnthropic
+	// wireChat is OpenAI Chat Completions translated to Converse (/r/bedrock, gateway contract §12.2).
+	wireChat
 )
 
 // anthropicVersion is the version string Bedrock requires in an Anthropic Messages body.
@@ -37,6 +39,8 @@ type parsed struct {
 	capPath   []string
 	doc       map[string]json.RawMessage
 	beta      string
+	// includeUsage is the chat client's stream_options.include_usage (wireChat only).
+	includeUsage bool
 }
 
 func badRequest(field, reason string) error {
@@ -216,7 +220,7 @@ func (p *parsed) upstreamBody(a gateway.Authorized) ([]byte, error) {
 		}
 	}
 	switch p.wire {
-	case wireConverse:
+	case wireConverse, wireChat:
 		md, err := json.Marshal(a.Metadata)
 		if err != nil {
 			return nil, domain.Internal(err)

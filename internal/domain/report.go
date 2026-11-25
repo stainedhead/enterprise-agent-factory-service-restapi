@@ -60,6 +60,8 @@ const (
 	DimHour   ReportDim = "hour"
 	DimPool   ReportDim = "pool"
 	DimTag    ReportDim = "tag"
+	// DimRoute groups usage and costs by model route (v1.5.0): an endpoint slug, bedrock for Bedrock calls.
+	DimRoute ReportDim = "route"
 	// DimSurface, DimReason and DimPerson group the collaboration report.
 	DimSurface ReportDim = "surface"
 	DimReason  ReportDim = "reason"
@@ -89,7 +91,7 @@ func dimsOf(k ReportKind) map[ReportDim]bool {
 	d := map[ReportDim]bool{DimTeam: true, DimAgent: true, DimDay: true, DimHour: true, DimPool: true, DimTag: true}
 	switch k {
 	case ReportKindUsage, ReportKindCosts:
-		d[DimModel] = true
+		d[DimModel], d[DimRoute] = true, true
 	case ReportKindTraffic:
 		d[DimSystem] = true
 	case ReportKindActivity:
@@ -108,6 +110,8 @@ type RawReportQuery struct {
 	// SystemID, PoolID are the ext_ and pool_ identifiers.
 	SystemID string
 	PoolID   string
+	// Route is the route filter (v1.5.0): an endpoint slug, bedrock for Bedrock calls.
+	Route string
 	// Tags are the tag.<key>=<value> filters.
 	Tags map[string]string
 	// DefaultGroupBy is used when GroupBy is empty.
@@ -117,6 +121,8 @@ type RawReportQuery struct {
 // ReportFilters narrow a report.
 type ReportFilters struct {
 	TeamID, AgentID, ModelID, SystemID, PoolID string
+	// Route is a route slug or bedrock (usage and costs only).
+	Route string
 	// Tags maps a tag key to the value a record must have; UntaggedValue selects records without it.
 	Tags map[string]string
 }
@@ -158,7 +164,7 @@ func (q ReportQuery) Fingerprint() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s|%d|%d|%s|", q.Kind, q.From.Unix(), q.To.Unix(), strings.Join(q.Columns(), ","))
 	f := q.Filters
-	fmt.Fprintf(&b, "%s|%s|%s|%s|%s|", f.TeamID, f.AgentID, f.ModelID, f.SystemID, f.PoolID)
+	fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%s|", f.TeamID, f.AgentID, f.ModelID, f.SystemID, f.PoolID, f.Route)
 	keys := make([]string, 0, len(f.Tags))
 	for k := range f.Tags {
 		keys = append(keys, k)
@@ -211,7 +217,7 @@ func ParseReportGroupBy(kind ReportKind, s string) ([]ReportGroup, error) {
 
 func isKnownDim(d ReportDim) bool {
 	switch d {
-	case DimTeam, DimAgent, DimModel, DimSystem, DimDay, DimHour, DimPool, DimSurface, DimReason, DimPerson:
+	case DimTeam, DimAgent, DimModel, DimSystem, DimDay, DimHour, DimPool, DimSurface, DimReason, DimPerson, DimRoute:
 		return true
 	}
 	return false
@@ -296,7 +302,10 @@ func ParseReportQuery(kind ReportKind, raw RawReportQuery, now time.Time) (Repor
 			return q, reportBad("groupBy", "hour needs a range of two days or less")
 		}
 	}
-	q.Filters = ReportFilters{TeamID: raw.TeamID, AgentID: raw.AgentID, ModelID: raw.ModelID, SystemID: raw.SystemID, PoolID: raw.PoolID}
+	q.Filters = ReportFilters{TeamID: raw.TeamID, AgentID: raw.AgentID, ModelID: raw.ModelID, SystemID: raw.SystemID, PoolID: raw.PoolID, Route: raw.Route}
+	if raw.Route != "" && raw.Route != RouteBedrock && ValidRouteSlug(raw.Route) != nil {
+		return q, reportBad("route", "must be a route slug or bedrock")
+	}
 	if raw.TeamID != "" {
 		if _, err := ParseID(PrefixTeam, raw.TeamID); err != nil {
 			return q, reportBad("teamId", "must be a team_ identifier")
@@ -329,6 +338,9 @@ func ParseReportQuery(kind ReportKind, raw RawReportQuery, now time.Time) (Repor
 	}
 	if raw.ModelID != "" && kind != ReportKindUsage && kind != ReportKindCosts {
 		return q, reportBad("modelId", fmt.Sprintf("%s reports have no model", kind))
+	}
+	if raw.Route != "" && kind != ReportKindUsage && kind != ReportKindCosts {
+		return q, reportBad("route", fmt.Sprintf("%s reports have no route", kind))
 	}
 	if raw.SystemID != "" && kind != ReportKindTraffic {
 		return q, reportBad("systemId", fmt.Sprintf("%s reports have no external system", kind))

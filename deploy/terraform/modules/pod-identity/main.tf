@@ -377,6 +377,13 @@ data "aws_iam_policy_document" "billing" {
     actions   = ["pricing:GetProducts", "pricing:DescribeServices", "pricing:GetAttributeValues", "ce:GetCostAndUsage", "ce:ListCostAllocationTags"]
     resources = ["*"]
   }
+
+  # Route billing (1.2.0): provider admin keys at <prefix>/_service/billing/<route>, read by route-pull only.
+  statement {
+    sid       = "ReadProviderBillingKeys"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["arn:${var.partition}:secretsmanager:${var.region}:${var.account_id}:secret:${var.secrets_path_prefix}/_service/billing/*"]
+  }
 }
 
 resource "aws_iam_role_policy" "billing" {

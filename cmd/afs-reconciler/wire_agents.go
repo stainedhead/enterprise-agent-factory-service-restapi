@@ -103,5 +103,5 @@ func agentRoutes() []engine.Route {
 	for _, t := range []string{"agent_templates", "external_systems", "service_tags", "storage_classes", "models", "model_prices", "service_settings"} {
 		routes = append(routes, engine.Route{Table: t, FanOut: []engine.Kind{engine.KindAgent}})
 	}
-	return routes
+	return append(routes, engine.GatewayRoutes(engine.KindAgent, true, "agent_model_endpoints")...)
 }

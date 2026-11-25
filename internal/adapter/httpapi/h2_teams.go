@@ -547,6 +547,7 @@ type modelBody struct {
 	// teamsWithAccess on the admin list; inferenceProfileState on a team's list.
 	Callable              bool    `json:"callable"`
 	PriceState            string  `json:"priceState"`
+	ProviderState         string  `json:"providerState"`
 	ServiceEnabled        *bool   `json:"serviceEnabled,omitempty"`
 	Origin                string  `json:"origin,omitempty"`
 	TeamsWithAccess       *int    `json:"teamsWithAccess,omitempty"`
@@ -558,7 +559,7 @@ func modelBodies(ms []teams.ModelInfo) []modelBody {
 	for _, m := range ms {
 		b := modelBody{ID: m.ID, Provider: m.Provider, DisplayName: m.DisplayName, Enabled: m.Enabled,
 			ContextWindow: m.ContextWindow, MaxOutputTokens: m.MaxOutputTokens, Version: m.Version, UpdatedAt: w2Time(m.UpdatedAt),
-			Callable: m.Callable, PriceState: m.PriceState}
+			Callable: m.Callable, PriceState: m.PriceState, ProviderState: domain.ProviderState(m.ProviderOff)}
 		if m.InferenceProfileState != "" {
 			st := m.InferenceProfileState
 			b.InferenceProfileState = &st

@@ -52,7 +52,7 @@ func modelSelect(withTeams bool) string {
        WHEN EXISTS (SELECT 1 FROM afs.model_prices p WHERE p.model_id = m.id AND p.effective_from > now())
          OR EXISTS (SELECT 1 FROM afs.model_price_proposals q WHERE q.model_id = m.id AND q.status = 'pending') THEN 'pending'
        ELSE 'none' END AS price_state,
-  m.origin, ` + teams + ` FROM afs.models m`
+  m.origin, ` + teams + `, NOT afs.provider_enabled('bedrock') FROM afs.models m`
 }
 
 func scanModel(row pgx.Row) (domain.Model, error) {
@@ -61,12 +61,12 @@ func scanModel(row pgx.Row) (domain.Model, error) {
 	var ps, origin string
 	var teams int64
 	err := row.Scan(&m.ID, &m.Provider, &m.DisplayName, &m.Enabled, &m.ContextWindow, &m.MaxOutputTokens, &v, &m.UpdatedAt,
-		&m.ServiceEnabled, &ps, &origin, &teams)
+		&m.ServiceEnabled, &ps, &origin, &teams, &m.ProviderOff)
 	m.Version = domain.Version(v)
 	m.PriceState = domain.PriceState(ps)
 	m.Origin = domain.ModelOrigin(origin)
 	m.TeamsWithAccess = int(teams)
-	m.Callable = m.ServiceEnabled && m.PriceState == domain.PriceApproved
+	m.Callable = m.ServiceEnabled && m.PriceState == domain.PriceApproved && !m.ProviderOff
 	return m, err
 }
 

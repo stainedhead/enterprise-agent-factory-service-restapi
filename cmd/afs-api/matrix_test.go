@@ -34,26 +34,23 @@ func TestAuthorizationMatrix(t *testing.T) {
 		have[id] = true
 	}
 	for id := range contract.Operations {
-		if !have[id] && !pendingV150[id] {
+		if !have[id] && !pendingMcp[id] {
 			t.Errorf("operation %s still answers the 501 not_implemented placeholder", id)
 		}
 	}
-	for id := range pendingV150 {
+	for id := range pendingMcp {
 		if have[id] {
-			t.Errorf("operation %s is implemented: remove it from pendingV150", id)
+			t.Errorf("operation %s is implemented: remove it from httpapi.PendingMcpOps", id)
 		}
 	}
 	matrix.Run(t, w, c.Handler)
 }
 
-// pendingV150 is httpapi.PendingModelEndpointOps and httpapi.PendingMcpOps: the v1.5.0 §4.13 and v1.6.0 §4.14
-// operations whose handlers land in the implementation changes of releases 1.2.0 and 1.3.0
-// (specs/261125-model-endpoint-gateway, specs/261125-mcp-gateway). The lists may only shrink.
-var pendingV150 = func() map[string]bool {
+// pendingMcp is httpapi.PendingMcpOps: the v1.6.0 §4.14 operations whose handlers land in the implementation
+// change of release 1.3.0 (specs/261125-mcp-gateway). The list may only shrink. The v1.5.0 §4.13 operations
+// are all implemented in 1.2.0.
+var pendingMcp = func() map[string]bool {
 	m := map[string]bool{}
-	for _, op := range httpapi.PendingModelEndpointOps {
-		m[op] = true
-	}
 	for _, op := range httpapi.PendingMcpOps {
 		m[op] = true
 	}

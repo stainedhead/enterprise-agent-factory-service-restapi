@@ -31,6 +31,10 @@ func (s *Service) identify(ctx context.Context, req Request) (Caller, error) {
 		// A team pod always belongs to its team and to exactly one agent or pool.
 		return Caller{}, unauthenticated("source address is not an agent or pool pod")
 	}
+	if s.cfg.TeamNamespace != "" && pod.Namespace != s.cfg.TeamNamespace {
+		// A team gateway serves its own namespace only (gateway contract §12.1).
+		return Caller{}, unauthenticated("source address is not a pod of this team gateway's namespace")
+	}
 	if req.Token != "" {
 		if err := s.checkToken(ctx, req.Token, pod); err != nil {
 			return Caller{}, err
@@ -79,6 +83,7 @@ func (s *Service) checkTeam(ctx context.Context, c Caller) (TeamRecord, error) {
 
 // Admission reasons the gateway reports (domain.ReasonModel*), and the message of each.
 var admissionMessage = map[string]string{
+	domain.ReasonProviderDisabled:          "the Bedrock provider is switched off",
 	domain.ReasonModelNotEnabledForService: "the model is not enabled for the service",
 	domain.ReasonModelNotEnabledForTeam:    "the model is not enabled for the team",
 	domain.ReasonModelNotEnabledForAgent:   "the model is not enabled for this agent",

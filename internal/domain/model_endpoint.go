@@ -553,3 +553,47 @@ func RouteHealthEvent(prev, next RouteHealth) (EventType, bool) {
 	}
 	return "", false
 }
+
+// GatewayURLRef is AFS_GATEWAY_URL as a Kubernetes dependent variable reference: the route variables are
+// rendered after AFS_GATEWAY_URL, so the kubelet expands it, and the API shows the same values.
+const GatewayURLRef = "$(AFS_GATEWAY_URL)"
+
+// GatewayPlaceholderKey is the OPENAI_API_KEY agents receive: not a secret, the gateway ignores it.
+const GatewayPlaceholderKey = "afs-gateway"
+
+// RouteBaseURL is the gateway URL of a route (gateway contract §12.4).
+func RouteBaseURL(slug string) string { return GatewayURLRef + "/r/" + slug + "/v1" }
+
+// RouteEnv returns the route variables of an agent or pool (gateway contract §12.4), in a fixed order:
+// AFS_LLM_ROUTES (effective routes, default first), one AFS_LLM_<ROUTE>_BASE_URL per route and for
+// bedrock when Bedrock is on, AFS_LLM_DEFAULT_ROUTE and AFS_LLM_DEFAULT_MODEL when the default is a
+// route model, then OPENAI_BASE_URL and OPENAI_API_KEY. Nothing is returned when there is no route and
+// Bedrock is off.
+func RouteEnv(routes []string, defaultRoute, defaultModel string, bedrockOn bool) []EnvVar {
+	if len(routes) == 0 && !bedrockOn {
+		return []EnvVar{}
+	}
+	out := []EnvVar{{Name: "AFS_LLM_ROUTES", Value: strings.Join(routes, ",")}}
+	for _, r := range routes {
+		out = append(out, EnvVar{Name: RouteEnvName(r), Value: RouteBaseURL(r)})
+	}
+	if bedrockOn {
+		out = append(out, EnvVar{Name: RouteEnvName(RouteBedrock), Value: RouteBaseURL(RouteBedrock)})
+	}
+	if defaultRoute != "" {
+		out = append(out, EnvVar{Name: "AFS_LLM_DEFAULT_ROUTE", Value: defaultRoute}, EnvVar{Name: "AFS_LLM_DEFAULT_MODEL", Value: defaultModel})
+	}
+	return append(out, EnvVar{Name: "OPENAI_BASE_URL", Value: GatewayURLRef + "/openai/v1"},
+		EnvVar{Name: "OPENAI_API_KEY", Value: GatewayPlaceholderKey})
+}
+
+// OrderRoutes returns the slugs, unique, the default first and then by name.
+func OrderRoutes(slugs []string, defaultRoute string) []string {
+	out := slices.Clone(slugs)
+	slices.Sort(out)
+	out = slices.Compact(out)
+	if i := slices.Index(out, defaultRoute); i > 0 {
+		out = append([]string{defaultRoute}, slices.Delete(out, i, i+1)...)
+	}
+	return out
+}

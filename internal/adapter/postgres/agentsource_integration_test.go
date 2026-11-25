@@ -221,3 +221,39 @@ func TestParseAgentResources(t *testing.T) {
 		}
 	}
 }
+
+// MEG-RC-3: on a per-namespace team the reconciler reads the agent's effective routes and its route default as
+// <route>/<model>; a route default that leaves the route set gets the route admission reason.
+func TestAgentSourceRoutesAgainstTheSchema(t *testing.T) {
+	db := pgtest.Get(t)
+	s := seedFullAgent(t, db)
+	admin := db.Admin(t)
+	ctx := t.Context()
+	slug, ep := mepSlug("ar"), pgtest.NewID("mep")
+	mustExec(t, admin, `UPDATE afs.teams SET gateway_deployment = 'per_namespace' WHERE id = $1`, s.team.ID)
+	mustExec(t, admin, `INSERT INTO afs.model_endpoints (id, slug, display_name, location, base_url, auth_kind, pricing_mode, enabled, protocols)
+VALUES ($1, $2, 'Routes', 'external', 'https://llm.example.com/v1', 'none', 'free', true, '{openai_chat,openai_responses}')`, ep, slug)
+	mustExec(t, admin, `INSERT INTO afs.endpoint_models (endpoint_id, model_name, max_output_tokens) VALUES ($1, 'm1', 4096)`, ep)
+	mustExec(t, admin, `INSERT INTO afs.team_model_endpoints (team_id, endpoint_id) VALUES ($1, $2)`, s.team.ID, ep)
+	mustExec(t, admin, `UPDATE afs.agents SET default_model_id = $2 WHERE id = $1`, s.agentID, slug+"/m1")
+
+	src := postgres.NewAgentSource(reconcilerPool(t, db))
+	d, err := src.LoadAgent(ctx, s.agentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := d.Routes
+	if d.Team.GatewayDeployment != agent.GatewayPerNamespace || d.ModelID != slug+"/m1" || r.DefaultRoute != slug || r.DefaultModel != "m1" ||
+		len(r.Routes) != 1 || r.Routes[0].Models[0].MaxOutputTokens != 4096 || len(r.Routes[0].Protocols) != 2 || d.ModelReason != "" {
+		t.Errorf("routes = %+v model %s reason %q", r, d.ModelID, d.ModelReason)
+	}
+	// The endpoint is switched off: the default is refused with the route admission reason.
+	mustExec(t, admin, `UPDATE afs.model_endpoints SET enabled = false WHERE id = $1`, ep)
+	d, err = src.LoadAgent(ctx, s.agentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Routes.Routes) != 0 || d.ModelReason != "route_not_enabled_for_service" {
+		t.Errorf("after disable: %+v %q", d.Routes, d.ModelReason)
+	}
+}

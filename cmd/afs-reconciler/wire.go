@@ -70,6 +70,7 @@ func routes(extra ...engine.Route) (*engine.Registry, error) {
 		{Table: "model_prices", FanOut: []engine.Kind{engine.KindTeam}},
 		{Table: "service_settings", FanOut: []engine.Kind{engine.KindTeam}},
 	}
+	base = append(base, engine.GatewayRoutes(engine.KindTeam, false)...)
 	// Several controllers route the same tables (teams, agents, ...); every route list goes through the one
 	// mergeRoutes so the registry sees each table once.
 	return engine.NewRegistry(mergeRoutes(append(append(base, agentRoutes()...), extra...))...)
@@ -195,6 +196,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 		AWS: team.AWSConfig{Partition: as.Partition, Region: as.Region, AccountID: account, GatewayRoleARN: s.GatewayRoleARN,
 			PermissionsBoundaryARN: s.PermissionsBoundaryARN, ClusterARN: clusterARN, ESORoleARN: s.ESORoleARN, SecretsPrefix: s.SecretsPrefix},
 		Gateway: gateway, Now: clock.Now,
+		TeamGateway: s.TeamGateway, Routes: postgres.NewRouteStatusWriter(runner, outbox, ids, clock),
 	})
 	if err != nil {
 		return fail(err)

@@ -36,7 +36,21 @@ func (r *Reader) Read(ctx context.Context, arn string) (notify.Credential, error
 	if !strings.HasPrefix(arn, "arn:") || !strings.Contains(arn, ":secretsmanager:") {
 		return "", errors.New("secretsmanager: not a Secrets Manager ARN")
 	}
-	out, err := r.api.GetSecretValue(ctx, &sm.GetSecretValueInput{SecretId: aws.String(arn)})
+	return r.get(ctx, arn)
+}
+
+// ReadBillingKey reads a provider admin key for afs-billing by name: <prefix>/_service/billing/<route> (gateway
+// contract §12, the billing credential path). Any other name is refused before AWS is called, and the value is
+// returned redacted-printing as Read's.
+func (r *Reader) ReadBillingKey(ctx context.Context, prefix, route string) (notify.Credential, error) {
+	if prefix == "" || strings.ContainsAny(prefix+route, " \t\n") || route == "" || strings.Contains(route, "/") {
+		return "", errors.New("secretsmanager: not a billing key name")
+	}
+	return r.get(ctx, prefix+"/_service/billing/"+route)
+}
+
+func (r *Reader) get(ctx context.Context, id string) (notify.Credential, error) {
+	out, err := r.api.GetSecretValue(ctx, &sm.GetSecretValueInput{SecretId: aws.String(id)})
 	if err != nil {
 		return "", fmt.Errorf("secretsmanager: GetSecretValue: %w", wrap(err))
 	}

@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/team"
 )
 
 // settings are read from the environment (architecture §7, user-docs/configuration.md).
@@ -30,8 +32,11 @@ type settings struct {
 	GatewayCAConfigMap     string   // AFS_GATEWAY_CA_CONFIGMAP, default afs-gateway-ca (in the gateway namespace)
 	EdgeNamespace          string   // AFS_EDGE_NAMESPACE, default afs-system: where afs-edge runs (collaboration ingress)
 	EdgeName               string   // AFS_EDGE_NAME, default afs-edge
-	PollInterval           time.Duration
-	ResyncInterval         time.Duration
+	// TeamGateway configures per-namespace gateways (gateway contract §12.1): AFS_TEAM_GATEWAY_IMAGE,
+	// AFS_TEAM_GATEWAY_DB_SECRET_ARN, AFS_TEAM_GATEWAY_DB_HOST, AFS_TEAM_GATEWAY_DB_PORT, AFS_TEAM_GATEWAY_TLS_ISSUER.
+	TeamGateway    team.TeamGatewaySpec
+	PollInterval   time.Duration
+	ResyncInterval time.Duration
 }
 
 func settingsFrom(env func(string) string, hostname func() (string, error)) (settings, error) {
@@ -42,6 +47,15 @@ func settingsFrom(env func(string) string, hostname func() (string, error)) (set
 		ESORoleARN: env("AFS_ESO_ROLE_ARN"), KMSKeyARN: env("AFS_KMS_KEY_ARN"), SecretsPrefix: env("AFS_SECRETS_PREFIX"),
 		GatewayNamespace: env("AFS_GATEWAY_NAMESPACE"), GatewayName: env("AFS_GATEWAY_NAME"), GatewayCAConfigMap: env("AFS_GATEWAY_CA_CONFIGMAP"),
 		EdgeNamespace: env("AFS_EDGE_NAMESPACE"), EdgeName: env("AFS_EDGE_NAME"),
+		TeamGateway: team.TeamGatewaySpec{Image: env("AFS_TEAM_GATEWAY_IMAGE"), DatabaseSecretARN: env("AFS_TEAM_GATEWAY_DB_SECRET_ARN"),
+			DatabaseHost: env("AFS_TEAM_GATEWAY_DB_HOST"), TLSIssuer: env("AFS_TEAM_GATEWAY_TLS_ISSUER")},
+	}
+	if v := env("AFS_TEAM_GATEWAY_DB_PORT"); v != "" {
+		p, err := strconv.Atoi(v)
+		if err != nil || p < 1 || p > 65535 {
+			return s, fmt.Errorf("AFS_TEAM_GATEWAY_DB_PORT: %q is not a port", v)
+		}
+		s.TeamGateway.DatabasePort = p
 	}
 	def := func(p *string, v string) {
 		if *p == "" {

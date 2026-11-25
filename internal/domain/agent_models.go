@@ -46,6 +46,38 @@ type AgentModels struct {
 	ModelIDs       []string
 	DefaultModelID string
 	Effective      []string
+	// RouteAccess, Routes and DefaultRoute are the v1.5.0 route members (API contract §4.13). DefaultRoute
+	// is set when the default is a route model; DefaultModelID then holds the route's model name.
+	RouteAccess  ModelAccess
+	Routes       []string
+	DefaultRoute string
+	// EffectiveRoutes (default first) and Env are computed at read time and never stored.
+	EffectiveRoutes []string
+	Env             []EnvVar
+}
+
+// EnvVar is one environment variable an agent receives (names and non-secret values only).
+type EnvVar struct{ Name, Value string }
+
+// DefaultRef is the default as one string: a Bedrock model id, or <route>/<model> for a route model.
+func (m AgentModels) DefaultRef() string {
+	if m.DefaultRoute != "" {
+		return m.DefaultRoute + "/" + m.DefaultModelID
+	}
+	return m.DefaultModelID
+}
+
+// routeAccessOrAll returns all for an unset route access.
+func (m AgentModels) routeAccessOrAll() ModelAccess {
+	if m.RouteAccess == "" {
+		return ModelAccessAll
+	}
+	return m.RouteAccess
+}
+
+// allowsRoute reports whether the subject's own route access admits the route.
+func (m AgentModels) allowsRoute(slug string) bool {
+	return m.routeAccessOrAll() == ModelAccessAll || slices.Contains(m.Routes, slug)
 }
 
 // ModelsInput is the models object of a CreateAgent, UpdateAgent, CreatePool or UpdatePool body. A nil
@@ -72,15 +104,6 @@ func (m *ModelsInput) Present() bool {
 	return m != nil && (m.Access != nil || m.ModelIDs != nil || m.DefaultModelID != nil || m.Routes != nil)
 }
 
-// routesNotYet refuses the route members until route admission is implemented (release 1.2.0, the
-// implementation change after the v1.5.0 contract change): never silently ignored.
-func routesNotYet(in *ModelsInput) []FieldError {
-	if in == nil || in.Routes == nil {
-		return nil
-	}
-	return []FieldError{{Field: "models.routeAccess", Reason: ReasonNotImplemented}}
-}
-
 // ModelSets are the sets the validation checks a request against, read in the request's transaction.
 type ModelSets struct {
 	// Service holds the ids enabled for the service (every catalog model while service access is all).
@@ -90,8 +113,17 @@ type ModelSets struct {
 	Team []string
 	// Callable holds the ids with a price in force; a default is picked from it.
 	Callable []string
-	// SettingDefault is models.default_model_id; empty when unset.
+	// SettingDefault is models.default_model_id; empty when unset. It may be a <route>/<model>.
 	SettingDefault string
+	// Routes is the team's set of routes (v1.5.0): each enabled route on a provider that is on, opted in or
+	// the team's own, with its callable model names. Nil when routes are not known (they are then refused).
+	Routes map[string][]string
+}
+
+// routeHas reports whether the team's route set has the route and, when model is not empty, the model.
+func (s ModelSets) routeHas(slug, model string) bool {
+	ms, ok := s.Routes[slug]
+	return ok && (model == "" || slices.Contains(ms, model))
 }
 
 func (s ModelSets) inService(id string) bool { return slices.Contains(s.Service, id) }
@@ -133,8 +165,8 @@ func checkSelection(ids []string, sets ModelSets, field string) []FieldError {
 // modelId alias: alone it creates {access: all, defaultModelId: modelId}; with models.defaultModelId and a
 // different value it is a conflict. field is the prefix of the reported fields ("models").
 func ResolveNewModels(in *ModelsInput, legacyModelID string, sets ModelSets) (AgentModels, error) {
-	fe := routesNotYet(in)
-	out := AgentModels{Access: ModelAccessAll, ModelIDs: []string{}}
+	var fe []FieldError
+	out := AgentModels{Access: ModelAccessAll, ModelIDs: []string{}, RouteAccess: ModelAccessAll, Routes: []string{}}
 	def := legacyModelID
 	if in != nil {
 		if in.Access != nil {
@@ -154,6 +186,9 @@ func ResolveNewModels(in *ModelsInput, legacyModelID string, sets ModelSets) (Ag
 			def = *in.DefaultModelID
 		}
 	}
+	if in != nil {
+		fe = append(fe, applyRoutes(&out, in.Routes, sets, true)...)
+	}
 	if len(fe) > 0 {
 		return AgentModels{}, Validation(fe...)
 	}
@@ -165,24 +200,106 @@ func ResolveNewModels(in *ModelsInput, legacyModelID string, sets ModelSets) (Ag
 	if len(fe) > 0 {
 		return AgentModels{}, Validation(fe...)
 	}
-	if def == "" {
-		switch {
-		case sets.SettingDefault != "" && sets.inTeam(sets.SettingDefault) && out.allows(sets.SettingDefault):
+	var defRoute string
+	if in != nil && in.Routes != nil && in.Routes.DefaultRoute != nil {
+		defRoute = *in.Routes.DefaultRoute
+	}
+	if def == "" && defRoute == "" {
+		if route, model, ok := ParseRouteModel(sets.SettingDefault); ok && sets.routeHas(route, model) && out.allowsRoute(route) {
 			def = sets.SettingDefault
-		case out.Access == ModelAccessSelected:
-			def = firstOf(out.ModelIDs)
-		default:
-			def = sets.firstCallable()
+		} else {
+			switch {
+			case sets.SettingDefault != "" && sets.inTeam(sets.SettingDefault) && out.allows(sets.SettingDefault):
+				def = sets.SettingDefault
+			case out.Access == ModelAccessSelected:
+				def = firstOf(out.ModelIDs)
+			default:
+				def = sets.firstCallable()
+			}
 		}
 	}
 	if def == "" {
 		return AgentModels{}, Validation(FieldError{Field: "models.defaultModelId", Reason: "required"})
 	}
-	out.DefaultModelID = def
+	if fe := setDefault(&out, def, defRoute, in != nil && in.Routes != nil && in.Routes.DefaultRoute != nil); len(fe) > 0 {
+		return AgentModels{}, Validation(fe...)
+	}
 	if fe := checkDefault(out, sets); len(fe) > 0 {
 		return AgentModels{}, Validation(fe...)
 	}
 	return out, nil
+}
+
+// MaxSelectedRoutes is the most routes an agent or pool may select (agent_model_endpoints).
+const MaxSelectedRoutes = 50
+
+// Route reasons of API contract v1.5.0.
+const (
+	ReasonRoutesNotAllowedForAll = "routes_not_allowed_for_all"
+)
+
+// applyRoutes applies routeAccess and routes. Switching to all clears the routes; routes with all are
+// refused like modelIds; every route must be in the team's set (agent_routes_team).
+func applyRoutes(out *AgentModels, in *RoutesInput, sets ModelSets, create bool) []FieldError {
+	if in == nil {
+		return nil
+	}
+	var fe []FieldError
+	if in.Access != nil {
+		a := ModelAccess(*in.Access)
+		if !a.Valid() {
+			return []FieldError{{Field: "models.routeAccess", Reason: "must be all or selected"}}
+		}
+		out.RouteAccess = a
+		if a == ModelAccessAll && in.Routes == nil {
+			out.Routes = []string{}
+		}
+	}
+	if in.Routes != nil {
+		out.Routes = slices.Clone(*in.Routes)
+		if in.Access == nil && len(out.Routes) > 0 && (create || out.routeAccessOrAll() == ModelAccessAll) {
+			out.RouteAccess = ModelAccessSelected
+		}
+	}
+	if out.routeAccessOrAll() == ModelAccessAll {
+		if len(out.Routes) > 0 {
+			return []FieldError{{Field: "models.routes", Reason: ReasonRoutesNotAllowedForAll}}
+		}
+		out.Routes = []string{}
+		return nil
+	}
+	if len(out.Routes) > MaxSelectedRoutes {
+		return []FieldError{{Field: "models.routes", Reason: "at most " + strconv.Itoa(MaxSelectedRoutes) + " routes"}}
+	}
+	seen := map[string]bool{}
+	for i, r := range out.Routes {
+		f := "models.routes[" + strconv.Itoa(i) + "]"
+		switch {
+		case seen[r]:
+			fe = append(fe, FieldError{Field: f, Reason: "is listed twice"})
+		case !sets.routeHas(r, ""):
+			fe = append(fe, FieldError{Field: f, Reason: ReasonAgentRoutesTeam})
+		}
+		seen[r] = true
+	}
+	return fe
+}
+
+// setDefault stores def (a Bedrock id, a <route>/<model>, or with defRoute the route's model name) as the
+// default. sentRoute reports an explicit defaultRoute member (defRoute "" for null).
+func setDefault(out *AgentModels, def, defRoute string, sentRoute bool) []FieldError {
+	route, model, isRoute := ParseRouteModel(def)
+	switch {
+	case isRoute && sentRoute && defRoute != "" && defRoute != route:
+		return []FieldError{{Field: "models.defaultRoute", Reason: ReasonConflictingFields}}
+	case isRoute:
+		out.DefaultRoute, out.DefaultModelID = route, model
+	case sentRoute && defRoute != "":
+		out.DefaultRoute, out.DefaultModelID = defRoute, def
+	default:
+		out.DefaultRoute, out.DefaultModelID = "", def
+	}
+	return nil
 }
 
 func firstOf(ids []string) string {
@@ -220,8 +337,15 @@ func validateAccess(m *AgentModels, sets ModelSets) []FieldError {
 	return fe
 }
 
-// checkDefault requires the default to be in the agent's own selection and in the team's set.
+// checkDefault requires the default to be in the agent's own selection and in the team's set: of models
+// for a Bedrock default, of routes (with the model callable there) for a route default.
 func checkDefault(m AgentModels, sets ModelSets) []FieldError {
+	if m.DefaultRoute != "" {
+		if !sets.routeHas(m.DefaultRoute, m.DefaultModelID) || !m.allowsRoute(m.DefaultRoute) {
+			return []FieldError{{Field: "models.defaultModelId", Reason: ReasonAgentsDefaultRouteAllowed}}
+		}
+		return nil
+	}
 	if !sets.inTeam(m.DefaultModelID) || !m.allows(m.DefaultModelID) {
 		return []FieldError{{Field: "models.defaultModelId", Reason: ReasonDefaultModelNotAllowed}}
 	}
@@ -232,8 +356,13 @@ func checkDefault(m AgentModels, sets ModelSets) []FieldError {
 // ones, omitted members are kept). legacyModelID alone sets only the default. Switching to all clears the
 // selection. The result is validated against sets as a whole.
 func (cur AgentModels) ApplyModels(in *ModelsInput, legacyModelID string, sets ModelSets) (AgentModels, error) {
-	out := AgentModels{Access: cur.Access, ModelIDs: slices.Clone(cur.ModelIDs), DefaultModelID: cur.DefaultModelID}
-	fe := routesNotYet(in)
+	out := AgentModels{Access: cur.Access, ModelIDs: slices.Clone(cur.ModelIDs), DefaultModelID: cur.DefaultModelID,
+		RouteAccess: cur.routeAccessOrAll(), Routes: slices.Clone(cur.Routes), DefaultRoute: cur.DefaultRoute}
+	if out.Routes == nil {
+		out.Routes = []string{}
+	}
+	var fe []FieldError
+	newDefault, sentRoute, defRoute := "", false, ""
 	if in != nil {
 		if in.Access != nil {
 			if !in.Access.Valid() {
@@ -248,11 +377,26 @@ func (cur AgentModels) ApplyModels(in *ModelsInput, legacyModelID string, sets M
 			if legacyModelID != "" && legacyModelID != *in.DefaultModelID {
 				fe = append(fe, FieldError{Field: "modelId", Reason: ReasonConflictingFields})
 			}
-			out.DefaultModelID = *in.DefaultModelID
+			newDefault = *in.DefaultModelID
 		}
+		if in.Routes != nil && (in.Routes.DefaultRoute != nil || in.Routes.DefaultRouteNull) {
+			sentRoute = true
+			if in.Routes.DefaultRoute != nil {
+				defRoute = *in.Routes.DefaultRoute
+			}
+		}
+		fe = append(fe, applyRoutes(&out, in.Routes, sets, false)...)
 	}
 	if legacyModelID != "" && (in == nil || in.DefaultModelID == nil) {
-		out.DefaultModelID = legacyModelID
+		newDefault = legacyModelID
+	}
+	switch {
+	case newDefault != "":
+		fe = append(fe, setDefault(&out, newDefault, defRoute, sentRoute)...)
+	case sentRoute && defRoute == "" && out.DefaultRoute != "":
+		fe = append(fe, FieldError{Field: "models.defaultModelId", Reason: "required when defaultRoute is cleared"})
+	case sentRoute && defRoute != "":
+		out.DefaultRoute = defRoute
 	}
 	if len(fe) > 0 {
 		return AgentModels{}, Validation(fe...)
@@ -280,7 +424,11 @@ func (m AgentModels) Equal(o AgentModels) bool {
 	a, b := slices.Clone(m.ModelIDs), slices.Clone(o.ModelIDs)
 	slices.Sort(a)
 	slices.Sort(b)
-	return m.Access == o.Access && m.DefaultModelID == o.DefaultModelID && slices.Equal(a, b)
+	ra, rb := slices.Clone(m.Routes), slices.Clone(o.Routes)
+	slices.Sort(ra)
+	slices.Sort(rb)
+	return m.Access == o.Access && m.DefaultModelID == o.DefaultModelID && slices.Equal(a, b) &&
+		m.routeAccessOrAll() == o.routeAccessOrAll() && m.DefaultRoute == o.DefaultRoute && slices.Equal(ra, rb)
 }
 
 // ComputeEffective returns the model ids the subject may call now: the team set ∩ the subject's own
@@ -307,7 +455,10 @@ func (m AgentModels) ComputeEffective(team, callable []string) []string {
 // ModelUnavailable reports whether the default left the effective set, and whether the set is empty
 // (the agent is Degraded then, MOD-6).
 func (m AgentModels) ModelUnavailable(effective []string) (defaultGone, empty bool) {
-	return !slices.Contains(effective, m.DefaultModelID), len(effective) == 0
+	if m.DefaultRoute != "" {
+		return !slices.Contains(m.EffectiveRoutes, m.DefaultRoute), len(effective) == 0 && len(m.EffectiveRoutes) == 0
+	}
+	return !slices.Contains(effective, m.DefaultModelID), len(effective) == 0 && len(m.EffectiveRoutes) == 0
 }
 
 // TeamModelAccess is a team's model access: all, or the explicit list (MOD-2, ListTeamModels).

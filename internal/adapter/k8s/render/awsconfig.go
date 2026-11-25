@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/agent"
@@ -16,8 +17,11 @@ const (
 	AWSConfigPath = "/etc/afs/aws/config"
 	TagsPath      = "/etc/afs/tags.json"
 	// ModelsPath is the list of models the agent or pool may call and the default (MOD-6).
-	ModelsPath   = "/etc/afs/models.json"
-	modelsKey    = "models.json"
+	ModelsPath = "/etc/afs/models.json"
+	modelsKey  = "models.json"
+	// RoutesPath is /etc/afs/llm-routes.json (gateway contract §12.4), present on team gateways only.
+	RoutesPath   = "/etc/afs/llm-routes.json"
+	routesKey    = "llm-routes.json"
 	awsConfigKey = "config"
 	tagsKey      = "tags.json"
 )
@@ -73,6 +77,27 @@ func ModelsJSON(def string, ids []string) string {
 	return string(b)
 }
 
+// addRoutes puts llm-routes.json in a ConfigMap's data while the team is on its own gateway.
+func addRoutes(data map[string]any, t agent.Team, r agent.LLMRoutes) {
+	if agent.Delivered(t) {
+		data[routesKey] = agent.RoutesJSON(agent.Gateway{}.For(t).URL(), r)
+	}
+}
+
+// routeDelivery appends the route variables after the gateway variables (they reference $(AFS_GATEWAY_URL)) and
+// mounts /etc/afs/llm-routes.json while the team is on its own gateway.
+func routeDelivery(t agent.Team, r agent.LLMRoutes, envVars []corev1.EnvVar, items []corev1.KeyToPath, mounts []corev1.VolumeMount) (
+	[]corev1.EnvVar, []corev1.KeyToPath, []corev1.VolumeMount) {
+	if !agent.Delivered(t) {
+		return envVars, items, mounts
+	}
+	for _, e := range agent.RouteEnv(t, r) {
+		envVars = append(envVars, corev1.EnvVar{Name: e.Name, Value: e.Value})
+	}
+	return envVars, append(items, corev1.KeyToPath{Key: routesKey, Path: routesKey}),
+		append(mounts, corev1.VolumeMount{Name: volumeAWS, MountPath: RoutesPath, SubPath: routesKey, ReadOnly: true})
+}
+
 // ModelsEnv is AFS_MODELS: the ids, sorted, comma separated.
 func ModelsEnv(ids []string) string {
 	ms := append([]string{}, ids...)
@@ -85,6 +110,7 @@ func ModelsEnv(ids []string) string {
 func AgentAWSConfigMap(d agent.Desired) *unstructured.Unstructured {
 	u := New("v1", "ConfigMap", d.Team.Namespace, agent.AWSConfigMapName(d.Name))
 	data := map[string]any{tagsKey: TagsJSON(d), modelsKey: ModelsJSON(d.ModelID, d.Models)}
+	addRoutes(data, d.Team, d.Routes)
 	if cfg := AWSConfig(d); cfg != "" {
 		data[awsConfigKey] = cfg
 	}

@@ -364,3 +364,63 @@ func (s *Spend) Settled() []Settlement {
 	defer s.mu.Unlock()
 	return append([]Settlement(nil), s.Settlements...)
 }
+
+// Routes is an in-memory gateway.RouteStore.
+type Routes struct {
+	mu        sync.Mutex
+	Grants    map[string][]gateway.RouteGrant // "agent/<id>" or "pool/<id>"
+	Endpoints map[string]gateway.RouteEndpoint
+	PriceRows map[string][]gateway.RoutePrice // "<endpoint id>/<model>"
+	Err       error
+}
+
+// NewRoutes returns an empty Routes.
+func NewRoutes() *Routes {
+	return &Routes{Grants: map[string][]gateway.RouteGrant{}, Endpoints: map[string]gateway.RouteEndpoint{}, PriceRows: map[string][]gateway.RoutePrice{}}
+}
+
+// RouteAdmission implements gateway.RouteStore.
+func (r *Routes) RouteAdmission(_ context.Context, kind, id string) ([]gateway.RouteGrant, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.Err != nil {
+		return nil, r.Err
+	}
+	g, ok := r.Grants[kind+"/"+id]
+	if !ok {
+		return nil, gateway.ErrNotFound
+	}
+	return g, nil
+}
+
+// RouteEndpoint implements gateway.RouteStore.
+func (r *Routes) RouteEndpoint(_ context.Context, _, slug string) (gateway.RouteEndpoint, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e, ok := r.Endpoints[slug]
+	if !ok {
+		return e, gateway.ErrNotFound
+	}
+	return e, nil
+}
+
+// RoutePrices implements gateway.RouteStore.
+func (r *Routes) RoutePrices(_ context.Context, id, model string) ([]gateway.RoutePrice, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.PriceRows[id+"/"+model], nil
+}
+
+// Auth is a gateway.UpstreamAuth with fixed answers per route slug.
+type Auth struct {
+	Creds map[string]gateway.UpstreamCredential
+	Errs  map[string]error
+}
+
+// Credential implements gateway.UpstreamAuth.
+func (a *Auth) Credential(_ context.Context, ep gateway.RouteEndpoint, _ string) (gateway.UpstreamCredential, error) {
+	if err := a.Errs[ep.Slug]; err != nil {
+		return gateway.UpstreamCredential{}, err
+	}
+	return a.Creds[ep.Slug], nil
+}

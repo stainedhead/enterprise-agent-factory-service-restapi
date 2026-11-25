@@ -30,6 +30,12 @@ const (
 	MetricGatewayModelDenials = "afs_gateway_model_denials_total"
 	// MetricGatewayUsageRowsDropped counts usage rows the writer lost (FR-R08, RD-3); reason is queue_full or write_failed.
 	MetricGatewayUsageRowsDropped = "afs_gateway_usage_rows_dropped_total"
+	// GenAI semantic-convention metrics of route calls (gateway contract §12.7). Labels never carry an agent
+	// or pool id: gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model, afs_team_id, afs_route,
+	// afs_provider, afs_usage_source (and gen_ai_token_type on token usage).
+	MetricGenAITokenUsage        = "gen_ai_client_token_usage" //nolint:gosec // a metric name
+	MetricGenAIOperationDuration = "gen_ai_client_operation_duration_seconds"
+	MetricGenAITimeToFirstToken  = "gen_ai_server_time_to_first_token_seconds" //nolint:gosec // a metric name
 
 	// Outbox.
 	MetricOutboxPending   = "afs_outbox_pending_events"

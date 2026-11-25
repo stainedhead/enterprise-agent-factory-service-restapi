@@ -30,7 +30,17 @@ not reconciled, so metered days are not reported as unbilled before AWS delivers
 | `price-sync` | Reads the AWS Price List for Bedrock and proposes new model prices (below). | `AFS_PRICING_REGION` (Price List API region, default `us-east-1`), `AFS_AWS_REGION` (region whose prices are read, default `us-east-1`) |
 | `cost-tags` | Daily at 06:30. For each AFS tag key (`afs-team-id`, `afs-agent-id`, `afs-pool-id`, the service tags and the teams' tags) records whether the CUR has shown it and whether AWS Billing has it active as a cost allocation tag. A key active for 3 days without the CUR showing it raises one `cost_tags.not_seen` event. Read the result with `ListCostTagStatus` (service admins). Needs `ce:ListCostAllocationTags` on the billing role. | |
 
+| `route-pull` | 1.2.0, daily at 23:30. Each provider's own cost of each route per team (OpenAI organization costs per project, Azure Cost Management, the Google billing export) for the lookback days, and OpenRouter key usage for the current UTC day (OpenRouter reports no history), compared with the gateway's settled cost. A variance above `billing.variance_alert_pct` publishes `cost.variance_detected` (aggregate `route_reconciliation`). Cost no team can be named for is logged as unattributed. | `AFS_BILLING_AZURE_SCOPES`, `AFS_BILLING_GOOGLE_EXPORTS`; provider keys at `<prefix>/_service/billing/<route>` |
+| `route-statements` | Monthly on the 5th: the previous month's Nous Portal and OpenCode statements (imported with `ImportProviderStatement`) against the gateway's cost; a Nous or OpenCode route without a statement is logged as not reconciled. | |
+| `route-capacity` | Daily: the day's cost of each capacity route (`endpoint_capacity_costs`, monthly / days in month or hourly × 24) split across the team's agents and pools by token share (`by_tokens`) or equally (`by_agent`), as `cost_daily` rows of source `route_capacity`. Rerunning a day replaces it. | |
+| `route-price-sync` | Daily: LiteLLM's price list against each `per_token` route model; one pending `endpoint_price_proposals` row per model whose price differs (a newer one supersedes it). Off with `pricing.price_list_sync`. | `AFS_ROUTE_PRICE_LIST_URL` |
+
 Add `--day YYYY-MM-DD` to run one completed UTC day.
+
+**Provider attribution.** A provider's figure belongs to a team when the provider side names the team: an OpenAI project
+or OpenRouter key whose name contains the team id, an Azure resource tagged `afs-team-id` or a resource group whose name
+contains the team id, a Google resource or project labelled `afs-team-id`. Give each team its own project, key, resource
+group or label (the `per_team` credential mode).
 
 The CUR export must be the standard data export with resource ids and split cost allocation data for EKS,
 and the AFS tags (`afs-team-id`, `afs-agent-id`, `afs-pool-id`, the service and team tags) activated as

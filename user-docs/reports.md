@@ -21,6 +21,7 @@ for service reports. A service administrator can read the reports of a deleted t
 | `range` | `24h`, `7d`, `30d`, `90d` or `mtd`, instead of `from` and `to`. With none of the three, a report covers the last 7 days (`GetUsage`: the month so far). |
 | `groupBy` | Comma-separated: `team`, `agent`, `model` (usage, costs), `system` (traffic), `day`, `hour` (ranges of two days or less), `pool` (ephemeral teams), `tag:<key>`. Default `day`. |
 | `teamId`, `agentId`, `modelId`, `systemId`, `poolId` | Filters. `teamId` applies to service reports. |
+| `route` | 1.2.0, usage and costs: a route slug or `bedrock`. `groupBy=route` groups by it; a route call's model is `<route>/<model>`. |
 | `tag.<key>=<value>` | Keep records that carried the tag value; `(untagged)` keeps those without it. |
 | `maxResults`, `nextToken` | Paging over the grouped rows (1 to 100, default 50). Totals always cover every row. |
 

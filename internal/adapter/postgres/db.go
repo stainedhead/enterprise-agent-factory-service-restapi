@@ -26,6 +26,9 @@ type Config struct {
 	// Password, when set, supplies a password for each new connection, for example an RDS IAM
 	// authentication token. It is never logged.
 	Password func(ctx context.Context) (string, error)
+	// TeamIDs, when set, is afs.team_ids on every connection: a team gateway (afs_gateway with
+	// gateway_deployment per_namespace) then reads service rows and its own team's rows only.
+	TeamIDs string
 }
 
 // poolConfig turns c into a pgxpool configuration.
@@ -43,6 +46,9 @@ func (c Config) poolConfig() (*pgxpool.Config, error) {
 			return nil, fmt.Errorf("postgres: SystemActor needs Service")
 		}
 		rp["afs.actor"] = "system:" + c.Service
+	}
+	if c.TeamIDs != "" {
+		rp["afs.team_ids"] = c.TeamIDs
 	}
 	if c.StatementTimeout > 0 {
 		rp["statement_timeout"] = strconv.FormatInt(c.StatementTimeout.Milliseconds(), 10)

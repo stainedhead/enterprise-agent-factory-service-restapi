@@ -37,6 +37,10 @@ type Metrics struct {
 	GatewayUsageRowsDropped *prometheus.CounterVec
 	// GatewayModelDenials counts calls refused by model admission, by reason.
 	GatewayModelDenials *prometheus.CounterVec
+	// GenAI metrics of route calls (gateway contract §12.7); GenAILabels are their labels.
+	GenAITokenUsage        *prometheus.HistogramVec
+	GenAIOperationDuration *prometheus.HistogramVec
+	GenAITimeToFirstToken  *prometheus.HistogramVec
 
 	RollupRuns        *prometheus.CounterVec
 	RollupLastSuccess *prometheus.GaugeVec
@@ -78,6 +82,12 @@ func NewMetrics(service, version string) *Metrics {
 	m.GatewaySettleFailures = prometheus.NewCounter(prometheus.CounterOpts(f(MetricGatewaySettleFailures, "Settlements that fell back to the retry queue or were dropped.")))
 	m.GatewayUsageRowsDropped = prometheus.NewCounterVec(prometheus.CounterOpts(f(MetricGatewayUsageRowsDropped, "Usage rows the gateway could not write, by reason.")), []string{"reason"})
 	m.GatewayModelDenials = prometheus.NewCounterVec(prometheus.CounterOpts(f(MetricGatewayModelDenials, "Calls the gateway refused because the model is not admitted for the agent, by reason.")), []string{"reason"})
+	m.GenAITokenUsage = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: MetricGenAITokenUsage, Help: "Tokens used by route calls.",
+		Buckets: prometheus.ExponentialBuckets(1, 4, 14)}, append(GenAILabels, "gen_ai_token_type"))
+	m.GenAIOperationDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: MetricGenAIOperationDuration, Help: "Duration of route calls.",
+		Buckets: GenAIBuckets}, GenAILabels)
+	m.GenAITimeToFirstToken = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: MetricGenAITimeToFirstToken, Help: "Time to the first token of route calls.",
+		Buckets: GenAIBuckets}, GenAILabels)
 	m.RollupRuns = prometheus.NewCounterVec(prometheus.CounterOpts(f(MetricReportRollupRuns, "Report rollup runs by job and outcome.")), []string{"job", "outcome"})
 	m.RollupLastSuccess = prometheus.NewGaugeVec(prometheus.GaugeOpts(f(MetricReportRollupLastSuccess, "Unix time of the last successful report rollup run, by job.")), []string{"job"})
 	m.OutboxPending = prometheus.NewGauge(prometheus.GaugeOpts(f(MetricOutboxPending, "Unpublished outbox events.")))
@@ -94,6 +104,7 @@ func NewMetrics(service, version string) *Metrics {
 		m.ReconcileDuration, m.ReconcileErrors, m.ReconcileLag, m.DriftCorrected, m.Leader,
 		m.GatewayReservationFailures, m.GatewayAddedLatency, m.GatewayReservationsExpired,
 		m.GatewaySettleFailures, m.GatewayUsageRowsDropped, m.GatewayModelDenials,
+		m.GenAITokenUsage, m.GenAIOperationDuration, m.GenAITimeToFirstToken,
 		m.OutboxPending, m.OutboxOldestAge, m.OutboxPublishedTotal, m.OutboxFailedTotal,
 		m.NotificationFailures, m.CURVariance, m.RollupRuns, m.RollupLastSuccess)
 	bi := prometheus.NewGaugeVec(prometheus.GaugeOpts(f(MetricBuildInfo, "Build information.")), []string{"service", "version"})
@@ -154,3 +165,9 @@ func (m *Metrics) SetLeader(is bool) {
 	}
 	m.Leader.Set(0)
 }
+
+// GenAILabels are the labels of the GenAI route metrics. No agent or pool id: those are on spans only.
+var GenAILabels = []string{"gen_ai_operation_name", "gen_ai_provider_name", "gen_ai_request_model", "afs_team_id", "afs_route", "afs_provider", "afs_usage_source"}
+
+// GenAIBuckets are the duration buckets of route calls, from 10 ms to about 10 minutes.
+var GenAIBuckets = prometheus.ExponentialBuckets(0.01, 2, 17)

@@ -262,3 +262,30 @@ The billing role reads `service_settings` and `team_models`; no env fallback rem
   team and hostname level and recognises both apexes; `decide` answers `404` for a surface whose effective level is the
   other one (CD-38). Access records carry `exposure`.
 - **Permissions.** No new permission; scope changes are listed in the CHANGELOG (1.1.0).
+
+## Team model gateway (1.2.0, spec 261125-model-endpoint-gateway)
+
+- **API.** `usecase/modelendpoints` implements the 27 operations of API contract v1.5.0 §4.13 on
+  `postgres.ModelEndpointsRepo` (`afs_app`); `adapter/postgres/errors.go` maps the 000023 guards to contract reasons
+  (`provider_disabled`, `no_fallback_model`, `model_not_on_route`, ...). Credential values go to Secrets Manager only; the
+  rows hold ARNs and status. Agent and pool `models` gain `routeAccess`, `routes`, `defaultRoute`, `effectiveRoutes` and
+  `env` (`postgres/routes_repo.go`); reports group and filter by `route`; `ListModels` adds `providerState`.
+  `PutTeamGatewaySettings` decodes the v1.6.0 MCP fields and refuses values 1.2.0 cannot store.
+- **Gateway.** Team mode (`--team-namespace`, `AFS_GATEWAY_TEAM_ID`); `gatewayhttp.Mux` route families (Bedrock and
+  Anthropic; `RoutesFamily` on `/r/` and `/openai/`); admission from `afs.route_admission` cached 60 s and dropped on the
+  change feed; OpenAI pass-through with `include_usage` injected and stripped and the output cap written into the request;
+  `/r/bedrock` Chat Completions to Converse; upstream auth from mounted files (`routeup`) and Azure and Google token
+  exchange (`routeauth`); `usage_events` route and timing columns.
+- **Reconciler.** `team.TeamGateway` (from `loadTeamGateway`) renders, for `per_namespace`, the `afs-gateway*` objects
+  (`render/teamgateway.go`) and removes them otherwise; `cilium_team.go` points agents' gateway egress at it.
+  `postgres.RouteStatusWriter` writes `team_route` and `team_gateway` status and the degraded and recovered events.
+  `agent.LLMRoutes` renders route variables after `AFS_GATEWAY_URL` and `/etc/afs/llm-routes.json`
+  (`render/awsconfig.go`); a route default is checked with `afs.route_admission` (`ModelUnavailable`,
+  `model_not_on_route`). `engine.GatewayRoutes` sends gateway-table changes to the team, agent and pool controllers.
+  Settings `AFS_TEAM_GATEWAY_*`.
+- **Billing.** `usecase/billing/routebill.Job`: `PullDay` (providers outside a transaction, then the comparison and events
+  in one), `ReconcileMonth` (statements, not reconciled routes), `AllocateCapacity` (`Allocate` keeps the sum exact; rows
+  carry cost only), `ProposePrices` (one pending per model, supersede on change). Adapters in `adapter/billingpull`
+  (OpenAI, OpenRouter, Azure, Google, LiteLLM) with recorded fixtures; store `postgres.RouteBillStore`; jobs
+  `route-pull`, `route-statements`, `route-capacity`, `route-price-sync` (`cmd/afs-billing/job_routes.go`). Provider keys
+  are read by name from `<prefix>/_service/billing/<route>` (`secretsmanager.Reader.ReadBillingKey`).

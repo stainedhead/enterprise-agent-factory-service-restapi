@@ -98,7 +98,7 @@ func Routes() []engine.Route {
 	for _, t := range []string{"agent_templates", "external_systems", "service_tags", "org_aws_accounts", "models", "model_prices", "service_settings"} {
 		routes = append(routes, engine.Route{Table: t, FanOut: []engine.Kind{engine.KindPool}})
 	}
-	return routes
+	return append(routes, engine.GatewayRoutes(engine.KindPool, true, "pool_model_endpoints")...)
 }
 
 // Reconcile implements engine.Controller. The IAM identity, the queue, the Kubernetes objects and the
@@ -159,7 +159,7 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 
 	pol, polErr := egress.PolicyFor(d.Team.ID, egress.Agent{ID: d.ID, State: d.State, Systems: d.Systems})
 	env := Environment{
-		Pool: d, RoleARN: roleARN, Region: c.cfg.AWS.Region, Gateway: c.cfg.Gateway, Replicas: d.Replicas(),
+		Pool: d, RoleARN: roleARN, Region: c.cfg.AWS.Region, Gateway: c.cfg.Gateway.For(d.Team), Replicas: d.Replicas(),
 		Hash: PodTemplateHash(d, inboxURL, handoffURLs), InboxURL: inboxURL, HandoffURLs: handoffURLs,
 		NodePool: nodePool(d), EFSStorageClass: c.cfg.EFSStorageClass, Egress: pol,
 	}
@@ -202,7 +202,7 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 	}
 	conds = append(conds, templateCondition(d))
 	conds = append(conds, agent.ReportModel(ctx, c.cfg.Events, slog.Default(), agent.ModelState{TeamID: d.Team.ID, Kind: "pools", ID: d.ID,
-		Default: d.ModelID, Effective: d.Models, Reason: d.ModelReason, Prev: d.PrevModelUnavailable}))
+		Default: d.ModelID, Effective: d.Routes.Effective(d.Models), Reason: d.ModelReason, Prev: d.PrevModelUnavailable}))
 
 	out := engine.Outcome{Generation: d.Generation, Conditions: conds, Changed: changed, Phase: phase, Requeue: requeue}
 	if len(errs) > 0 {

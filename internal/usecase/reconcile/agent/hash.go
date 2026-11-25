@@ -24,6 +24,9 @@ func PodTemplateHash(d Desired) string {
 	w("cpu=%s memory=%s", d.Resources.CPU, d.Resources.Memory)
 	w("identity=%s", d.IAMIdentity)
 	w("tier=%s workorder=%t", d.Team.IsolationTier, d.Team.WorkOrderAssigned)
+	if l := RoutesHash(d.Team, d.Routes); l != "" {
+		w("%s", l)
+	}
 	if d.Collab != nil {
 		w("collab tool=%s mode=%s host=%s prefix=%s", d.Collab.Tool, d.Collab.Mode, d.Collab.Host, d.Collab.SecretsPrefix)
 	}

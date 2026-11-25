@@ -49,3 +49,16 @@ func TestReader(t *testing.T) {
 		}
 	}
 }
+
+func TestReadBillingKey(t *testing.T) {
+	f := &readFake{val: aws.String("sk-admin")}
+	c, err := secretsmanager.NewReaderWithAPI(f).ReadBillingKey(t.Context(), "afs", "openai-prod")
+	if err != nil || c.Reveal() != "sk-admin" || f.id != "afs/_service/billing/openai-prod" {
+		t.Fatal(c, err, f.id)
+	}
+	for _, bad := range [][2]string{{"", "x"}, {"afs", ""}, {"afs", "../x/y"}, {"a b", "x"}} {
+		if _, err := secretsmanager.NewReaderWithAPI(f).ReadBillingKey(t.Context(), bad[0], bad[1]); err == nil {
+			t.Errorf("%v: want error", bad)
+		}
+	}
+}

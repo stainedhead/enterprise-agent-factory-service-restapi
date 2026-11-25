@@ -104,7 +104,12 @@ func (s *TeamSource) LoadTeam(ctx context.Context, id string) (team.Desired, err
 			}
 			d.Retiring = append(d.Retiring, r)
 		}
-		return ret.Err()
+		if err := ret.Err(); err != nil {
+			return err
+		}
+		ret.Close()
+		d.Gateway, err = loadTeamGateway(ctx, t, id)
+		return err
 	})
 	return d, err
 }

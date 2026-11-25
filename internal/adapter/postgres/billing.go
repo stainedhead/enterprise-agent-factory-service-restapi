@@ -142,15 +142,20 @@ func (s *BillingStore) RollupGateway(ctx context.Context, tx port.Tx, day time.T
 	if err != nil {
 		return err
 	}
-	if _, err := t.Exec(ctx, `DELETE FROM afs.cost_daily WHERE day = $1::date AND source = 'gateway'`, dayArg(day)); err != nil {
+	if _, err := t.Exec(ctx, `DELETE FROM afs.cost_daily WHERE day = $1::date AND source IN ('gateway', 'route')`, dayArg(day)); err != nil {
 		return MapError(err, OpWrite, "cost_daily")
 	}
+	// Bedrock calls roll up as source gateway; route calls (endpoint_id set, v1.5.0) as source route with
+	// model_id <route>/<model>.
 	_, err = t.Exec(ctx, `INSERT INTO afs.cost_daily (team_id, day, source, agent_id, pool_id, model_id, input_tokens, output_tokens, cost_usd, calls, tag_set_id)
-SELECT e.team_id, $1::date, 'gateway', e.agent_id, e.pool_id, e.model_id, sum(e.input_tokens), sum(e.output_tokens), sum(e.cost_usd), count(*), e.tag_set_id
+SELECT e.team_id, $1::date, CASE WHEN e.endpoint_id IS NULL THEN 'gateway' ELSE 'route' END, e.agent_id, e.pool_id,
+  CASE WHEN e.endpoint_id IS NULL THEN e.model_id ELSE coalesce(me.slug, e.endpoint_id) || '/' || coalesce(e.model_name, '') END,
+  sum(e.input_tokens), sum(e.output_tokens), sum(e.cost_usd), count(*), e.tag_set_id
 FROM afs.usage_events e
 JOIN afs.teams t ON t.id = e.team_id
+LEFT JOIN afs.model_endpoints me ON me.id = e.endpoint_id
 WHERE e.occurred_at >= $2::timestamptz AND e.occurred_at < $2::timestamptz + interval '1 day' AND e.outcome IN ('ok', 'error')
-GROUP BY e.team_id, e.agent_id, e.pool_id, e.model_id, e.tag_set_id`, dayArg(day), startArg(day))
+GROUP BY 1, 2, 3, 4, 5, 6, e.tag_set_id`, dayArg(day), startArg(day))
 	return MapError(err, OpWrite, "cost_daily")
 }
 

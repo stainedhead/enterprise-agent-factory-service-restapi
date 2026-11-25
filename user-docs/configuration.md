@@ -73,6 +73,9 @@ Needs `AFS_AWS_REGION` (or `AWS_REGION`) when `AFS_DB_IAM_AUTH` is `true`.
 | `AFS_NOTIFY_TARGET_ROLE_ARN`, `AFS_NOTIFY_DLQ_ARN`, `AFS_NOTIFY_EMAIL_QUEUE_ARN`, `AFS_NOTIFY_EMAIL_FROM` | no | Notification delivery (EventBridge targets, dead-letter queue, email queue, SES sender). |
 | `AFS_HUBBLE_ADDR`, `AFS_HUBBLE_TLS` | no | Hubble relay for external traffic samples. |
 | `AFS_LOG_AGGREGATOR_IMAGE`, `AFS_LOG_ROUTE_NAMESPACE`, `AFS_LOG_REDACTION_KEY` | no | Log destination aggregator. |
+| `AFS_TEAM_GATEWAY_IMAGE` | for per_namespace teams | Image of the team gateway (`afs-gateway`, pinned by digest). |
+| `AFS_TEAM_GATEWAY_DB_SECRET_ARN`, `AFS_TEAM_GATEWAY_DB_HOST`, `AFS_TEAM_GATEWAY_DB_PORT` | for per_namespace teams | Secret holding the team gateway's database URL (synced into the namespace by an ExternalSecret), the database host for its egress rule, and its port (default 5432). |
+| `AFS_TEAM_GATEWAY_TLS_ISSUER` | for per_namespace teams | cert-manager issuer of the team gateway's serving certificate. |
 | `AFS_KUBECONFIG`, `POD_NAME` | no | Out-of-cluster development; leader election identity (default hostname). |
 
 More detail on each is in [Running afs-reconciler](reconciler.md).
@@ -88,6 +91,9 @@ More detail on each is in [Running afs-reconciler](reconciler.md).
 | `AFS_GATEWAY_MAX_BODY` | 20 MB | Request body limit in bytes. |
 | `AFS_GATEWAY_CACHE_TTL` | `1m` | Cache lifetime for team, model, price and budget data. |
 | `AFS_GATEWAY_CILIUM_CHECK` | `true` | Cross-check the caller's IP against its Cilium endpoint identity. |
+| `AFS_GATEWAY_TEAM_NAMESPACE` (`--team-namespace`), `AFS_GATEWAY_TEAM_ID` | none | Team gateway mode (1.2.0): serve this namespace only, with model routes. Both or neither; the reconciler sets them. |
+| `AFS_GATEWAY_CREDENTIALS_DIR` | `/etc/afs/gateway-credentials` | Team gateway: one file per route slug holding the route credential, reread on change. |
+| `AFS_GATEWAY_FEDERATION_TOKEN` | none | Team gateway: the projected ServiceAccount token file used for Azure and Google federation. |
 
 ## afs-billing
 
@@ -101,6 +107,9 @@ Run one job per CronJob: `afs-billing --job <name>`.
 | `AFS_PRICING_REGION` | `us-east-1` | Price List API region (`price-sync`). |
 | `AFS_REPORTS_BUCKET`, `AFS_REPORTS_KMS_KEY_ID` | none | `report-schedules` and `showback`. |
 | `AFS_SHOWBACK_TAG_KEY` | empty | Tag key of the second showback dimension. |
+| `AFS_BILLING_AZURE_SCOPES` | empty | `route-pull` (1.2.0): `route=/subscriptions/<id>[/resourceGroups/<rg>],...`, the Cost Management scope of each Azure route. Empty: Azure is not pulled. |
+| `AFS_BILLING_GOOGLE_EXPORTS` | empty | `route-pull`: `route=<project>:<dataset>.<table>,...`, the Cloud Billing export of each Google route. Empty: Google is not pulled. |
+| `AFS_ROUTE_PRICE_LIST_URL` | LiteLLM's published list | `route-price-sync`. |
 
 See [Costs, reconciliation and prices](billing.md).
 
