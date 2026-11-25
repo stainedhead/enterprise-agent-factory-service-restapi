@@ -250,11 +250,13 @@ func TestBillingCronJobs(t *testing.T) {
 			t.Errorf("%s args = %v", key(d), args)
 		}
 	}
-	if n != 6 {
-		t.Errorf("%d billing CronJobs, want 6", n)
+	if n != 10 { // 6 through 1.1.0, plus the four route billing jobs of 1.2.0
+		t.Errorf("%d billing CronJobs, want 10", n)
 	}
-	if find(t, docs, "CronJob", "afs-billing-cur-ingest") == nil {
-		t.Fatal("cur-ingest missing")
+	for _, name := range []string{"cur-ingest", "route-pull", "route-statements", "route-capacity", "route-price-sync"} {
+		if find(t, docs, "CronJob", "afs-billing-"+name) == nil {
+			t.Fatalf("%s missing", name)
+		}
 	}
 }
 

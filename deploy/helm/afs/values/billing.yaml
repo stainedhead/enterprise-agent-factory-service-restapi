@@ -18,6 +18,11 @@ env:
 # (ce:ListCostAllocationTags on the billing role, Terraform billing policy).
 # The reconcile job logs each day with metric=afs_cost_cur_variance_ratio (WARN over the threshold):
 # match it with a CloudWatch Logs metric filter; the CronJob pod exits before Prometheus can scrape it.
+# Route billing (1.2.0): route-pull reads each provider's admin key from <prefix>/_service/billing/<route>
+# (Secrets Manager; grant the billing role secretsmanager:GetSecretValue on that path only). Optional:
+# AFS_BILLING_AZURE_SCOPES ("route=/subscriptions/<id>[/resourceGroups/<rg>],..."), AFS_BILLING_GOOGLE_EXPORTS
+# ("route=<project>:<dataset>.<table>,..."), AFS_ROUTE_PRICE_LIST_URL (default LiteLLM's published list).
+# route-pull runs late in the UTC day because OpenRouter reports the current day only.
 # One CronJob per entry; `job` is passed as `afs-billing --job <job>` (M4-C1).
 cronjobs:
   cur-ingest:      {schedule: "0 3 * * *",    job: cur-ingest}
@@ -26,6 +31,10 @@ cronjobs:
   report-schedules: {schedule: "*/15 * * * *", job: report-schedules}
   showback:        {schedule: "0 6 * * *",    job: showback}
   cost-tags:       {schedule: "30 6 * * *",   job: cost-tags}
+  route-pull:      {schedule: "30 23 * * *",  job: route-pull}
+  route-statements: {schedule: "0 7 5 * *",   job: route-statements}
+  route-capacity:  {schedule: "15 4 * * *",   job: route-capacity}
+  route-price-sync: {schedule: "30 5 * * *",  job: route-price-sync}
 concurrencyPolicy: Forbid
 backoffLimit: 2
 activeDeadlineSeconds: 3600
