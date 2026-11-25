@@ -21,3 +21,8 @@
   setting. Recorded as a known limit; a shared limiter waits for the 1.2.0 gateway's store choice.
 - `afs-mcp-bridge` rewrites request ids, serialises requests, refuses server-to-client requests with `-32601`, drops
   stdio notifications, restarts the child with backoff and replays the last successful `initialize`.
+- Drift: a change is compatible when only descriptive keys (`description`, `title`, `_meta`, `icons`) change anywhere,
+  or optional input properties or optional prompt arguments are added. Any other change, including annotations, is
+  incompatible and always held. A compatible change is auto-approved only under `auto_approve_compatible`, only for an
+  approved primitive, only when it crosses no risk line, and only when the whole listing passes the definition checks.
+- A truncated listing (more than 2,000 primitives) never marks anything removed.
