@@ -1,7 +1,8 @@
 // Package settings implements GetSettings and PutSetting (API contract §4.11, root PRD §6.13).
 // Values are typed and range-checked from the generated registry (domain.SettingSpecs); the database
-// checks them again. Contract §7 has no settings event, so a change writes the row and an audit
-// record only (CD-7).
+// checks them again. A change writes the row and an audit record; the mcp.*, gateway.mcp.* and
+// federation.* keys also need mcp-settings:write and emit mcp_settings.changed (CD-49), the others emit
+// nothing (CD-7).
 package settings
 
 import (
@@ -87,6 +88,10 @@ func (s *Service) Put(ctx context.Context, c acting.Caller, key string, value js
 	if err := s.check(ctx, c, "PutSetting"); err != nil {
 		return Setting{}, err
 	}
+	mcpKey := domain.IsMcpSetting(key)
+	if mcpKey && !authz.Authorize(c.Principal, authz.McpSettingsWrite, authz.Resource{Scope: authz.ScopeService}).Allowed() {
+		return Setting{}, s.Denied(ctx, c, "PutSetting", "", authz.McpSettingsWrite)
+	}
 	if next, renamed := domain.RenamedSettings[key]; renamed {
 		// The 1.0.1 keys are read-only aliases until 2.0.0 (ORC-27): the error names the new key.
 		e := domain.Validation(domain.FieldError{Field: "key", Reason: "setting_renamed: use " + next})
@@ -124,6 +129,13 @@ func (s *Service) Put(ctx context.Context, c acting.Caller, key string, value js
 		if err := s.Audit.Write(ctx, tx, c.Record("PutSetting", "service_settings", key, "",
 			map[string]any{"key": key, "value": prev}, map[string]any{"key": key, "value": st.Value})); err != nil {
 			return err
+		}
+		if mcpKey {
+			// CD-49: an MCP setting change is announced, because the approval policy decides who may approve.
+			if err := s.Emit(ctx, tx, c, domain.McpSettingsEvent, "", "service_settings", key,
+				map[string]any{"key": key, "from": prev, "to": st.Value}); err != nil {
+				return err
+			}
 		}
 		out = build(spec, st, true)
 		return nil

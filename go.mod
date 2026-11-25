@@ -33,7 +33,7 @@ require (
 	github.com/pb33f/libopenapi v0.44.0
 	github.com/pb33f/libopenapi-validator v0.16.5
 	github.com/prometheus/client_golang v1.25.0
-	github.com/stainedhead/enterprise-agent-factory-service-db v0.0.0-20261123172306-3514c68a6594
+	github.com/stainedhead/enterprise-agent-factory-service-db v0.0.0-20261125012612-aedd85a43f7a
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.47.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.47.0

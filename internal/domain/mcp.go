@@ -154,6 +154,9 @@ type McpHosted struct {
 	EnvNames     []string `json:"envNames"`
 	InstanceMode string   `json:"instanceMode"`
 	EgressHosts  []string `json:"egressHosts"`
+	// Resources are the pod's cpu and memory requests, for example {"cpu": "250m", "memory": "256Mi"}.
+	Resources map[string]string `json:"resources,omitempty"`
+	NeedsAWS  bool              `json:"needsAws"`
 }
 
 // McpServer is an MCP server of the catalog: enterprise (TeamID empty) or team-added.
