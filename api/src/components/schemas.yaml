@@ -153,7 +153,16 @@ schemas:
         example: teams:write
       reason:
         type: string
-        description: idempotency_mismatch, idempotency_in_progress, team_suspended, not_implemented and others
+        description: idempotency_mismatch, idempotency_in_progress, team_suspended, not_implemented and others. v1.5.0
+          adds slug_taken, slug_reserved, slug_invalid, base_url_not_https, provider_disabled, no_fallback_model,
+          endpoint_base_url_placeholder, needs_service_admin, team_endpoints_not_allowed, endpoint_enabled,
+          endpoint_credential_path, agent_routes_team and agents_default_route_allowed
+      route:
+        type: string
+        description: v1.5.0, a route slug named by the reason
+      model:
+        type: string
+        description: v1.5.0, a model named by the reason
       missingTags:
         type: array
         items:

@@ -5,7 +5,7 @@ import _ "embed"
 
 // ContractVersion is the API contract version this build implements. Every response carries it in
 // X-Afs-Contract-Version (D47); it equals info.version of the OpenAPI document.
-const ContractVersion = "1.4.0"
+const ContractVersion = "1.5.0"
 
 // OpenAPI is the bundled OpenAPI 3.1 document served at GET /v1/openapi.yaml.
 //

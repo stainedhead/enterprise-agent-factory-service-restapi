@@ -245,3 +245,21 @@ func TestCapabilityValidation(t *testing.T) {
 		t.Error("filter x accepted")
 	}
 }
+
+// The v1.5.0 route members are refused, never ignored, until route admission ships.
+func TestRouteMembersRefusedUntilImplemented(t *testing.T) {
+	ra := "selected"
+	in := &ModelsInput{Routes: &RoutesInput{Access: &ra}}
+	if !in.Present() {
+		t.Error("routes make the input present")
+	}
+	if _, err := ResolveNewModels(in, "", sets()); err == nil {
+		t.Error("create with routes must fail")
+	} else if f, r := fieldReason(err); f != "models.routeAccess" || r != ReasonNotImplemented {
+		t.Errorf("create = %s %s", f, r)
+	}
+	cur := AgentModels{Access: ModelAccessAll, DefaultModelID: "a"}
+	if _, err := cur.ApplyModels(in, "", sets()); err == nil {
+		t.Error("update with routes must fail")
+	}
+}

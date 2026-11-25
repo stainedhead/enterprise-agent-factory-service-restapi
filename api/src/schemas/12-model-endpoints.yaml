@@ -1,0 +1,1656 @@
+# API contract v1.5.0 §4.13: model endpoints, routes and providers. Generated once from the contract, then hand-maintained.
+ModelEndpointHealth:
+  type: object
+  description: Route health; Unknown before the first evaluation
+  required:
+  - state
+  properties:
+    state:
+      type: string
+      enum:
+      - Ready
+      - Degraded
+      - Unavailable
+      - Unknown
+      description: Route condition derived by the reconciler from the gateway ledger over 5 minutes (PRD §10.4)
+    reason:
+      type:
+      - string
+      - 'null'
+      description: Why the state is not Ready, for example error_rate or ttft_objective
+    since:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+  readOnly: true
+EndpointModelPriceInline:
+  type: object
+  description: USD per million tokens and an optional per-call fee; team endpoints set prices inline (PutTeamEndpointModels)
+  required:
+  - inputUsdPerMtok
+  - outputUsdPerMtok
+  properties:
+    inputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    outputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    cachedInputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    requestFeeUsd:
+      $ref: '#/components/schemas/Money'
+EndpointModel:
+  type: object
+  required:
+  - modelName
+  - maxOutputTokens
+  - enabled
+  properties:
+    modelName:
+      type: string
+      minLength: 1
+      maxLength: 200
+      pattern: ^[^/\s][\x20-\x7e]*$
+      description: What the client sends in model (for Azure, the deployment name)
+    maxOutputTokens:
+      type: integer
+      minimum: 1
+      maximum: 1000000
+    contextTokens:
+      type:
+      - integer
+      - 'null'
+      minimum: 1
+    enabled:
+      type: boolean
+    callable:
+      type: boolean
+      description: Enabled and, on a per_token route, priced in force
+      readOnly: true
+    priceState:
+      type: string
+      enum:
+      - approved
+      - pending
+      - none
+      - not_required
+      description: not_required on capacity and free routes
+      readOnly: true
+    price:
+      oneOf:
+      - $ref: '#/components/schemas/EndpointModelPriceInline'
+      - type: 'null'
+      readOnly: true
+      description: The price in force, if any
+EndpointModelInput:
+  type: object
+  required:
+  - modelName
+  - maxOutputTokens
+  properties:
+    modelName:
+      type: string
+      minLength: 1
+      maxLength: 200
+      pattern: ^[^/\s][\x20-\x7e]*$
+    maxOutputTokens:
+      type: integer
+      minimum: 1
+      maximum: 1000000
+    contextTokens:
+      type: integer
+      minimum: 1
+    enabled:
+      type: boolean
+      default: true
+TeamEndpointModelInput:
+  allOf:
+  - $ref: '#/components/schemas/EndpointModelInput'
+  - type: object
+    description: price is required on a per_token team endpoint and refused on capacity and free ones
+    properties:
+      price:
+        $ref: '#/components/schemas/EndpointModelPriceInline'
+EndpointModelList:
+  type: object
+  description: The route models of an endpoint
+  required:
+  - endpointId
+  - items
+  properties:
+    endpointId:
+      type: string
+      pattern: ^mep_[0-9A-HJKMNP-TV-Z]{26}$
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/EndpointModel'
+      maxItems: 500
+    version:
+      type: integer
+      description: The endpoint's version after the change
+      readOnly: true
+PutEndpointModelsRequest:
+  type: object
+  description: Replaces the endpoint's route models; a model left out is removed
+  required:
+  - models
+  properties:
+    models:
+      type: array
+      items:
+        $ref: '#/components/schemas/EndpointModelInput'
+      maxItems: 500
+PutTeamEndpointModelsRequest:
+  type: object
+  description: Replaces the team endpoint's route models and their prices (written as manual prices effective now)
+  required:
+  - models
+  properties:
+    models:
+      type: array
+      items:
+        $ref: '#/components/schemas/TeamEndpointModelInput'
+      maxItems: 500
+ModelEndpoint:
+  type: object
+  description: One configured upstream (a route). Never holds a credential value
+  required:
+  - id
+  - teamId
+  - slug
+  - displayName
+  - provider
+  - protocols
+  - location
+  - baseUrl
+  - authKind
+  - credentialMode
+  - pricingMode
+  - requiresTerms
+  - enabled
+  - providerState
+  - version
+  properties:
+    id:
+      type: string
+      pattern: ^mep_[0-9A-HJKMNP-TV-Z]{26}$
+      readOnly: true
+    teamId:
+      type:
+      - string
+      - 'null'
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+      description: null for a service endpoint
+      readOnly: true
+    slug:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{1,30}$
+      description: The route name; bedrock is reserved; immutable
+    displayName: &id001
+      type: string
+      minLength: 1
+      maxLength: 200
+    description: &id002
+      type: string
+      maxLength: 2000
+    protocols: &id003
+      type: array
+      items:
+        type: string
+        enum:
+        - openai_chat
+        - openai_responses
+        - openai_embeddings
+      minItems: 1
+      uniqueItems: true
+      description: openai_chat always; openai_responses and openai_embeddings add those paths
+    baseUrl: &id004
+      type: string
+      maxLength: 500
+      format: uri
+      description: https for external and corporate; in_namespace may be http://<service>.<namespace>.svc:<port>
+    caBundle: &id005
+      type:
+      - string
+      - 'null'
+      maxLength: 16384
+      description: PEM; not a secret
+    authKind: &id006
+      type: string
+      enum:
+      - none
+      - bearer
+      - header
+      - azure_federated
+      - google_federated
+    authHeader: &id007
+      type:
+      - string
+      - 'null'
+      maxLength: 100
+      pattern: ^[A-Za-z0-9-]{1,100}$
+      description: Header name, required when authKind is header
+    pricingMode: &id008
+      type: string
+      enum:
+      - per_token
+      - capacity
+      - free
+    timeoutSeconds: &id009
+      type: integer
+      minimum: 5
+      maximum: 3600
+      default: 300
+    maxBodyMib: &id010
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 20
+    owner:
+      type:
+      - string
+      - 'null'
+      maxLength: 200
+      description: Required on team endpoints
+    purpose:
+      type:
+      - string
+      - 'null'
+      maxLength: 500
+      description: Required on team endpoints
+    provider:
+      type: string
+      pattern: ^[a-z][a-z0-9_]{1,30}$
+      description: Provider key of inference_providers (bedrock, openai, openrouter, nous, opencode, azure, google, other)
+        or internal for corporate and in-namespace endpoints, which have no provider switch
+    location:
+      type: string
+      enum:
+      - external
+      - corporate
+      - in_namespace
+    metricsPort:
+      type:
+      - integer
+      - 'null'
+      minimum: 1
+      maximum: 65535
+      description: in_namespace only
+    credentialMode:
+      type: string
+      enum:
+      - shared
+      - per_team
+      description: Team endpoints are always per_team
+    requiresTerms:
+      type: boolean
+      description: 'Extra terms: only a service admin selects it for a team'
+    useProviderCost:
+      type: boolean
+      description: Settle to the larger of the provider's usage.cost and the token-price cost
+    enabled:
+      type: boolean
+      description: The service (or team) switch; new endpoints are off
+    externalSystemId:
+      type:
+      - string
+      - 'null'
+      pattern: ^ext_[0-9A-HJKMNP-TV-Z]{26}$
+      description: The llm external system of the same provider (direct-access policy, MEG-OQ-5)
+    builtin:
+      type: boolean
+      readOnly: true
+    providerState:
+      type: string
+      enum:
+      - 'on'
+      - 'off'
+      description: off when the provider's switch is off (provider policy)
+      readOnly: true
+    metered:
+      type: boolean
+      readOnly: true
+    capped:
+      type: boolean
+      description: per_token routes reserve and settle against the team budget
+      readOnly: true
+    models:
+      type: array
+      items:
+        $ref: '#/components/schemas/EndpointModel'
+      readOnly: true
+    teamsSelected:
+      type: integer
+      minimum: 0
+      readOnly: true
+    health:
+      $ref: '#/components/schemas/ModelEndpointHealth'
+    version:
+      type: integer
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    createdBy:
+      type: string
+      readOnly: true
+    updatedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+ModelEndpointList:
+  type: object
+  description: A page of ModelEndpoint resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/ModelEndpoint'
+    nextToken:
+      type: string
+      description: Absent on the last page
+CreateModelEndpointRequest:
+  type: object
+  description: A service endpoint; created off (enabled false)
+  required:
+  - slug
+  - displayName
+  - provider
+  - protocols
+  - location
+  - baseUrl
+  - authKind
+  - pricingMode
+  properties:
+    slug:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{1,30}$
+    displayName: *id001
+    description: *id002
+    protocols: *id003
+    baseUrl: *id004
+    caBundle: *id005
+    authKind: *id006
+    authHeader: *id007
+    pricingMode: *id008
+    timeoutSeconds: *id009
+    maxBodyMib: *id010
+    provider:
+      type: string
+      pattern: ^[a-z][a-z0-9_]{1,30}$
+      description: Provider key of inference_providers (bedrock, openai, openrouter, nous, opencode, azure, google, other)
+        or internal for corporate and in-namespace endpoints, which have no provider switch
+    location:
+      type: string
+      enum:
+      - external
+      - corporate
+    credentialMode:
+      type: string
+      enum:
+      - shared
+      - per_team
+      default: per_team
+    requiresTerms:
+      type: boolean
+      default: false
+    useProviderCost:
+      type: boolean
+      default: false
+    externalSystemId:
+      type: string
+      pattern: ^ext_[0-9A-HJKMNP-TV-Z]{26}$
+    models:
+      type: array
+      items:
+        $ref: '#/components/schemas/EndpointModelInput'
+      maxItems: 500
+UpdateModelEndpointRequest:
+  type: object
+  description: Members sent replace stored ones; slug cannot change
+  properties:
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 200
+    description:
+      type: string
+      maxLength: 2000
+    protocols:
+      type: array
+      items:
+        type: string
+        enum:
+        - openai_chat
+        - openai_responses
+        - openai_embeddings
+      minItems: 1
+      uniqueItems: true
+      description: openai_chat always; openai_responses and openai_embeddings add those paths
+    baseUrl:
+      type: string
+      maxLength: 500
+      format: uri
+      description: https for external and corporate; in_namespace may be http://<service>.<namespace>.svc:<port>
+    caBundle:
+      type:
+      - string
+      - 'null'
+      maxLength: 16384
+      description: PEM; not a secret
+    authKind:
+      type: string
+      enum:
+      - none
+      - bearer
+      - header
+      - azure_federated
+      - google_federated
+    authHeader:
+      type:
+      - string
+      - 'null'
+      maxLength: 100
+      pattern: ^[A-Za-z0-9-]{1,100}$
+      description: Header name, required when authKind is header
+    pricingMode:
+      type: string
+      enum:
+      - per_token
+      - capacity
+      - free
+    timeoutSeconds:
+      type: integer
+      minimum: 5
+      maximum: 3600
+      default: 300
+    maxBodyMib:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 20
+    provider:
+      type: string
+      pattern: ^[a-z][a-z0-9_]{1,30}$
+    location:
+      type: string
+      enum:
+      - external
+      - corporate
+    credentialMode:
+      type: string
+      enum:
+      - shared
+      - per_team
+    requiresTerms:
+      type: boolean
+    useProviderCost:
+      type: boolean
+    externalSystemId:
+      type:
+      - string
+      - 'null'
+      pattern: ^ext_[0-9A-HJKMNP-TV-Z]{26}$
+    enabled:
+      type: boolean
+      description: Refused while the provider is off (provider_disabled) or the base URL holds a placeholder (endpoint_base_url_placeholder)
+CreateTeamModelEndpointRequest:
+  type: object
+  description: A team-declared endpoint (needs mayAddModelEndpoints). The provider is derived from the host; a host of a disabled
+    provider is refused (provider_disabled). Created off
+  required:
+  - slug
+  - displayName
+  - owner
+  - purpose
+  - protocols
+  - location
+  - baseUrl
+  - authKind
+  - pricingMode
+  properties:
+    slug:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{1,30}$
+      description: Unique in the team and not a service slug
+    displayName: *id001
+    description: *id002
+    protocols: *id003
+    baseUrl: *id004
+    caBundle: *id005
+    authKind: *id006
+    authHeader: *id007
+    pricingMode: *id008
+    timeoutSeconds: *id009
+    maxBodyMib: *id010
+    owner:
+      type: string
+      minLength: 1
+      maxLength: 200
+    purpose:
+      type: string
+      minLength: 1
+      maxLength: 500
+    location:
+      type: string
+      enum:
+      - external
+      - corporate
+      - in_namespace
+    metricsPort:
+      type: integer
+      minimum: 1
+      maximum: 65535
+    models:
+      type: array
+      items:
+        $ref: '#/components/schemas/TeamEndpointModelInput'
+      maxItems: 500
+UpdateTeamModelEndpointRequest:
+  type: object
+  description: Members sent replace stored ones; slug cannot change
+  properties:
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 200
+    description:
+      type: string
+      maxLength: 2000
+    protocols:
+      type: array
+      items:
+        type: string
+        enum:
+        - openai_chat
+        - openai_responses
+        - openai_embeddings
+      minItems: 1
+      uniqueItems: true
+      description: openai_chat always; openai_responses and openai_embeddings add those paths
+    baseUrl:
+      type: string
+      maxLength: 500
+      format: uri
+      description: https for external and corporate; in_namespace may be http://<service>.<namespace>.svc:<port>
+    caBundle:
+      type:
+      - string
+      - 'null'
+      maxLength: 16384
+      description: PEM; not a secret
+    authKind:
+      type: string
+      enum:
+      - none
+      - bearer
+      - header
+      - azure_federated
+      - google_federated
+    authHeader:
+      type:
+      - string
+      - 'null'
+      maxLength: 100
+      pattern: ^[A-Za-z0-9-]{1,100}$
+      description: Header name, required when authKind is header
+    pricingMode:
+      type: string
+      enum:
+      - per_token
+      - capacity
+      - free
+    timeoutSeconds:
+      type: integer
+      minimum: 5
+      maximum: 3600
+      default: 300
+    maxBodyMib:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 20
+    owner:
+      type: string
+      minLength: 1
+      maxLength: 200
+    purpose:
+      type: string
+      minLength: 1
+      maxLength: 500
+    location:
+      type: string
+      enum:
+      - external
+      - corporate
+      - in_namespace
+    metricsPort:
+      type:
+      - integer
+      - 'null'
+      minimum: 1
+      maximum: 65535
+    enabled:
+      type: boolean
+EndpointModelPrice:
+  type: object
+  description: An effective-dated price of a route model (append-only)
+  required:
+  - endpointId
+  - modelName
+  - effectiveFrom
+  - inputUsdPerMtok
+  - outputUsdPerMtok
+  - source
+  properties:
+    endpointId:
+      type: string
+      pattern: ^mep_[0-9A-HJKMNP-TV-Z]{26}$
+    modelName:
+      type: string
+    effectiveFrom:
+      $ref: '#/components/schemas/Timestamp'
+    inputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    outputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    cachedInputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    requestFeeUsd:
+      $ref: '#/components/schemas/Money'
+    source:
+      type: string
+      enum:
+      - manual
+      - price_list
+      - transfer
+      - provider
+    approvedBy:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+    createdAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+CreateEndpointModelPriceRequest:
+  type: object
+  required:
+  - modelName
+  - effectiveFrom
+  - inputUsdPerMtok
+  - outputUsdPerMtok
+  properties:
+    modelName:
+      type: string
+      minLength: 1
+      maxLength: 200
+    effectiveFrom:
+      $ref: '#/components/schemas/Timestamp'
+    inputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    outputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    cachedInputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    requestFeeUsd:
+      $ref: '#/components/schemas/Money'
+    source:
+      type: string
+      enum:
+      - manual
+      - transfer
+      default: manual
+      description: transfer for an internal platform's chargeback rate
+EndpointPriceProposal:
+  type: object
+  required:
+  - id
+  - endpointId
+  - modelName
+  - effectiveFrom
+  - inputUsdPerMtok
+  - outputUsdPerMtok
+  - status
+  - fetchedAt
+  properties:
+    id:
+      type: string
+      pattern: ^epp_[0-9A-HJKMNP-TV-Z]{26}$
+      readOnly: true
+    endpointId:
+      type: string
+      pattern: ^mep_[0-9A-HJKMNP-TV-Z]{26}$
+    slug:
+      type: string
+      readOnly: true
+    modelName:
+      type: string
+    effectiveFrom:
+      $ref: '#/components/schemas/Timestamp'
+    inputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    outputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    cachedInputUsdPerMtok:
+      $ref: '#/components/schemas/Money'
+    requestFeeUsd:
+      $ref: '#/components/schemas/Money'
+    source:
+      type: string
+      enum:
+      - price_list
+      - provider
+      description: LiteLLM's list or the provider's published prices
+    status:
+      type: string
+      enum:
+      - pending
+      - approved
+      - rejected
+      readOnly: true
+    fetchedAt:
+      $ref: '#/components/schemas/Timestamp'
+      readOnly: true
+    decidedBy:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+    decidedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+    note:
+      type:
+      - string
+      - 'null'
+      maxLength: 500
+    version:
+      type: integer
+      description: 1 while pending, 2 once decided
+      readOnly: true
+EndpointPriceProposalList:
+  type: object
+  description: A page of EndpointPriceProposal resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/EndpointPriceProposal'
+    nextToken:
+      type: string
+      description: Absent on the last page
+EndpointTeam:
+  type: object
+  description: One team's view of a service endpoint (screen 58)
+  required:
+  - teamId
+  - selected
+  - credentialState
+  - federationState
+  - gatewayDeployment
+  - spendMtdUsd
+  properties:
+    teamId:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+    teamSlug:
+      type: string
+    teamDisplayName:
+      type: string
+    selected:
+      type: boolean
+    selectedBy:
+      type:
+      - string
+      - 'null'
+      enum:
+      - team_admin
+      - service_admin
+      - null
+    credentialState:
+      type: string
+      enum:
+      - set
+      - missing
+      - not_required
+    credentialRotatedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+    federationState:
+      type: string
+      enum:
+      - pending
+      - ready
+      - failing
+      - not_required
+    gatewayDeployment:
+      type: string
+      enum:
+      - shared
+      - per_namespace
+    gatewayVersion:
+      type:
+      - string
+      - 'null'
+      description: Image version of the team gateway, when rendered
+    spendMtdUsd:
+      $ref: '#/components/schemas/Money'
+    health:
+      $ref: '#/components/schemas/ModelEndpointHealth'
+EndpointTeamList:
+  type: object
+  description: A page of EndpointTeam resources
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/EndpointTeam'
+    nextToken:
+      type: string
+      description: Absent on the last page
+ModelEndpointCredentialRequest:
+  type: object
+  description: 'The upstream credential (API key). Write-only: never stored in the database, returned or logged'
+  required:
+  - value
+  properties:
+    value:
+      $ref: '#/components/schemas/SecretValue'
+ModelEndpointCredential:
+  type: object
+  description: Credential metadata only; there is no value member
+  required:
+  - endpointId
+  - scope
+  - state
+  - rotatedAt
+  properties:
+    endpointId:
+      type: string
+      pattern: ^mep_[0-9A-HJKMNP-TV-Z]{26}$
+    scope:
+      type: string
+      pattern: ^(team_[0-9A-HJKMNP-TV-Z]{26}|_shared)$
+    state:
+      type: string
+      enum:
+      - set
+      - missing
+    rotatedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+EndpointFederationRequest:
+  type: object
+  description: Metadata only, no secret. Azure endpoints (authKind azure_federated) take tenantId and clientId; Google endpoints
+    (google_federated) take projectNumber, poolId, providerId, projectId and location
+  properties:
+    tenantId:
+      type: string
+      format: uuid
+      description: Azure
+    clientId:
+      type: string
+      format: uuid
+      description: 'Azure: the managed identity or app registration'
+    projectNumber:
+      type: string
+      pattern: ^[0-9]{1,20}$
+      description: Google
+    poolId:
+      type: string
+      pattern: ^[a-z0-9-]{4,32}$
+      description: Google workload identity pool
+    providerId:
+      type: string
+      pattern: ^[a-z0-9-]{4,32}$
+      description: Google pool provider
+    projectId:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{4,28}[a-z0-9]$
+      description: Google
+    location:
+      type: string
+      pattern: ^[a-z0-9-]{2,40}$
+      description: Google, for example us-central1 or global
+EndpointFederation:
+  type: object
+  description: What AFS stores and what the cloud admins must trust (§11.1)
+  required:
+  - endpointId
+  - teamId
+  - kind
+  - status
+  properties:
+    endpointId:
+      type: string
+      pattern: ^mep_[0-9A-HJKMNP-TV-Z]{26}$
+    teamId:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+    kind:
+      type: string
+      enum:
+      - azure
+      - google
+    tenantId:
+      type:
+      - string
+      - 'null'
+    clientId:
+      type:
+      - string
+      - 'null'
+    projectNumber:
+      type:
+      - string
+      - 'null'
+    poolId:
+      type:
+      - string
+      - 'null'
+    providerId:
+      type:
+      - string
+      - 'null'
+    projectId:
+      type:
+      - string
+      - 'null'
+    location:
+      type:
+      - string
+      - 'null'
+    status:
+      type: string
+      enum:
+      - pending
+      - ready
+      - failing
+      readOnly: true
+    lastError:
+      type:
+      - string
+      - 'null'
+      maxLength: 500
+      readOnly: true
+    checkedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+    expectedIssuer:
+      type:
+      - string
+      - 'null'
+      description: 'Azure: the EKS cluster''s OIDC issuer URL to trust'
+      readOnly: true
+    expectedSubject:
+      type:
+      - string
+      - 'null'
+      description: 'Azure: system:serviceaccount:afs-t-<slug>:afs-gateway'
+      readOnly: true
+    expectedAudience:
+      type:
+      - string
+      - 'null'
+      description: 'Azure: api://AzureADTokenExchange'
+      readOnly: true
+    expectedRoleArn:
+      type:
+      - string
+      - 'null'
+      description: 'Google: the team gateway''s AWS role to map in the pool provider'
+      readOnly: true
+    version:
+      type: integer
+      readOnly: true
+ProviderStatementRow:
+  type: object
+  required:
+  - teamId
+  - model
+  - amountUsd
+  properties:
+    teamId:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+    model:
+      type: string
+      minLength: 1
+      maxLength: 200
+    amountUsd:
+      $ref: '#/components/schemas/Money'
+    tokens:
+      type: integer
+      minimum: 0
+ImportProviderStatementRequest:
+  type: object
+  description: A provider's monthly statement. A text/csv body (columns teamId,model,amountUsd,tokens) takes period and source
+    as query parameters
+  required:
+  - period
+  - source
+  - rows
+  properties:
+    period:
+      type: string
+      pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
+      description: Month, YYYY-MM
+    source:
+      type: string
+      enum:
+      - nous_statement
+      - opencode_csv
+    rows:
+      type: array
+      items:
+        $ref: '#/components/schemas/ProviderStatementRow'
+      maxItems: 10000
+ProviderStatement:
+  type: object
+  required:
+  - id
+  - endpointId
+  - period
+  - source
+  - rowCount
+  - totalUsd
+  - importedBy
+  - importedAt
+  properties:
+    id:
+      type: string
+      pattern: ^pst_[0-9A-HJKMNP-TV-Z]{26}$
+      readOnly: true
+    endpointId:
+      type: string
+      pattern: ^mep_[0-9A-HJKMNP-TV-Z]{26}$
+    period:
+      type: string
+    source:
+      type: string
+      enum:
+      - nous_statement
+      - opencode_csv
+    rowCount:
+      type: integer
+      minimum: 0
+    totalUsd:
+      $ref: '#/components/schemas/Money'
+    importedBy:
+      type: string
+    importedAt:
+      $ref: '#/components/schemas/Timestamp'
+InferenceProviderImpact:
+  type: object
+  description: What turning the provider off (or on) changes (screen 68a)
+  required:
+  - routes
+  - teams
+  - agents
+  - agentsMovingToFallback
+  - agentsDegraded
+  - directSystems
+  - teamsToSelect
+  properties:
+    routes:
+      type: integer
+      minimum: 0
+      description: Endpoints on the provider (service and team)
+    teams:
+      type: integer
+      minimum: 0
+      description: Teams with a route of the provider selected or declared
+    agents:
+      type: integer
+      minimum: 0
+      description: Agents and pools with a route or model of the provider
+    agentsMovingToFallback:
+      type: integer
+      minimum: 0
+      description: 'Bedrock off: agents whose default moves to fallbackModel'
+    agentsDegraded:
+      type: integer
+      minimum: 0
+      description: Agents left with no model (for example templates that speak only Anthropic Messages)
+    directSystems:
+      type: integer
+      minimum: 0
+      description: llm external systems that stop rendering
+    teamsToSelect:
+      type: integer
+      minimum: 0
+      description: 'Bedrock off: teams the fallback route would be selected for (selectForAllTeams)'
+    fallbackModel:
+      type:
+      - string
+      - 'null'
+  readOnly: true
+InferenceProvider:
+  type: object
+  description: A provider switch (Bedrock included). impact is present on a dryRun and after a change
+  required:
+  - provider
+  - displayName
+  - hosts
+  - enabled
+  - teamSelection
+  - routes
+  - teams
+  - directSystems
+  - version
+  properties:
+    provider:
+      type: string
+      pattern: ^[a-z][a-z0-9_]{1,30}$
+    displayName:
+      type: string
+    hosts:
+      type: array
+      items:
+        type: string
+      maxItems: 20
+      description: FQDN globs; other has none and matches any unlisted external host
+    enabled:
+      type: boolean
+    teamSelection:
+      type: string
+      enum:
+      - team_admin
+      - service_admin
+    disabledReason:
+      type:
+      - string
+      - 'null'
+      maxLength: 500
+    fallbackModel:
+      type:
+      - string
+      - 'null'
+      description: 'Bedrock only: <route>/<model> chosen when it was turned off'
+    routes:
+      type: integer
+      minimum: 0
+      readOnly: true
+    teams:
+      type: integer
+      minimum: 0
+      readOnly: true
+    directSystems:
+      type: integer
+      minimum: 0
+      readOnly: true
+    changedBy:
+      type:
+      - string
+      - 'null'
+      readOnly: true
+    changedAt:
+      oneOf:
+      - $ref: '#/components/schemas/Timestamp'
+      - type: 'null'
+      readOnly: true
+    version:
+      type: integer
+      readOnly: true
+    impact:
+      $ref: '#/components/schemas/InferenceProviderImpact'
+InferenceProviderList:
+  type: object
+  description: Every provider
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/InferenceProvider'
+UpdateInferenceProviderRequest:
+  type: object
+  description: Turning Bedrock off without a usable fallback → 400 no_fallback_model
+  properties:
+    enabled:
+      type: boolean
+    teamSelection:
+      type: string
+      enum:
+      - team_admin
+      - service_admin
+    reason:
+      type: string
+      maxLength: 500
+      description: Recorded as disabledReason and in the audit record
+    fallbackModel:
+      type: string
+      pattern: ^[a-z][a-z0-9-]{1,30}/[^/\s][\x20-\x7e]{0,199}$
+      description: 'Bedrock off only: becomes models.default_model_id; its route must be enabled, on a provider that is on'
+    selectForAllTeams:
+      type: boolean
+      default: false
+      description: 'Bedrock off only: select the fallback route for every team that lacks it (selectedBy service_admin) in
+        the same transaction'
+TeamGatewaySettings:
+  type: object
+  required:
+  - teamId
+  - deployment
+  - mayAddModelEndpoints
+  - gatewayState
+  - version
+  properties:
+    teamId:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+    deployment:
+      type: string
+      enum:
+      - shared
+      - per_namespace
+    mayAddModelEndpoints:
+      type: boolean
+    gatewayUrl:
+      type:
+      - string
+      - 'null'
+      description: The opaque AFS_GATEWAY_URL agents of the team receive
+      readOnly: true
+    gatewayState:
+      type: string
+      enum:
+      - shared
+      - provisioning
+      - ready
+      - degraded
+      description: shared until the reconciler has rendered the team gateway
+      readOnly: true
+    version:
+      type: integer
+      description: The team's version
+      readOnly: true
+PutTeamGatewaySettingsRequest:
+  type: object
+  description: Members sent replace stored ones (service admins only, teams_guardrail_guard). Routes are served only by team
+    gateways
+  properties:
+    deployment:
+      type: string
+      enum:
+      - shared
+      - per_namespace
+    mayAddModelEndpoints:
+      type: boolean
+TeamModelEndpoint:
+  type: object
+  description: A route as the team sees it (screens 61, 66)
+  required:
+  - id
+  - teamId
+  - slug
+  - displayName
+  - provider
+  - protocols
+  - location
+  - pricingMode
+  - enabled
+  - relation
+  - selectableBy
+  - credentialState
+  - providerState
+  - offReason
+  - models
+  - version
+  properties:
+    id:
+      type: string
+      pattern: ^mep_[0-9A-HJKMNP-TV-Z]{26}$
+    teamId:
+      type:
+      - string
+      - 'null'
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+      description: null for a service endpoint
+    slug:
+      type: string
+    displayName:
+      type: string
+    description:
+      type:
+      - string
+      - 'null'
+    owner:
+      type:
+      - string
+      - 'null'
+    purpose:
+      type:
+      - string
+      - 'null'
+    provider:
+      type: string
+    protocols:
+      type: array
+      items:
+        type: string
+        enum:
+        - openai_chat
+        - openai_responses
+        - openai_embeddings
+    location:
+      type: string
+      enum:
+      - external
+      - corporate
+      - in_namespace
+    baseUrl:
+      type:
+      - string
+      - 'null'
+      description: Team endpoints only; null for service endpoints
+    authKind:
+      type: string
+      enum:
+      - none
+      - bearer
+      - header
+      - azure_federated
+      - google_federated
+    pricingMode:
+      type: string
+      enum:
+      - per_token
+      - capacity
+      - free
+    requiresTerms:
+      type: boolean
+    enabled:
+      type: boolean
+    relation:
+      type: string
+      enum:
+      - selected
+      - own
+      - available
+      description: 'selected: an opted-in service endpoint; own: declared by the team; available: switched on, not opted in'
+    selectedBy:
+      type:
+      - string
+      - 'null'
+      enum:
+      - team_admin
+      - service_admin
+      - null
+    selectableBy:
+      type: string
+      enum:
+      - team_admin
+      - service_admin
+      description: service_admin for extra-terms endpoints and providers with teamSelection service_admin
+    credentialMode:
+      type: string
+      enum:
+      - shared
+      - per_team
+    credentialState:
+      type: string
+      enum:
+      - set
+      - missing
+      - not_required
+    federationState:
+      type: string
+      enum:
+      - pending
+      - ready
+      - failing
+      - not_required
+    providerState:
+      type: string
+      enum:
+      - 'on'
+      - 'off'
+    offReason:
+      type:
+      - string
+      - 'null'
+      enum:
+      - provider_disabled
+      - endpoint_disabled
+      - not_selected
+      - credential_missing
+      - federation_not_ready
+      - null
+      description: Why the route does not reach the team's agents
+    metered:
+      type: boolean
+    capped:
+      type: boolean
+    baseUrlEnv:
+      type: string
+      description: AFS_LLM_<ROUTE>_BASE_URL
+    models:
+      type: array
+      items:
+        $ref: '#/components/schemas/EndpointModel'
+    health:
+      $ref: '#/components/schemas/ModelEndpointHealth'
+    version:
+      type: integer
+TeamModelEndpointList:
+  type: object
+  description: The team's selected, own and available routes
+  required:
+  - items
+  - gatewayDeployment
+  - mayAddModelEndpoints
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/TeamModelEndpoint'
+    gatewayDeployment:
+      type: string
+      enum:
+      - shared
+      - per_namespace
+      description: Routes reach agents only with per_namespace
+    mayAddModelEndpoints:
+      type: boolean
+    nextToken:
+      type: string
+      description: Absent on the last page
+PutTeamModelEndpointsRequest:
+  type: object
+  description: Replaces the team's opt-in list. Selecting an extra-terms endpoint or one of a provider with teamSelection
+    service_admin, or deselecting one a service admin selected, needs a service admin (403 needs_service_admin)
+  required:
+  - endpointIds
+  properties:
+    endpointIds:
+      type: array
+      items:
+        type: string
+        pattern: ^mep_[0-9A-HJKMNP-TV-Z]{26}$
+      maxItems: 200
+      uniqueItems: true
+      description: Service endpoints to opt in to; one left out is deselected
+TeamModelEndpointSelection:
+  type: object
+  required:
+  - endpointId
+  - slug
+  - selectedBy
+  properties:
+    endpointId:
+      type: string
+      pattern: ^mep_[0-9A-HJKMNP-TV-Z]{26}$
+    slug:
+      type: string
+    selectedBy:
+      type: string
+      enum:
+      - team_admin
+      - service_admin
+TeamModelEndpointSelections:
+  type: object
+  required:
+  - teamId
+  - endpointIds
+  - selections
+  properties:
+    teamId:
+      type: string
+      pattern: ^team_[0-9A-HJKMNP-TV-Z]{26}$
+    endpointIds:
+      type: array
+      items:
+        type: string
+    selections:
+      type: array
+      items:
+        $ref: '#/components/schemas/TeamModelEndpointSelection'
+InferenceReport:
+  type: object
+  description: Latency, TTFT, errors, throughput and cost from the usage ledger (PRD §10.5); never prompt or completion content
+  required:
+  - range
+  - groupBy
+  - rows
+  - totals
+  - notes
+  properties:
+    range:
+      $ref: '#/components/schemas/ReportRange'
+    groupBy:
+      type: array
+      items:
+        type: string
+    rows:
+      type: array
+      items:
+        $ref: '#/components/schemas/InferenceReportRow'
+    totals:
+      $ref: '#/components/schemas/InferenceReportRow'
+    notes:
+      type: array
+      items:
+        type: string
+    nextToken:
+      type: string
+InferenceReportRow:
+  type: object
+  description: groupBy columns, then measures; percentiles are null with no calls
+  required:
+  - calls
+  - errors
+  - inputTokens
+  - outputTokens
+  - costUsd
+  properties:
+    teamId:
+      type: string
+    route:
+      type: string
+      description: Endpoint slug; bedrock for Bedrock calls
+    model:
+      type: string
+    agentId:
+      type: string
+    poolId:
+      type: string
+    hour:
+      $ref: '#/components/schemas/Timestamp'
+    day:
+      type: string
+      format: date
+    calls:
+      type: integer
+      minimum: 0
+    errors:
+      type: integer
+      minimum: 0
+    throttled:
+      type: integer
+      minimum: 0
+    refused:
+      type: integer
+      minimum: 0
+      description: AFS refusals (402, 403)
+    errorRatePct:
+      type: number
+      minimum: 0
+    latencyP50Ms:
+      type:
+      - integer
+      - 'null'
+    latencyP95Ms:
+      type:
+      - integer
+      - 'null'
+    latencyP99Ms:
+      type:
+      - integer
+      - 'null'
+    ttftP50Ms:
+      type:
+      - integer
+      - 'null'
+    ttftP95Ms:
+      type:
+      - integer
+      - 'null'
+    ttftP99Ms:
+      type:
+      - integer
+      - 'null'
+    gatewayP99Ms:
+      type:
+      - integer
+      - 'null'
+      description: Gateway added latency
+    inputTokens:
+      type: integer
+      minimum: 0
+    outputTokens:
+      type: integer
+      minimum: 0
+    cachedTokens:
+      type: integer
+      minimum: 0
+    reasoningTokens:
+      type: integer
+      minimum: 0
+    outputTokensPerSecond:
+      type:
+      - number
+      - 'null'
+    estimatedPct:
+      type: number
+      minimum: 0
+      description: Share of calls settled with usage_source estimated
+    costUsd:
+      $ref: '#/components/schemas/Money'
+    costUsdPerHour:
+      $ref: '#/components/schemas/Money'
+    effectiveUsdPerMtok:
+      oneOf:
+      - $ref: '#/components/schemas/Money'
+      - type: 'null'
+      description: 'capacity routes: allocated cost over tokens'
+    pricingMode:
+      type: string
+      enum:
+      - per_token
+      - capacity
+      - free
+      - bedrock
