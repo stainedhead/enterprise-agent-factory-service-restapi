@@ -98,7 +98,7 @@ func Routes() []engine.Route {
 	for _, t := range []string{"agent_templates", "external_systems", "service_tags", "org_aws_accounts", "models", "model_prices", "service_settings"} {
 		routes = append(routes, engine.Route{Table: t, FanOut: []engine.Kind{engine.KindPool}})
 	}
-	return routes
+	return append(routes, engine.GatewayRoutes(engine.KindPool, true, "pool_model_endpoints")...)
 }
 
 // Reconcile implements engine.Controller. The IAM identity, the queue, the Kubernetes objects and the

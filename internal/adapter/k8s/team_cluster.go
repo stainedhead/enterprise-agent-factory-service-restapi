@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -64,6 +65,13 @@ func (c *TeamCluster) ApplyTeam(ctx context.Context, env team.Environment) (team
 	} else {
 		objs = append(objs, render.GatewayCA(env.Team, bundle))
 	}
+	if env.Team.Gateway.PerNamespace() {
+		gw, err := render.TeamGateway(env)
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+		objs = append(objs, gw...)
+	}
 	for _, o := range objs {
 		r, err := c.client.Apply(ctx, o)
 		if r.Modified() {
@@ -73,7 +81,33 @@ func (c *TeamCluster) ApplyTeam(ctx context.Context, env team.Environment) (team
 			firstErr = fmt.Errorf("%s: %w", o.GetKind(), err)
 		}
 	}
+	if !env.Team.Gateway.PerNamespace() {
+		if err := c.removeTeamGateway(ctx, env.Team.Namespace); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
 	return res, firstErr
+}
+
+// removeTeamGateway deletes the objects of a team gateway the reconciler made, when the team is back on the
+// shared gateway. An object that is absent or not managed by the reconciler is left alone.
+func (c *TeamCluster) removeTeamGateway(ctx context.Context, ns string) error {
+	for _, o := range render.TeamGatewayGVKs {
+		live, err := c.client.Get(ctx, o.GVK, ns, o.Name)
+		if err != nil {
+			if meta.IsNoMatchError(err) {
+				continue // a CRD that is not installed holds no object
+			}
+			return fmt.Errorf("team gateway %s: %w", o.GVK.Kind, err)
+		}
+		if live == nil || !render.IsManaged(live) {
+			continue
+		}
+		if err := c.client.Delete(ctx, o.GVK, ns, o.Name); err != nil {
+			return fmt.Errorf("team gateway %s: %w", o.GVK.Kind, err)
+		}
+	}
+	return nil
 }
 
 // ApplyPlatform implements team.PlatformCluster.

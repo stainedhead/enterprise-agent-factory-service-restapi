@@ -25,14 +25,15 @@ func TestSettingsFrom(t *testing.T) {
 		mut  func(map[string]string)
 		want string
 	}{
-		"no db":      {func(m map[string]string) { delete(m, "AFS_DATABASE_URL") }, "AFS_DATABASE_URL"},
-		"no gw":      {func(m map[string]string) { delete(m, "AFS_GATEWAY_ROLE_ARN") }, "AFS_GATEWAY_ROLE_ARN"},
-		"no bus":     {func(m map[string]string) { delete(m, "AFS_EVENT_BUS_NAME") }, "AFS_EVENT_BUS_NAME"},
-		"no cluster": {func(m map[string]string) { delete(m, "AFS_CLUSTER_NAME") }, "AFS_CLUSTER_NAME"},
-		"bad iam":    {func(m map[string]string) { m["AFS_DB_IAM_AUTH"] = "maybe" }, "AFS_DB_IAM_AUTH"},
-		"no users":   {func(m map[string]string) { delete(m, "AFS_RECONCILER_USERS") }, "AFS_RECONCILER_USERS"},
-		"bad poll":   {func(m map[string]string) { m["AFS_POLL_INTERVAL"] = "soon" }, "AFS_POLL_INTERVAL"},
-		"neg":        {func(m map[string]string) { m["AFS_RESYNC_INTERVAL"] = "-1s" }, "AFS_RESYNC_INTERVAL"},
+		"no db":          {func(m map[string]string) { delete(m, "AFS_DATABASE_URL") }, "AFS_DATABASE_URL"},
+		"no gw":          {func(m map[string]string) { delete(m, "AFS_GATEWAY_ROLE_ARN") }, "AFS_GATEWAY_ROLE_ARN"},
+		"no bus":         {func(m map[string]string) { delete(m, "AFS_EVENT_BUS_NAME") }, "AFS_EVENT_BUS_NAME"},
+		"no cluster":     {func(m map[string]string) { delete(m, "AFS_CLUSTER_NAME") }, "AFS_CLUSTER_NAME"},
+		"bad iam":        {func(m map[string]string) { m["AFS_DB_IAM_AUTH"] = "maybe" }, "AFS_DB_IAM_AUTH"},
+		"no users":       {func(m map[string]string) { delete(m, "AFS_RECONCILER_USERS") }, "AFS_RECONCILER_USERS"},
+		"bad poll":       {func(m map[string]string) { m["AFS_POLL_INTERVAL"] = "soon" }, "AFS_POLL_INTERVAL"},
+		"neg":            {func(m map[string]string) { m["AFS_RESYNC_INTERVAL"] = "-1s" }, "AFS_RESYNC_INTERVAL"},
+		"bad gw db port": {func(m map[string]string) { m["AFS_TEAM_GATEWAY_DB_PORT"] = "x" }, "AFS_TEAM_GATEWAY_DB_PORT"},
 	}
 	for name, tc := range cases {
 		m := map[string]string{}
@@ -50,6 +51,14 @@ func TestSettingsFrom(t *testing.T) {
 	}
 	if s, err := settingsFrom(envOf(iam), host()); err != nil || !s.DBIAMAuth || s.EventBusName != "afs-events" {
 		t.Errorf("IAM auth: %+v %v", s, err)
+	}
+	tg := map[string]string{"AFS_TEAM_GATEWAY_IMAGE": "registry.example.com/afs-gateway:1.2.0", "AFS_TEAM_GATEWAY_DB_PORT": "5433",
+		"AFS_TEAM_GATEWAY_DB_HOST": "db.example.com", "AFS_TEAM_GATEWAY_TLS_ISSUER": "afs-internal"}
+	for k, v := range base {
+		tg[k] = v
+	}
+	if s, err := settingsFrom(envOf(tg), host()); err != nil || s.TeamGateway.DatabasePort != 5433 || s.TeamGateway.Image == "" || s.TeamGateway.TLSIssuer != "afs-internal" {
+		t.Errorf("team gateway: %+v %v", s.TeamGateway, err)
 	}
 	if _, err := settingsFrom(envOf(base), func() (string, error) { return "", errors.New("no") }); err == nil {
 		t.Error("without POD_NAME the hostname is the identity; its failure must be reported")

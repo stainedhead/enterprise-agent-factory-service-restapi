@@ -194,3 +194,17 @@ func TestQueueWakesAllWaiters(t *testing.T) {
 	}
 	q.ShutDown()
 }
+
+// MEG-RC-6: a change of a gateway table reconciles the named team's resources, or every one for a
+// service-level row.
+func TestGatewayRoutes(t *testing.T) {
+	rs := GatewayRoutes(KindAgent, true, "agent_model_endpoints")
+	if len(rs) != len(GatewayTables)+1 || rs[len(rs)-1].Table != "agent_model_endpoints" {
+		t.Fatalf("routes = %+v", rs)
+	}
+	for _, r := range rs {
+		if len(r.FanOut) != 1 || r.FanOut[0] != KindAgent || !r.Targets[0].Children {
+			t.Errorf("%s = %+v", r.Table, r)
+		}
+	}
+}

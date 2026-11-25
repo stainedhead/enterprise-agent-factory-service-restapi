@@ -58,6 +58,8 @@ type Desired struct {
 	Tags map[string]string
 	// DeletedAt is set once the team is deleted.
 	DeletedAt *time.Time
+	// Gateway is the team's gateway deployment and route set (v1.2.0).
+	Gateway TeamGateway
 }
 
 // Environment is everything the cluster adapter renders for one team.
@@ -70,6 +72,22 @@ type Environment struct {
 	GatewayNamespace string
 	GatewayName      string
 	GatewayPort      int
+	// TeamGateway configures the team's own gateway; used only while Team.Gateway is per_namespace.
+	TeamGateway TeamGatewaySpec
+}
+
+// TeamGatewaySpec is the service-level configuration of team gateways (Helm values, never per team).
+type TeamGatewaySpec struct {
+	// Image is the afs-gateway image (AFS_TEAM_GATEWAY_IMAGE).
+	Image string
+	// DatabaseSecretARN is the Secrets Manager reference of the afs_gateway connection URL
+	// (AFS_TEAM_GATEWAY_DB_SECRET_ARN); DatabaseHost and DatabasePort are its egress destination.
+	DatabaseSecretARN string
+	DatabaseHost      string
+	DatabasePort      int
+	// TLSIssuer is the cert-manager ClusterIssuer of the gateway's serving certificate
+	// (AFS_TEAM_GATEWAY_TLS_ISSUER); it must chain to the CA bundle agents trust. Empty: no Certificate.
+	TLSIssuer string
 }
 
 // ApplyResult lists the objects an apply created or changed, by engine.ObjectName.

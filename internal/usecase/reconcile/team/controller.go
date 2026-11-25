@@ -73,8 +73,11 @@ type Config struct {
 	Profiles InferenceProfiles
 	AWS      AWSConfig
 	Gateway  PlatformSpec
-	Hooks    Hooks
-	Now      func() time.Time
+	// TeamGateway configures per-namespace gateways; Routes, when set, records route health.
+	TeamGateway TeamGatewaySpec
+	Routes      RouteReporter
+	Hooks       Hooks
+	Now         func() time.Time
 }
 
 // Controller reconciles teams (engine.KindTeam).
@@ -152,12 +155,18 @@ func (c *Controller) Reconcile(ctx context.Context, ref engine.Ref) (engine.Outc
 	res, k8sErr := c.cfg.Cluster.ApplyTeam(ctx, Environment{
 		Team: t, TeamRoleARN: roleARN, Region: c.cfg.AWS.Region,
 		GatewayNamespace: c.cfg.Gateway.GatewayNamespace, GatewayName: c.cfg.Gateway.GatewayName, GatewayPort: c.cfg.Gateway.GatewayPort,
+		TeamGateway: c.cfg.TeamGateway,
 	})
 	changed = append(changed, res.Changed...)
 	if k8sErr != nil {
 		errs = append(errs, engine.WithCondition(domain.CondNamespaceReady, k8sErr))
 	} else {
 		conds = append(conds, ok(domain.CondNamespaceReady, "Reconciled"))
+	}
+	if c.cfg.Routes != nil {
+		if err := c.cfg.Routes.ReportRoutes(ctx, t.ID, k8sErr == nil && t.Gateway.PerNamespace(), t.Gateway.RouteHealth()); err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	out := engine.Outcome{Generation: t.Generation, Conditions: conds, Changed: changed, Requeue: requeue}
