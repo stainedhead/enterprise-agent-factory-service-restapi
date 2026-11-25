@@ -250,7 +250,8 @@ func TestSecurityOperatorsReachOnlyTheirOperations(t *testing.T) {
 			if rt.Scope == authz.ScopePublic {
 				continue
 			}
-			teams := []string{""}
+			// A service route may still name a team in its path (v1.5.0 PutEndpointFederation).
+			teams := []string{unknownTeam}
 			if rt.Scope == authz.ScopeTeam {
 				teams = []string{g.w.TeamA.ID, g.w.TeamB.ID, unknownTeam}
 			}

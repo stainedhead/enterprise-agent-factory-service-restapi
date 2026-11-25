@@ -54,11 +54,31 @@ type ModelsInput struct {
 	Access         *ModelAccess
 	ModelIDs       *[]string
 	DefaultModelID *string
+	// Routes holds the v1.5.0 route members (routeAccess, routes, defaultRoute); nil when none is sent.
+	Routes *RoutesInput
+}
+
+// RoutesInput is the route part of a models object (API contract v1.5.0 §4.13): routeAccess, routes and
+// defaultRoute. A nil member is omitted; DefaultRouteNull marks an explicit null defaultRoute.
+type RoutesInput struct {
+	Access           *string
+	Routes           *[]string
+	DefaultRoute     *string
+	DefaultRouteNull bool
 }
 
 // Present reports whether any member is set.
 func (m *ModelsInput) Present() bool {
-	return m != nil && (m.Access != nil || m.ModelIDs != nil || m.DefaultModelID != nil)
+	return m != nil && (m.Access != nil || m.ModelIDs != nil || m.DefaultModelID != nil || m.Routes != nil)
+}
+
+// routesNotYet refuses the route members until route admission is implemented (release 1.2.0, the
+// implementation change after the v1.5.0 contract change): never silently ignored.
+func routesNotYet(in *ModelsInput) []FieldError {
+	if in == nil || in.Routes == nil {
+		return nil
+	}
+	return []FieldError{{Field: "models.routeAccess", Reason: ReasonNotImplemented}}
 }
 
 // ModelSets are the sets the validation checks a request against, read in the request's transaction.
@@ -113,7 +133,7 @@ func checkSelection(ids []string, sets ModelSets, field string) []FieldError {
 // modelId alias: alone it creates {access: all, defaultModelId: modelId}; with models.defaultModelId and a
 // different value it is a conflict. field is the prefix of the reported fields ("models").
 func ResolveNewModels(in *ModelsInput, legacyModelID string, sets ModelSets) (AgentModels, error) {
-	var fe []FieldError
+	fe := routesNotYet(in)
 	out := AgentModels{Access: ModelAccessAll, ModelIDs: []string{}}
 	def := legacyModelID
 	if in != nil {
@@ -213,7 +233,7 @@ func checkDefault(m AgentModels, sets ModelSets) []FieldError {
 // selection. The result is validated against sets as a whole.
 func (cur AgentModels) ApplyModels(in *ModelsInput, legacyModelID string, sets ModelSets) (AgentModels, error) {
 	out := AgentModels{Access: cur.Access, ModelIDs: slices.Clone(cur.ModelIDs), DefaultModelID: cur.DefaultModelID}
-	var fe []FieldError
+	fe := routesNotYet(in)
 	if in != nil {
 		if in.Access != nil {
 			if !in.Access.Valid() {

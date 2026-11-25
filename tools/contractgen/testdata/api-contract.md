@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Contract **v1.4.0** (2026-11-23) adds the team orchestration agent and model access ([team-orchestration-agent-PRD.md](../../team-orchestration-agent-PRD.md), approved by J; §4.4d, changes to §3, §4.2, §4.4, §4.4a, §4.4c, §4.11 and §5 to §7; decisions CD-26 to CD-38, see §9); it ships with `-restapi` 1.1.0 and is not yet built. Contract v1.3.2 (2026-11-22) records decisions from the build of the Paperclip collaboration change (see §9). v1.3.1 (2026-11-22) corrects v1.3.0 after the `-db`, `-restapi`, `-website` and `-cli` PRD reviews (see §9). v1.3.0 (2026-11-22) adds Paperclip team collaboration (§4.4b, §4.4c, the `team_collaborator` role and the events of §7; see §9); v1.2.0, draft for implementation (2026-11-21); v1.2.0 records the decisions of `-restapi` milestone M0 (CD-1 to CD-10, see §9) and, as an amendment of 2026-11-22, those of the feature-complete build (CD-7 exemption list, CD-11, CD-12, swarm template secrets, `Me.servicePermissions`; see §9); v1.1.0 was revised after the `review-prd` pass (root PRD D23 to D57) |
+| **Status** | Contract **v1.5.0** (2026-11-25) adds the team model gateway: model endpoints, routes, provider switches and the inference report (§4.13; [model-endpoint-gateway-PRD.md](../../model-endpoint-gateway-PRD.md), approved by J; ships with `-restapi` 1.2.0). Contract v1.4.0 (2026-11-23) adds the team orchestration agent and model access ([team-orchestration-agent-PRD.md](../../team-orchestration-agent-PRD.md), approved by J; §4.4d, changes to §3, §4.2, §4.4, §4.4a, §4.4c, §4.11 and §5 to §7; decisions CD-26 to CD-38, see §9); it ships with `-restapi` 1.1.0 and is not yet built. Contract v1.3.2 (2026-11-22) records decisions from the build of the Paperclip collaboration change (see §9). v1.3.1 (2026-11-22) corrects v1.3.0 after the `-db`, `-restapi`, `-website` and `-cli` PRD reviews (see §9). v1.3.0 (2026-11-22) adds Paperclip team collaboration (§4.4b, §4.4c, the `team_collaborator` role and the events of §7; see §9); v1.2.0, draft for implementation (2026-11-21); v1.2.0 records the decisions of `-restapi` milestone M0 (CD-1 to CD-10, see §9) and, as an amendment of 2026-11-22, those of the feature-complete build (CD-7 exemption list, CD-11, CD-12, swarm template secrets, `Me.servicePermissions`; see §9); v1.1.0 was revised after the `review-prd` pass (root PRD D23 to D57) |
 | **Provider** | [enterprise-agent-factory-service-restapi](https://github.com/stainedhead/enterprise-agent-factory-service-restapi) (`afs-api`) |
 | **Consumers** | [-cli](https://github.com/stainedhead/enterprise-agent-factory-service-cli) (`afs`), [-website](https://github.com/stainedhead/enterprise-agent-factory-service-website) (`@afs/sdk`, console) |
 | **Machine-readable form** | `-restapi/api/openapi.yaml` (OpenAPI 3.1). Built from this document; once an operation is in the YAML, the YAML wins and this document is updated to match in the same PR |
@@ -143,6 +143,8 @@ both, in the same cycle.
 | `work-orders:report` | | ✓ on the assigned team | ✓ | | Update the status and PR of the assigned work order's repositories. Also held by the assigned team's workload principals (D29) |
 | `swarm-templates:read` | | | ✓ | ✓ | List and describe templates (D37) |
 | `admin:swarm-templates`, `admin:cost-tag-status` | | | ✓ | | Create, update, enable, disable, delete templates; cost tag status |
+| `admin:model-endpoints`, `admin:inference-providers` | | | ✓ | | v1.5.0: service model endpoints, credentials, federation; provider switches including Bedrock |
+| `model-endpoints:read` / `model-endpoints:write` | ✓ / | ✓ / ✓ | ✓ / ✓ | | v1.5.0: the team's routes; opt in, declare team endpoints (when allowed), team credentials |
 
 **Security operator** (service-level role, D18): only the permissions in its column. It cannot be
 granted by team-admins and never appears in a team binding. **Workload principal**: `work-orders:report`
@@ -989,6 +991,60 @@ as ordinary desired-state writes, one transaction per team (each with its audit 
 returning a report `{dryRun, teams[{slug, result: created|updated|skipped|failed, changes[], error?}]}`.
 With `dryRun=true` (the default) nothing is written. A bundle over 100 MB → `400 ValidationError`.
 
+### 4.13 Model endpoints, routes and providers (v1.5.0)
+
+Source: [model endpoint gateway PRD](../../model-endpoint-gateway-PRD.md) Appendix D.3.4 (approved by J, 2026-11-25).
+Every mutation writes audit and outbox in one transaction; updates need `If-Match`; credential values are write-only
+and never returned (`credentialState` only). Team-scoped paths take `teamId` from the path.
+
+| Operation | Method and path | Permission | CLI | SDK | Screen | Pri |
+|---|---|---|---|---|---|---|
+| `ListModelEndpoints` | `GET /v1/admin/model-endpoints` (service endpoints and, with `includeTeams=true`, team-declared ones; filters `provider`, `location`, `pricingMode`) | `admin:model-endpoints` | `model-endpoints list-model-endpoints` | `admin.modelEndpoints.list()` | 56 | P0 |
+| `CreateModelEndpoint` | `POST /v1/admin/model-endpoints` (created off) | `admin:model-endpoints` | `model-endpoints create-model-endpoint` | `admin.modelEndpoints.create()` | 57 | P0 |
+| `GetModelEndpoint` | `GET /v1/admin/model-endpoints/{endpointId}` | `admin:model-endpoints` | `model-endpoints describe-model-endpoint` | `admin.modelEndpoints.get()` | 58 | P0 |
+| `UpdateModelEndpoint` | `PATCH /v1/admin/model-endpoints/{endpointId}` (includes `enabled`) | `admin:model-endpoints` | `model-endpoints update-model-endpoint` | `admin.modelEndpoints.update()` | 56, 58 | P0 |
+| `DeleteModelEndpoint` | `DELETE /v1/admin/model-endpoints/{endpointId}` (refused while enabled, `409 endpoint_enabled`) | `admin:model-endpoints` | `model-endpoints delete-model-endpoint` | `admin.modelEndpoints.delete()` | 58 | P0 |
+| `PutEndpointModels` | `PUT /v1/admin/model-endpoints/{endpointId}/models` | `admin:model-endpoints` | `model-endpoints put-endpoint-models` | `admin.modelEndpoints.putModels()` | 57 | P0 |
+| `CreateEndpointModelPrice` | `POST /v1/admin/model-endpoints/{endpointId}/prices` | `admin:pricing` | `model-endpoints create-endpoint-model-price` | `admin.modelEndpoints.createPrice()` | 57 | P0 |
+| `ListEndpointPriceProposals` | `GET /v1/admin/endpoint-price-proposals` | `admin:pricing` | `model-endpoints list-endpoint-price-proposals` | `admin.endpointPriceProposals.list()` | 56 | P0 |
+| `ApproveEndpointPriceProposal` | `POST /v1/admin/endpoint-price-proposals/{proposalId}:approve` | `admin:pricing` | `model-endpoints approve-endpoint-price-proposal` | `admin.endpointPriceProposals.approve()` | 56 | P0 |
+| `RejectEndpointPriceProposal` | `POST /v1/admin/endpoint-price-proposals/{proposalId}:reject` | `admin:pricing` | `model-endpoints reject-endpoint-price-proposal` | `admin.endpointPriceProposals.reject()` | 56 | P0 |
+| `ListEndpointTeams` | `GET /v1/admin/model-endpoints/{endpointId}/teams` (selection, `selectedBy`, `credentialState`, `federationState`, gateway version, spend) | `admin:model-endpoints` | `model-endpoints list-endpoint-teams` | `admin.modelEndpoints.teams()` | 58 | P0 |
+| `PutModelEndpointCredential` | `PUT /v1/admin/model-endpoints/{endpointId}/credentials/{scope}` (`scope` = team id or `_shared`; body `{value}`; → `{state, rotatedAt}`) | `admin:model-endpoints` | `model-endpoints put-model-endpoint-credential` (value from file, stdin or prompt) | `admin.modelEndpoints.putCredential()` | 58 | P0 |
+| `RotateModelEndpointCredential` | `POST /v1/admin/model-endpoints/{endpointId}/credentials/{scope}:rotate` | `admin:model-endpoints` | `model-endpoints rotate-model-endpoint-credential` | `admin.modelEndpoints.rotateCredential()` | 58 | P0 |
+| `PutEndpointFederation` | `PUT /v1/admin/model-endpoints/{endpointId}/federations/{teamId}` (Azure `tenantId`, `clientId`; Google `projectNumber`, `poolId`, `providerId`, `projectId`, `location`); response adds `expectedIssuer`, `expectedSubject`, `expectedAudience` or `expectedRoleArn` | `admin:model-endpoints` | `model-endpoints put-endpoint-federation` | `admin.modelEndpoints.putFederation()` | 58 | P0 |
+| `ImportProviderStatement` | `POST /v1/admin/model-endpoints/{endpointId}/statements` (`period`, `source`, `rows[]` or CSV body) | `admin:pricing` | `model-endpoints import-provider-statement` | `admin.modelEndpoints.importStatement()` | 59 | P1 |
+| `ListInferenceProviders` | `GET /v1/admin/inference-providers` (each with hosts, enabled, teamSelection, routes, teams, direct systems) | `admin:model-endpoints` | `model-endpoints list-inference-providers` | `admin.inferenceProviders.list()` | 68 | P0 |
+| `UpdateInferenceProvider` | `PATCH /v1/admin/inference-providers/{provider}` (`enabled`, `teamSelection`, `reason`; Bedrock off also `fallbackModel` = `<route>/<model>` and `selectForAllTeams`; `dryRun=true` returns the impact counts of screen 68a without writing) | `admin:inference-providers` | `model-endpoints update-inference-provider` | `admin.inferenceProviders.update()` | 68, 68a | P0 |
+| `PutTeamGatewaySettings` | `PUT /v1/admin/teams/{teamId}/gateway-settings` (`deployment` `shared`\|`per_namespace`, `mayAddModelEndpoints`) | `teams:set-guardrails` | `teams put-team-gateway-settings` | `admin.teams.putGatewaySettings()` | 60 | P0 |
+| `ListTeamModelEndpoints` | `GET /v1/teams/{teamId}/model-endpoints` (`selected`, `own`, `available`; per item `selectedBy`, `credentialState`, health, `offReason`) | `model-endpoints:read` | `model-endpoints list-team-model-endpoints` | `teams.modelEndpoints.list()` | 61, 66 | P0 |
+| `PutTeamModelEndpoints` | `PUT /v1/teams/{teamId}/model-endpoint-selections` (`{endpointIds[]}`; extra-terms and service-selected providers need a service admin, else `403 needs_service_admin`) | `model-endpoints:write` | `teams put-team-model-endpoints` | `teams.modelEndpoints.putSelections()` | 60, 61 | P0 |
+| `CreateTeamModelEndpoint` | `POST /v1/teams/{teamId}/model-endpoints` (needs `mayAddModelEndpoints`, else `403 team_endpoints_not_allowed`) | `model-endpoints:write` | `model-endpoints create-team-model-endpoint` | `teams.modelEndpoints.create()` | 62 | P0 |
+| `UpdateTeamModelEndpoint` | `PATCH /v1/teams/{teamId}/model-endpoints/{endpointId}` | `model-endpoints:write` | `model-endpoints update-team-model-endpoint` | `teams.modelEndpoints.update()` | 61 | P0 |
+| `DeleteTeamModelEndpoint` | `DELETE /v1/teams/{teamId}/model-endpoints/{endpointId}` | `model-endpoints:write` | `model-endpoints delete-team-model-endpoint` | `teams.modelEndpoints.delete()` | 61 | P0 |
+| `PutTeamEndpointModels` | `PUT /v1/teams/{teamId}/model-endpoints/{endpointId}/models` (prices inline for team endpoints) | `model-endpoints:write` | `model-endpoints put-team-endpoint-models` | `teams.modelEndpoints.putModels()` | 62 | P0 |
+| `PutTeamModelEndpointCredential` | `PUT /v1/teams/{teamId}/model-endpoints/{endpointId}/credential` (team endpoints, and the team's credential of a `per_team` service endpoint) | `model-endpoints:write` | `model-endpoints put-team-model-endpoint-credential` | `teams.modelEndpoints.putCredential()` | 61, 62 | P0 |
+| `GetInferenceReport` | `GET /v1/reports/inference` (service) and `GET /v1/teams/{teamId}/reports/inference` (`groupBy=route\|model\|agent\|hour`, CSV) | `admin:reports` / `reports:read` | `reports get-inference-report`, `reports get-team-inference-report` | `reports.inference()` | 59, 64 | P0 |
+
+Changes to existing operations: `PutAgentModels` and `PutPoolModels` (and `CreateAgent` / `CreatePool` model fields) gain
+`routeAccess` (`all`\|`selected`), `routes[]` (endpoint slugs) and `defaultModel` may be `<route>/<model>`; responses add
+`effectiveRoutes[]` and `env` (the `AFS_LLM_*` names the agent will receive). Usage and cost reports gain
+`groupBy=route` and a `route` filter. `ListModels` items gain `providerState` (`on`\|`off`). `GetMe` permissions include
+the new ones.
+
+New permissions (§3): `admin:model-endpoints` and `admin:inference-providers` (service admin); `model-endpoints:read`
+(viewer, team-admin, service admin) and `model-endpoints:write` (team-admin, service admin). `admin:pricing` and
+`teams:set-guardrails` cover prices and gateway settings.
+
+New error reasons (§6): `slug_taken` (409), `slug_reserved`, `slug_invalid`, `base_url_not_https`, `provider_disabled`,
+`no_fallback_model`, `endpoint_base_url_placeholder` (400), `needs_service_admin`, `team_endpoints_not_allowed` (403),
+`endpoint_enabled` (409).
+
+New events (§7): `model_endpoint.created`, `model_endpoint.updated`, `model_endpoint.deleted`,
+`model_endpoint.enabled`, `model_endpoint.disabled`, `model_endpoint.credential_set`, `model_endpoint.selected`,
+`model_endpoint.deselected` (api); `model_endpoint.degraded`, `model_endpoint.recovered` (reconciler);
+`inference_provider.enabled`, `inference_provider.disabled` (api).
+
 ### 4.12 Mutations without an outbox event (exemption from the outbox rule)
 
 (v1.4.0 adds `PutServiceModelAccess`, 72 operations; v1.3.0 adds `ConnectAgentToCollaboration` and `DisconnectAgentFromCollaboration`, 71 operations; `PutTeamCollaboration` emits `collaboration.updated` and `RotateCollaborationKeys` emits `secret.rotated`, so neither is listed.)
@@ -1183,6 +1239,12 @@ Events written by database functions use the same envelope (`afs.event_detail`, 
 4. A contract test in each consumer replays the OpenAPI examples; CI fails on drift.
 
 ## 9. Changelog
+
+- **v1.5.0 (2026-11-25), team model gateway ([PRD](../../model-endpoint-gateway-PRD.md), approved by J):** §4.13: 26
+  operations for model endpoints, route models and prices, credentials, federation, statements, provider switches
+  (including Bedrock off with a fallback), team gateway settings, team selections and team endpoints, and the inference
+  report; route fields on agent and pool model access; four permissions; new error reasons and `model_endpoint.*` and
+  `inference_provider.*` events. Minor (1.2.0).
 
 - **v1.4.0 (2026-11-23), team orchestration agent and model access ([PRD](../../team-orchestration-agent-PRD.md) ORC-1 to ORC-32, MOD-1 to MOD-8, approved by J):** §4.4d (`GetTeamOrchestration`, `PutTeamOrchestration`, `ChangeCollaborationTool`, `ListOrchestrationEndpoints`); every team gets its orchestration agent from `CreateTeam` (`orchestration`, `maxCollaborationExposure`, `modelAccess`, `Team.orchestrationAgentId`); `CreateAgent` creates workers only (`role_reserved`, `name_reserved`), `DeleteAgent` refuses the orchestration agent (`orchestration_agent_required`), `UpdateAgent` refuses its fixed fields (`orchestration_field_fixed`); exposure levels `off`/`private`/`public` within a team limit, with `exposure_above_limit` and `surface_not_supported_by_tool` (Buzz: both surfaces N/A); the edge's private entry and wrong-level `404` (§4.4c); `Agent.models` and `Pool.models`; `ListTeamModels`/`PutTeamModels` with `access`; `ListModels` `callable` and `priceState`; `PutServiceModelAccess`; the `orchestration.*` and `models.*` settings; events `orchestration.created`, `orchestration.updated`, `orchestration.tool_changed`, `orchestration.endpoint_state_changed`, `team.models_changed`, `agent.model_unavailable`; permission scope changes in §3 (no new permission). Deprecated until 2.0.0 with `Deprecation` and `Sunset` headers: `GetTeamCollaboration`, `PutTeamCollaboration`, `ListCollaborationEndpoints`, `Team.mayExposeCollaboration`, `Agent.modelId`, `Pool.modelId`, `SwarmTemplate.spec.collaboration`, the event `collaboration.endpoint_state_changed` and `collaboration.updated`. Minor (1.1.0, OR-D10): refusing to create or delete a collaboration agent is accepted as a minor change because 1.0.1 has no production users.
 

@@ -48,8 +48,8 @@ func TestGolden(t *testing.T) {
 
 func TestOperations(t *testing.T) {
 	ex := fixture(t)
-	if len(ex.Operations) != 194 {
-		t.Fatalf("operations = %d, want 194", len(ex.Operations))
+	if len(ex.Operations) != 221 {
+		t.Fatalf("operations = %d, want 221", len(ex.Operations))
 	}
 	byID := map[string]Operation{}
 	for _, op := range ex.Operations {
@@ -70,6 +70,16 @@ func TestOperations(t *testing.T) {
 		{"ListSwarmTemplates", "GET", "/v1/admin/swarm-templates", "swarm-templates:read", "service"},
 		{"CreateImport", "POST", "/v1/imports", "admin:export", "service"},
 		{"GetReadiness", "GET", "/readyz", "", "public"},
+		// v1.5.0 §4.13: no *svc* markers; admin paths are service routes, team paths team routes.
+		{"ListModelEndpoints", "GET", "/v1/admin/model-endpoints", "admin:model-endpoints", "service"},
+		{"RotateModelEndpointCredential", "POST", "/v1/admin/model-endpoints/{endpointId}/credentials/{scope}:rotate", "admin:model-endpoints", "service"},
+		{"PutEndpointFederation", "PUT", "/v1/admin/model-endpoints/{endpointId}/federations/{teamId}", "admin:model-endpoints", "service"},
+		{"UpdateInferenceProvider", "PATCH", "/v1/admin/inference-providers/{provider}", "admin:inference-providers", "service"},
+		{"PutTeamGatewaySettings", "PUT", "/v1/admin/teams/{teamId}/gateway-settings", "teams:set-guardrails", "team"},
+		{"PutTeamModelEndpoints", "PUT", "/v1/teams/{teamId}/model-endpoint-selections", "model-endpoints:write", "team"},
+		{"ListTeamModelEndpoints", "GET", "/v1/teams/{teamId}/model-endpoints", "model-endpoints:read", "team"},
+		{"GetInferenceReport", "GET", "/v1/reports/inference", "admin:reports", "service"},
+		{"GetTeamInferenceReport", "GET", "/v1/teams/{teamId}/reports/inference", "reports:read", "team"},
 	}
 	for _, c := range cases {
 		op, ok := byID[c.id]
@@ -105,18 +115,28 @@ func TestOperations(t *testing.T) {
 			csv++
 		}
 	}
-	if csv != 10 {
-		t.Errorf("CSV operations = %d, want 10", csv)
+	if op := byID["GetTeamInferenceReport"]; op.CLI != "reports get-team-inference-report" || op.SDK != "reports.inference()" || !op.CSV {
+		t.Errorf("GetTeamInferenceReport = %+v", op)
+	}
+	if csv != 12 {
+		t.Errorf("CSV operations = %d, want 12", csv)
 	}
 }
 
 func TestPermissionsErrorsEventsSettings(t *testing.T) {
 	ex := fixture(t)
-	if len(ex.Permissions) != 63 {
+	if len(ex.Permissions) != 67 {
 		t.Errorf("permissions = %d", len(ex.Permissions))
 	}
-	if len(ex.Errors) != 13 || len(ex.Events) != 68 || len(ex.Settings) != 19 {
+	if len(ex.Errors) != 13 || len(ex.Events) != 80 || len(ex.Settings) != 19 {
 		t.Errorf("errors %d events %d settings %d", len(ex.Errors), len(ex.Events), len(ex.Settings))
+	}
+	emitters := map[string]string{}
+	for _, e := range ex.Events {
+		emitters[e.Type] = strings.Join(e.EmittedBy, ",")
+	}
+	if emitters["model_endpoint.created"] != "api" || emitters["model_endpoint.degraded"] != "reconciler" || emitters["inference_provider.disabled"] != "api" {
+		t.Errorf("v1.5.0 events = %v", emitters)
 	}
 	gw := 0
 	for _, e := range ex.Errors {
@@ -144,6 +164,9 @@ func TestSplitRowAndHelpers(t *testing.T) {
 	}
 	if grantCondition("✓ when `viewerKubectl`") != "viewerKubectl" || grantCondition("✓") != "" || grantCondition("✓ all") != "" {
 		t.Error("grantCondition")
+	}
+	if operationIDOf("reports get-team-inference-report") != "GetTeamInferenceReport" {
+		t.Error("operationIDOf")
 	}
 	if _, err := extract([]byte("Contract v9.9.9"), nil); err == nil {
 		t.Error("wrong contract version must fail")

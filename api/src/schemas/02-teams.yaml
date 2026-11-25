@@ -137,6 +137,17 @@ Team:
     mayAddExternalSystems:
       type: boolean
       description: 'Guardrail field: needs teams:set-guardrails'
+    mayAddModelEndpoints:
+      type: boolean
+      readOnly: true
+      description: 'v1.5.0: the team may declare its own model endpoints; set with PutTeamGatewaySettings'
+    gatewayDeployment:
+      type: string
+      enum:
+      - shared
+      - per_namespace
+      readOnly: true
+      description: 'v1.5.0: shared gateway or a team gateway in the namespace; set with PutTeamGatewaySettings'
     mayExposeCollaboration:
       type: boolean
       description: 'Deprecated: use maxCollaborationExposure (limit is not off)'

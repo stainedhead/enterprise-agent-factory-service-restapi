@@ -109,10 +109,10 @@ func TestDocumentValid(t *testing.T) {
 }
 
 // TestOperationsEqualContract: operationIds, methods, paths, permissions and scopes equal the
-// contract extract (all 194 operations).
+// contract extract (all 221 operations).
 func TestOperationsEqualContract(t *testing.T) {
 	ops := loadOps(t)
-	if len(ops) != 194 {
+	if len(ops) != 221 {
 		t.Fatalf("contract operations = %d", len(ops))
 	}
 	got := operations(t)
