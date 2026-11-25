@@ -307,6 +307,16 @@ func (s *Service) review(ctx context.Context, c acting.Caller, action, serverID 
 	}
 	var replay *port.StoredResponse
 	t := transition{action: action, scope: scope,
+		// An enterprise server has no submit step: a reviewer decides on its draft, which enters review first (the
+		// database allows draft to pending_review only). A team server's draft is submitted by its team.
+		before: func(ctx context.Context, tx port.Tx, cur domain.McpServerRecord) (domain.McpServerRecord, error) {
+			if cur.IsTeam() || cur.ReviewStatus != domain.McpDraft || to == domain.McpDraft {
+				return cur, nil
+			}
+			next := cur
+			next.ReviewStatus = domain.McpPendingReview
+			return s.store(ctx, tx, next)
+		},
 		change: func(st Settings, cur domain.McpServerRecord, next *domain.McpServerRecord) (domain.EventType, map[string]any, error) {
 			if allow != nil {
 				if err := allow(st, cur); err != nil {

@@ -12,7 +12,7 @@ func TestPendingMcpOpsAreSection414(t *testing.T) {
 	for _, rt := range Routes {
 		sec[rt.OperationID] = true
 	}
-	if len(PendingMcpOps) != 55 {
+	if len(PendingMcpOps) != 2 {
 		t.Errorf("pending = %d", len(PendingMcpOps))
 	}
 	for _, op := range PendingMcpOps {
@@ -21,7 +21,7 @@ func TestPendingMcpOpsAreSection414(t *testing.T) {
 		}
 	}
 	h, _ := newServer(t, BindMcpPending())
-	rec := do(t, h, http.MethodGet, "/v1/mcp-servers", "svc", "")
+	rec := do(t, h, http.MethodGet, "/v1/mcp-oauth/callback", "svc", "")
 	if rec.Code != http.StatusNotImplemented || !strings.Contains(rec.Body.String(), "not_implemented") {
 		t.Errorf("pending answer = %d %s", rec.Code, rec.Body.String())
 	}

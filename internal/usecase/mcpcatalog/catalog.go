@@ -536,6 +536,8 @@ func (s *Service) Delete(ctx context.Context, c acting.Caller, id string, expect
 type transition struct {
 	action string
 	scope  func(domain.McpServerRecord) error
+	// before may store an intermediate state (an enterprise draft entering review) and returns the row change sees.
+	before func(ctx context.Context, tx port.Tx, cur domain.McpServerRecord) (domain.McpServerRecord, error)
 	change func(st Settings, cur domain.McpServerRecord, next *domain.McpServerRecord) (domain.EventType, map[string]any, error)
 	after  func(ctx context.Context, tx port.Tx, st Settings, stored domain.McpServerRecord) (domain.McpServerRecord, error)
 }
@@ -554,6 +556,12 @@ func (s *Service) runIn(ctx context.Context, tx port.Tx, c acting.Caller, id str
 	if err != nil {
 		return ServerView{}, err
 	}
+	orig := cur
+	if t.before != nil {
+		if cur, err = t.before(ctx, tx, cur); err != nil {
+			return ServerView{}, err
+		}
+	}
 	next := cur
 	ev, data, err := t.change(st, cur, &next)
 	if err != nil {
@@ -571,7 +579,7 @@ func (s *Service) runIn(ctx context.Context, tx port.Tx, c acting.Caller, id str
 		}
 	}
 	if ev != "" {
-		if err := s.Audit.Write(ctx, tx, c.Record(t.action, kindServer, id, cur.TeamID, auditServer(cur), auditServer(stored))); err != nil {
+		if err := s.Audit.Write(ctx, tx, c.Record(t.action, kindServer, id, cur.TeamID, auditServer(orig), auditServer(stored))); err != nil {
 			return ServerView{}, err
 		}
 		if err := s.emitServer(ctx, tx, c, ev, stored, data); err != nil {
