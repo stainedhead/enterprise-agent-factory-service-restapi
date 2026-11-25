@@ -6,7 +6,7 @@ COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 PKG     := github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/buildinfo
 LDFLAGS := -s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).Date=$(DATE)
-BINS    := afs-api afs-reconciler afs-gateway afs-billing afs-edge
+BINS    := afs-api afs-reconciler afs-gateway afs-billing afs-edge afs-mcp-bridge
 
 GOLANGCI_LINT_VERSION ?= v2.15.0
 GOVULNCHECK_VERSION   ?= v1.8.0
