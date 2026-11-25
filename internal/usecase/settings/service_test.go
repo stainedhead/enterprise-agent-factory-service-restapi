@@ -159,3 +159,27 @@ func TestRepositoryFailures(t *testing.T) {
 		t.Errorf("put = %v", err)
 	}
 }
+
+func TestPutMcpSettingEmitsChange(t *testing.T) {
+	s, audit := rig()
+	out := s.Outbox.(*fakes.Outbox)
+	key := domain.SettingMcpTeamServerApproval
+	if _, err := s.Put(t.Context(), svcAdmin, key, json.RawMessage(`"security_all"`), nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Events) != 1 || out.Events[0].Type != domain.EventMcpSettingsChanged {
+		t.Fatalf("events = %+v", out.Events)
+	}
+	if d := out.Events[0].Detail.Data; d["key"] != key || string(d["to"].(json.RawMessage)) != `"security_all"` {
+		t.Errorf("event data = %v", d)
+	}
+	if _, err := s.Put(t.Context(), svcAdmin, domain.SettingTeamsEphemeralMaxDays, json.RawMessage(`30`), nil); err != nil || len(out.Events) != 1 {
+		t.Errorf("non-MCP setting emitted: %v %d", err, len(out.Events))
+	}
+	if _, err := s.Put(t.Context(), teamAdm, key, json.RawMessage(`"security_all"`), nil); domain.KindOf(err) != domain.KindAccessDenied {
+		t.Errorf("team admin = %v", err)
+	}
+	if len(audit.Entries) != 3 {
+		t.Errorf("audit = %d", len(audit.Entries))
+	}
+}

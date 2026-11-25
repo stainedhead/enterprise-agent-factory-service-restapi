@@ -19,6 +19,7 @@ func TestAuthorizationMatrix(t *testing.T) {
 	c, err := wire(context.Background(), quiet, withCluster(settings{
 		DatabaseURL: db.URLs["afs_app"], OwnerURL: db.URLs["afs_owner"], APIReplicas: 1,
 		OIDCHTTP: w.OIDCClient(), RatePerSecond: 1e6, RateBurst: 1e6, AWSRegion: "us-east-1", ClusterOIDCIssuer: w.Cluster.Server.URL,
+		McpOAuth: testMcpOAuth(w),
 	}))
 	if err != nil {
 		t.Fatal(err)

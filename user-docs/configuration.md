@@ -33,6 +33,7 @@ the database as service settings (last section), not in the environment.
 | `AFS_HTTP_IDLE_TIMEOUT` | `120s` | How long an idle keep-alive connection stays open. |
 | `AFS_CLUSTER_NAME`, `AFS_CLUSTER_ENDPOINT`, `AFS_CLUSTER_CA_DATA` | none | Cluster identity for `GetTeamKubeconfig`; without endpoint and CA data it answers `503`. The endpoint must be an https URL and the CA data base64; a bad value stops startup. |
 | `AFS_CLUSTER_OIDC_ISSUER` | none | Issuer of projected ServiceAccount tokens (workload principal). Unset: workload tokens are refused. |
+| `AFS_MCP_OAUTH_CLIENT_ID`, `AFS_MCP_OAUTH_REDIRECT_URI`, `AFS_CONSOLE_URL` | none | MCP OAuth connect for `oauth_user` servers: the https URL of the environment's OAuth Client ID Metadata Document, the public https URL of `GET /v1/mcp-oauth/callback`, and the console's base URL the callback redirects to. Set all three or none; unset, `StartMcpOAuthConnect` answers `409 oauth_not_configured`. The PKCE verifier is derived from `AFS_PAGE_TOKEN_KEY`, so every replica must share that key (it already must). |
 | `AFS_AWS_ACCOUNT_ID` | none | The platform account (12 digits) used to derive role ARNs for identity bindings. A malformed value stops startup. |
 
 Startup validates every variable above; a bad value stops afs-api with exit code 2 and the variable's name.

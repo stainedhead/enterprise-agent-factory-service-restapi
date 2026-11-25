@@ -55,8 +55,8 @@ func countTeams(t *testing.T, tx port.Tx) int {
 func TestMigrateAndSchema(t *testing.T) {
 	db := pgtest.Get(t)
 	want, err := postgres.ExpectedSchemaVersion()
-	if err != nil || want != 23 {
-		t.Fatalf("expected version 23, got %d, %v", want, err)
+	if err != nil || want != 26 {
+		t.Fatalf("expected version 26, got %d, %v", want, err)
 	}
 	// Three concurrent starts under the advisory lock: all succeed, none applies anything twice.
 	var wg sync.WaitGroup

@@ -116,6 +116,9 @@ func MapError(err error, op Op, resource string) error {
 var uniqueReasons = map[string]string{
 	"agents_team_collaboration_uq": domain.ReasonCollaborationAgentExists,
 	"collab_hostname_held":         domain.ReasonHostnameHeld,
+	// 000024: a slug an enterprise or same-team server holds, and a second open query capture.
+	"mcp_servers_slug_taken": domain.ReasonSlugTaken,
+	"capture_active":         domain.ReasonCaptureActive,
 	// 000023: a route slug is unique per scope, and a team slug may not take a service slug.
 	"model_endpoints_slug_taken":      domain.ReasonSlugTaken,
 	"model_endpoints_service_slug_uq": domain.ReasonSlugTaken,
@@ -136,6 +139,16 @@ var constraintConflicts = map[string]conflictReason{
 	"team_collaboration_exposure_limit":         {domain.ReasonExposureAboveLimit},
 	"team_collaboration_surface_supported":      {domain.ReasonSurfaceNotSupported},
 	"team_collaboration_registration_supported": {domain.ReasonRegistrationNotSupported},
+	// 000024 MCP guards.
+	"mcp_review_transition":    {domain.ReasonInvalidReviewTransition},
+	"mcp_primitive_transition": {domain.ReasonInvalidReviewTransition},
+	"mcp_servers_publish":      {domain.ReasonServerNotApproved},
+	"team_gateway_required":    {domain.ReasonTeamGatewayRequired},
+	"team_mcp_servers_scope":   {domain.ReasonServerNotPublished},
+	"federated_identity_limit": {domain.ReasonFederatedIdentityLimit},
+	"governed_by_mcp_server":   {domain.ReasonGovernedByMcpServer},
+	"mcp_primitives_limit":     {"primitive_limit"},
+	"mcp_policies_limit":       {"policy_rule_limit"},
 }
 
 // constraintRefusals names the 000022 guards that are a 400 ValidationError with a contract reason.
@@ -148,6 +161,10 @@ var constraintRefusals = map[string]string{ //nolint:gosec // constraint names a
 	"agent_models_team":                domain.ReasonModelNotEnabledForTeam,
 	"agents_default_model_allowed":     domain.ReasonDefaultModelNotAllowed,
 	"service_settings_alias_read_only": "setting_renamed",
+	"audience_reserved":                domain.ReasonAudienceReserved,
+	"audience_not_allowed":             domain.ReasonAudienceNotAllowed,
+	"mcp_query_captures_window":        domain.ReasonCaptureWindowTooLong,
+	"mcp_credential_path":              "invalid_credential_path",
 	// 000023 model endpoint guards (database contract §7.4).
 	"provider_disabled":                  domain.ReasonProviderDisabled,
 	"no_fallback_model":                  domain.ReasonNoFallbackModel,
@@ -202,6 +219,12 @@ func constraintFieldOf(pe *pgconn.PgError) string {
 		return "name"
 	case "service_settings_alias_read_only":
 		return "key"
+	case "audience_reserved", "audience_not_allowed":
+		return "audience"
+	case "mcp_query_captures_window":
+		return "days"
+	case "mcp_credential_path":
+		return "secretArn"
 	}
 	return "models"
 }
