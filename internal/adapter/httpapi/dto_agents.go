@@ -39,17 +39,36 @@ type agentModelsBody struct {
 	ModelIDs          []string `json:"modelIds"`
 	DefaultModelID    string   `json:"defaultModelId"`
 	EffectiveModelIDs []string `json:"effectiveModelIds"`
+	// The v1.5.0 route members (API contract §4.13).
+	RouteAccess     string            `json:"routeAccess"`
+	Routes          []string          `json:"routes"`
+	DefaultRoute    *string           `json:"defaultRoute"`
+	EffectiveRoutes []string          `json:"effectiveRoutes"`
+	Env             map[string]string `json:"env"`
 }
 
 func toAgentModelsBody(m domain.AgentModels) agentModelsBody {
-	b := agentModelsBody{Access: string(m.Access), ModelIDs: m.ModelIDs, DefaultModelID: m.DefaultModelID, EffectiveModelIDs: m.Effective}
-	if b.ModelIDs == nil {
-		b.ModelIDs = []string{}
+	b := agentModelsBody{Access: string(m.Access), ModelIDs: nonNil(m.ModelIDs), DefaultModelID: m.DefaultModelID,
+		EffectiveModelIDs: nonNil(m.Effective), RouteAccess: string(m.RouteAccess), Routes: nonNil(m.Routes),
+		EffectiveRoutes: nonNil(m.EffectiveRoutes), Env: map[string]string{}}
+	if b.RouteAccess == "" {
+		b.RouteAccess = string(domain.ModelAccessAll)
 	}
-	if b.EffectiveModelIDs == nil {
-		b.EffectiveModelIDs = []string{}
+	if m.DefaultRoute != "" {
+		r := m.DefaultRoute
+		b.DefaultRoute = &r
+	}
+	for _, e := range m.Env {
+		b.Env[e.Name] = e.Value
 	}
 	return b
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // modelsRequest is the models object of an agent or pool create or update body; a nil member is omitted.
@@ -131,7 +150,7 @@ func toAgentBody(a domain.Agent) agentBody {
 	tpl, img := a.Template, string(a.Image)
 	b := agentBody{ID: a.ID, Version: int64(a.Version), Generation: int64(a.Generation), CreatedAt: w2Time(a.CreatedAt),
 		CreatedBy: a.CreatedBy, UpdatedAt: w2Time(a.UpdatedAt), Name: string(a.Name), Description: a.Description,
-		Template: &tpl, Image: &img, ModelID: a.Models.DefaultModelID, Models: toAgentModelsBody(a.Models), Resources: a.Resources,
+		Template: &tpl, Image: &img, ModelID: a.Models.DefaultRef(), Models: toAgentModelsBody(a.Models), Resources: a.Resources,
 		IAMIdentity: string(a.IAMIdentity), IAMRoleArn: a.IAMRoleARN, Paused: a.Paused(),
 		Volume: agentVolumeBody{SizeGiB: a.Volume.SizeGiB, StorageClass: a.Volume.StorageClass, OnDelete: a.Volume.OnDelete,
 			SnapshotSchedule: a.Volume.SnapshotSchedule, SnapshotRetain: a.Volume.SnapshotRetain},

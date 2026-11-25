@@ -224,7 +224,7 @@ func (s *Service) Create(ctx context.Context, c acting.Caller, teamID string, in
 		if a.Models, err = domain.ResolveNewModels(in.Models, in.ModelID, sets); err != nil {
 			return err
 		}
-		a.ModelID = a.Models.DefaultModelID
+		a.ModelID = a.Models.DefaultRef()
 		if err := s.guard().CheckStorageClass(ctx, tx, a.Volume.StorageClass); err != nil {
 			return err
 		}
@@ -441,7 +441,7 @@ func (s *Service) Update(ctx context.Context, c acting.Caller, teamID, id string
 			if next.Models, err = cur.Models.ApplyModels(p.Models, legacy, sets); err != nil {
 				return err
 			}
-			next.ModelID = next.Models.DefaultModelID
+			next.ModelID = next.Models.DefaultRef()
 		}
 		if p.Bindings != nil {
 			if err := s.guard().CheckBindings(ctx, tx, teamID, id, next.Bindings); err != nil {

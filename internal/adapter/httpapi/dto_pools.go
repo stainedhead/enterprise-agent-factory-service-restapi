@@ -61,7 +61,7 @@ type poolBody struct {
 func toPoolBody(p domain.Pool) poolBody {
 	b := poolBody{ID: p.ID, Version: int64(p.Version), CreatedAt: w2Time(p.CreatedAt), CreatedBy: p.CreatedBy,
 		UpdatedAt: w2Time(p.UpdatedAt), Generation: int64(p.Generation), Status: p.Status, Name: string(p.Name),
-		Description: p.Description, Template: p.Template, Image: string(p.Image), Persona: p.Persona, ModelID: p.Models.DefaultModelID, Models: toAgentModelsBody(p.Models),
+		Description: p.Description, Template: p.Template, Image: string(p.Image), Persona: p.Persona, ModelID: p.Models.DefaultRef(), Models: toAgentModelsBody(p.Models),
 		Workers: p.Workers, Resources: p.Resources, ScratchSizeGiB: p.ScratchSizeGiB, SharedVolume: p.SharedVolume,
 		State: string(p.State), Handoffs: append([]string{}, p.Handoffs...)}
 	if p.StageID != "" {

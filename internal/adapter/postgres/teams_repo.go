@@ -444,7 +444,11 @@ WHERE EXISTS (SELECT 1 FROM afs.model_prices p WHERE p.model_id = m.id AND p.eff
 	}
 	err = pt.QueryRow(ctx, `SELECT coalesce((SELECT s.value #>> '{}' FROM afs.service_settings s
   WHERE s.key = 'models.default_model_id' AND jsonb_typeof(s.value) = 'string'), '')`).Scan(&out.SettingDefault)
-	return out, MapError(err, OpRead, "model")
+	if err != nil {
+		return out, MapError(err, OpRead, "model")
+	}
+	out.Routes, err = teamRoutes(ctx, pt, teamID)
+	return out, err
 }
 
 // InsertOrchestration implements teams.Repository: afs.create_orchestration_agent (service admins), which

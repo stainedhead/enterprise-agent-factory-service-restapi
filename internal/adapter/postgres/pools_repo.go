@@ -25,9 +25,10 @@ func NewPoolRepo() *PoolRepo { return &PoolRepo{} }
 
 var _ pools.Repository = (*PoolRepo)(nil)
 
-const poolSelect = `SELECT p.id, p.team_id, p.name, p.description, coalesce(p.stage_id, ''), p.template, p.image, p.persona,
+var poolSelect = `SELECT p.id, p.team_id, p.name, p.description, coalesce(p.stage_id, ''), p.template, p.image, p.persona,
   p.model_id, p.model_access, p.default_model_id,
   coalesce((SELECT array_agg(x.model_id ORDER BY x.model_id) FROM afs.pool_models x WHERE x.team_id = p.team_id AND x.pool_id = p.id), '{}'),
+  ` + subjectRouteCols("p", "pool_model_endpoints", "pool_id") + `,
   p.workers, p.resources, p.scratch_size_gib, p.shared_volume, p.state, p.version, p.generation,
   p.created_at, p.created_by, p.updated_at,
   rs.phase, rs.observed_generation, rs.conditions, rs.last_reconciled_at
@@ -48,9 +49,12 @@ func scanPool(row pgx.Row) (domain.Pool, error) {
 		lastRec     *time.Time
 		access, def string
 		modelIDs    []string
+		routes      []string
+		rAccess     string
+		defRoute    string
 	)
 	err := row.Scan(&p.ID, &p.TeamID, &name, &p.Description, &p.StageID, &p.Template, &image, &p.Persona,
-		&p.ModelID, &access, &def, &modelIDs, &p.Workers, &res, &p.ScratchSizeGiB, &p.SharedVolume, &state, &ver, &gen,
+		&p.ModelID, &access, &def, &modelIDs, &rAccess, &defRoute, &routes, &p.Workers, &res, &p.ScratchSizeGiB, &p.SharedVolume, &state, &ver, &gen,
 		&p.CreatedAt, &p.CreatedBy, &p.UpdatedAt, &phase, &obs, &conds, &lastRec)
 	if err != nil {
 		return domain.Pool{}, err
@@ -60,6 +64,8 @@ func scanPool(row pgx.Row) (domain.Pool, error) {
 	if modelIDs == nil {
 		p.Models.ModelIDs = []string{}
 	}
+	routeModels(&p.Models, rAccess, defRoute, routes)
+	p.ModelID = p.Models.DefaultRef()
 	p.Version, p.Generation = domain.Version(ver), domain.Generation(gen)
 	if len(res) > 0 {
 		if err := json.Unmarshal(res, &p.Resources); err != nil {
@@ -183,14 +189,15 @@ func (*PoolRepo) Insert(ctx context.Context, tx port.Tx, p domain.Pool, template
 		return err
 	}
 	_, err = pt.Exec(ctx, `INSERT INTO afs.agent_pools (id, team_id, name, description, stage_id, template, template_id, image, persona,
-  default_model_id, model_access, workers, resources, scratch_size_gib, shared_volume, state, generation)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+  default_model_id, model_access, workers, resources, scratch_size_gib, shared_volume, state, generation, route_access, default_route)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
 		p.ID, p.TeamID, string(p.Name), p.Description, nullable(p.StageID), p.Template, nullable(templateID), string(p.Image), p.Persona,
-		p.Models.DefaultModelID, string(accessOrAll(p.Models.Access)), p.Workers, res, p.ScratchSizeGiB, p.SharedVolume, string(p.State), int64(p.Generation))
+		p.Models.DefaultModelID, string(accessOrAll(p.Models.Access)), p.Workers, res, p.ScratchSizeGiB, p.SharedVolume, string(p.State), int64(p.Generation),
+		string(accessOrAll(p.Models.RouteAccess)), nullRoute(p.Models))
 	if err != nil {
 		return MapError(err, OpWrite, "pool")
 	}
-	return replaceModels(ctx, pt, "pool_models", "pool_id", p.TeamID, p.ID, p.Models)
+	return replacePoolModels(ctx, pt, p)
 }
 
 // Update implements pools.PoolRepository. template and image are named in the UPDATE only when the
@@ -205,11 +212,12 @@ func (*PoolRepo) Update(ctx context.Context, tx port.Tx, p domain.Pool, template
 		return err
 	}
 	q := `UPDATE afs.agent_pools SET description=$3, stage_id=$4, persona=$5, default_model_id=$6, model_access=$13, workers=$7, resources=$8,
-  scratch_size_gib=$9, shared_volume=$10, state=$11, generation=$12`
+  scratch_size_gib=$9, shared_volume=$10, state=$11, generation=$12, route_access=$14, default_route=$15`
 	args := []any{p.TeamID, p.ID, p.Description, nullable(p.StageID), p.Persona, p.Models.DefaultModelID, p.Workers, res,
-		p.ScratchSizeGiB, p.SharedVolume, string(p.State), int64(p.Generation), string(accessOrAll(p.Models.Access))}
+		p.ScratchSizeGiB, p.SharedVolume, string(p.State), int64(p.Generation), string(accessOrAll(p.Models.Access)),
+		string(accessOrAll(p.Models.RouteAccess)), nullRoute(p.Models)}
 	if templateChanged {
-		q += `, template=$14, template_id=$15, image=$16`
+		q += `, template=$16, template_id=$17, image=$18`
 		args = append(args, p.Template, templateID, string(p.Image))
 	}
 	q += ` WHERE team_id=$1 AND id=$2 AND deleted_at IS NULL AND version=$` + strconv.Itoa(len(args)+1)
@@ -221,7 +229,14 @@ func (*PoolRepo) Update(ctx context.Context, tx port.Tx, p domain.Pool, template
 	if tag.RowsAffected() == 0 {
 		return domain.PreconditionFailed()
 	}
-	return replaceModels(ctx, pt, "pool_models", "pool_id", p.TeamID, p.ID, p.Models)
+	return replacePoolModels(ctx, pt, p)
+}
+
+func replacePoolModels(ctx context.Context, pt *Tx, p domain.Pool) error {
+	if err := replaceModels(ctx, pt, "pool_models", "pool_id", p.TeamID, p.ID, p.Models); err != nil {
+		return err
+	}
+	return replaceRoutes(ctx, pt, "pool_model_endpoints", "pool_id", p.TeamID, p.ID, p.Models)
 }
 
 // Touch implements pools.PoolRepository: a generation bump, which the version trigger and the change
@@ -288,7 +303,11 @@ WHERE team_id = $1 AND subject_kind = 'pool' AND subject_id = ANY($2) ORDER BY s
 		i := idx[pool]
 		list[i].Models.Effective = append(list[i].Models.Effective, model)
 	}
-	return MapError(rows.Err(), OpRead, "models")
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return MapError(err, OpRead, "models")
+	}
+	return effectiveRoutes(ctx, pt, teamID, "pool", ids, func(id string) *domain.AgentModels { return &list[idx[id]].Models })
 }
 
 // AgentNameTaken implements pools.PoolRepository.

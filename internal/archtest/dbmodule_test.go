@@ -25,7 +25,7 @@ func TestDBModuleMigrations(t *testing.T) {
 			t.Errorf("migration %d has version %06d", i, m.Version)
 		}
 	}
-	if got := fmt.Sprintf("%06d", migs[len(migs)-1].Version); got != "000022" {
+	if got := fmt.Sprintf("%06d", migs[len(migs)-1].Version); got != "000023" {
 		t.Errorf("latest = %s", got)
 	}
 }
