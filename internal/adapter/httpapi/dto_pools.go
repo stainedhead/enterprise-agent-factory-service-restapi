@@ -87,6 +87,7 @@ type createPoolRequest struct {
 	Resources      domain.AgentResources `json:"resources"`
 	ScratchSizeGiB int                   `json:"scratchSizeGiB"`
 	SharedVolume   string                `json:"sharedVolume"`
+	Mcp            *mcpRequest           `json:"mcp"`
 }
 
 type updatePoolRequest struct {
@@ -101,6 +102,7 @@ type updatePoolRequest struct {
 	Resources      *domain.AgentResources `json:"resources"`
 	ScratchSizeGiB *int                   `json:"scratchSizeGiB"`
 	SharedVolume   *string                `json:"sharedVolume"`
+	Mcp            *mcpRequest            `json:"mcp"`
 }
 
 func (u updatePoolRequest) patch() domain.PoolPatch {

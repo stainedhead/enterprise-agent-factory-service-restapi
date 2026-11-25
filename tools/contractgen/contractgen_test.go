@@ -48,8 +48,8 @@ func TestGolden(t *testing.T) {
 
 func TestOperations(t *testing.T) {
 	ex := fixture(t)
-	if len(ex.Operations) != 221 {
-		t.Fatalf("operations = %d, want 221", len(ex.Operations))
+	if len(ex.Operations) != 276 {
+		t.Fatalf("operations = %d, want 276", len(ex.Operations))
 	}
 	byID := map[string]Operation{}
 	for _, op := range ex.Operations {
@@ -80,6 +80,18 @@ func TestOperations(t *testing.T) {
 		{"ListTeamModelEndpoints", "GET", "/v1/teams/{teamId}/model-endpoints", "model-endpoints:read", "team"},
 		{"GetInferenceReport", "GET", "/v1/reports/inference", "admin:reports", "service"},
 		{"GetTeamInferenceReport", "GET", "/v1/teams/{teamId}/reports/inference", "reports:read", "team"},
+		// v1.6.0 §4.14: service paths for service admins and security operators (CD-45), team paths team routes.
+		{"ListMcpServers", "GET", "/v1/mcp-servers", "mcp-servers:read", "service"},
+		{"SuspendMcpServer", "POST", "/v1/mcp-servers/{mcpServerId}:suspend", "mcp-servers:suspend", "service"},
+		{"ApproveMcpPrimitive", "POST", "/v1/mcp-servers/{mcpServerId}/primitives/{primitiveId}:approve", "mcp-servers:review", "service"},
+		{"GetMcpQueryCapture", "GET", "/v1/mcp-settings/query-capture", "mcp-events:read", "service"},
+		{"UpdateTeamMcpServer", "PATCH", "/v1/teams/{teamId}/mcp-servers/{mcpServerId}", "team-mcp-servers:write", "team"},
+		{"DeleteTeamMcpServer", "DELETE", "/v1/teams/{teamId}/mcp-servers/{mcpServerId}", "team-mcp-servers:write", "team"},
+		{"ApproveTeamMcpServer", "POST", "/v1/teams/{teamId}/mcp-servers/{mcpServerId}:approve", "team-mcp-servers:approve", "team"},
+		{"CompleteMcpOAuthConnect", "GET", "/v1/mcp-oauth/callback", "", "public"},
+		{"GetEffectivePoolMcp", "GET", "/v1/teams/{teamId}/pools/{poolId}/mcp", "team-mcp-servers:read", "team"},
+		{"PutPoolFederatedIdentity", "PUT", "/v1/teams/{teamId}/pools/{poolId}/federated-identities/{name}", "agent-federated-identities:write", "team"},
+		{"DeleteAgentFederatedIdentity", "DELETE", "/v1/teams/{teamId}/agents/{agentId}/federated-identities/{name}", "agent-federated-identities:write", "team"},
 	}
 	for _, c := range cases {
 		op, ok := byID[c.id]
@@ -118,17 +130,17 @@ func TestOperations(t *testing.T) {
 	if op := byID["GetTeamInferenceReport"]; op.CLI != "reports get-team-inference-report" || op.SDK != "reports.inference()" || !op.CSV {
 		t.Errorf("GetTeamInferenceReport = %+v", op)
 	}
-	if csv != 12 {
-		t.Errorf("CSV operations = %d, want 12", csv)
+	if csv != 16 {
+		t.Errorf("CSV operations = %d, want 16", csv)
 	}
 }
 
 func TestPermissionsErrorsEventsSettings(t *testing.T) {
 	ex := fixture(t)
-	if len(ex.Permissions) != 67 {
+	if len(ex.Permissions) != 77 {
 		t.Errorf("permissions = %d", len(ex.Permissions))
 	}
-	if len(ex.Errors) != 13 || len(ex.Events) != 80 || len(ex.Settings) != 19 {
+	if len(ex.Errors) != 13 || len(ex.Events) != 107 || len(ex.Settings) != 19 {
 		t.Errorf("errors %d events %d settings %d", len(ex.Errors), len(ex.Events), len(ex.Settings))
 	}
 	emitters := map[string]string{}
@@ -137,6 +149,16 @@ func TestPermissionsErrorsEventsSettings(t *testing.T) {
 	}
 	if emitters["model_endpoint.created"] != "api" || emitters["model_endpoint.degraded"] != "reconciler" || emitters["inference_provider.disabled"] != "api" {
 		t.Errorf("v1.5.0 events = %v", emitters)
+	}
+	if emitters["mcp_server.updated"] != "api" || emitters["mcp_server.primitive_changed"] != "gateway" ||
+		emitters["team_mcp_server.enabled"] != "api,db function" || emitters["mcp_query_capture.stopped"] != "api,reconciler" ||
+		emitters["agent.federated_identity_changed"] != "api" {
+		t.Errorf("v1.6.0 events = %v", emitters)
+	}
+	for _, p := range ex.Permissions {
+		if p.Name == "team-mcp-servers:approve" && (len(p.Grants) != 2 || p.Grants[0].Condition != "mcpApprovalPolicy") {
+			t.Errorf("team-mcp-servers:approve grants = %+v", p.Grants)
+		}
 	}
 	gw := 0
 	for _, e := range ex.Errors {

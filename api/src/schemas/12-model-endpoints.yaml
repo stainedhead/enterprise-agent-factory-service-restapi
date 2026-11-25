@@ -1260,6 +1260,15 @@ TeamGatewaySettings:
       - per_namespace
     mayAddModelEndpoints:
       type: boolean
+    mayAddMcpServers:
+      type: boolean
+      description: v1.6.0; team-admins may register team MCP servers
+    mcpPlacement:
+      type: string
+      enum:
+      - combined
+      - separate
+      description: v1.6.0; MCP with the model routes or in its own gateway Deployment (default gateway.mcp.placement_default)
     gatewayUrl:
       type:
       - string
@@ -1291,6 +1300,15 @@ PutTeamGatewaySettingsRequest:
       - per_namespace
     mayAddModelEndpoints:
       type: boolean
+    mayAddMcpServers:
+      type: boolean
+      description: v1.6.0
+    mcpPlacement:
+      type: string
+      enum:
+      - combined
+      - separate
+      description: v1.6.0
 TeamModelEndpoint:
   type: object
   description: A route as the team sees it (screens 61, 66)

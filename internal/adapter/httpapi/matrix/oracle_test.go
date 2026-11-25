@@ -31,7 +31,7 @@ func TestOracleAgreesWithAuthz(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c.Operations) != 221 {
+	if len(c.Operations) != 276 {
 		t.Fatalf("operations = %d", len(c.Operations))
 	}
 	const teamA = "team_01JD2Q3R4S5T6V7W8X9Y0Z0001"

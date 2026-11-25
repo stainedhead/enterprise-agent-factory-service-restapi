@@ -33,6 +33,14 @@ ExternalSystem:
       - identity
       - llm
       - other
+      - mcp
+    governedBy:
+      type:
+      - string
+      - 'null'
+      pattern: ^mcp_[0-9A-HJKMNP-TV-Z]{26}$
+      readOnly: true
+      description: v1.6.0, category mcp only; the MCP server whose host covers this system. It cannot be granted then (409 governed_by_mcp_server)
     description:
       type: string
     docsUrl:
@@ -135,6 +143,7 @@ DeclareExternalSystemRequest:
       - identity
       - llm
       - other
+      - mcp
     description:
       type: string
     docsUrl:

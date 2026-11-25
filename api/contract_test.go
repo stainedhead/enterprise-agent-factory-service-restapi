@@ -109,10 +109,10 @@ func TestDocumentValid(t *testing.T) {
 }
 
 // TestOperationsEqualContract: operationIds, methods, paths, permissions and scopes equal the
-// contract extract (all 221 operations).
+// contract extract (all 276 operations).
 func TestOperationsEqualContract(t *testing.T) {
 	ops := loadOps(t)
-	if len(ops) != 221 {
+	if len(ops) != 276 {
 		t.Fatalf("contract operations = %d", len(ops))
 	}
 	got := operations(t)
@@ -336,6 +336,10 @@ func TestExamplesValidate(t *testing.T) {
 				checked := 0
 				for rp := o.Responses.Codes.First(); rp != nil; rp = rp.Next() {
 					code := rp.Key()
+					if strings.HasPrefix(code, "3") {
+						checked++ // a redirect (CompleteMcpOAuthConnect, CD-48) has no body to validate
+						continue
+					}
 					if !strings.HasPrefix(code, "2") {
 						continue
 					}

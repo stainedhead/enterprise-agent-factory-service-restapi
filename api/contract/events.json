@@ -581,5 +581,198 @@
       "api"
     ],
     "when": "§4.13 (v1.5.0)"
+  },
+  {
+    "type": "mcp_server.created",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Catalog mutations; `data` `{serverId, teamId?, slug, scope}` plus `changes` on update §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.updated",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Catalog mutations; `data` `{serverId, teamId?, slug, scope}` plus `changes` on update §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.deleted",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Catalog mutations; `data` `{serverId, teamId?, slug, scope}` plus `changes` on update §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.published",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Catalog mutations; `data` `{serverId, teamId?, slug, scope}` plus `changes` on update §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.retired",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Catalog mutations; `data` `{serverId, teamId?, slug, scope}` plus `changes` on update §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.submitted",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Review; `data` `{serverId, teamId?, riskTier, approver, decidedBy?, note?}`; `submitted` is delivered to reviewers' channels, decisions to the owning team §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.approved",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Review; `data` `{serverId, teamId?, riskTier, approver, decidedBy?, note?}`; `submitted` is delivered to reviewers' channels, decisions to the owning team §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.rejected",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Review; `data` `{serverId, teamId?, riskTier, approver, decidedBy?, note?}`; `submitted` is delivered to reviewers' channels, decisions to the owning team §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.changes_requested",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Review; `data` `{serverId, teamId?, riskTier, approver, decidedBy?, note?}`; `submitted` is delivered to reviewers' channels, decisions to the owning team §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.suspended",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "`data` `{serverId, teamId?, reason}`; delivered to every team that has it on §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.resumed",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "`data` `{serverId, teamId?, reason}`; delivered to every team that has it on §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.primitive_changed",
+    "emittedBy": [
+      "gateway"
+    ],
+    "when": "A new or changed primitive is held; `data` `{serverId, teamId?, primitiveId, kind, name, change: new|changed, digest, previousDigest?, autoApproved}`; at most one per server per refresh §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.primitive_approved",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "`data` `{serverId, primitiveId, digest, decidedBy}` §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.primitive_rejected",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "`data` `{serverId, primitiveId, digest, decidedBy}` §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.credential_set",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "`PutMcpServerCredential`, `PutTeamMcpServerCredential`, `CompleteMcpOAuthConnect`, `DisconnectMcpOAuth`; `data` `{serverId, scope, kind, state, subject?}`; never a value §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.credential_removed",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "`PutMcpServerCredential`, `PutTeamMcpServerCredential`, `CompleteMcpOAuthConnect`, `DisconnectMcpOAuth`; `data` `{serverId, scope, kind, state, subject?}`; never a value §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.policy_changed",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "`PutMcpPolicy`, `PutTeamMcpPolicy`; `data` `{serverId, level, teamId?, rules: {added, removed}}` §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.auth_expired",
+    "emittedBy": [
+      "gateway"
+    ],
+    "when": "`oauth_user` refresh failed or was restored; `data` `{serverId, teamId}` §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.auth_restored",
+    "emittedBy": [
+      "gateway"
+    ],
+    "when": "`oauth_user` refresh failed or was restored; `data` `{serverId, teamId}` §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.degraded",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "Condition `McpServerReady` changed; `data` `{serverId, teamId, reason}` §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_server.recovered",
+    "emittedBy": [
+      "reconciler"
+    ],
+    "when": "Condition `McpServerReady` changed; `data` `{serverId, teamId, reason}` §4.14 (v1.6.0)"
+  },
+  {
+    "type": "team_mcp_server.enabled",
+    "emittedBy": [
+      "api",
+      "db function"
+    ],
+    "when": "`PutTeamMcpServer` and the `defaultForNewTeams` switch-on in `CreateTeam`; `data` `{teamId, serverId, mode}` §4.14 (v1.6.0)"
+  },
+  {
+    "type": "team_mcp_server.disabled",
+    "emittedBy": [
+      "api",
+      "db function"
+    ],
+    "when": "`PutTeamMcpServer` and the `defaultForNewTeams` switch-on in `CreateTeam`; `data` `{teamId, serverId, mode}` §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_settings.changed",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "An `mcp.*` setting changed; `data` `{key, from, to}` §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_query_capture.started",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "`data` `{captureId, startedBy, until, reason}`; the reconciler emits `stopped` at expiry §4.14 (v1.6.0)"
+  },
+  {
+    "type": "mcp_query_capture.stopped",
+    "emittedBy": [
+      "api",
+      "reconciler"
+    ],
+    "when": "`data` `{captureId, startedBy, until, reason}`; the reconciler emits `stopped` at expiry §4.14 (v1.6.0)"
+  },
+  {
+    "type": "agent.federated_identity_changed",
+    "emittedBy": [
+      "api"
+    ],
+    "when": "Put or delete; `data` `{teamId, agentId?, poolId?, name, audience, change: put|delete}` §4.14 (v1.6.0)"
   }
 ]

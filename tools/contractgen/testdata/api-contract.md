@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Contract **v1.5.0** (2026-11-25) adds the team model gateway: model endpoints, routes, provider switches and the inference report (§4.13; [model-endpoint-gateway-PRD.md](../../model-endpoint-gateway-PRD.md), approved by J; ships with `-restapi` 1.2.0). Contract v1.4.0 (2026-11-23) adds the team orchestration agent and model access ([team-orchestration-agent-PRD.md](../../team-orchestration-agent-PRD.md), approved by J; §4.4d, changes to §3, §4.2, §4.4, §4.4a, §4.4c, §4.11 and §5 to §7; decisions CD-26 to CD-38, see §9); it ships with `-restapi` 1.1.0 and is not yet built. Contract v1.3.2 (2026-11-22) records decisions from the build of the Paperclip collaboration change (see §9). v1.3.1 (2026-11-22) corrects v1.3.0 after the `-db`, `-restapi`, `-website` and `-cli` PRD reviews (see §9). v1.3.0 (2026-11-22) adds Paperclip team collaboration (§4.4b, §4.4c, the `team_collaborator` role and the events of §7; see §9); v1.2.0, draft for implementation (2026-11-21); v1.2.0 records the decisions of `-restapi` milestone M0 (CD-1 to CD-10, see §9) and, as an amendment of 2026-11-22, those of the feature-complete build (CD-7 exemption list, CD-11, CD-12, swarm template secrets, `Me.servicePermissions`; see §9); v1.1.0 was revised after the `review-prd` pass (root PRD D23 to D57) |
+| **Status** | Contract **v1.6.0** (2026-11-25) adds governed MCP servers: catalog, team switches and team servers, review, policy, credentials and OAuth connect, the MCP ledger and reports, and federated identities (§4.14; [mcp-gateway-PRD.md](../../mcp-gateway-PRD.md), approved by J; ships with `-restapi` 1.3.0). Contract v1.5.0 (2026-11-25) adds the team model gateway: model endpoints, routes, provider switches and the inference report (§4.13; [model-endpoint-gateway-PRD.md](../../model-endpoint-gateway-PRD.md), approved by J; ships with `-restapi` 1.2.0). Contract v1.4.0 (2026-11-23) adds the team orchestration agent and model access ([team-orchestration-agent-PRD.md](../../team-orchestration-agent-PRD.md), approved by J; §4.4d, changes to §3, §4.2, §4.4, §4.4a, §4.4c, §4.11 and §5 to §7; decisions CD-26 to CD-38, see §9); it ships with `-restapi` 1.1.0 and is not yet built. Contract v1.3.2 (2026-11-22) records decisions from the build of the Paperclip collaboration change (see §9). v1.3.1 (2026-11-22) corrects v1.3.0 after the `-db`, `-restapi`, `-website` and `-cli` PRD reviews (see §9). v1.3.0 (2026-11-22) adds Paperclip team collaboration (§4.4b, §4.4c, the `team_collaborator` role and the events of §7; see §9); v1.2.0, draft for implementation (2026-11-21); v1.2.0 records the decisions of `-restapi` milestone M0 (CD-1 to CD-10, see §9) and, as an amendment of 2026-11-22, those of the feature-complete build (CD-7 exemption list, CD-11, CD-12, swarm template secrets, `Me.servicePermissions`; see §9); v1.1.0 was revised after the `review-prd` pass (root PRD D23 to D57) |
 | **Provider** | [enterprise-agent-factory-service-restapi](https://github.com/stainedhead/enterprise-agent-factory-service-restapi) (`afs-api`) |
 | **Consumers** | [-cli](https://github.com/stainedhead/enterprise-agent-factory-service-cli) (`afs`), [-website](https://github.com/stainedhead/enterprise-agent-factory-service-website) (`@afs/sdk`, console) |
 | **Machine-readable form** | `-restapi/api/openapi.yaml` (OpenAPI 3.1). Built from this document; once an operation is in the YAML, the YAML wins and this document is updated to match in the same PR |
@@ -145,6 +145,12 @@ both, in the same cycle.
 | `admin:swarm-templates`, `admin:cost-tag-status` | | | ✓ | | Create, update, enable, disable, delete templates; cost tag status |
 | `admin:model-endpoints`, `admin:inference-providers` | | | ✓ | | v1.5.0: service model endpoints, credentials, federation; provider switches including Bedrock |
 | `model-endpoints:read` / `model-endpoints:write` | ✓ / | ✓ / ✓ | ✓ / ✓ | | v1.5.0: the team's routes; opt in, declare team endpoints (when allowed), team credentials |
+| `mcp-servers:read`, `mcp-servers:review`, `mcp-servers:suspend` | | | ✓ | ✓ | v1.6.0: service MCP paths, review queue, suspend any server |
+| `mcp-servers:write`, `mcp-settings:write` | | | ✓ | | v1.6.0: enterprise servers, service policy, shared credentials, `mcp.*` settings, query capture |
+| `team-mcp-servers:read` / `team-mcp-servers:write` | ✓ / | ✓ / ✓ | ✓ / ✓ | | v1.6.0: the team's switches, team servers, team policy and credentials |
+| `team-mcp-servers:approve` | | ✓ when `mcp.team_server_approval` allows the tier | ✓ | | v1.6.0: condition `mcpApprovalPolicy`, decided in the use case |
+| `mcp-events:read` | ✓ | ✓ | ✓ | ✓ | v1.6.0: the MCP ledger and reports; team paths for team roles |
+| `agent-federated-identities:write` | | ✓ | ✓ | | v1.6.0: agent and pool federated identities |
 
 **Security operator** (service-level role, D18): only the permissions in its column. It cannot be
 granted by team-admins and never appears in a team binding. **Workload principal**: `work-orders:report`
@@ -1045,6 +1051,139 @@ New events (§7): `model_endpoint.created`, `model_endpoint.updated`, `model_end
 `model_endpoint.deselected` (api); `model_endpoint.degraded`, `model_endpoint.recovered` (reconciler);
 `inference_provider.enabled`, `inference_provider.disabled` (api).
 
+### 4.14 MCP servers, policy, reviews, ledger and federated identities (v1.6.0)
+
+Source: [MCP gateway PRD](../../mcp-gateway-PRD.md) Appendix A to D (approved by J, 2026-11-25; ships with `-restapi`
+1.3.0). Every mutation writes the row, an `audit_log` record and its outbox event in one transaction; updates need
+`If-Match`; credential values are write-only and never returned (`credentialState` only). Service paths
+(`/v1/mcp-servers…`) act on any server and are for service admins and security operators; team members act on their
+team's servers and switches only through `/v1/teams/{teamId}/…` paths, which take `teamId` from the path (CD-45).
+
+| Operation | Method and path | Permission | CLI | SDK | Screen | Pri |
+|---|---|---|---|---|---|---|
+| `ListMcpServers` | `GET /v1/mcp-servers` (filters `scope` `enterprise`\|`team`\|`all`, `reviewStatus`, `riskTier`, `teamId`, `location`) | `mcp-servers:read` | `mcp-servers list-mcp-servers` | `mcpServers.list()` | 46 | P0 |
+| `CreateMcpServer` | `POST /v1/mcp-servers` (enterprise; created `draft`) | `mcp-servers:write` | `mcp-servers create-mcp-server` | `mcpServers.create()` | 48 | P0 |
+| `GetMcpServer` | `GET /v1/mcp-servers/{mcpServerId}` (any server; checks, risk, adoption) | `mcp-servers:read` | `mcp-servers describe-mcp-server` | `mcpServers.get()` | 47 | P0 |
+| `UpdateMcpServer` | `PATCH /v1/mcp-servers/{mcpServerId}` (enterprise; a change of URL, image, location or auth returns it to `pending_review`) | `mcp-servers:write` | `mcp-servers update-mcp-server` | `mcpServers.update()` | 47 | P0 |
+| `DeleteMcpServer` | `DELETE /v1/mcp-servers/{mcpServerId}` (refused while switched on for any team, `409 server_in_use`) | `mcp-servers:write` | `mcp-servers delete-mcp-server` | `mcpServers.delete()` | 47 | P0 |
+| `ImportMcpServerManifest` | `POST /v1/mcp-servers:import` (body: MCP Registry `server.json`; → a `draft`) | `mcp-servers:write` | `mcp-servers import-mcp-server-manifest` | `mcpServers.importManifest()` | 48 | P1 |
+| `PublishMcpServer`, `RetireMcpServer` | `POST /v1/mcp-servers/{mcpServerId}:publish`, `:retire` (publish needs `approved`) | `mcp-servers:write` | `mcp-servers publish-mcp-server`, `retire-mcp-server` | `mcpServers.publish()`, `.retire()` | 47 | P0 |
+| `SuspendMcpServer`, `ResumeMcpServer` | `POST /v1/mcp-servers/{mcpServerId}:suspend`, `:resume` (`reason` required, ≤ 500) | `mcp-servers:suspend` | `mcp-servers suspend-mcp-server`, `resume-mcp-server` | `mcpServers.suspend()`, `.resume()` | 47, 49 | P0 |
+| `RefreshMcpInventory` | `POST /v1/mcp-servers/{mcpServerId}:refresh` (→ `202`; the gateway refreshes within 2 minutes) | `mcp-servers:write` | `mcp-servers refresh-mcp-inventory` | `mcpServers.refresh()` | 47 | P1 |
+| `ListMcpPrimitives` | `GET /v1/mcp-servers/{mcpServerId}/primitives` (filters `kind`, `status`) | `mcp-servers:read` | `mcp-servers list-mcp-primitives` | `mcpServers.primitives()` | 47 | P0 |
+| `GetMcpPrimitiveChange` | `GET /v1/mcp-servers/{mcpServerId}/primitives/{primitiveId}/change` (approved and pending definitions, field diff, checks) | `mcp-servers:read` | `mcp-servers get-mcp-primitive-change` | `mcpServers.primitiveChange()` | 49 | P0 |
+| `ApproveMcpPrimitive`, `RejectMcpPrimitive` | `POST /v1/mcp-servers/{mcpServerId}/primitives/{primitiveId}:approve`, `:reject` (`note`; reject → `blocked`) | `mcp-servers:review` | `mcp-servers approve-mcp-primitive`, `reject-mcp-primitive` | `mcpServers.approvePrimitive()`, `.rejectPrimitive()` | 49 | P0 |
+| `PutMcpPolicy` | `PUT /v1/mcp-servers/{mcpServerId}/policy` (service rules, `driftPolicy`, `allowSampling`, `trustAnnotations`) | `mcp-servers:write` | `mcp-servers put-mcp-policy` | `mcpServers.putPolicy()` | 47 | P0 |
+| `PutMcpServerCredential` | `PUT /v1/mcp-servers/{mcpServerId}/credentials/{scope}` (`scope` = team id or `_shared`; body `{value}` or OAuth client `{clientId, clientSecret}`; → `{state, rotatedAt}`) | `mcp-servers:write` | `mcp-servers put-mcp-server-credential` (value from file, stdin or prompt) | `mcpServers.putCredential()` | 47 | P0 |
+| `ApproveMcpServer`, `RejectMcpServer`, `RequestMcpServerChanges` | `POST /v1/mcp-servers/{mcpServerId}:approve`, `:reject`, `:request-changes` (`note` required; optional `primitives[]` `{primitiveId, decision: approve\|block}`) | `mcp-servers:review` | `mcp-servers approve-mcp-server`, `reject-mcp-server`, `request-mcp-server-changes` | `mcpServers.approve()`, `.reject()`, `.requestChanges()` | 49 | P0 |
+| `ListMcpReviews` | `GET /v1/mcp-reviews` (pending servers and held primitives of every team; filters `kind` `server`\|`primitive`, `riskTier`, `teamId`, `approver` `security`\|`team_admin`) | `mcp-servers:review` | `mcp-servers list-mcp-reviews` | `mcpReviews.list()` | 49 | P0 |
+| `ListMcpEvents` | `GET /v1/mcp-events` (filters `from`, `to`, `teamId`, `agentId`, `poolId`, `serverId`, `method`, `name`, `outcome`, `reason`) *CSV* | `mcp-events:read` | `audit list-mcp-events` | `mcpEvents.list()` | 55 | P0 |
+| `GetMcpUsageReport` | `GET /v1/reports/mcp` (`groupBy` `server`\|`primitive`\|`team`\|`agent`\|`day`; `view` `usage`\|`unused`\|`refusals`\|`discovery`\|`adoption`; `window` days for `unused`, 30 or 90) *CSV* | `mcp-events:read` | `reports get-mcp-usage-report` | `reports.mcp()` | 55 | P0 |
+| `StartMcpQueryCapture`, `StopMcpQueryCapture` | `POST /v1/mcp-settings/query-capture:start` (`days` ≤ `mcp.query_capture_max_days`, `reason` required), `:stop` | `mcp-settings:write` | `mcp-servers start-mcp-query-capture`, `stop-mcp-query-capture` | `mcpSettings.startQueryCapture()`, `.stopQueryCapture()` | 55 | P1 |
+| `GetMcpQueryCapture` | `GET /v1/mcp-settings/query-capture` (the open window, if any) | `mcp-events:read` | `mcp-servers get-mcp-query-capture` | `mcpSettings.getQueryCapture()` | 55 | P1 |
+| `ListTeamMcpServers` | `GET /v1/teams/{teamId}/mcp-servers` (published enterprise servers with the team's switch and mode, and the team's own servers; filter `state` `on`\|`off`\|`pending`) | `team-mcp-servers:read` | `teams list-team-mcp-servers` | `teams.mcpServers.list()` | 50, 54 | P0 |
+| `GetTeamMcpServer` | `GET /v1/teams/{teamId}/mcp-servers/{mcpServerId}` (an enterprise server the team can see, or a team server) | `team-mcp-servers:read` | `teams describe-team-mcp-server` | `teams.mcpServers.get()` | 51, 54 | P0 |
+| `PutTeamMcpServer` | `PUT /v1/teams/{teamId}/mcp-servers/{mcpServerId}` (`{enabled, mode: full\|read_only}`; enterprise needs `published`; `409 team_gateway_required` while the team gateway is `shared`, CD-44) | `team-mcp-servers:write` | `teams put-team-mcp-server` | `teams.mcpServers.put()` | 50 | P0 |
+| `CreateTeamMcpServer` | `POST /v1/teams/{teamId}/mcp-servers` (needs `mayAddMcpServers`, else `403 team_servers_not_allowed`; created `draft`) | `team-mcp-servers:write` | `teams create-team-mcp-server` | `teams.mcpServers.create()` | 53 | P0 |
+| `UpdateTeamMcpServer`, `DeleteTeamMcpServer` | `PATCH`/`DELETE /v1/teams/{teamId}/mcp-servers/{mcpServerId}` (team servers only; an enterprise id → `403 not_team_server`) | `team-mcp-servers:write` | `teams update-team-mcp-server`, `delete-team-mcp-server` | `teams.mcpServers.update()`, `.delete()` | 51 | P0 |
+| `SubmitMcpServerForReview` | `POST /v1/teams/{teamId}/mcp-servers/{mcpServerId}:submit` (runs the automatic checks; → `pending_review` with `riskTier` and `approver`) | `team-mcp-servers:write` | `teams submit-mcp-server-for-review` | `teams.mcpServers.submit()` | 53 | P0 |
+| `ApproveTeamMcpServer`, `RejectTeamMcpServer` | `POST /v1/teams/{teamId}/mcp-servers/{mcpServerId}:approve`, `:reject` (`note` required; refused with `403 approval_not_permitted_by_policy` when `mcp.team_server_approval` sends this tier to security) | `team-mcp-servers:approve` | `teams approve-team-mcp-server`, `reject-team-mcp-server` | `teams.mcpServers.approve()`, `.reject()` | 51 | P0 |
+| `RefreshTeamMcpInventory` | `POST /v1/teams/{teamId}/mcp-servers/{mcpServerId}:refresh` | `team-mcp-servers:write` | `teams refresh-team-mcp-inventory` | `teams.mcpServers.refresh()` | 51 | P1 |
+| `ListTeamMcpPrimitives` | `GET /v1/teams/{teamId}/mcp-servers/{mcpServerId}/primitives` (with the team's and service's decision per primitive) | `team-mcp-servers:read` | `teams list-team-mcp-primitives` | `teams.mcpServers.primitives()` | 51 | P0 |
+| `ApproveTeamMcpPrimitive`, `RejectTeamMcpPrimitive` | `POST /v1/teams/{teamId}/mcp-servers/{mcpServerId}/primitives/{primitiveId}:approve`, `:reject` (team servers; a change that crosses a risk line needs security, `403 approval_not_permitted_by_policy`) | `team-mcp-servers:approve` | `teams approve-team-mcp-primitive`, `reject-team-mcp-primitive` | `teams.mcpServers.approvePrimitive()`, `.rejectPrimitive()` | 51 | P0 |
+| `PutTeamMcpPolicy` | `PUT /v1/teams/{teamId}/mcp-servers/{mcpServerId}/policy` (team rules) | `team-mcp-servers:write` | `teams put-team-mcp-policy` | `teams.mcpServers.putPolicy()` | 51 | P0 |
+| `PutTeamMcpServerCredential` | `PUT /v1/teams/{teamId}/mcp-servers/{mcpServerId}/credential` (team servers and the team's credential of a `per_team` enterprise server) | `team-mcp-servers:write` | `teams put-team-mcp-server-credential` | `teams.mcpServers.putCredential()` | 51 | P0 |
+| `StartMcpOAuthConnect` | `POST /v1/teams/{teamId}/mcp-servers/{mcpServerId}/oauth:start` (→ `{authorizationUrl, state, expiresAt}`; `oauth_user` only) | `team-mcp-servers:write` | `teams start-mcp-oauth-connect` (prints the URL) | `teams.mcpServers.startOAuth()` | 51 | P0 |
+| `CompleteMcpOAuthConnect` | `GET /v1/mcp-oauth/callback?code&state&iss` (no bearer; bound to `state`, single use, 10 minutes; redirects to the console) | none (state-bound) | none | none | 51 | P0 |
+| `DisconnectMcpOAuth` | `POST /v1/teams/{teamId}/mcp-servers/{mcpServerId}/oauth:disconnect` | `team-mcp-servers:write` | `teams disconnect-mcp-oauth` | `teams.mcpServers.disconnectOAuth()` | 51 | P0 |
+| `TestMcpFederation` | `POST /v1/teams/{teamId}/mcp-servers/{mcpServerId}/federation:test` (→ `202`; the gateway tries the exchange and records `federationState`) | `team-mcp-servers:write` | `teams test-mcp-federation` | `teams.mcpServers.testFederation()` | 51 | P1 |
+| `GetEffectiveAgentMcp` | `GET /v1/teams/{teamId}/agents/{agentId}/mcp` and `GET /v1/teams/{teamId}/pools/{poolId}/mcp` (`GetEffectivePoolMcp`): servers, effective primitives with the deciding level and reason, URLs, env names | `team-mcp-servers:read` | `agents get-effective-agent-mcp`, `pools get-effective-pool-mcp` | `agents.mcp()`, `pools.mcp()` | 52 | P0 |
+| `ListTeamMcpEvents` | `GET /v1/teams/{teamId}/mcp-events` (filters as `ListMcpEvents` without `teamId`) *CSV* | `mcp-events:read` | `audit list-team-mcp-events` | `teams.mcpEvents.list()` | 54 | P0 |
+| `GetTeamMcpUsageReport` | `GET /v1/teams/{teamId}/reports/mcp` (as `GetMcpUsageReport` without `team`, `adoption`) *CSV* | `mcp-events:read` | `reports get-team-mcp-usage-report` | `teams.reports.mcp()` | 54 | P0 |
+| `ListAgentFederatedIdentities` | `GET /v1/teams/{teamId}/agents/{agentId}/federated-identities` | `agents:read` | `agents list-agent-federated-identities` | `agents.federatedIdentities.list()` | 52 | P0 |
+| `PutAgentFederatedIdentity`, `DeleteAgentFederatedIdentity` | `PUT`/`DELETE /v1/teams/{teamId}/agents/{agentId}/federated-identities/{name}` (`{audience, expirationSeconds, filePath?, envVar?}`) | `agent-federated-identities:write` | `agents put-agent-federated-identity`, `delete-agent-federated-identity` | `agents.federatedIdentities.put()`, `.delete()` | 52 | P0 |
+| `ListPoolFederatedIdentities` | `GET /v1/teams/{teamId}/pools/{poolId}/federated-identities` | `pools:read` | `pools list-pool-federated-identities` | `pools.federatedIdentities.list()` | 52 | P1 |
+| `PutPoolFederatedIdentity`, `DeletePoolFederatedIdentity` | `PUT`/`DELETE /v1/teams/{teamId}/pools/{poolId}/federated-identities/{name}` (as for agents) | `agent-federated-identities:write` | `pools put-pool-federated-identity`, `delete-pool-federated-identity` | `pools.federatedIdentities.put()`, `.delete()` | 52 | P1 |
+
+That is 55 operations (counting each named operation once, including `GetEffectivePoolMcp`).
+
+Changes to existing operations:
+
+- `CreateAgent`, `UpdateAgent`, `CreatePool`, `UpdatePool` take `mcp`: `{access: all|selected, serverIds[], mode:
+  search|full, blocks[]}` where `blocks[]` are agent-level rules `{serverId, name|class, effect: block}`. Responses add
+  `mcp.effectiveServers[]` and `mcp.env` (the `AFS_MCP_*` names). Defaults: `access: all`, `mode` from
+  `mcp.default_agent_mode`. A `serverIds` entry outside the team's effective set → `400 mcp_server_not_enabled_for_team`.
+- `PutTeamGatewaySettings` (§4.13) takes `mayAddMcpServers` and `mcpPlacement` (`combined`|`separate`, default from
+  `gateway.mcp.placement_default`).
+- `PutSetting` accepts the keys of PRD Appendix B (`mcp.*`, `gateway.mcp.placement_default`,
+  `federation.allowed_audiences`); writing them needs `mcp-settings:write`, and the setting values are validated as
+  listed there. `mcp.team_server_approval` changes emit `mcp_settings.changed`.
+- `CreateTeam` switches on every published enterprise server with `defaultForNewTeams` (mode as stored on the server).
+- `ListExternalSystems` items gain `category` (`mcp` among others) and, for `mcp`, `governedBy` (the MCP server id
+  that covers the host, after which the system cannot be granted: `409 governed_by_mcp_server`).
+- `GetMe` permissions include the new ones; `team-mcp-servers:approve` is reported per team as the policy allows.
+
+Mutations added to the §4.12 exemption list (audit only, no event; the matrix test list grows by five):
+`RefreshMcpInventory`, `RefreshTeamMcpInventory`, `TestMcpFederation` (each sets a request timestamp the gateway acts
+on), `StartMcpOAuthConnect` (writes a single-use state) and `StopMcpQueryCapture` when the window had already expired.
+
+Resource shapes (§5): `McpServer` `{id, teamId|null, scope: enterprise|team, slug, displayName, owner, purpose, docUrl,
+dataClassification, transport: streamable_http|hosted, location: external|corporate|in_namespace, url?, hosted?:
+{imageDigest, args[], envNames[], instanceMode: per_team|per_agent, egressHosts[], resources}, authKind,
+federation?: {issuer, audience, subjectTemplate, tokenEndpoint}, protocolVersion, reviewStatus:
+draft|pending_review|approved|rejected|suspended, published, riskTier, riskReasons[], checks[], driftPolicy:
+hold|auto_approve_compatible, defaultForNewTeams, allowSampling, trustAnnotations, limits, credentialState:
+set|missing|expired|not_required, adoption?: {teams, agents}, version, createdAt, createdBy, updatedAt}`.
+`McpPrimitive` `{id, serverId, kind, name, title, annotations, digest, approvedDigest, status, firstSeen, lastSeen,
+decision?: {allowed, level, reason}}`. `McpEvent` as database contract §7.5.5 in camelCase. Credentials expose
+`{state, subject?, scopes[], expiresAt?, rotatedAt?}` only.
+
+New permissions (§3):
+
+| Permission | Viewer | Team-admin | Service admin | Security operator | Notes |
+|---|:-:|:-:|:-:|:-:|---|
+| `mcp-servers:read` | | | ✓ | ✓ | Service paths only |
+| `mcp-servers:write` | | | ✓ | | Enterprise servers, service policy, shared credentials |
+| `mcp-servers:review` | | | ✓ | ✓ | Review queue, server and primitive decisions |
+| `mcp-servers:suspend` | | | ✓ | ✓ | Any server, takes effect within 60 s |
+| `team-mcp-servers:read` | ✓ | ✓ | ✓ | | Credential metadata only |
+| `team-mcp-servers:write` | | ✓ | ✓ | | Switches, team servers, team policy, team credentials, OAuth connect |
+| `team-mcp-servers:approve` | | ✓ when the policy allows | ✓ | | Condition `mcpApprovalPolicy`, decided in the use case from `mcp.team_server_approval` and the tier |
+| `mcp-settings:write` | | | ✓ | | Appendix B keys and the query capture window |
+| `mcp-events:read` | ✓ | ✓ | ✓ | ✓ | Team paths for team roles; service paths for service admins and security operators |
+| `agent-federated-identities:write` | | ✓ | ✓ | | Agent and pool federated identities |
+
+New error reasons (§6): `slug_invalid`, `slug_reserved`, `url_not_https`, `host_denied`, `image_not_pinned`,
+`image_unsigned`, `registry_not_allowed`, `auth_kind_unsupported`, `service_account_required`, `audience_not_allowed`,
+`audience_reserved`, `capture_window_too_long`, `mcp_server_not_enabled_for_team`, `invalid_policy_rule` (400);
+`team_servers_not_allowed`, `approval_not_permitted_by_policy`, `not_team_server` (403); `slug_taken`, `server_in_use`,
+`server_not_published`, `server_not_approved`, `team_gateway_required`, `invalid_review_transition`,
+`federated_identity_limit`, `governed_by_mcp_server`, `capture_active` (409).
+
+New events (§7):
+
+| Type | Emitted by | When |
+|---|---|---|
+| `mcp_server.created`, `.updated`, `.deleted`, `.published`, `.retired` | api | Catalog mutations; `data` `{serverId, teamId?, slug, scope}` plus `changes` on update |
+| `mcp_server.submitted`, `.approved`, `.rejected`, `.changes_requested` | api | Review; `data` `{serverId, teamId?, riskTier, approver, decidedBy?, note?}`; `submitted` is delivered to reviewers' channels, decisions to the owning team |
+| `mcp_server.suspended`, `.resumed` | api | `data` `{serverId, teamId?, reason}`; delivered to every team that has it on |
+| `mcp_server.primitive_changed` | gateway | A new or changed primitive is held; `data` `{serverId, teamId?, primitiveId, kind, name, change: new\|changed, digest, previousDigest?, autoApproved}`; at most one per server per refresh |
+| `mcp_server.primitive_approved`, `.primitive_rejected` | api | `data` `{serverId, primitiveId, digest, decidedBy}` |
+| `mcp_server.credential_set`, `.credential_removed` | api | `PutMcpServerCredential`, `PutTeamMcpServerCredential`, `CompleteMcpOAuthConnect`, `DisconnectMcpOAuth`; `data` `{serverId, scope, kind, state, subject?}`; never a value |
+| `mcp_server.policy_changed` | api | `PutMcpPolicy`, `PutTeamMcpPolicy`; `data` `{serverId, level, teamId?, rules: {added, removed}}` |
+| `mcp_server.auth_expired`, `.auth_restored` | gateway | `oauth_user` refresh failed or was restored; `data` `{serverId, teamId}` |
+| `mcp_server.degraded`, `.recovered` | reconciler | Condition `McpServerReady` changed; `data` `{serverId, teamId, reason}` |
+| `team_mcp_server.enabled`, `.disabled` | api, db function | `PutTeamMcpServer` and the `defaultForNewTeams` switch-on in `CreateTeam`; `data` `{teamId, serverId, mode}` |
+| `mcp_settings.changed` | api | An `mcp.*` setting changed; `data` `{key, from, to}` |
+| `mcp_query_capture.started`, `.stopped` | api, reconciler | `data` `{captureId, startedBy, until, reason}`; the reconciler emits `stopped` at expiry |
+| `agent.federated_identity_changed` | api | Put or delete; `data` `{teamId, agentId?, poolId?, name, audience, change: put\|delete}` |
+
+| # | Decision |
+|---|---|
+| CD-45 | Service paths serve service admins and security operators for every server; team roles use mirrored team paths only, because the authorization middleware takes `teamId` from the path and security operators are denied team routes. A team-admin's right to approve is a conditional grant decided in the use case from `mcp.team_server_approval` and the tier |
+| CD-48 | `CompleteMcpOAuthConnect` is the only unauthenticated `/v1` route: it is bound to a single-use `state` (10 minutes, sealed with the caller and server) and to `iss` (RFC 9207), writes the refresh token to Secrets Manager and redirects; it carries no permission and is listed in the matrix's public-route list |
+| CD-49 | `PutSetting` for `mcp.*` keys is audited and emits `mcp_settings.changed`, unlike other settings (§4.12), because a change of the approval policy changes who may approve |
+
 ### 4.12 Mutations without an outbox event (exemption from the outbox rule)
 
 (v1.4.0 adds `PutServiceModelAccess`, 72 operations; v1.3.0 adds `ConnectAgentToCollaboration` and `DisconnectAgentFromCollaboration`, 71 operations; `PutTeamCollaboration` emits `collaboration.updated` and `RotateCollaborationKeys` emits `secret.rotated`, so neither is listed.)
@@ -1239,6 +1378,15 @@ Events written by database functions use the same envelope (`afs.event_detail`, 
 4. A contract test in each consumer replays the OpenAPI examples; CI fails on drift.
 
 ## 9. Changelog
+
+- **v1.6.0 (2026-11-25), governed MCP servers ([PRD](../../mcp-gateway-PRD.md), approved by J):** §4.14: 55
+  operations for the enterprise catalog, import, publish, suspend, inventory and primitive review, service and team
+  policy, credentials and OAuth connect for service accounts, federation tests, team switches (full or read-only) and
+  team servers with a three-level approval policy, the review queue, effective agent and pool MCP, the MCP ledger and
+  usage reports, query capture windows, and agent and pool federated identities; `mcp` on agent and pool bodies;
+  `mayAddMcpServers` and `mcpPlacement` on team gateway settings; ten permissions; new error reasons and `mcp_server.*`,
+  `team_mcp_server.*`, `mcp_settings.changed`, `mcp_query_capture.*` and `agent.federated_identity_changed` events;
+  CD-45, CD-48, CD-49. Minor (1.3.0).
 
 - **v1.5.0 (2026-11-25), team model gateway ([PRD](../../model-endpoint-gateway-PRD.md), approved by J):** §4.13: 26
   operations for model endpoints, route models and prices, credentials, federation, statements, provider switches
