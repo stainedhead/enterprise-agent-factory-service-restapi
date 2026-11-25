@@ -3,6 +3,7 @@ package domain
 import (
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain/mcp"
@@ -699,3 +700,49 @@ func McpCaptureEvent(started bool) EventType {
 
 // FederatedIdentityEvent is emitted by the put and delete of an agent or pool federated identity.
 const FederatedIdentityEvent = EventAgentFederatedIdentityChanged
+
+// McpHostedPort is the port the afs-mcp-bridge of a hosted server listens on.
+const McpHostedPort = 8080
+
+// McpHostedName is the Deployment and Service name of a hosted server in its team namespace.
+func McpHostedName(slug string) string { return "afs-mcp-" + slug }
+
+// McpHostedURL is where the team gateway reaches a hosted server: its Service in the team namespace, plain HTTP
+// inside the namespace, with only the gateway allowed in by network policy (PRD §10.2, AC-11.2).
+func McpHostedURL(namespace, slug string) string {
+	return "http://" + McpHostedName(slug) + "." + namespace + ".svc:" + strconv.Itoa(McpHostedPort) + "/mcp"
+}
+
+// McpCredentialKey is the key of a server's credential in the team gateway's credentials Secret, which the
+// reconciler mounts as one file per key. Route slugs never contain a dot, so the keys cannot collide.
+func McpCredentialKey(slug string) string { return "mcp." + slug }
+
+// McpGatewayFederationRoot is where the team gateway's projected tokens for workload federation are mounted.
+const McpGatewayFederationRoot = "/var/run/secrets/afs/gateway/federation"
+
+// McpFederationDir is the directory name of an audience's projected token: the audience lower-cased with every
+// character outside [a-z0-9] replaced by '-', runs folded, at most 63 characters, so api://x and https://x/y map
+// to stable DNS-label names.
+func McpFederationDir(audience string) string {
+	var b strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(audience) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+			dash = false
+			continue
+		}
+		if !dash && b.Len() > 0 {
+			b.WriteByte('-')
+			dash = true
+		}
+	}
+	out := strings.TrimRight(b.String(), "-")
+	if len(out) > 63 {
+		out = strings.TrimRight(out[:63], "-")
+	}
+	if out == "" {
+		out = "default"
+	}
+	return out
+}

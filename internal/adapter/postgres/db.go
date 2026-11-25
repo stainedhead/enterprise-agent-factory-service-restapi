@@ -29,6 +29,16 @@ type Config struct {
 	// TeamIDs, when set, is afs.team_ids on every connection: a team gateway (afs_gateway with
 	// gateway_deployment per_namespace) then reads service rows and its own team's rows only.
 	TeamIDs string
+	// Role, when set, is assumed on every connection (the startup parameter role, as SET ROLE). The schema's
+	// guards key on current_user being the service's group role (afs_app, afs_gateway, ...), and a LOGIN user
+	// that is only a member of that group would otherwise run as itself and pass them. Empty means the role
+	// of Service (serviceRoles); a Service with no role assumes none.
+	Role string
+}
+
+// serviceRoles are the group roles each service assumes (bootstrap/roles.sql in -db).
+var serviceRoles = map[string]string{
+	"afs-api": "afs_app", "afs-reconciler": "afs_reconciler", "afs-gateway": "afs_gateway", "afs-billing": "afs_billing", "afs-edge": "afs_edge",
 }
 
 // poolConfig turns c into a pgxpool configuration.
@@ -49,6 +59,13 @@ func (c Config) poolConfig() (*pgxpool.Config, error) {
 	}
 	if c.TeamIDs != "" {
 		rp["afs.team_ids"] = c.TeamIDs
+	}
+	role := c.Role
+	if role == "" {
+		role = serviceRoles[c.Service]
+	}
+	if role != "" {
+		rp["role"] = role
 	}
 	if c.StatementTimeout > 0 {
 		rp["statement_timeout"] = strconv.FormatInt(c.StatementTimeout.Milliseconds(), 10)

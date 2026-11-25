@@ -46,8 +46,10 @@ type gatewayApp struct {
 	// Background run until ctx ends: the pod cache and the change feed.
 	Background []func(ctx context.Context) error
 	Usage      *postgres.UsageWriter
-	Checks     []observability.Check
-	Close      func()
+	// Mcp is the MCP route of a team gateway with a sealing key; nil otherwise.
+	Mcp    *mcpApp
+	Checks []observability.Check
+	Close  func()
 }
 
 // metricsObserver reports what the gateway measures to Prometheus.
@@ -155,7 +157,17 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 		svc.Routes = routes
 	}
 	app.Service = svc
-	app.Handler = gatewayhttp.New(gatewayhttp.Config{Service: svc, Upstream: rt, MaxBody: s.MaxBody, Log: log, Observer: metricsObserver{m}, Routes: routeUp})
+	mcp, err := wireMcp(ctx, log, s, pool, identifyMcp(svc), awsCfg.Credentials, as.Region)
+	if err != nil {
+		return fail(err)
+	}
+	var families []gatewayhttp.Family
+	if mcp != nil {
+		families = append(families, mcp.Family)
+		app.Mcp = mcp
+	}
+	app.Handler = gatewayhttp.New(gatewayhttp.Config{Service: svc, Upstream: rt, MaxBody: s.MaxBody, Log: log, Observer: metricsObserver{m}, Routes: routeUp,
+		Families: families})
 
 	// A change to prices, models, budgets, teams or tags is seen within a second, not a TTL later; the TTL
 	// is the fallback when a notification is lost.
@@ -169,15 +181,24 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 					if routes != nil {
 						routes.Invalidate(c.Table, c.TeamID)
 					}
+					if mcp != nil {
+						mcp.Invalidate(c.Table)
+					}
 				},
 				Connected: func() {
 					store.InvalidateAll()
 					if routes != nil {
 						routes.InvalidateAll()
 					}
+					if mcp != nil {
+						mcp.InvalidateAll()
+					}
 				},
 			})
 		},
+	}
+	if mcp != nil {
+		app.Background = append(app.Background, mcp.Refresher.Run)
 	}
 	want, err := postgres.ExpectedSchemaVersion()
 	if err != nil {

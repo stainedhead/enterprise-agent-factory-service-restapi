@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -143,39 +144,63 @@ func (c *Client) Discover(ctx context.Context, resourceURL string) (mcpcatalog.O
 }
 
 type tokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	ExpiresIn    int64  `json:"expires_in"`
 	RefreshToken string `json:"refresh_token"`
 	Scope        string `json:"scope"`
 	IDToken      string `json:"id_token"`
+	Error        string `json:"error"`
+}
+
+// ErrInvalidGrant means the token endpoint refused the grant itself (RFC 6749 §5.2 invalid_grant): a refresh
+// token that expired or was revoked, or a federated assertion the server does not trust.
+var ErrInvalidGrant = errors.New("mcpoauth: invalid_grant")
+
+// postToken posts a form to a token endpoint and decodes the answer. A 400 or 401 whose error is invalid_grant
+// wraps ErrInvalidGrant; no body text ever reaches the error.
+func (c *Client) postToken(ctx context.Context, endpoint string, form url.Values, basic [2]string) (tokenResponse, error) {
+	if _, err := httpsURL(endpoint); err != nil {
+		return tokenResponse{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
+	if err != nil {
+		return tokenResponse{}, fail("request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	if basic[0] != "" {
+		req.SetBasicAuth(url.QueryEscape(basic[0]), url.QueryEscape(basic[1]))
+	}
+	res, err := c.http().Do(req)
+	if err != nil {
+		return tokenResponse{}, fail("token endpoint: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	var tr tokenResponse
+	decErr := json.NewDecoder(io.LimitReader(res.Body, maxBody)).Decode(&tr)
+	if res.StatusCode != http.StatusOK {
+		if decErr == nil && tr.Error == "invalid_grant" && (res.StatusCode == http.StatusBadRequest || res.StatusCode == http.StatusUnauthorized) {
+			return tokenResponse{}, errors.Join(fail("token endpoint: invalid_grant"), ErrInvalidGrant)
+		}
+		return tokenResponse{}, fail("token endpoint: status %d", res.StatusCode)
+	}
+	if decErr != nil {
+		return tokenResponse{}, fail("token endpoint: not a JSON token response")
+	}
+	return tr, nil
 }
 
 // Exchange implements mcpcatalog.OAuthClient. The access token in the response is dropped: the gateway mints its own
 // from the refresh token per call.
 func (c *Client) Exchange(ctx context.Context, as mcpcatalog.OAuthServer, x mcpcatalog.OAuthExchange) (mcpcatalog.OAuthTokens, error) {
-	if _, err := httpsURL(as.TokenEndpoint); err != nil {
-		return mcpcatalog.OAuthTokens{}, err
-	}
 	form := url.Values{"grant_type": {"authorization_code"}, "code": {x.Code}, "redirect_uri": {x.RedirectURI},
 		"client_id": {x.ClientID}, "code_verifier": {x.Verifier}}
 	if x.Resource != "" {
 		form.Set("resource", x.Resource)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, as.TokenEndpoint, strings.NewReader(form.Encode()))
+	tr, err := c.postToken(ctx, as.TokenEndpoint, form, [2]string{})
 	if err != nil {
-		return mcpcatalog.OAuthTokens{}, fail("request: %v", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
-	res, err := c.http().Do(req)
-	if err != nil {
-		return mcpcatalog.OAuthTokens{}, fail("token endpoint: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		return mcpcatalog.OAuthTokens{}, fail("token endpoint: status %d", res.StatusCode)
-	}
-	var tr tokenResponse
-	if err := json.NewDecoder(io.LimitReader(res.Body, maxBody)).Decode(&tr); err != nil {
-		return mcpcatalog.OAuthTokens{}, fail("token endpoint: not a JSON token response")
+		return mcpcatalog.OAuthTokens{}, err
 	}
 	out := mcpcatalog.OAuthTokens{Scopes: strings.Fields(tr.Scope), Subject: subjectOf(tr.IDToken)}
 	if tr.RefreshToken != "" {
@@ -184,6 +209,72 @@ func (c *Client) Exchange(ctx context.Context, as mcpcatalog.OAuthServer, x mcpc
 		}
 	}
 	return out, nil
+}
+
+// AccessToken is a short-lived token the gateway sends upstream. It lives in memory only.
+type AccessToken struct {
+	Value   string
+	Expires time.Time
+	// Refresh is a rotated refresh token, when the server issued one (RFC 6749 §6).
+	Refresh string
+}
+
+// Token grant types the gateway uses (URNs, not credentials).
+//
+//nolint:gosec // grant and token type URNs
+const (
+	grantRefresh       = "refresh_token"
+	grantClient        = "client_credentials"
+	grantTokenExchange = "urn:ietf:params:oauth:grant-type:token-exchange"
+	tokenTypeJWT       = "urn:ietf:params:oauth:token-type:jwt"
+	tokenTypeAccess    = "urn:ietf:params:oauth:token-type:access_token"
+)
+
+func (c *Client) access(ctx context.Context, endpoint string, form url.Values, basic [2]string, now time.Time) (AccessToken, error) {
+	tr, err := c.postToken(ctx, endpoint, form, basic)
+	if err != nil {
+		return AccessToken{}, err
+	}
+	if tr.AccessToken == "" {
+		return AccessToken{}, fail("token endpoint: no access token")
+	}
+	ttl := time.Duration(tr.ExpiresIn) * time.Second
+	if ttl <= 0 || ttl > 24*time.Hour {
+		ttl = time.Hour
+	}
+	return AccessToken{Value: tr.AccessToken, Expires: now.Add(ttl), Refresh: tr.RefreshToken}, nil
+}
+
+// Refresh mints an access token from a user-delegated refresh token (RFC 6749 §6), for the resource (RFC 8707).
+func (c *Client) Refresh(ctx context.Context, tokenEndpoint, clientID, refreshToken, resource string) (AccessToken, error) {
+	form := url.Values{"grant_type": {grantRefresh}, "refresh_token": {refreshToken}, "client_id": {clientID}}
+	if resource != "" {
+		form.Set("resource", resource)
+	}
+	return c.access(ctx, tokenEndpoint, form, [2]string{}, time.Now())
+}
+
+// ClientCredentials mints an access token with the client credentials grant (RFC 6749 §4.4), the client
+// authenticating with HTTP Basic (client_secret_basic), for the resource.
+func (c *Client) ClientCredentials(ctx context.Context, tokenEndpoint, clientID, clientSecret, resource string) (AccessToken, error) {
+	form := url.Values{"grant_type": {grantClient}}
+	if resource != "" {
+		form.Set("resource", resource)
+	}
+	return c.access(ctx, tokenEndpoint, form, [2]string{clientID, clientSecret}, time.Now())
+}
+
+// TokenExchange trades the gateway's projected ServiceAccount token for an access token to the resource (RFC 8693).
+func (c *Client) TokenExchange(ctx context.Context, tokenEndpoint, subjectToken, audience, resource string) (AccessToken, error) {
+	form := url.Values{"grant_type": {grantTokenExchange}, "subject_token": {subjectToken}, "subject_token_type": {tokenTypeJWT},
+		"requested_token_type": {tokenTypeAccess}}
+	if audience != "" {
+		form.Set("audience", audience)
+	}
+	if resource != "" {
+		form.Set("resource", resource)
+	}
+	return c.access(ctx, tokenEndpoint, form, [2]string{}, time.Now())
 }
 
 // subjectOf reads a display name from an ID token's claims. The token is not verified: the name is shown, never used
