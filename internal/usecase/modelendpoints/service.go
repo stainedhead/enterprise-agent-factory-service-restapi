@@ -308,13 +308,13 @@ func (s *Service) inlinePrices(ctx context.Context, tx port.Tx, endpointID strin
 // (caBundle, authHeader, externalSystemId, metricsPort).
 type Patch struct {
 	DisplayName, Description, BaseURL, CABundle, AuthHeader, Provider, Owner, Purpose, ExternalSystem *string
-	AuthKind                                                                                    *domain.AuthKind
-	PricingMode                                                                                 *domain.PricingMode
-	Location                                                                                    *domain.EndpointLocation
-	CredentialMode                                                                              *domain.CredentialMode
-	Protocols                                                                                   *[]domain.Protocol
-	TimeoutSeconds, MaxBodyMiB, MetricsPort                                                     *int
-	RequiresTerms, UseProviderCost, Enabled                                                     *bool
+	AuthKind                                                                                          *domain.AuthKind
+	PricingMode                                                                                       *domain.PricingMode
+	Location                                                                                          *domain.EndpointLocation
+	CredentialMode                                                                                    *domain.CredentialMode
+	Protocols                                                                                         *[]domain.Protocol
+	TimeoutSeconds, MaxBodyMiB, MetricsPort                                                           *int
+	RequiresTerms, UseProviderCost, Enabled                                                           *bool
 }
 
 func set[T any](dst *T, src *T, changed *bool) {
