@@ -23,6 +23,7 @@ import (
 
 func main() {
 	version := flag.Bool("version", false, "print version and exit")
+	teamNS := flag.String("team-namespace", "", "run as the team gateway of this namespace (gateway contract §12.1); needs AFS_GATEWAY_TEAM_ID")
 	flag.Parse()
 	if *version {
 		fmt.Println(buildinfo.String("afs-gateway"))
@@ -31,7 +32,16 @@ func main() {
 	log := observability.NewLogger(os.Stderr, observability.LogConfig{Level: os.Getenv("AFS_LOG_LEVEL"), Service: "afs-gateway"})
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := run(ctx, log, os.Getenv); err != nil {
+	env := os.Getenv
+	if *teamNS != "" {
+		env = func(k string) string {
+			if k == "AFS_GATEWAY_TEAM_NAMESPACE" {
+				return *teamNS
+			}
+			return os.Getenv(k)
+		}
+	}
+	if err := run(ctx, log, env); err != nil {
 		log.Error("afs-gateway failed", "err", err)
 		os.Exit(1)
 	}

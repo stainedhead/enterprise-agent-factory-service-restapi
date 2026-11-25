@@ -162,7 +162,7 @@ func (c *CachedStore) Invalidate(table, teamID string) {
 	case "model_prices":
 		c.prices.invalidate(func(string) bool { return true })
 		c.admits.invalidate(func(string) bool { return true })
-	case "agent_models", "pool_models", "agents", "agent_pools", "service_settings":
+	case "agent_models", "pool_models", "agents", "agent_pools", "service_settings", "inference_providers":
 		c.admits.invalidate(func(string) bool { return true })
 	case "budgets":
 		c.budget.invalidate(forTeam)
@@ -178,3 +178,70 @@ func (c *CachedStore) InvalidateAll() {
 		c.Invalidate(t, "")
 	}
 }
+
+// RouteTables are the change-feed tables of migration 000023 that change a route answer.
+var RouteTables = []string{"inference_providers", "model_endpoints", "endpoint_models", "endpoint_model_prices",
+	"endpoint_credentials", "endpoint_federations", "endpoint_capacity_costs", "team_model_endpoints",
+	"agent_model_endpoints", "pool_model_endpoints"}
+
+// CachedRoutes is a RouteStore that remembers answers for at most the TTL (60 s) and forgets them on a
+// change notification for any route table, or for agents, pools and teams (gateway contract §12.3).
+type CachedRoutes struct {
+	inner     RouteStore
+	admission *ttlCache[[]RouteGrant]
+	endpoints *ttlCache[RouteEndpoint]
+	prices    *ttlCache[[]RoutePrice]
+}
+
+// NewCachedRoutes wraps inner.
+func NewCachedRoutes(inner RouteStore, ttl time.Duration, now func() time.Time) *CachedRoutes {
+	if now == nil {
+		now = time.Now
+	}
+	if ttl <= 0 {
+		ttl = DefaultCacheTTL
+	}
+	return &CachedRoutes{inner: inner, admission: newTTLCache[[]RouteGrant](ttl, now),
+		endpoints: newTTLCache[RouteEndpoint](ttl, now), prices: newTTLCache[[]RoutePrice](ttl, now)}
+}
+
+var _ RouteStore = (*CachedRoutes)(nil)
+
+// RouteAdmission implements RouteStore.
+func (c *CachedRoutes) RouteAdmission(ctx context.Context, kind, id string) ([]RouteGrant, error) {
+	return c.admission.get(kind+"\x00"+id, func() ([]RouteGrant, error) { return c.inner.RouteAdmission(ctx, kind, id) })
+}
+
+// RouteEndpoint implements RouteStore.
+func (c *CachedRoutes) RouteEndpoint(ctx context.Context, teamID, slug string) (RouteEndpoint, error) {
+	return c.endpoints.get(teamID+"\x00"+slug, func() (RouteEndpoint, error) { return c.inner.RouteEndpoint(ctx, teamID, slug) })
+}
+
+// RoutePrices implements RouteStore.
+func (c *CachedRoutes) RoutePrices(ctx context.Context, endpointID, model string) ([]RoutePrice, error) {
+	return c.prices.get(endpointID+"\x00"+model, func() ([]RoutePrice, error) { return c.inner.RoutePrices(ctx, endpointID, model) })
+}
+
+// Invalidate forgets what a change on table may have changed. Route answers are few and cheap to load,
+// so any route-relevant change drops them all.
+func (c *CachedRoutes) Invalidate(table, _ string) {
+	all := func(string) bool { return true }
+	switch table {
+	case "endpoint_model_prices":
+		c.prices.invalidate(all)
+		c.admission.invalidate(all)
+	case "agents", "agent_pools", "teams":
+		c.admission.invalidate(all)
+	default:
+		for _, t := range RouteTables {
+			if t == table {
+				c.admission.invalidate(all)
+				c.endpoints.invalidate(all)
+				c.prices.invalidate(all)
+			}
+		}
+	}
+}
+
+// InvalidateAll forgets everything.
+func (c *CachedRoutes) InvalidateAll() { c.Invalidate("model_endpoints", "") }

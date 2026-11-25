@@ -22,6 +22,8 @@ import (
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/k8s/tokenreview"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/observability"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/postgres"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/routeauth"
+	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/adapter/routeup"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/domain"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/gateway"
 	"github.com/stainedhead/enterprise-agent-factory-service-restapi/internal/usecase/reconcile/engine"
@@ -88,7 +90,7 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 	if err != nil {
 		return nil, err
 	}
-	dbCfg := postgres.Config{URL: s.DatabaseURL, Service: "afs-gateway", SystemActor: true, StatementTimeout: 10 * time.Second}
+	dbCfg := postgres.Config{URL: s.DatabaseURL, Service: "afs-gateway", SystemActor: true, StatementTimeout: 10 * time.Second, TeamIDs: s.TeamID}
 	if s.DBIAMAuth {
 		if dbCfg.Password, err = postgres.IAMPassword(s.DatabaseURL, as.Region, awsCfg.Credentials); err != nil {
 			return nil, err
@@ -128,16 +130,32 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 		return fail(err)
 	}
 
-	store := gateway.NewCachedStore(postgres.NewGatewayStore(pool), s.CacheTTL, time.Now)
+	gs := postgres.NewGatewayStore(pool)
+	store := gateway.NewCachedStore(gs, s.CacheTTL, time.Now)
+	var routes *gateway.CachedRoutes
+	var upstreams gateway.UpstreamAuth
+	var routeUp gatewayhttp.RouteUpstream
+	if s.TeamNamespace != "" {
+		// A team gateway: model routes, credentials mounted per route, Azure and Google federation from the
+		// projected token (gateway contract §12, PRD §11.1).
+		routes = gateway.NewCachedRoutes(gs, s.CacheTTL, time.Now)
+		upstreams = &routeauth.Auth{Dir: s.CredentialsDir, Federations: gs,
+			Azure: &routeauth.AzureExchanger{TokenFile: s.FederationToken}, Google: &routeauth.GoogleExchanger{TokenFile: s.FederationToken}}
+		routeUp = routeup.New()
+	}
 	runner := postgres.NewTxRunner(pool)
 	app.Usage = postgres.NewUsageWriter(pool, log, postgres.UsageWriterConfig{Recorder: usageDropRecorder{m}})
 	svc := gateway.NewService(gateway.Deps{
 		Pods: pods, Tokens: tokenreview.New(cs, time.Now), Store: store, Spend: postgres.NewSpendStore(pool),
-		Thresholds: postgres.NewThresholdStore(runner, ulidGen{}, realClock{}), Usage: app.Usage,
+		Thresholds: postgres.NewThresholdStore(runner, ulidGen{}, realClock{}), Usage: telemetrySink{next: app.Usage, m: m},
 		SettleRecorder: settleRecorder{m}, ModelDenials: modelDenialRecorder{m},
-	}, gateway.Config{Partition: as.Partition, AccountID: account, AsyncSettle: true, Now: time.Now, Log: log})
+		Upstreams: upstreams,
+	}, gateway.Config{Partition: as.Partition, AccountID: account, AsyncSettle: true, Now: time.Now, Log: log, TeamNamespace: s.TeamNamespace})
+	if routes != nil {
+		svc.Routes = routes
+	}
 	app.Service = svc
-	app.Handler = gatewayhttp.New(gatewayhttp.Config{Service: svc, Upstream: rt, MaxBody: s.MaxBody, Log: log, Observer: metricsObserver{m}})
+	app.Handler = gatewayhttp.New(gatewayhttp.Config{Service: svc, Upstream: rt, MaxBody: s.MaxBody, Log: log, Observer: metricsObserver{m}, Routes: routeUp})
 
 	// A change to prices, models, budgets, teams or tags is seen within a second, not a TTL later; the TTL
 	// is the fallback when a notification is lost.
@@ -146,8 +164,18 @@ func wire(ctx context.Context, log *slog.Logger, s settings, env func(string) st
 		pods.Run,
 		func(ctx context.Context) error {
 			return feed.Listen(ctx, engine.FeedHandler{
-				Change:    func(c engine.Change) { store.Invalidate(c.Table, c.TeamID) },
-				Connected: store.InvalidateAll,
+				Change: func(c engine.Change) {
+					store.Invalidate(c.Table, c.TeamID)
+					if routes != nil {
+						routes.Invalidate(c.Table, c.TeamID)
+					}
+				},
+				Connected: func() {
+					store.InvalidateAll()
+					if routes != nil {
+						routes.InvalidateAll()
+					}
+				},
 			})
 		},
 	}

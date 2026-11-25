@@ -9,7 +9,7 @@ import (
 // ErrorKind classifies a domain error. The HTTP layer maps each kind to one API contract §6 code.
 type ErrorKind string
 
-// Error kinds. BudgetExceeded and UpstreamError exist only in afs-gateway.
+// Error kinds. BudgetExceeded, UpstreamError and UpstreamTimeout exist only in afs-gateway.
 const (
 	KindValidation           ErrorKind = "ValidationError"
 	KindUnauthenticated      ErrorKind = "Unauthenticated"
@@ -23,6 +23,7 @@ const (
 	KindInternal             ErrorKind = "InternalError"
 	KindBudgetExceeded       ErrorKind = "BudgetExceeded"
 	KindUpstream             ErrorKind = "UpstreamError"
+	KindUpstreamTimeout      ErrorKind = "UpstreamTimeout"
 )
 
 // Conflict reasons named by the API contract.

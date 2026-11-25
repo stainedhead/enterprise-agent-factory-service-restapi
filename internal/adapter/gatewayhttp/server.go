@@ -53,15 +53,23 @@ type Config struct {
 	MaxBody  int64
 	Log      *slog.Logger
 	Observer Observer
+	// Routes forwards model route calls. When set (a team gateway, --team-namespace) the route family of
+	// gateway contract §12.2 is mounted.
+	Routes RouteUpstream
+	// Families are mounted on the listener's Mux after the gateway's own, for example a later MCP family
+	// at /mcp. A family may not claim a path another one holds.
+	Families []Family
 }
 
 // Server is the gateway's http.Handler.
 type Server struct {
-	svc     *gateway.Service
-	up      Upstream
-	maxBody int64
-	log     *slog.Logger
-	obs     Observer
+	svc      *gateway.Service
+	up       Upstream
+	maxBody  int64
+	log      *slog.Logger
+	obs      Observer
+	routes   RouteUpstream
+	families []Family
 }
 
 // New returns a Server.
@@ -72,11 +80,47 @@ func New(cfg Config) *Server {
 	if cfg.Log == nil {
 		cfg.Log = slog.Default()
 	}
-	return &Server{svc: cfg.Service, up: cfg.Upstream, maxBody: cfg.MaxBody, log: cfg.Log, obs: cfg.Observer}
+	return &Server{svc: cfg.Service, up: cfg.Upstream, maxBody: cfg.MaxBody, log: cfg.Log, obs: cfg.Observer, routes: cfg.Routes, families: cfg.Families}
 }
 
-// Handler returns the handler to serve.
-func (s *Server) Handler() http.Handler { return http.HandlerFunc(s.serve) }
+// Handler returns the handler to serve: a Mux whose fallback is the Bedrock and Anthropic family of
+// gateway contract §2 (it answers the contract's 404 for anything it does not serve), with the route
+// family of §12.2 on a team gateway and any extra families of the configuration.
+func (s *Server) Handler() http.Handler {
+	return s.Mux()
+}
+
+// Mux returns the listener's router, so the composition root can mount further families on it.
+func (s *Server) Mux() *Mux {
+	m := NewMux(s.wrap(s.serveCore))
+	if s.routes != nil {
+		s.RoutesFamily().Mount(m)
+	}
+	for _, f := range s.families {
+		f.Mount(m)
+	}
+	return m
+}
+
+// wrap gives a family handler the gateway's response headers, request id and panic recovery.
+func (s *Server) wrap(h func(rw *respWriter, r *http.Request)) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rw := &respWriter{ResponseWriter: w, requestID: newRequestID(r)}
+		hd := rw.Header()
+		hd.Set(VersionHeader, gateway.ContractVersion)
+		hd.Set("X-Amzn-Requestid", rw.requestID)
+		hd.Set("Cache-Control", "no-store")
+		defer func() {
+			if rec := recover(); rec != nil {
+				s.log.Error("panic serving a model call", "requestId", rw.requestID, "panic", rec, "stack", string(debug.Stack()))
+				if !rw.started {
+					rw.writeProblem(domain.Internal(errors.New("panic")), 0, false)
+				}
+			}
+		}()
+		h(rw, r)
+	})
+}
 
 // respWriter tracks whether the response has begun, which decides how a late error is reported.
 type respWriter struct {
@@ -124,9 +168,11 @@ func newRequestID(r *http.Request) string {
 type route struct {
 	health    bool
 	anthropic bool
-	op        gateway.Operation
-	rtOp      bedrock.Operation
-	modelID   string
+	// chat is POST /r/bedrock/v1/chat/completions (gateway contract §12.2).
+	chat    bool
+	op      gateway.Operation
+	rtOp    bedrock.Operation
+	modelID string
 }
 
 // operations of /model/{modelId}/{operation}.
@@ -167,20 +213,7 @@ func parsePath(method, escaped string) (route, bool) {
 	return route{op: op.op, rtOp: op.rtOp, modelID: id}, true
 }
 
-func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
-	rw := &respWriter{ResponseWriter: w, requestID: newRequestID(r)}
-	h := rw.Header()
-	h.Set(VersionHeader, gateway.ContractVersion)
-	h.Set("X-Amzn-Requestid", rw.requestID)
-	h.Set("Cache-Control", "no-store")
-	defer func() {
-		if rec := recover(); rec != nil {
-			s.log.Error("panic serving a model call", "requestId", rw.requestID, "panic", rec, "stack", string(debug.Stack()))
-			if !rw.started {
-				rw.writeProblem(domain.Internal(errors.New("panic")), 0, false)
-			}
-		}
-	}()
+func (s *Server) serveCore(rw *respWriter, r *http.Request) {
 	rt, ok := parsePath(r.Method, r.URL.EscapedPath())
 	switch {
 	case !ok:
@@ -250,6 +283,8 @@ func (s *Server) call(rw *respWriter, r *http.Request, rt route) {
 	switch {
 	case rt.anthropic:
 		p, err = parseAnthropic(body, r.Header)
+	case rt.chat:
+		p, err = parseChatBedrock(body)
 	case rt.op == gateway.OpConverse || rt.op == gateway.OpConverseStream:
 		p, err = parseConverse(rt.rtOp, rt.op, rt.modelID, body)
 	default:
@@ -258,6 +293,9 @@ func (s *Server) call(rw *respWriter, r *http.Request, rt route) {
 	if err != nil {
 		rw.writeProblem(err, 0, rt.anthropic)
 		return
+	}
+	if rt.chat {
+		rt.op = p.op
 	}
 
 	var upstream time.Duration
@@ -287,7 +325,10 @@ func (s *Server) call(rw *respWriter, r *http.Request, rt route) {
 		s.finish(rw, rt, err, start, upstream)
 		return
 	}
-	if out != nil {
+	switch {
+	case out != nil && p.wire == wireChat:
+		writeChatComplete(rw, out, p.modelID)
+	case out != nil:
 		writeComplete(rw, out)
 	}
 	s.done(rt, rw.status, start, upstream)

@@ -36,3 +36,37 @@ var (
 	_ gateway.SettleRecorder      = settleRecorder{}
 	_ gateway.UsageDropRecorder   = usageDropRecorder{}
 )
+
+// genAIOperation is the GenAI operation name of a route protocol.
+var genAIOperation = map[domain.Protocol]string{domain.ProtocolChat: "chat", domain.ProtocolResponses: "chat", domain.ProtocolEmbeddings: "embeddings"}
+
+// telemetrySink observes every route call's usage row as GenAI metrics (gateway contract §12.7) and passes
+// the row on. Bedrock rows (no Route) only pass through.
+type telemetrySink struct {
+	next gateway.UsageSink
+	m    *observability.Metrics
+}
+
+// Record implements gateway.UsageSink.
+func (t telemetrySink) Record(r gateway.Record) {
+	t.next.Record(r)
+	rf := r.Route
+	if rf == nil || r.Outcome != gateway.OutcomeOK && r.Outcome != gateway.OutcomeError {
+		return
+	}
+	op := genAIOperation[rf.Protocol]
+	if op == "" {
+		op = "chat"
+	}
+	lv := []string{op, rf.Provider, rf.Model, r.TeamID, rf.Slug, rf.Provider, rf.Source}
+	t.m.GenAIOperationDuration.WithLabelValues(lv...).Observe(float64(r.LatencyMS) / 1000)
+	if rf.TTFTMS > 0 {
+		t.m.GenAITimeToFirstToken.WithLabelValues(lv...).Observe(float64(rf.TTFTMS) / 1000)
+	}
+	t.m.GenAITokenUsage.WithLabelValues(append(lv, "input")...).Observe(float64(r.Usage.Input))
+	if op != "embeddings" {
+		t.m.GenAITokenUsage.WithLabelValues(append(lv, "output")...).Observe(float64(r.Usage.Output))
+	}
+}
+
+var _ gateway.UsageSink = telemetrySink{}

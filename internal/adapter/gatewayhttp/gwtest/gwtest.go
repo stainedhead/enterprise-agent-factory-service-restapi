@@ -50,6 +50,11 @@ type Rig struct {
 	HTTP    *httptest.Server // the gateway, plain http
 	Upstrm  *httptest.Server // the fake Bedrock, TLS
 	Metrics *Observed
+	// Team mode: set by a mutate function to make the rig a team gateway serving model routes.
+	TeamNamespace string
+	Routes        gateway.RouteStore
+	Auth          gateway.UpstreamAuth
+	RouteUp       gatewayhttp.RouteUpstream
 }
 
 // Observed collects what the observer saw.
@@ -135,9 +140,11 @@ func New(t testing.TB, mutate ...func(*Rig)) *Rig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.Svc = gateway.NewService(gateway.Deps{Pods: r.Dir, Tokens: r.Tokens, Store: r.Store, Spend: r.Spend, Thresholds: r.Thr, Usage: r.Usage},
-		gateway.Config{Partition: "aws", AccountID: "111122223333", FailClosedTimeout: 2 * time.Second, Now: func() time.Time { return Now }})
-	r.Server = gatewayhttp.New(gatewayhttp.Config{Service: r.Svc, Upstream: rt, Observer: r.Metrics})
+	r.Svc = gateway.NewService(gateway.Deps{Pods: r.Dir, Tokens: r.Tokens, Store: r.Store, Spend: r.Spend, Thresholds: r.Thr, Usage: r.Usage,
+		Routes: r.Routes, Upstreams: r.Auth},
+		gateway.Config{Partition: "aws", AccountID: "111122223333", FailClosedTimeout: 2 * time.Second, Now: func() time.Time { return Now },
+			TeamNamespace: r.TeamNamespace})
+	r.Server = gatewayhttp.New(gatewayhttp.Config{Service: r.Svc, Upstream: rt, Observer: r.Metrics, Routes: r.RouteUp})
 	r.HTTP = httptest.NewServer(r.Server.Handler())
 	t.Cleanup(func() { r.HTTP.Close(); r.Svc.Wait() })
 	return r

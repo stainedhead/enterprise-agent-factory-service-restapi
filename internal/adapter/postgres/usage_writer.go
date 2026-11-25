@@ -165,17 +165,50 @@ func nullStr(s string) *string {
 // ("COPY FROM not supported with row-level security"), so the batch goes through unnest.
 const insertUsageSQL = `INSERT INTO afs.usage_events
  (occurred_at, team_id, agent_id, pool_id, worker_pod, model_id, request_id, outcome,
-  input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, latency_ms, tag_set_id)
+  input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, latency_ms, tag_set_id,
+  endpoint_id, model_name, usage_source, reasoning_tokens, ttft_ms, upstream_ms, gateway_ms, http_status)
 SELECT * FROM unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[],
-  $9::int[], $10::int[], $11::int[], $12::int[], $13::numeric[], $14::int[], $15::text[])`
+  $9::int[], $10::int[], $11::int[], $12::int[], $13::numeric[], $14::int[], $15::text[],
+  $16::text[], $17::text[], $18::text[], $19::bigint[], $20::int[], $21::int[], $22::int[], $23::smallint[])`
+
+// routeCols are the route columns of one row (gateway contract §12.6); NULL on a Bedrock call.
+type routeCols struct {
+	endpoint, model, source               []*string
+	reasoning                             []*int64
+	ttft, upstream, gatewayMS, httpStatus []*int32
+}
+
+func i32p(v int) *int32 {
+	x := int32(v) //nolint:gosec // timings and statuses are small
+	return &x
+}
+
+func (rc *routeCols) add(r *gateway.RouteFields) {
+	if r == nil {
+		rc.endpoint, rc.model, rc.source = append(rc.endpoint, nil), append(rc.model, nil), append(rc.source, nil)
+		rc.reasoning = append(rc.reasoning, nil)
+		rc.ttft, rc.upstream, rc.gatewayMS, rc.httpStatus = append(rc.ttft, nil), append(rc.upstream, nil), append(rc.gatewayMS, nil), append(rc.httpStatus, nil)
+		return
+	}
+	rs := int64(r.Reasoning)
+	var st *int32
+	if r.HTTPStatus >= 100 && r.HTTPStatus <= 599 {
+		st = i32p(r.HTTPStatus)
+	}
+	rc.endpoint, rc.model, rc.source = append(rc.endpoint, nullStr(r.EndpointID)), append(rc.model, nullStr(r.Model)), append(rc.source, nullStr(r.Source))
+	rc.reasoning = append(rc.reasoning, &rs)
+	rc.ttft, rc.upstream, rc.gatewayMS, rc.httpStatus = append(rc.ttft, i32p(r.TTFTMS)), append(rc.upstream, i32p(r.UpstreamMS)), append(rc.gatewayMS, i32p(r.GatewayMS)), append(rc.httpStatus, st)
+}
 
 func (w *UsageWriter) write(parent context.Context, batch []gateway.Record) {
 	var (
-		at                     = make([]time.Time, 0, len(batch))
-		team, model, req, outc = make([]string, 0, len(batch)), make([]string, 0, len(batch)), make([]string, 0, len(batch)), make([]string, 0, len(batch))
-		agent, pool, pod, tag  = make([]*string, 0, len(batch)), make([]*string, 0, len(batch)), make([]*string, 0, len(batch)), make([]*string, 0, len(batch))
-		in, out, cr, cw, lat   = make([]int32, 0, len(batch)), make([]int32, 0, len(batch)), make([]int32, 0, len(batch)), make([]int32, 0, len(batch)), make([]int32, 0, len(batch))
-		cost                   = make([]pgtype.Numeric, 0, len(batch))
+		at                    = make([]time.Time, 0, len(batch))
+		team, req, outc       = make([]string, 0, len(batch)), make([]string, 0, len(batch)), make([]string, 0, len(batch))
+		model                 = make([]*string, 0, len(batch))
+		rc                    routeCols
+		agent, pool, pod, tag = make([]*string, 0, len(batch)), make([]*string, 0, len(batch)), make([]*string, 0, len(batch)), make([]*string, 0, len(batch))
+		in, out, cr, cw, lat  = make([]int32, 0, len(batch)), make([]int32, 0, len(batch)), make([]int32, 0, len(batch)), make([]int32, 0, len(batch)), make([]int32, 0, len(batch))
+		cost                  = make([]pgtype.Numeric, 0, len(batch))
 	)
 	for _, r := range batch {
 		var c pgtype.Numeric
@@ -185,11 +218,12 @@ func (w *UsageWriter) write(parent context.Context, batch []gateway.Record) {
 			w.log.Error("usage row dropped: cost", "err", err)
 			continue
 		}
-		at, team, model, req, outc = append(at, r.OccurredAt), append(team, r.TeamID), append(model, r.ModelID), append(req, r.RequestID), append(outc, string(r.Outcome))
+		at, team, model, req, outc = append(at, r.OccurredAt), append(team, r.TeamID), append(model, nullStr(r.ModelID)), append(req, r.RequestID), append(outc, string(r.Outcome))
 		agent, pool, pod, tag = append(agent, nullStr(r.AgentID)), append(pool, nullStr(r.PoolID)), append(pod, nullStr(r.WorkerPod)), append(tag, nullStr(r.TagSetID))
 		in, out = append(in, int32(r.Usage.Input)), append(out, int32(r.Usage.Output))       //nolint:gosec // token counts are bounded by the model
 		cr, cw = append(cr, int32(r.Usage.CacheRead)), append(cw, int32(r.Usage.CacheWrite)) //nolint:gosec // token counts are bounded by the model
 		lat, cost = append(lat, int32(r.LatencyMS)), append(cost, c)                         //nolint:gosec // latency is bounded by the request timeout
+		rc.add(r.Route)
 	}
 	if len(at) == 0 {
 		return
@@ -197,7 +231,8 @@ func (w *UsageWriter) write(parent context.Context, batch []gateway.Record) {
 	var err error
 	for attempt := 1; attempt <= w.attempts; attempt++ {
 		ctx, cancel := context.WithTimeout(parent, 5*time.Second)
-		_, err = w.pool.Exec(ctx, insertUsageSQL, at, team, agent, pool, pod, model, req, outc, in, out, cr, cw, cost, lat, tag)
+		_, err = w.pool.Exec(ctx, insertUsageSQL, at, team, agent, pool, pod, model, req, outc, in, out, cr, cw, cost, lat, tag,
+			rc.endpoint, rc.model, rc.source, rc.reasoning, rc.ttft, rc.upstream, rc.gatewayMS, rc.httpStatus)
 		cancel()
 		if err == nil {
 			w.written.Add(int64(len(at)))
